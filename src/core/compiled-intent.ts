@@ -5,6 +5,7 @@ import {
   isRecord,
   requireNonEmptyString,
   requireNonNegativeInteger,
+  refKey,
   validateCompiledIntent,
   type Atom,
   type AtomDraft,
@@ -48,6 +49,27 @@ export function buildCompiledIntents(
   const atomStates: AtomStateRecord[] = []
   const errors: string[] = []
   const now = options.now ?? (() => new Date().toISOString())
+  // Resolve new endpoints only after requirement binding has produced final
+  // Atom content. The model cannot compute these digests in its proposal.
+  let proposedAtoms: Atom[]
+  try {
+    proposedAtoms = drafts.flatMap(draft => draft.atoms).map(normalizeAtomDraft).map(contentOf)
+  } catch (error) {
+    return { ok: false, intents, atom_states: atomStates, errors: [errorMessage(error)] }
+  }
+  const availableAtoms = [...proposedAtoms, ...Object.values(current).flatMap(intent => intent?.atoms ?? [])]
+  const resolveEndpoint = (value: unknown): Ref => {
+    if (isRecord(value) && typeof value.local_ref === "string") {
+      const matches = proposedAtoms.filter(atom => atom.atom_id === value.local_ref)
+      if (matches.length !== 1) throw new Error(`relation local endpoint ${value.local_ref} must resolve to exactly one new Atom`)
+      return atomRef(matches[0]!)
+    }
+    const ref = normalizeRef(value)
+    if (!availableAtoms.some(atom => atom.atom_id === ref.id && atom.revision === ref.revision && atomRef(atom).digest === ref.digest)) {
+      throw new Error(`relation endpoint ${ref.id}@${ref.revision} has an unknown identity or digest`)
+    }
+    return ref
+  }
 
   for (const draft of drafts) {
     try {
@@ -55,9 +77,13 @@ export function buildCompiledIntents(
       const taskId = requireNonEmptyString(draft.task_id, "draft.task_id")
       const revision = (current[taskId]?.compiled_revision ?? -1) + 1
       const compiledIntentId = options.nextCompiledIntentId()
-      const newAtoms = (Array.isArray(draft.atoms) ? draft.atoms : []).map(normalizeAtomDraft)
       const previousAtoms = current[taskId]?.atoms ?? []
-      const supersededKeys = new Set<string>()
+      const newAtoms = (Array.isArray(draft.atoms) ? draft.atoms : []).map(normalizeAtomDraft).map(atom => {
+        const previous = previousAtoms.filter(prior => prior.atom_id === atom.atom_id).sort((a, b) => b.revision - a.revision)[0]
+        return atom.previous_atom_ref === undefined && previous && atom.revision > previous.revision
+          ? { ...atom, previous_atom_ref: atomRef(previous) }
+          : atom
+      })
       for (const atom of newAtoms) {
         const previous = atom.previous_atom_ref
         if (!previous) continue
@@ -66,7 +92,6 @@ export function buildCompiledIntents(
         if (prior.atom_id === previous.id && atomRef(prior).digest !== previous.digest) {
           throw new Error(`previous_atom_ref digest does not match atom ${previous.id}@${previous.revision}`)
         }
-        supersededKeys.add(`${previous.id}@${previous.revision}`)
       }
       const intent: CompiledIntent = {
         schema_version: 2,
@@ -82,7 +107,7 @@ export function buildCompiledIntents(
           // dispatchability comes from the state ledger, not from this list.
           ...previousAtoms.filter((atom) => !newAtoms.some((proposed) => proposed.atom_id === atom.atom_id && proposed.revision === atom.revision)),
         ],
-        relations: (Array.isArray(draft.relations) ? draft.relations : []).map(normalizeRelation),
+        relations: (Array.isArray(draft.relations) ? draft.relations : []).map(value => normalizeRelation(value, resolveEndpoint)),
         attachments: (Array.isArray(draft.attachments) ? draft.attachments : []).filter(isRefOrSource),
       }
       validateCompiledIntent(intent)
@@ -103,6 +128,26 @@ export function buildCompiledIntents(
       errors.push(errorMessage(error))
     }
   }
+
+  // Cycles and self-dependencies have no valid start order; reject them rather
+  // than accepting a permanently stalled compilation.
+  const graph = new Map<string, string[]>()
+  for (const intent of Object.values({ ...current, ...intents })) for (const relation of intent?.relations ?? []) {
+    const from = refKey(relation.predecessor)
+    const to = refKey(relation.successor)
+    graph.set(from, [...(graph.get(from) ?? []), to])
+  }
+  const visiting = new Set<string>(), visited = new Set<string>()
+  function visit(node: string): boolean {
+    if (visiting.has(node)) return false
+    if (visited.has(node)) return true
+    visiting.add(node)
+    for (const next of graph.get(node) ?? []) if (!visit(next)) return false
+    visiting.delete(node)
+    visited.add(node)
+    return true
+  }
+  if ([...graph.keys()].some(node => !visit(node))) errors.push("relation dependency cycle has no valid execution order")
 
   return { ok: errors.length === 0, intents, atom_states: atomStates, errors }
 }
@@ -272,11 +317,11 @@ function normalizeAtom(value: unknown): Atom {
   return atom
 }
 
-function normalizeRelation(value: unknown): CompiledIntent["relations"][number] {
+function normalizeRelation(value: unknown, resolve: (value: unknown) => Ref): CompiledIntent["relations"][number] {
   if (!isRecord(value)) throw new Error("relation must be an object")
   return {
-    predecessor: normalizeRef(value.predecessor),
-    successor: normalizeRef(value.successor),
+    predecessor: resolve(value.predecessor),
+    successor: resolve(value.successor),
     requires: typeof value.requires === "string" ? value.requires : "",
     conditions: (Array.isArray(value.conditions) ? value.conditions.filter(isRecord) : []) as Condition[],
     basis: (Array.isArray(value.basis) ? value.basis : []).filter(isRefOrSource),

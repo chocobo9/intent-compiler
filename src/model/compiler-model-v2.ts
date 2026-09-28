@@ -7,6 +7,7 @@ import {
   type ExecutionView,
   type Ref,
   type SourceRef,
+  type SourceSegment,
   type TaskIntent,
 } from "../core/intent-contract.js"
 import { validateCandidateSchema } from "./candidate-schema.js"
@@ -17,6 +18,10 @@ import type { CandidateRepairContext } from "../core/candidate-repair.js"
 export interface CompilerModelV2Input {
   run_id: string
   events: CompilerEvent[]
+  /** Prior user text relevant to this task, for checking retained requirements. It is not a new delegation. */
+  source_events?: CompilerEvent[]
+  /** Addressable original text; paragraph boundaries do not determine semantic role. */
+  source_segments?: SourceSegment[]
   /** Management-computed identities for the current events; digest values are not model-authored. */
   event_source_refs?: SourceRef[]
   ir: Record<string, TaskIntent>
@@ -129,6 +134,7 @@ export interface CompilerModelV2FailureDiagnostic {
 export interface CompilerModelV2CheckInput {
   run_id: string
   events: readonly CompilerEvent[]
+  source_events?: readonly CompilerEvent[]
   /** Management-computed identities for the current events; digest values are not model-authored. */
   event_source_refs?: SourceRef[]
   ir: Record<string, TaskIntent>
@@ -138,7 +144,7 @@ export interface CompilerModelV2CheckInput {
   /** Exact prepared facts needed by the check; the full commit object remains private to management. */
   prepared?: {
     ir: Record<string, TaskIntent>
-    execution_tasks: import("../core/intent-contract.js").ExecutionTask[]
+    dispatchable_atoms: import("../core/intent-contract.js").Atom[]
     eligible_task_ids: string[]
     eligible_execution_ids: string[]
   }
@@ -192,6 +198,8 @@ export interface CompilerModelV2Call {
   started_at?: string
   completed_at?: string
   usage?: CompilerModelV2Usage
+  /** Exact submitted generation-schema violations, before optional-null removal. */
+  structured_schema_errors?: string[]
 }
 
 export interface CompilerModelV2Result {
@@ -215,6 +223,7 @@ export const V2_COMPILER_CONTRACT = Object.freeze({
     "{",
     '  "schema_version": 2,',
     '  "basis": { "event_ids": ["<triggered event ids>"], "refs": [] },',
+    '  "source_coverage": [{"source":SourceRef,"disposition":"context|material|management|unresolved|superseded","requirements":[],"reason":"role of unselected text or reason for withdrawal","basis":[]}],',
     '  "groups": [ { "local_ref": "g1", "task_refs": ["<task_id>"], "depends_on": [],',
     '    "ir_changes": [...], "compilation": {...}, "execution_decisions": [],',
     '    "assessments": [], "coverage": [...], "checks": [...], "questions": [...] } ]',
@@ -223,9 +232,9 @@ export const V2_COMPILER_CONTRACT = Object.freeze({
   ].join("\n"),
   reference_contract: [
     "Ref = { id: string, revision: integer>=0, digest: string }.",
-    "SourceRef = { source_id: string, digest: string, span?: { unit:\"utf16\", start: integer, end: integer } }.",
-    "A valid SourceRef.source_id is exactly one of the event ids listed in events for this batch. A contract field name, a file path, a role name, or any other string is not a source: it is recorded as unresolvable and does not count as the delegation.",
-    "event_source_refs contains the exact source_id and code-computed digest for each event in this input. Copy those values for source citations; do not calculate or invent a digest.",
+    "SourceRef = { source_id: string, digest: string, segment_id?: string, quote?: string, span?: { unit:\"utf16\", start: integer, end: integer } }. For content create/revise select source_segments by segment_id, or supply a contiguous exact unique quote for a sub-segment. Never supply both selectors. Management computes spans; do not calculate them yourself. Segment IDs are local to their source event, never semantic task IDs.",
+    "A valid SourceRef.source_id is an event id in events or source_events. events are the current triggers; source_events are prior user text for checking retained meaning, not new instructions. A contract field name, file path, or role name is not a source.",
+    "event_source_refs contains code-computed digests for events and source_events. Copy those values for source citations; do not calculate or invent a digest.",
     "The model may only invent local_ref strings; persistent IDs, revisions, and digests come from supplied state or the input event.",
   ].join("\n"),
   compilation_contract: [
@@ -245,19 +254,29 @@ export const V2_COMPILER_CONTRACT = Object.freeze({
     '- retire: { action:"retire", target:"binding"|"output"|"content", id, expected_revision, reason, sources }',
     '- preserve: { action:"preserve", reason, sources }',
     "Use only the user's words and adopted references as sources. Do not invent IDs, versions, digests, or business answers.",
+    "One TaskIntent represents one delegated task; its IR.content items organize normative behavior within that task. Source segments are addressing units, not tasks, requirements or Atoms. Choose cohesive IR.content items by meaning and scope, each with all operative source selections needed for that behavior. Several original segments may belong to one item, and shared definitions may belong to several items. Do not create a task or Atom mechanically per paragraph.",
+    "For content create/revise, value.text is a short interpretation/label, NOT a replacement specification. Management stores it separately and constructs canonical IR.content.text verbatim from the selected sources, in source order. The executor receives the compiled Atom instruction; it does not receive the IR passage automatically, so the Atom must faithfully carry every detail needed for its assigned work. Select complete operative passages including literal strings, formulas, alternatives, defaults and exceptions. A title or synopsis cannot replace its rule paragraphs. Prefer source_segments selectors to copying long quotes; quote only when selecting a precise sub-segment is necessary.",
+    "Each assigned set of current requirements must be understandable and executable together: select the enclosing command/function heading and prerequisite definitions for dependent subrules, or assign the current requirement that supplies that context to the same Atom. Resolve cross-references through current requirements. Do not adopt examples or quoted commands as fresh authority. Interpret source role and current scope before selecting it; a correctly located segment alone proves neither role nor support.",
+    "ALL current user text must have a destination. Selecting sources in content create/revise already declares their normative role and exact IR destination; management derives that mapping, so do not repeat selected normative passages in source_coverage. source_coverage is REQUIRED (use [] when nothing remains) and classifies only unselected current text or withdrawn old text: source, disposition (context/material/management/unresolved/superseded), requirements:[], reason, basis. Classify every remaining passage explicitly; a heading required to understand a rule belongs with its IR sources. Non-normative entries must not overlap active normative text. Do not label operative details context merely to omit them. Neither absent nor null source_coverage is valid. Group fields such as assessments, checks, coverage, execution_decisions and questions belong inside their group, never at the root.",
+    "On updates retain unchanged content, revise changed items, create new requirements, retire withdrawn ones, and replace compilation before dispatch. Do not reactivate historical instructions. If an old normative passage is withdrawn or replaced, add a superseded source_coverage entry selecting exactly the dropped old text, empty requirements, and basis selecting the current user's change. Retained parts of a mixed paragraph can use exact quotes. A directive describing how to revise a rule is management text; the active rule text it supplies is normative. Explicitly preserve unchanged subrules instead of treating a whole old paragraph as withdrawn without cause. Coverage accounting proves preservation and declared roles, not semantic correctness.",
   ].join("\n"),
   atom_contract: [
-    "An Atom is one complete deliverable unit, not one sentence, JSON field, or tool call.",
-    "The atom task must itself be the delegated deliverable for its object: reading a spec or analyzing materials to prepare later work is not an atom unless the user asked only for that reading or analysis. Give the atom the atom_id of the work it performs, not of a preparation step for it.",
+    "An Atom is the smallest effective deliverable that can be executed, returned and evaluated on its own. Start from the WHOLE current delegation, identify its independently testable behaviors and real consumers, then choose boundaries. A complete project or CLI is not automatically one Atom merely because it produces one binary or shares a repository. Each Atom may need several files, tool calls and tests.",
+    "For a compound implementation, separate coherent behavior units when they can be independently accepted, revised or consumed, and state the concrete benefit in intent_judgments. Keep ordinary investigation, implementation and the tests of that unit together. Do not create reading-only preparation, an Atom per requirement, an empty integration shell, or a fixed number of Atoms. A single small cohesive deliverable can remain one Atom; explain why it has no useful independent boundary.",
+    "Shared code does not erase behavioral boundaries. If multiple Atoms modify a shared workspace, express a real producer/consumer or safe serial handoff using Relation and its requires text; state what usable implementation/result must be returned. Do not assume concurrent writes are safe or invent a dependency just from list order. Keep shared invariants assigned to every affected Atom, including integration work when that work has its own user-required behavior.",
     "Each Atom needs atom_id, revision, goal_refs, task, inputs, outputs, constraints, optional_tools, authority, preconditions, completion, return_when, intent_judgments.",
     "Each atom.constraints entry must be exactly: { \"text\": \"<full condition>\", \"basis\": [<Ref|SourceRef>], \"scope\": [{ \"target_id\": \"<task|binding|output id>\", \"path\": \"<optional JSON pointer>\" }] }. Plain strings are not allowed.",
-    "Only atoms with empty preconditions are ready to start. Preview and later confirmed write-back are separate atoms.",
+    "IR.content preserves the current source-backed business specification. The Atom is the executable contract for one independently deliverable unit, not a label or a pointer to IR. Write atom.task as a self-contained, concrete account of the behavior this unit must implement: inputs, transformations, outputs, exact literals, ordering, defaults and failure cases that matter to its assigned requirements. Synthesize the relevant rules into actionable work instead of pasting entire IR passages or saying 'as specified'. Each completion entry must name an observable acceptance condition and the evidence to return. Do not introduce behavior absent from the assigned IR. Default Atom.constraints to []; when a separate constraint is essential it must repeat an assigned IR rule verbatim with the same scope. There is no fixed word count or Atom count: choose enough detail for execution and enough separation for independent acceptance.",
+    "Start eligibility requires satisfied preconditions AND accepted incoming Relation results. Preview and later confirmed write-back are separate atoms. Future work whose behavior is known may already be a dependent Atom; record genuinely unknown later work as unresolved coverage instead of an empty Atom.",
+    'A Relation is { predecessor: Ref|{local_ref:"new-atom-id"}, successor: Ref|{local_ref:"new-atom-id"}, requires:"exact usable result/ordering reason", conditions:[], basis:[Ref|SourceRef] }. For new Atoms use local_ref; management resolves final content digests after requirement assignment. For existing Atoms copy their exact supplied Ref. Relations are operational dependencies: the successor waits for the exact predecessor version to complete and receive management acceptance. No self/cyclic dependencies. A replacement draft states all still-applicable relations, including retained work; dropping an edge changes execution order.',
     "authority.lifetime must be \"this_execution\" and delegation must be \"not_supported\".",
     "An Atom carries content only: never send status, created_at, updated_at, or result_ref. Lifecycle transitions (ready, executing, completed, legacy, failed) are committed by management code in a separate ledger.",
     "atom_id plus revision identifies one content: if you change an atom's task, inputs, outputs, constraints, or authority, raise its revision in the same draft so the new content gets its own lifecycle record.",
     "To replace a failed atom, propose a new atom and set its previous_atom_ref to the exact ref supplied in atom_refs; management records the supersession and keeps the failed record.",
     "Do not pre-compute the business answer in compiler output. Delegate authorized repository investigation, file location and implementation choices to the executor. A guessed path or implementation must not become a required deliverable or completion condition; user-specified locations and host-provided facts remain valid inputs. State the required behavior, constraints and evidence instead.",
     "Use the exact refs supplied in atom_refs for assessments.target_ref and previous_atom_ref; never invent ids, revisions, or digests.",
+    "Atom.goal_refs for IR content are filled by management code from coverage. You may leave them empty or include the known task Ref; do not invent content digests. One Atom may implement many content requirements.",
+    "On a user update, reassess the shape of the full remaining work, retain unchanged Atoms and relations, and revise/supersede affected Atoms with the exact previous_atom_ref. Preserve current requirements from earlier sources unless changed or withdrawn. Newly added functionality must not silently absorb unrelated existing work into one catch-all Atom.",
   ].join("\n"),
   atom_input_contract: [
     "Each atom.inputs entry must be exactly:",
@@ -280,6 +299,7 @@ export const V2_COMPILER_CONTRACT = Object.freeze({
     "Use it to record where every current goal and requirement goes; do not use { atom_ref, requirement, status } shapes.",
     "Whenever a group compiles atoms for a task, coverage must contain an entry for that work whose requirement or refs names the task (its task_id, or the create local_ref that becomes it) or one of the atoms that carry it. A compiled task with no such entry is rejected and returned to you with the reason.",
     "Disposition must state the truth: assigned or supported when an atom delivers it, paused when the user paused it, unresolved when it still needs a decision or a missing input.",
+    "Record one coverage entry for every current IR.content item in a replaced task, using its item id as requirement and receiving Atom id(s) in refs. Assigned/supported items need an Atom; paused/unresolved items name none. An Atom with no assigned requirement cannot start, and pausing a requirement still carried by active work requires replacement. A compiled task with no source-backed IR.content or an item without a destination is rejected. Coverage explanation is not requirement text.",
   ].join("\n"),
   checks_contract: [
     "Default checks to an empty array: do not generate a self-certification report for every requirement. Preserve actionable uncertainty in the task, constraints, preconditions or questions; never delete it merely to shorten output. When a concrete additional check is needed, entries must be objects:",
@@ -304,8 +324,8 @@ export const V2_COMPILER_CONTRACT = Object.freeze({
     "An atom that does implementation, build, or verification work must grant the operation_ids that work needs, including write, edit, and bash, and must list the same tools in optional_tools. Operations and objects the delegated goal itself needs are authorized by that delegation. Never invent operations, paths, or objects outside the delegation, and never drop to a read-only atom to avoid granting tools the goal requires.",
     "If the goal needs work the current delegation does not authorize yet (a later write-back, an unwritten confirmation, a data source the user has not allowed), keep that work in the task and record it in coverage as paused or unresolved. Do not replace the goal with whatever step happens to be allowed now.",
     "capabilities lists the operations the host can grant, the workspace root, and every path this batch names with whether it exists and is readable by the executor. A path that exists and is readable is provided material the executor will open: never treat 'I cannot see its content' as a missing binding. Missing material means the user referenced something that was never provided at all.",
-    "A precondition or authority condition of kind capability_available is evaluated against capabilities.operations using its expectation as the operation id; other condition kinds are not evaluated yet and block the work they guard, so prefer conditions you can express with scope_allows, capability_available, all, and any.",
-    "A separate independent check reads your candidate, original input, prior IR and Compiled Intent, and exact prepared effects: prepared.ir is the post-candidate IR, prepared.execution_tasks are the host-facing work, prepared eligibility lists are the code-computed start/continue scope, and candidate.execution_decisions is the decision list. It may reject the candidate with specific findings; handling a user update (including reuse) or compiling new atoms requires a consistent verdict when an independent checker is configured. State changed requirements, coverage, conditions and execution decisions; do not solve the business task or restate unchanged objects to persuade the checker. After a user update, an active execution continues only with an explicit continue decision for unchanged work; stop closes its authority, await_result permits only its return. Unreviewed work remains suspended.",
+    "Supported conditions are scope_allows, capability_available (expectation is the operation id), assessment_supports (exact target Ref), all and any. Other condition kinds block the work. A Relation already waits for accepted predecessor completion; do not add an unsupported artifact_exists condition just to duplicate this dependency. Management acceptance considers execution evidence and requires, not a bare executor completion claim.",
+    "A separate independent check reads your candidate, original input, prior IR and Compiled Intent, and exact prepared effects: prepared.ir is the post-candidate IR, prepared.dispatchable_atoms are the Atoms sent to the executor, prepared eligibility lists are the code-computed start/continue scope, and candidate.execution_decisions is the decision list. It may reject the candidate with specific findings; handling a user update (including reuse) or compiling new atoms requires a consistent verdict when an independent checker is configured. State changed requirements, coverage, conditions and execution decisions; do not solve the business task or restate unchanged objects to persuade the checker. After a user update, an active execution continues only with an explicit continue decision for unchanged work; stop closes its authority, await_result permits only its return. Unreviewed work remains suspended.",
     "When previous_rejection is present it lists why the previous batch for these same events was rejected. Repair those specific reasons in place; do not re-plan from scratch, do not resend the same candidate, and treat a reason with evidence_resolved false as recorded rather than binding — it did not block the batch.",
     "A path in prior IR or Compiled Intent is management-authored content, even when it has a source reference. A source reference proves where a claim came from, not that the cited user text supports the path. Preserve a path as a user restriction only when the cited user-authored text explicitly limits work to that path and the restriction still applies. When no applicable user text limits the file, keep the requested behavior as the task and let the executor locate the file within the already authorized workspace and operations; do not add permissions or widen scope.",
   ]),
@@ -324,17 +344,18 @@ export const V2_CHECK_CONTRACT = Object.freeze({
   check_contract: [
     "Return exactly one JSON object:",
     '{ "schema_version": 2, "verdict": "consistent"|"inconsistent", "findings": [ { "dimension": "D1"|"D2"|"D3"|"D4"|"D5"|"D6"|"D7", "claim": "<behavior being judged>", "expected": "<what the original input and source-backed current IR require>", "observed": "<what the candidate actually does>", "refs": [<Ref|SourceRef>] } ] }',
-    "You are the independent check of one management candidate, not its author. Read the original input, current IR and Compiled Intent as prior state, candidate changes, and prepared effects. prepared.ir is the exact post-candidate IR; prepared.execution_tasks are the exact host-facing work; prepared.eligible_task_ids and prepared.eligible_execution_ids are the code-computed start/continue eligibility. candidate.execution_decisions is the decision list. Judge the actual prepared work against the current delegation and source-backed requirements. Preparation fixes the commit object but supplies no new business facts. Do not design an alternative implementation or demand repository answers the executor is authorized to investigate.",
+    "You are the independent check of one management candidate, not its author. Read the original input, current IR and Compiled Intent as prior state, candidate changes, and prepared effects. prepared.ir is the exact post-candidate IR; prepared.dispatchable_atoms are the exact host-facing Atoms; prepared.eligible_task_ids and prepared.eligible_execution_ids are the code-computed start/continue eligibility. candidate.execution_decisions is the decision list. Judge the actual prepared work against the current delegation and source-backed requirements. Preparation fixes the commit object but supplies no new business facts. Do not design an alternative implementation or demand repository answers the executor is authorized to investigate.",
     "verdict must be \"consistent\" only when you found no inconsistency; findings must be empty then. List only real inconsistencies, each with what was required and what the candidate does instead.",
     "Name the dimension each finding judges: D1 the roles of the materials the delegation names; D2 the outputs and field scope the delegation requires; D3 whether an authority rule's operation and object resolve to host facts; D4 where an unchanged requirement goes; D5 whether a citation resolves to the text it claims; D6 a requirement the candidate adds that the delegation does not contain; D7 whether the plan actually does the work the delegation asks for — a candidate whose atoms only read, restate, analyse, or ask about the delegated work, without delivering it, violates D7.",
     "Use D7 only with the delegation words that ask for that work: cite the span that asks for the deliverable or the action, and do not raise D7 for a plan that is merely less detailed than you would write, for a question the delegation itself leaves open, or for work the delegation records as paused or unresolved.",
     "Only a finding whose refs resolve can block the batch: cite the delegation source (its source_id plus a span covering the words you rely on) or a current IR entry whose source references support the requirement. A finding that cites nothing, or names a source id or id that is not in this input, is recorded and set aside — do not report it as a reason to reject.",
     "You may not supply the business answer, widen or narrow Authority, rewrite the candidate, or invent ids, revisions, or digests.",
-    "event_source_refs contains the exact source_id and code-computed digest for each event in this input. Copy those values for source citations; do not calculate or invent a digest.",
+    "event_source_refs contains the exact source_id and code-computed digest for each current or historical source event. Copy those values for citations; do not calculate or invent a digest.",
+    "Inspect every current IR.content item and its source text, including relevant source_events. Find any missing, wrongly scoped, invented or incorrectly retained requirement. Verify that every assigned item has an exact requirement_ref in its Atom delivery and that the delivered instruction and completion evidence explain the required behavior sufficiently to execute and assess it without re-reading IR. A coverage explanation or broad Atom label is not a substitute. The instruction is a compilation of the assigned IR, not a second source of business requirements. Historical source_events are evidence, not new requests.",
   ].join("\n"),
   rules: Object.freeze([
     "A path the host reports as existing and readable is provided material: the executor reads it, so 'the compiler cannot see its content' is not a missing binding.",
-    "Judge the changes and their effect on retained work: a new restriction may invalidate unchanged content or an execution continuation. Do not ask for work the delegation does not require. Use prepared.execution_tasks as the canonical exact content of work sent to the executor; prepared eligibility is the canonical start/continue scope. Compiler-written self-checks do not substitute for this comparison; an empty checks array is not an inconsistency.",
+    "Judge the changes and their effect on retained work: a new restriction may invalidate unchanged content or an execution continuation. Do not ask for work the delegation does not require. Use prepared.dispatchable_atoms as the canonical exact content of work sent to the executor; prepared eligibility is the canonical start/continue scope. Compiler-written self-checks do not substitute for this comparison; an empty checks array is not an inconsistency.",
     "If the candidate records a coverage entry with disposition paused or unresolved, treat the delegation as recorded rather than missing, unless the original input requires work to start now.",
     "Do not repeat the candidate's own claims back as evidence; cite the original input or a source-backed current IR entry.",
     "Do not judge conventions. How many outputs there are, what a field is named, whether a field is 'redundant', or whether a task is a goal rather than a task are not requirements unless the delegation or the current IR states them; an objection that rests on one of these and cannot cite the delegation is not an inconsistency.",
@@ -371,6 +392,10 @@ export function createCompilerModelV2(
         return { ok: false, error: { code: "transport", message: errorMessage(error), diagnostic: diagnosticOf(error, "transport") } }
       }
       const call = typeof raw === "string" ? { text: raw, text_source: "text" as const } : raw
+      if (call.structured_schema_errors?.length) {
+        const errors = call.structured_schema_errors
+        return { ok: false, call, error: { code: "schema", message: errors.join("; ") }, schema_errors: errors, schema_rejected_draft: { text: call.text, errors } }
+      }
       if (typeof call.text !== "string" || call.text.length === 0) {
         return { ok: false, call, error: { code: "transport", message: "model transport must return non-empty text" } }
       }
@@ -414,6 +439,7 @@ export function createCompilerModelV2(
               return { error: { code: "transport", message: errorMessage(error), diagnostic: diagnosticOf(error, "check_transport") } }
             }
             const call = typeof raw === "string" ? { text: raw, text_source: "text" as const } : raw
+            if (call.structured_schema_errors?.length) return { call, error: { code: "schema", message: call.structured_schema_errors.join("; ") }, schema_errors: call.structured_schema_errors }
             if (typeof call.text !== "string" || call.text.length === 0) {
               return { call, error: { code: "transport", message: "model transport must return non-empty text" } }
             }

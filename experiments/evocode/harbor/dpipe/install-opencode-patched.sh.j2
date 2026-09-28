@@ -11,14 +11,14 @@ test -s /run/secrets/opencode-auth.json
 
 test "${INTENT_COMPILER_TRANSPORT:-}" = "opencode"
 test "${INTENT_COMPILER_PROVIDER_ID:-}" = "openai"
-test "${INTENT_COMPILER_MODEL_ID:-}" = "gpt-6-luna-fast"
-test "${INTENT_COMPILER_MODEL_VARIANT:-}" = "high"
+test "${INTENT_COMPILER_MODEL_ID:-}" = "gpt-5.6-sol"
+test "${INTENT_COMPILER_MODEL_VARIANT:-}" = "medium-fast"
 test "${INTENT_COMPILER_STORE:-}" = "/opt/intent-data/compiler-store"
 test "${EXPERIMENT_OBSERVER_STORE:-}" = "/opt/intent-data/observer-store"
 
 test "$(jq -r '.version' /opt/opencode-runtime/packages/opencode/package.json)" = "1.18.31"
 jq -e '.openai.type == "oauth" and (.openai.access | length > 0) and (.openai.expires > 0)' /run/secrets/opencode-auth.json >/dev/null
-jq -e '.model == "openai/gpt-5.6-sol" and .provider.openai.models["gpt-5.6-sol"].options.reasoningEffort == "medium" and .plugin[0] == "file:///opt/intent-compiler/.opencode/plugins/experiment-runtime.js"' /opt/intent-data/model/opencode.json >/dev/null
+jq -e '.model == "openai/gpt-5.6-sol" and .provider.openai.models["gpt-5.6-sol"].options.reasoningEffort == "medium" and .provider.openai.models["gpt-5.6-sol"].variants["medium-fast"].reasoningEffort == "medium" and .provider.openai.models["gpt-5.6-sol"].variants["medium-fast"].serviceTier == "priority" and .plugin[0] == "file:///opt/intent-compiler/.opencode/plugins/experiment-runtime.js"' /opt/intent-data/model/opencode.json >/dev/null
 grep -q 'strict: true' /opt/opencode-runtime/packages/opencode/src/session/prompt.ts
 grep -q 'tools\[key\].strict !== true' /opt/opencode-runtime/packages/opencode/src/session/llm/request.ts
 test -d "$(dirname "$OPENCODE_STRICT_TOOL_EVIDENCE_PATH")"
@@ -41,4 +41,4 @@ test "$cli_version" = "local"
 run_help="$(opencode run --help 2>&1 || true)"
 printf '%s' "$run_help" | grep -q -- "--variant"
 printf '%s' "$run_help" | grep -q -- "--format"
-printf 'container preflight passed: source=1.18.31 cli-mode=%s manager=openai/gpt-6-luna-fast@high executor=openai/gpt-5.6-sol@medium plugin=mounted strict-patch=present\n' "$cli_version"
+printf 'container preflight passed: source=1.18.31 cli-mode=%s manager=openai/gpt-5.6-sol@medium-fast executor=openai/gpt-5.6-sol@medium plugin=mounted strict-patch=present\n' "$cli_version"

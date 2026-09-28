@@ -4,7 +4,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
-import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
+import { createIntentCompilerV2 as createCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { atomRef } from "../src/core/compiled-intent.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
 import type { CompilerModelV2Input, CompilerModelV2Result } from "../src/model/compiler-model-v2.js"
@@ -17,6 +17,10 @@ import type {
   Ref,
   SourceRef,
 } from "../src/core/intent-contract.js"
+
+// Existing compiler fixtures use the pre-ledger v2 contract; strict requirement flow is tested separately.
+const createIntentCompilerV2 = (options: Parameters<typeof createCompilerV2>[0]) =>
+  createCompilerV2({ ...options, requirement_integrity: "legacy" })
 
 const SOURCE: SourceRef = { source_id: "s-u1", digest: "sha256:0000000000000000000000000000000000000000000000000000000000000001" }
 const TASK_REF: Ref = { id: "t-fix", revision: 0, digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111" }
@@ -555,11 +559,11 @@ test("the shipped candidate example is accepted, dispatched, and records its cov
   assert.equal(result.ok, true, result.message ?? "")
   assert.equal(result.disposition, "dispatched")
   const delivery = result.deliveries?.[0]
-  assert.ok(delivery?.execution_task)
-  assert.equal(delivery.execution_task.instruction, "Deliver the example user goal as o1.")
-  assert.deepEqual(delivery.execution_task.tool_candidates, ["read", "edit", "bash"])
-  assert.deepEqual(delivery.execution_task.permissions.map((rule) => rule.operation_id), ["read", "edit", "bash"])
-  assert.deepEqual(store.current().coverage.map((record) => record.requirement), [{ local_ref: "t1" }])
+  assert.ok(delivery?.atom)
+  assert.match(delivery.atom.task, /MISSING_INPUT/)
+  assert.deepEqual(delivery.atom.optional_tools, ["read", "edit", "bash"])
+  assert.deepEqual(delivery.atom.authority.rules.map((rule) => rule.operation_id), ["read", "edit", "bash"])
+  assert.deepEqual(store.current().coverage.map((record) => record.requirement), [{ local_ref: "t1" }, { local_ref: "r1" }, { local_ref: "r2" }])
 })
 
 test("v2 retries a candidate with an empty basis instead of dropping the user input", async () => {
@@ -1506,9 +1510,9 @@ test("v2 registers the deliverable and material an atom declares", async () => {
   assert.equal(task?.revision, 0, "registering a declaration is not a task revision")
 
   // The registered material reaches the executor as a resolvable reference.
-  const executionTask = result.deliveries?.[0]?.execution_task
-  assert.deepEqual(executionTask?.inputs, [{ id: "b-spec", ref: SOURCE, role: "task_data", description: "the export spec" }])
-  assert.deepEqual(executionTask?.outputs.map((output) => output.id), ["o-patch"])
+  const atom = result.deliveries?.[0]?.atom
+  assert.deepEqual(atom?.inputs, [{ binding_id: "b-spec", ref: SOURCE, role: "task_data", use: "the export spec" }])
+  assert.deepEqual(atom?.outputs.map((output) => output.output_id), ["o-patch"])
 })
 
 test("v2 accepts an atom that restates a registered deliverable and material identically", async () => {

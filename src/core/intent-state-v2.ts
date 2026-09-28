@@ -279,6 +279,8 @@ function normalizeContent(value: Record<string, any>): ContentItem {
     item_id: requireNonEmptyString(value.item_id, "item_id"),
     revision: requireNonNegativeInteger(value.revision, "content revision"),
     text: typeof value.text === "string" ? value.text : "",
+    ...(typeof value.interpretation === "string" ? { interpretation: value.interpretation } : {}),
+    ...(value.text_origin === "source" ? { text_origin: "source" as const } : {}),
     sources: normalizeSources(value.sources),
     about: (Array.isArray(value.about) ? value.about.filter((item): item is Ref => isRefOrSource(item) && "id" in item) : []) as Ref[],
     scope: (Array.isArray(value.scope) ? value.scope.filter(isRecord) : []) as Scope[],

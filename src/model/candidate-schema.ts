@@ -104,6 +104,7 @@ export const CANDIDATE_JSON_SCHEMA = {
       type: "array",
       items: { $ref: "#/definitions/group" },
     },
+    source_coverage: { type: "array", items: { $ref: "#/definitions/source_disposition" } },
   },
   definitions: {
     ref: {
@@ -123,6 +124,8 @@ export const CANDIDATE_JSON_SCHEMA = {
       properties: {
         source_id: { type: "string", minLength: 1 },
         digest: { type: "string", minLength: 1 },
+        quote: { type: "string", minLength: 1 },
+        segment_id: { type: "string", minLength: 1 },
         span: {
           type: "object",
           additionalProperties: false,
@@ -136,6 +139,17 @@ export const CANDIDATE_JSON_SCHEMA = {
       },
     },
     ref_or_source: { oneOf: [{ $ref: "#/definitions/ref" }, { $ref: "#/definitions/source_ref" }] },
+    source_disposition: {
+      type: "object", additionalProperties: false,
+      required: ["source", "disposition", "requirements", "reason", "basis"],
+      properties: {
+        source: { $ref: "#/definitions/source_ref" },
+        disposition: { enum: ["normative", "context", "material", "management", "unresolved", "superseded"] },
+        requirements: { type: "array", items: { $ref: "#/definitions/ref_or_local" } },
+        reason: { type: "string", minLength: 1 },
+        basis: { type: "array", items: { $ref: "#/definitions/source_ref" } },
+      },
+    },
     ref_or_local: {
       oneOf: [
         { $ref: "#/definitions/ref" },
@@ -278,8 +292,8 @@ export const CANDIDATE_JSON_SCHEMA = {
       additionalProperties: false,
       required: ["predecessor", "successor", "requires", "conditions", "basis"],
       properties: {
-        predecessor: { $ref: "#/definitions/ref" },
-        successor: { $ref: "#/definitions/ref" },
+        predecessor: { $ref: "#/definitions/ref_or_local" },
+        successor: { $ref: "#/definitions/ref_or_local" },
         requires: { type: "string", minLength: 1 },
         conditions: { type: "array", items: { $ref: "#/definitions/condition" } },
         basis: { type: "array", items: { $ref: "#/definitions/ref_or_source" } },

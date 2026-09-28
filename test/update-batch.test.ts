@@ -4,14 +4,18 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
-import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
+import { createIntentCompilerV2 as createCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
 import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 import type { CompilerModelV2, CompilerModelV2CheckInput, CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
-import { digestText, type Candidate, type CompilerEvent, type ExecutionTask } from "../src/core/intent-contract.js"
+import { digestText, type Candidate, type CompilerEvent, type Atom } from "../src/core/intent-contract.js"
 import { createOpenCodeAdapter } from "../src/adapters/opencode.js"
+
+// Existing update fixtures use the pre-ledger v2 contract; strict requirement flow is tested separately.
+const createIntentCompilerV2 = (options: Parameters<typeof createCompilerV2>[0]) =>
+  createCompilerV2({ ...options, requirement_integrity: "legacy" })
 
 // Authority and exact limits: development/validation/2026-09-24-update-batch/SCOPE.md.
 // No timers, network, business execution, or assertions about model intelligence.
@@ -135,9 +139,9 @@ function operation(executionId: string) {
 
 test("U1/U2 work without a guessed path or self-checks carries constraints and return conditions", async () => {
   const h = await setup()
-  const task = h.dispatch.execution_task as ExecutionTask & { constraints?: unknown; return_when?: unknown }
-  assert.deepEqual(task.constraints, h.dispatch.atom.constraints)
-  assert.deepEqual(task.return_when, h.dispatch.atom.return_when)
+  const atom = h.dispatch.atom
+  assert.deepEqual(atom.constraints, h.store.current().compiled.t1?.atoms[0]?.constraints)
+  assert.deepEqual(atom.return_when, h.store.current().compiled.t1?.atoms[0]?.return_when)
   assert.equal(h.store.current().management_calls.length, 2)
   assert.equal(h.start().ok, true)
 })
@@ -171,15 +175,15 @@ test("an explicit user path limit reaches the proposal and check requests and st
   assert.match(checkPrompt, /preserve still-applicable user path restrictions and host-provided access boundaries/i)
   assert.match(checkPrompt, /does not prove that only that file may be modified/i)
 
-  const delivery = advanced.deliveries?.[0]?.execution_task as ExecutionTask | undefined
+  const delivery = advanced.deliveries?.[0]?.atom as Atom | undefined
   assert.ok(delivery)
-  assert.match(delivery.instruction, /Only edit django\/models\/serialization\.py/)
-  assert.deepEqual(delivery.constraints?.map(constraint => constraint.text), ["Only edit django/models/serialization.py."])
-  assert.equal(delivery.permissions.find(rule => rule.operation_id === "edit")?.allowed_use, "Edit only django/models/serialization.py.")
-  assert.deepEqual(delivery.tool_candidates, ["read", "edit", "bash"])
-  assert.deepEqual(delivery.permissions.map(rule => rule.operation_id), ["read", "edit", "bash"])
-  assert.deepEqual(checkInput.prepared?.execution_tasks[0]?.constraints, delivery.constraints)
-  assert.equal(checkInput.prepared?.execution_tasks[0]?.instruction, delivery.instruction)
+  assert.match(delivery.task, /Only edit django\/models\/serialization\.py/)
+  assert.deepEqual(delivery.constraints.map(constraint => constraint.text), ["Only edit django/models/serialization.py."])
+  assert.equal(delivery.authority.rules.find(rule => rule.operation_id === "edit")?.allowed_use, "Edit only django/models/serialization.py.")
+  assert.deepEqual(delivery.optional_tools, ["read", "edit", "bash"])
+  assert.deepEqual(delivery.authority.rules.map(rule => rule.operation_id), ["read", "edit", "bash"])
+  assert.deepEqual(checkInput.prepared?.dispatchable_atoms[0]?.constraints, delivery.constraints)
+  assert.equal(checkInput.prepared?.dispatchable_atoms[0]?.task, delivery.task)
 })
 
 test("U2 a user update with reuse is checked against the prepared IR and work without rewriting atoms", async () => {
@@ -193,9 +197,9 @@ test("U2 a user update with reuse is checked against the prepared IR and work wi
   assert.ok(checked, "reuse must not bypass user-update checking")
   const prepared = checked.prepared
   assert.ok(prepared)
-  assert.deepEqual(Object.keys(prepared).sort(), ["eligible_execution_ids", "eligible_task_ids", "execution_tasks", "ir"])
+  assert.deepEqual(Object.keys(prepared).sort(), ["dispatchable_atoms", "eligible_execution_ids", "eligible_task_ids", "ir"])
   assert.deepEqual(prepared.ir, h.store.current().ir)
-  assert.ok(prepared.execution_tasks.some(t => t.instruction === h.dispatch.atom.task))
+  assert.ok(prepared.dispatchable_atoms.some(atom => atom.task === h.dispatch.atom.task))
   assert.deepEqual(prepared.eligible_task_ids, ["t1"])
   assert.deepEqual(prepared.eligible_execution_ids, [])
   assert.ok(Array.isArray(checked.candidate.groups[0]?.execution_decisions))

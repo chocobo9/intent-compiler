@@ -22,6 +22,7 @@ class OpenCodePatched(OpenCode):
         self._dispatch_snapshot_path = Path(dispatch_snapshot_path)
         self._experiment_run_id = experiment_run_id
         self._active_round = 1
+        self._executions_before_round = set()
         super().__init__(*args, **kwargs)
 
     @property
@@ -68,6 +69,9 @@ class OpenCodePatched(OpenCode):
 
     async def run_round(self, instruction, round_num, environment, context) -> None:
         self._active_round = round_num
+        self._executions_before_round = self._execution_ids(
+            self._read_snapshot(required=False)
+        )
         encoded = base64.b64encode(instruction.encode("utf-8")).decode("ascii")
         staged = await environment.exec(command=": > /app/TASK_SPEC.md", cwd="/app")
         if staged.return_code != 0:
@@ -84,20 +88,54 @@ class OpenCodePatched(OpenCode):
 
     async def run(self, instruction, environment, context) -> None:
         await super().run(instruction, environment, context)
+        snapshot = self._read_snapshot(required=True)
+        dispatches = snapshot.get("dispatches")
+        if not isinstance(dispatches, list) or not dispatches:
+            raise RuntimeError(
+                "No persisted Compiler dispatch; stopping before the official verifier"
+            )
+        new_executions = self._execution_ids(snapshot) - self._executions_before_round
+        if not new_executions:
+            raise RuntimeError(
+                f"No executor start persisted for round {self._active_round}; "
+                "stopping before the official verifier"
+            )
+        print(
+            f"Harbor dispatch gate: round {self._active_round} started "
+            f"{len(new_executions)} execution(s)"
+        )
+
+    def _read_snapshot(self, *, required: bool):
         snapshot_path = self._dispatch_snapshot_path
         if not snapshot_path.is_file():
-            raise RuntimeError(
-                "Compiler snapshot missing; stopping before the official verifier"
-            )
+            if required:
+                raise RuntimeError(
+                    "Compiler snapshot missing; stopping before the official verifier"
+                )
+            return None
         try:
             snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
             raise RuntimeError(
                 "Compiler snapshot unreadable; stopping before the official verifier"
             ) from exc
-        dispatches = snapshot.get("dispatches")
-        if not isinstance(dispatches, list) or not dispatches:
+        if not isinstance(snapshot, dict):
             raise RuntimeError(
-                "No persisted Compiler dispatch; stopping before the official verifier"
+                "Compiler snapshot invalid; stopping before the official verifier"
             )
-        print(f"Harbor dispatch gate: {len(dispatches)} persisted dispatch(es)")
+        return snapshot
+
+    @staticmethod
+    def _execution_ids(snapshot):
+        if snapshot is None:
+            return set()
+        executions = snapshot.get("executions")
+        if not isinstance(executions, list) or any(
+            not isinstance(item, dict)
+            or not isinstance(item.get("execution_id"), str)
+            for item in executions
+        ):
+            raise RuntimeError(
+                "Compiler snapshot executions invalid; stopping before the official verifier"
+            )
+        return {item["execution_id"] for item in executions}

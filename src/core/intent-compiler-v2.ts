@@ -46,10 +46,15 @@ import type {
   ExistingObjectDirectory,
 } from "../model/compiler-model-v2.js"
 import { V2_CHECK_CONTRACT, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
+import { bindCurrentRequirements, selectSourceEvents } from "./requirement-flow.js"
+import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
+import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
 
 export interface IntentCompilerV2Options {
   store: IntentStoreV2
   model: CompilerModelV2
+  /** Opt-in compatibility for old runs and fixtures without IR requirements; strict is the default. */
+  requirement_integrity?: "strict" | "legacy"
   /**
    * Host facts for the management model: which operations the executor can be
    * granted, the workspace root, and whether a named path exists and is
@@ -172,7 +177,7 @@ export function createIntentCompilerV2(options: IntentCompilerV2Options): Intent
       if (advancingStores.has(options.store)) return failure(input.runId, "management_busy", "this store already has an advance in progress")
       advancingStores.add(options.store)
       try {
-        return await advance(options.store, options.model, hydrateExecutionManager(options.store.current()), new AtomStateLedger(options.store.current().atom_states), options.capabilities, input)
+        return await advance(options.store, options.model, hydrateExecutionManager(options.store.current()), new AtomStateLedger(options.store.current().atom_states), options.capabilities, input, options.requirement_integrity !== "legacy")
       } finally { advancingStores.delete(options.store) }
     },
     authorize: (request: AuthorizeRequest) => authorize(options.store, hydrateExecutionManager(options.store.current()), new AtomStateLedger(options.store.current().atom_states), options.capabilities, request),
@@ -189,12 +194,15 @@ async function advance(
   atoms: AtomStateLedger,
   capabilities: CapabilitySource | undefined,
   input: { runId: string },
+  strictRequirements: boolean,
 ): Promise<AdvanceResult> {
   let snapshot = store.current()
   if (input.runId !== snapshot.run_id) return failure(input.runId, "identity_conflict", "runId does not match this store")
 
   const events = store.popPending()
   snapshot = store.current()
+  const sourceEvents = selectSourceEvents(store.readEvents(), events, snapshot.ir)
+  const availableSources = [...sourceEvents, ...events]
   if (events.length === 0) {
     return {
       ok: true,
@@ -234,9 +242,11 @@ async function advance(
     })),
   }
   const modelInput: CompilerModelV2Input = {
+    source_segments: sourceSegments(availableSources),
     run_id: snapshot.run_id,
     events,
-    event_source_refs: eventSourceRefs(events),
+    source_events: sourceEvents,
+    event_source_refs: eventSourceRefs(availableSources),
     ir: snapshot.ir,
     compiled: snapshot.compiled,
     existing_objects: buildExistingObjectDirectory(snapshot.ir, snapshot.compiled),
@@ -297,16 +307,19 @@ async function advance(
   let prepared: ReturnType<typeof prepareCandidate> | undefined
   const issuesFor = (result: CompilerModelV2Result): string[] => {
     prepared = undefined
-    if (!result.ok || result.candidate === undefined) return proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun)
+    if (!result.ok || result.candidate === undefined) return proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements)
     result.candidate = structuredClone(result.candidate)
-    sourceRefs = resolveSourceRefs(result.candidate, events)
+    sourceRefs = resolveSourceRefs(result.candidate, availableSources)
+    if (strictRequirements && sourceRefs.unresolved > 0) {
+      return [`candidate sources must cite a resolvable user text span or event; ${sourceRefs.unresolved} unresolved reference(s): ${JSON.stringify(sourceRefs.unresolvedRefs)}`]
+    }
     const attempt = attemptsLog.at(-1)
     if (attempt?.kind === "propose" && activeRepairContext !== undefined) {
       attempt.candidate_changes = candidateChanges(activeRepairContext.candidate, result.candidate)
     }
-    const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun)
+    const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements)
     if (candidateErrors.length > 0) return candidateErrors
-    try { prepared = prepareCandidate(snapshot, result.candidate, events) }
+    try { prepared = prepareCandidate(snapshot, result.candidate, events, availableSources, strictRequirements, capabilities) }
     catch (error) { return [errorMessage(error)] }
     return []
   }
@@ -327,9 +340,8 @@ async function advance(
   for (;;) {
     if (managementBasis(store.current(), store.readEvents()) !== basisDigest) break
     if (proposal.ok && proposal.candidate !== undefined && issues.length === 0) {
-      // A batch that compiles new atoms is never accepted unverified, so a
-      // check that no longer fits the budget fails the batch instead of
-      // silently accepting the candidate.
+      if (model.verify === undefined || semanticCheckTaskIds(proposal.candidate, events).length === 0) break
+      // A configured, applicable check must fit within the same batch budget.
       const maxAttempts = snapshot.budget.max_management_requests
       if (attempts + 1 > maxAttempts) {
         checkBudgetExhausted = true
@@ -339,6 +351,7 @@ async function advance(
       const runCheck = () => runSemanticCheck(model, proposal.candidate as Candidate, {
         run_id: snapshot.run_id,
         events,
+        source_events: sourceEvents,
         ir: snapshot.ir,
         compiled: snapshot.compiled,
         capabilities: modelInput.capabilities ?? { operations: [], material: [] },
@@ -533,7 +546,7 @@ async function advance(
 }
 
 /** Prepare on private state; no persistence, authorization or host effects. */
-function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events: readonly CompilerEvent[]) {
+function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events: readonly CompilerEvent[], availableSources: readonly CompilerEvent[], strictRequirements: boolean, capabilities?: CapabilitySource) {
   const execution = hydrateExecutionManager(snapshot)
   const atoms = new AtomStateLedger(snapshot.atom_states)
   let compiledIntentSequence = snapshot.compiled_intent_sequence
@@ -559,6 +572,7 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
         throw new Error(stateResult.errors.map((error) => error.message).join("; "))
       }
       for (const [taskId, task] of Object.entries(stateResult.tasks)) ir[taskId] = task
+      if (strictRequirements) materializeSourceContent(ir[taskRefs[0]!]!, group.ir_changes, availableSources)
       irChanged = true
     }
 
@@ -578,18 +592,30 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     }
 
     if (group.compilation.decision === "replace") {
-      for (const draft of group.compilation.drafts) {
+      const drafts = strictRequirements
+        ? bindCurrentRequirements(
+          group, ir[taskRefs[0] as string] as TaskIntent, snapshot.ir[taskRefs[0] as string], availableSources,
+          (compiled[taskRefs[0] as string]?.atoms ?? []).filter(atom => ["ready", "executing"].includes(atoms.status(taskRefs[0] as string, atom))),
+        )
+        : group.compilation.drafts
+      if (strictRequirements) for (const draft of drafts) for (const atom of draft.atoms) {
+        const prior = compiled[draft.task_id]?.atoms.find(existing => existing.atom_id === atom.atom_id && existing.revision === atom.revision)
+        if (prior && atomRef(prior).digest !== atomRef(atom).digest) {
+          throw new Error(`Atom ${atom.atom_id}@${atom.revision} changes content after requirement binding; raise its revision`)
+        }
+      }
+      for (const draft of drafts) {
         if (!ir[draft.task_id]) {
           throw new Error(`compiled draft references unknown task ${draft.task_id}`)
         }
       }
-      const build = buildCompiledIntents(compiled, group.compilation.drafts, { nextCompiledIntentId })
+      const build = buildCompiledIntents(compiled, drafts, { nextCompiledIntentId })
       if (!build.ok) {
         throw new Error(build.errors.join("; "))
       }
       // Register declared deliverables and materials in the same commit, so the
       // compiled intent is stored together with the IR entries it references.
-      const registration = registrationChanges(taskRefs[0] as string, group.compilation.drafts, ir[taskRefs[0] as string], eventSourceRefs(events))
+      const registration = registrationChanges(taskRefs[0] as string, drafts, ir[taskRefs[0] as string], eventSourceRefs(events))
       if (registration.issues.length > 0) {
         throw new Error(registration.issues.join("; "))
       }
@@ -602,13 +628,16 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
         irChanged = true
       }
       for (const change of registration.declarationChanges) declarationChanges.push(change)
-      atoms.apply(build.atom_states)
+      const existingStates = atoms.snapshot()
+      atoms.apply(build.atom_states.filter(record => !existingStates.some(existing =>
+        existing.task_id === record.task_id && existing.atom_id === record.atom_id && existing.atom_revision === record.atom_revision,
+      )))
       // A replacement the model proposed becomes a ledger fact here, where the
       // prior atom and its owner are still known; the atom itself keeps content.
       for (const draft of group.compilation.drafts) {
         const prior = compiled[draft.task_id]
-        for (const atom of draft.atoms) {
-          const previous = atom.previous_atom_ref
+        for (const state of build.atom_states.filter(record => record.task_id === draft.task_id)) {
+          const previous = state.previous_atom_ref
           if (previous === undefined) continue
           const superseded = prior?.atoms.find((candidate) => candidate.atom_id === previous.id && candidate.revision === previous.revision)
           // A failed atom keeps its failed record: the replacement chain is
@@ -623,12 +652,19 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
         compiled[taskId] = intent
         changedTasks.add(taskId)
       }
+    } else if (strictRequirements) {
+      bindCurrentRequirements(
+        group, ir[taskRefs[0] as string] as TaskIntent, snapshot.ir[taskRefs[0] as string], availableSources,
+        (compiled[taskRefs[0] as string]?.atoms ?? []).filter(atom => ["ready", "executing"].includes(atoms.status(taskRefs[0] as string, atom))),
+      )
     }
 
     for (const question of group.questions) questions.push(question.text)
   }
 
   // Management acceptance: a satisfied assessment targeting a completed atom
+  if (strictRequirements) validateSourceCoverage(candidate, events, availableSources, snapshot.ir, ir)
+
   // is the code-committed signal that the atom becomes a historical record.
   const satisfiedTargets = candidate.groups
     .flatMap((group) => group.assessments)
@@ -680,12 +716,21 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     }
   }
 
-  // Dispatch only atoms with no preconditions: those are ready to start now.
-  for (const taskId of changedTasks) {
+  const admission: AtomAdmissionContext = { compiled, ir, atoms, capabilities,
+    execution_outcomes: snapshot.execution_outcomes,
+    assessments: [...snapshot.assessments, ...candidate.groups.flatMap(group => group.assessments)] }
+  // Re-evaluate waiting successors after accepted results even with reuse.
+  // User updates still clear only tasks explicitly handled by the candidate.
+  const dispatchTasks = events.some(event => event.kind === "user_input")
+    ? new Set(candidate.groups.flatMap(group => group.task_refs))
+    : new Set(Object.keys(compiled).filter(taskId => !snapshot.execution_eligibility || snapshot.execution_eligibility.task_ids.includes(taskId)))
+  for (const taskId of dispatchTasks) {
     const intent = compiled[taskId]
     if (!intent || ir[taskId]?.current_scope.disposition !== "proceed") continue
     for (const atom of intent.atoms) {
-      if (atom.preconditions.length === 0 && atoms.status(taskId, atom) === "ready") {
+      const alreadyOffered = execution.dispatchesSnapshot().some(dispatch => dispatch.task_id === taskId && dispatch.atom_id === atom.atom_id && dispatch.atom_revision === atom.revision && dispatch.digest === atomRef(atom).digest)
+      if (!changedTasks.has(taskId) && alreadyOffered) continue
+      if (atoms.status(taskId, atom) === "ready" && atomAdmission(taskId, atom, admission) === undefined) {
         const dispatch = execution.createDispatch(intent, atom.atom_id)
         deliveries.push({
           dispatch_id: dispatch.dispatch_id,
@@ -694,7 +739,6 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
           digest: dispatch.digest,
           compiled_revision: dispatch.compiled_revision,
           atom,
-          execution_task: projectExecutionTask(dispatch, atom),
         })
       }
     }
@@ -706,18 +750,18 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     task_ids: taskIds.filter(taskId => ir[taskId]?.current_scope.disposition === "proceed"),
     execution_ids: [...continued],
   } : snapshot.execution_eligibility
-  const executionTasks: import("./intent-contract.js").ExecutionTask[] = []
+  const dispatchableAtoms: import("./intent-contract.js").Atom[] = []
   for (const taskId of taskIds) {
     const intent = compiled[taskId]
     if (!intent || ir[taskId]?.current_scope.disposition !== "proceed") continue
     for (const atom of intent.atoms) {
       if (!["ready", "executing"].includes(atoms.status(taskId, atom))) continue
       const dispatch = execution.dispatchesSnapshot().find(d => d.task_id === taskId && d.atom_id === atom.atom_id && d.atom_revision === atom.revision && d.digest === atomRef(atom).digest)
-      if (dispatch) executionTasks.push(projectExecutionTask(dispatch, atom))
+      if (dispatch && atomAdmission(taskId, atom, admission) === undefined) dispatchableAtoms.push(atom)
     }
   }
   const view = {
-    ir, compiled, execution_tasks: executionTasks,
+    ir, compiled, dispatchable_atoms: dispatchableAtoms,
     execution_decisions: candidate.groups.flatMap(group => group.execution_decisions),
     eligible_task_ids: eligibility?.task_ids ?? taskIds,
     eligible_execution_ids: eligibility?.execution_ids ?? execution.list().filter(e => e.status === "active").map(e => e.execution_id),
@@ -732,16 +776,6 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     compiled_intent_sequence: compiledIntentSequence, execution_eligibility: eligibility,
     view: { ...view, digest: digestOf(view) },
   }
-}
-
-function projectExecutionTask(dispatch: import("./execution-state.js").DispatchRecord, atom: import("./intent-contract.js").Atom): import("./intent-contract.js").ExecutionTask {
-  return structuredClone({ schema_version: 2, dispatch_id: dispatch.dispatch_id, task_id: dispatch.task_id,
-    compiled_revision: dispatch.compiled_revision, atom_id: atom.atom_id, instruction: atom.task,
-    inputs: atom.inputs.map(input => ({ id: input.binding_id, ref: input.ref, role: input.role, description: input.use })),
-    outputs: atom.outputs.map(output => ({ id: output.output_id, description: output.description, format: output.format })),
-    tool_candidates: atom.optional_tools, permissions: atom.authority.rules,
-    completion_rules: atom.completion.map(rule => rule.text), constraints: atom.constraints, return_when: atom.return_when,
-  })
 }
 
 /** Compare read facts, excluding accounting written by this call itself. */
@@ -772,6 +806,14 @@ function authorize(
   if ((snapshot.unresolved_user_event_ids?.length ?? 0) > 0) refusal = deny(request.run_id, "user_update_pending", "a received user update has not been committed; run authority is suspended")
   else if (taskId && snapshot.ir[taskId]?.current_scope.disposition !== "proceed") refusal = deny(request.run_id, "scope_not_proceeding", "the current task scope does not permit execution")
   else if (snapshot.execution_eligibility && taskId && (!snapshot.execution_eligibility.task_ids.includes(taskId) || (request.kind === "operation" && !snapshot.execution_eligibility.execution_ids.includes(request.execution_id)))) refusal = deny(request.run_id, "execution_review_required", "this work has not been cleared under the latest user update")
+  if (!refusal && taskId) {
+    const dispatch = request.kind === "start" ? execution.dispatch(request.dispatch_id) : execution.dispatch(execution.getExecution(request.execution_id)?.dispatch_id ?? "")
+    const atom = snapshot.compiled[taskId]?.atoms.find(candidate => candidate.atom_id === dispatch?.atom_id && candidate.revision === dispatch.atom_revision)
+    if (atom) {
+      const blocked = atomAdmission(taskId, atom, { compiled: snapshot.compiled, ir: snapshot.ir, atoms, assessments: snapshot.assessments, capabilities, execution_outcomes: snapshot.execution_outcomes })
+      if (blocked) refusal = deny(request.run_id, "execution_inactive", blocked)
+    }
+  }
   if (refusal) { recordDenial(store, request, refusal); return refusal }
   const result = request.kind === "start"
     ? startExecution(store, execution, atoms, request)
@@ -1122,15 +1164,21 @@ function collectNamedPaths(events: readonly CompilerEvent[]): string[] {
 /**
  * Independent check of one candidate: it reads the original input, the
  * candidate, and the current IR, and may only report inconsistencies.  A
- * batch that compiles new atoms is not accepted without it; if the check
- * cannot run or keeps failing, the whole batch fails.
+ * When configured and applicable, a failed or unavailable check prevents
+ * acceptance; a run without a checker does not reserve a phantom call.
  */
+function semanticCheckTaskIds(candidate: Candidate, events: readonly CompilerEvent[]): string[] {
+  return events.some(event => event.kind === "user_input")
+    ? [...new Set(candidate.groups.flatMap(group => group.task_refs))] : compiledTasks(candidate)
+}
+
 async function runSemanticCheck(
   model: CompilerModelV2,
   candidate: Candidate,
   input: {
     run_id: string
     events: readonly CompilerEvent[]
+    source_events?: readonly CompilerEvent[]
     ir: Record<string, TaskIntent>
     compiled: Record<string, CompiledIntent>
     capabilities: CapabilityCatalog
@@ -1152,13 +1200,12 @@ async function runSemanticCheck(
   failure?: { kind: "transport" | "deterministic"; message: string }
 } | undefined> {
   if (model.verify === undefined) return undefined
-  const taskIds = input.events.some(event => event.kind === "user_input")
-    ? [...new Set(candidate.groups.flatMap(group => group.task_refs))] : compiledTasks(candidate)
+  const taskIds = semanticCheckTaskIds(candidate, input.events)
   if (taskIds.length === 0) return undefined
   const basisEventIds = input.events.map((event) => event.event_id)
   const preparedForCheck = input.prepared === undefined ? undefined : {
     ir: input.prepared.ir,
-    execution_tasks: input.prepared.execution_tasks,
+    dispatchable_atoms: input.prepared.dispatchable_atoms,
     eligible_task_ids: input.prepared.eligible_task_ids,
     eligible_execution_ids: input.prepared.eligible_execution_ids,
   }
@@ -1168,7 +1215,8 @@ async function runSemanticCheck(
     result = await model.verify(structuredClone({
       run_id: input.run_id,
       events: input.events,
-      event_source_refs: eventSourceRefs(input.events),
+      source_events: input.source_events ?? [],
+      event_source_refs: eventSourceRefs([...(input.source_events ?? []), ...input.events]),
       ir: input.ir,
       compiled: input.compiled,
       capabilities: input.capabilities,
@@ -1215,7 +1263,7 @@ async function runSemanticCheck(
     }
   }
   input.recordCall(startedAt, "ok", undefined, result.call?.usage, result.call?.text)
-  const findings = resolveCheckEvidence(verdict.findings, input.events, input.ir, input.compiled)
+  const findings = resolveCheckEvidence(verdict.findings, [...(input.source_events ?? []), ...input.events], input.ir, input.compiled)
   const blocking = findings.filter((finding) => finding.evidence_resolved === true)
   return {
     record: {
@@ -1429,9 +1477,10 @@ export function proposalIssues(
   ir: Record<string, TaskIntent>,
   compiled: Record<string, CompiledIntent>,
   buildOptions: BuildCompiledIntentOptions,
+  strictRequirements = false,
 ): string[] {
   if (!proposal.ok || !proposal.candidate) return proposal.schema_errors ?? []
-  return candidateIssues(proposal.candidate, events, ir, compiled, buildOptions)
+  return candidateIssues(proposal.candidate, events, ir, compiled, buildOptions, strictRequirements)
 }
 
 /**
@@ -1474,6 +1523,7 @@ export function candidateIssues(
   ir: Record<string, TaskIntent>,
   compiled: Record<string, CompiledIntent>,
   buildOptions: BuildCompiledIntentOptions,
+  strictRequirements = false,
 ): string[] {
   const issues: string[] = []
   const eventIds = events.map((event) => event.event_id)
@@ -1555,7 +1605,7 @@ export function candidateIssues(
         const currentIntent = compiled[draft.task_id]
         for (const atom of draft.atoms) {
           const prior = currentIntent?.atoms.find((candidate) => candidate.atom_id === atom.atom_id && candidate.revision === atom.revision)
-          if (prior !== undefined && atomRef(prior).digest !== atomRef(atom).digest) {
+          if (!strictRequirements && prior !== undefined && atomRef(prior).digest !== atomRef(atom).digest) {
             issues.push(
               `groups[${index}].compilation.drafts: atom ${atom.atom_id}@${atom.revision} already exists with different content; raise its revision so the new content gets its own lifecycle record`,
             )
@@ -1783,6 +1833,9 @@ export function resolveCheckEvidence(
       if (isRef(ref)) {
         const task = ir[ref.id]
         if (task !== undefined && task.revision === ref.revision) resolved = true
+        if (Object.values(ir).some(candidate => candidate.content.some(item =>
+          item.item_id === ref.id && item.revision === ref.revision && digestOf(item) === ref.digest,
+        ))) resolved = true
         if (atomIds.has(ref.id)) resolved = true
         return ref
       }
@@ -1820,6 +1873,7 @@ export function resolveSourceRefs(
     textBySource.set(event.event_id, typeof payload.text === "string" ? payload.text : canonicalJson(event.payload ?? null))
   }
   const stats: SourceRefStats = { total: 0, resolved: 0, normalized: 0, unresolved: 0, unresolvedRefs: [] }
+  const segments = new Map(sourceSegments(events).map(segment => [`${segment.source_id}\0${segment.segment_id}`, segment]))
   /** Keep the audit's list bounded; the counters above stay exact. */
   const noteUnresolved = (value: Record<string, unknown>, span: Record<string, unknown> | undefined): void => {
     if (stats.unresolvedRefs.length >= MAX_UNRESOLVED_REFS) return
@@ -1843,9 +1897,32 @@ export function resolveSourceRefs(
         stats.unresolved += 1
         noteUnresolved(value, isRecord(value.span) ? value.span : undefined)
       } else {
+        if (typeof value.segment_id === "string") {
+          const segment = segments.get(`${value.source_id}\0${value.segment_id}`)
+          if (!segment || value.quote !== undefined) {
+            stats.unresolved += 1
+            noteUnresolved(value, undefined)
+            return
+          }
+          value.span = { ...segment.span }
+          delete value.segment_id
+        }
+        if (typeof value.quote === "string") {
+          const start = text.indexOf(value.quote)
+          const repeated = start >= 0 && text.indexOf(value.quote, start + 1) >= 0
+          if (value.quote.length === 0 || start < 0 || repeated) {
+            // A plausible model-written span must not rescue a missing or
+            // ambiguous quote. The whole candidate fails the source gate.
+            delete value.span
+            stats.unresolved += 1
+            noteUnresolved(value, undefined)
+            return
+          }
+          value.span = { unit: "utf16", start, end: start + value.quote.length }
+          delete value.quote
+        }
         const span = isRecord(value.span) ? value.span : undefined
-        const end = typeof span?.end === "number" ? span.end : undefined
-        if (end !== undefined && end > text.length) {
+        if (span !== undefined && (span.unit !== "utf16" || !Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end <= span.start || span.end > text.length)) {
           stats.unresolved += 1
           noteUnresolved(value, span)
         } else {

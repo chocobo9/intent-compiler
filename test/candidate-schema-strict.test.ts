@@ -7,6 +7,15 @@ import { createCompilerModelV2, V2_COMPILER_CONTRACT } from "../src/model/compil
 import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
 import { Ajv } from "ajv"
 
+test("strict generation requires a non-null source disposition array even when empty", () => {
+  const validate = new Ajv({ allErrors: true, strict: false }).compile(buildStrictCandidateSchema("openai"))
+  const value = buildStrictCandidateExample("openai")
+  value.source_coverage = null
+  assert.equal(validate(value), false, "a nullable coverage field silently permits omitting source dispositions")
+  value.source_coverage = []
+  assert.equal(validate(value), true)
+})
+
 test("strict candidate schema requires every property and rejects additional properties", () => {
   const schema = buildStrictCandidateSchema() as Record<string, any>
   const visited = new Set<unknown>()
@@ -98,6 +107,19 @@ test("strict ir_change keeps one value shape per target instead of one merged bl
   const taskCreate = branches.find((item) => item.properties?.action?.enum?.[0] === "create" && item.properties?.target?.enum?.[0] === "task")
   assert.equal("description" in (taskCreate?.properties?.value?.properties ?? {}), false)
   assert.equal("format" in (taskCreate?.properties?.value?.properties ?? {}), false)
+})
+
+test("strict content changes require an exact user quote or supplied source segment", () => {
+  const schema = buildStrictCandidateSchema("openai") as Record<string, any>
+  const branches = schema.definitions.ir_change.anyOf as Array<Record<string, any>>
+  for (const action of ["create", "revise"]) {
+    const content = branches.find((item) => item.properties?.action?.enum?.[0] === action && item.properties?.target?.enum?.[0] === "content")
+    assert.equal(content?.properties?.sources?.items?.$ref, "#/definitions/source_ref_with_quote")
+  }
+  const source = schema.definitions.source_ref_with_quote
+  assert.equal(source.anyOf[0].required.includes("quote"), true)
+  assert.equal(source.anyOf[1].required.includes("segment_id"), true)
+  assert.equal(source.anyOf.every((branch: any) => !("span" in branch.properties)), true)
 })
 
 test("null-valued optional fields from strict providers are stripped before canonical validation", async () => {

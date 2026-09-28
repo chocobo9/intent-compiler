@@ -1,4 +1,5 @@
 import { isAbsolute } from "node:path"
+import { Ajv } from "ajv"
 import type {
   CompilerModelRequest,
   CompilerModelTransport,
@@ -229,7 +230,14 @@ function createOpenCodeV2Transport(
         retryCount: 0,
       },
     })
-    return v2CallFromPromptResponse(completed, startedAt, sessionId)
+    const call = v2CallFromPromptResponse(completed, startedAt, sessionId)
+    // info.structured is a host container, not evidence of schema validation.
+    // Keep raw output and usage, and report schema failures as candidate errors
+    // rather than transport failures that could trigger a network retry.
+    const validate = new Ajv({ allErrors: true, strict: false, allowUnionTypes: true }).compile(schema as Record<string, unknown>)
+    if (!validate(JSON.parse(call.text))) call.structured_schema_errors = (validate.errors ?? []).map(error =>
+      `${error.instancePath || "/"}: ${error.message ?? "invalid"} ${JSON.stringify(error.params)}`)
+    return call
   }
 }
 

@@ -22,6 +22,10 @@ export interface SourceRef {
   source_id: string
   digest: string
   span?: { unit: "utf16"; start: number; end: number }
+  /** Candidate-only exact excerpt; management resolves it to span before storing. */
+  quote?: string
+  /** Candidate-only identity of an immutable source segment supplied by management. */
+  segment_id?: string
 }
 
 export interface Binding {
@@ -55,6 +59,9 @@ export interface ContentItem {
   item_id: string
   revision: number
   text: string
+  /** Management keeps the model's interpretation separate from verbatim normative text. */
+  interpretation?: string
+  text_origin?: "source"
   sources: SourceRef[]
   about: Ref[]
   scope: Scope[]
@@ -191,6 +198,12 @@ export interface Relation {
   basis: Array<Ref | SourceRef>
 }
 
+/** Candidate-local endpoints are resolved after management binds requirements. */
+export interface RelationDraft extends Omit<Relation, "predecessor" | "successor"> {
+  predecessor: Ref | { local_ref: string }
+  successor: Ref | { local_ref: string }
+}
+
 export interface CompiledIntent {
   schema_version: 2
   artifact_type: "compiled_intent"
@@ -220,30 +233,12 @@ export interface ExecutionReturnPayload {
   outcome: ExecutionOutcome
 }
 
-export interface ExecutionTask {
-  schema_version: 2
-  dispatch_id: string
-  task_id: string
-  compiled_revision: number
-  atom_id: string
-  instruction: string
-  /** The executor gets the material reference, not just a binding label. */
-  inputs: Array<{ id: string; ref: Ref | SourceRef; role: "task_data" | "context" | "example"; description: string }>
-  outputs: Array<{ id: string; description: string; format: "text" | "json" | "artifact" }>
-  tool_candidates: string[]
-  permissions: PermissionRule[]
-  completion_rules: string[]
-  /** New deliveries always carry these; optional only for old host records. */
-  constraints?: Atom["constraints"]
-  return_when?: string[]
-}
-
 export interface CompiledIntentDraft {
   local_ref: string
   task_id: string
   intent_basis: Ref[]
   atoms: AtomDraft[]
-  relations: Relation[]
+  relations: RelationDraft[]
   attachments: Array<Ref | SourceRef>
 }
 
@@ -317,6 +312,24 @@ export interface Candidate {
   schema_version: 2
   basis: { event_ids: string[]; refs: Ref[] }
   groups: CandidateGroup[]
+  /** Required by strict preparation; optional here for explicit legacy callers. */
+  source_coverage?: SourceDisposition[]
+}
+
+export interface SourceDisposition {
+  source: SourceRef
+  disposition: "normative" | "context" | "material" | "management" | "unresolved" | "superseded"
+  requirements: Array<Ref | { local_ref: string }>
+  reason: string
+  /** Current input supporting removal of previously adopted source text. */
+  basis: SourceRef[]
+}
+
+export interface SourceSegment {
+  source_id: string
+  segment_id: string
+  span: { unit: "utf16"; start: number; end: number }
+  text: string
 }
 
 /**
@@ -487,7 +500,6 @@ export interface AdvanceResult {
     digest: string
     compiled_revision: number
     atom: Atom
-    execution_task?: ExecutionTask
   }>
   questions?: string[]
   code?: string

@@ -29,6 +29,22 @@ const nullable = (value: unknown, profile: StrictSchemaProfile): SchemaNode => (
 const text = { type: "string", minLength: 1 } as const
 const refOrSource = { $ref: "#/definitions/ref_or_source" } as const
 const ref = { $ref: "#/definitions/ref" } as const
+const sourceWithQuote = { $ref: "#/definitions/source_ref_with_quote" } as const
+
+const sourceRefWithQuote = { oneOf: [{
+  type: "object",
+  additionalProperties: false,
+  required: ["source_id", "digest", "quote"],
+  properties: {
+    source_id: text,
+    digest: text,
+    quote: text,
+  },
+}, {
+  type: "object", additionalProperties: false,
+  required: ["source_id", "digest", "segment_id"],
+  properties: { source_id: text, digest: text, segment_id: text },
+}] } as const
 
 const goalValue = {
   type: "object",
@@ -150,7 +166,7 @@ function valueFor(profile: StrictSchemaProfile, target: ValueTarget): SchemaNode
   }
 }
 
-function branch(action: string, target: string[], value: SchemaNode, extra: SchemaNode = {}): SchemaNode {
+function branch(action: string, target: string[], value: SchemaNode, extra: SchemaNode = {}, sourceItem: SchemaNode = { $ref: "#/definitions/source_ref" }): SchemaNode {
   return {
     type: "object",
     additionalProperties: false,
@@ -159,7 +175,7 @@ function branch(action: string, target: string[], value: SchemaNode, extra: Sche
       action: { enum: [action] },
       target: { enum: target },
       value,
-      sources: { type: "array", items: { $ref: "#/definitions/source_ref" } },
+      sources: { type: "array", items: sourceItem },
       ...extra.properties,
     },
   }
@@ -177,10 +193,10 @@ function strictIrChange(profile: StrictSchemaProfile): SchemaNode {
     branch("create", [target], valueFor(profile, target), {
       required: ["local_ref"],
       properties: { local_ref: { type: "string", minLength: 1 } },
-    }),
+    }, target === "content" ? sourceWithQuote : undefined),
   )
   const reviseBranches = (["task", "current_scope", "binding", "output", "content"] as const).map((target) =>
-    branch("revise", [target], valueFor(profile, target), withId),
+    branch("revise", [target], valueFor(profile, target), withId, target === "content" ? sourceWithQuote : undefined),
   )
   return {
     anyOf: [
@@ -261,11 +277,14 @@ function transformUnionVariant(variant: unknown, profile: StrictSchemaProfile): 
 }
 
 export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq"): Record<string, unknown> {
-  const source = CANDIDATE_JSON_SCHEMA as unknown as SchemaNode
+  const canonical = CANDIDATE_JSON_SCHEMA as unknown as SchemaNode
+  // Legacy canonical callers may omit this field; generated candidates may not.
+  const source: SchemaNode = { ...canonical, required: [...canonical.required, "source_coverage"] }
   const definitions: Record<string, unknown> = {}
   for (const [name, definition] of Object.entries(source.definitions as Record<string, unknown>)) {
     definitions[name] = transform(name === "ir_change" ? strictIrChange(profile) : definition, profile) as Record<string, unknown>
   }
+  definitions.source_ref_with_quote = transform(sourceRefWithQuote, profile)
   const output: Record<string, unknown> = { ...(transform(source, profile) as Record<string, unknown>), definitions }
   if (profile === "openai") {
     delete output.$schema
@@ -279,10 +298,10 @@ export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq"
  * schemas require optional properties to be present as null; CompilerModelV2
  * strips those nulls before canonical validation.
  */
-export function buildStrictCandidateExample(profile: StrictSchemaProfile = "openai"): Record<string, unknown> {
+export function buildStrictCandidateExample(profile: StrictSchemaProfile = "openai", example: unknown = CANDIDATE_EXAMPLE): Record<string, unknown> {
   const schema = buildStrictCandidateSchema(profile)
   const definitions = schema.definitions as Record<string, unknown>
-  const result = completeStrictExample(CANDIDATE_EXAMPLE, schema, definitions)
+  const result = completeStrictExample(example, schema, definitions)
   return result as Record<string, unknown>
 }
 

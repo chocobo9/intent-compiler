@@ -21,7 +21,6 @@ import type {
   CompilerEvent,
   EventReceipt,
   ExecutionOutcome,
-  ExecutionTask,
   OperationRequest,
   Ref,
   SourceRef,
@@ -99,8 +98,7 @@ export interface OpenCodeV2Delivery {
   atom_id: string
   digest: string
   compiled_revision: number
-  execution_task: ExecutionTask
-  /** Kept for internal identity bookkeeping only; never rendered to the executor. */
+  /** The compiled work sent to the executor, with dispatch identity kept by the host. */
   atom: Atom
 }
 
@@ -553,19 +551,12 @@ async function onV2ChatMessage(
   const advanced = await advanceForTurn(compiler, identity.runId)
 
   const deliveries: OpenCodeV2Delivery[] = (advanced.deliveries ?? []).map((delivery) => {
-    if (!delivery.execution_task) {
-      throw new OpenCodeAdapterError(
-        "COMPILER_EXECUTION_TASK_MISSING",
-        `dispatch ${delivery.dispatch_id} has no execution_task; the executor must not receive the raw Atom`,
-      )
-    }
     return {
       dispatch_id: delivery.dispatch_id,
       task_id: delivery.task_id,
       atom_id: delivery.atom_id,
       digest: delivery.digest,
       compiled_revision: delivery.compiled_revision,
-      execution_task: delivery.execution_task,
       atom: delivery.atom,
     }
   })
@@ -581,7 +572,7 @@ async function onV2ChatMessage(
     blocked.managementOutcome = structuredClone(advanced)
     throw blocked
   }
-  mutateTextPartsInPlace(output.parts, stableJson(deliveries.map((delivery) => delivery.execution_task)))
+  mutateTextPartsInPlace(output.parts, stableJson(deliveries.map((delivery) => delivery.atom)))
 
   const expectedParts = expectedPartsOf(textPartsOf(output.parts))
   const delivery: PendingDelivery = {
@@ -763,7 +754,7 @@ async function confirmV2Delivery(
       `v2 delivery payload is not valid JSON: ${errorMessage(error)}`,
     )
   }
-  const expectedPayload = delivery.v2Deliveries.map((item) => item.execution_task)
+  const expectedPayload = delivery.v2Deliveries.map((item) => item.atom)
   if (stableJson(actualDeliveries) !== stableJson(expectedPayload)) {
     delivery.rejected = true
     throw new OpenCodeAdapterError("DELIVERY_GUARD_PART_MISMATCH", "SDK readback v2 dispatch payload differs from expected delivery")

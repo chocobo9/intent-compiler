@@ -8,7 +8,6 @@ import type {
   Atom,
   CompilerEvent,
   EventReceipt,
-  ExecutionTask,
   RunView,
 } from "../src/core/intent-contract.js"
 
@@ -28,27 +27,12 @@ const ATOM: Atom = {
   intent_judgments: [],
 }
 
-const EXECUTION_TASK: ExecutionTask = {
-  schema_version: 2,
-  dispatch_id: "dispatch-1",
-  task_id: "t-fix",
-  compiled_revision: 0,
-  atom_id: "a-preview",
-  instruction: "preview fix",
-  inputs: [],
-  outputs: [],
-  tool_candidates: [],
-  permissions: [],
-  completion_rules: [],
-}
-
 const DELIVERY: {
   dispatch_id: string
   task_id: string
   atom_id: string
   digest: string
   compiled_revision: number
-  execution_task?: ExecutionTask
   atom: Atom
 } = {
   dispatch_id: "dispatch-1",
@@ -56,7 +40,6 @@ const DELIVERY: {
   atom_id: "a-preview",
   digest: "sha256:0000000000000000000000000000000000000000000000000000000000000001",
   compiled_revision: 0,
-  execution_task: EXECUTION_TASK,
   atom: ATOM,
 }
 
@@ -154,10 +137,10 @@ test("v2 compiler arm routes acceptEvent/advance, confirms readback, starts, and
 
   await hooks["chat.message"]({ sessionID: "session-1", messageID: "message-1" }, output)
   assert.equal(compiler.events[0]?.kind, "user_input")
-  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [EXECUTION_TASK])
+  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [ATOM])
   const injected = JSON.parse(output.parts[0]?.text ?? "[]") as unknown[]
-  assert.equal("authority" in (injected[0] as Record<string, unknown>), false)
-  assert.equal("intent_judgments" in (injected[0] as Record<string, unknown>), false)
+  assert.equal("authority" in (injected[0] as Record<string, unknown>), true)
+  assert.equal("intent_judgments" in (injected[0] as Record<string, unknown>), true)
 
   await hooks["chat.params"]({ sessionID: "session-1", message: { id: "message-1" } }, {})
   assert.deepEqual(compiler.started, ["dispatch-1"])
@@ -279,7 +262,7 @@ test("v2 compiler arm retries a transport-level advance failure once before reje
 
   await hooks["chat.message"]({ sessionID: "session-1", messageID: "message-1" }, output)
   assert.equal(calls, 2)
-  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [EXECUTION_TASK])
+  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [ATOM])
 })
 
 test("v2 compiler arm reports the clarify outcome with its questions", async () => {

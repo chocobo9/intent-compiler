@@ -6,7 +6,7 @@ import { join } from "node:path"
 import { createOpenCodeCompilerRuntimeV2 } from "../src/runtime/opencode-compiler-v2.js"
 import type { OpenCodeModelClient } from "../src/model/opencode-transport.js"
 import type { CompilerEvent } from "../src/core/intent-contract.js"
-import { buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
+import { buildStrictCandidateExample, buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
 
 test("v2 runtime routes each run through its own compiler", async () => {
@@ -34,6 +34,7 @@ test("v2 runtime routes each run through its own compiler", async () => {
           : JSON.stringify({
               schema_version: 2,
               basis: { event_ids: ["e1"], refs: [] },
+              source_coverage: [{ source: { source_id: "e1", digest: "computed-by-management", quote: "hello" }, disposition: "unresolved", requirements: [], reason: "Greeting gives no concrete task", basis: [] }],
               groups: [{
                 local_ref: "g",
                 task_refs: ["t"],
@@ -43,7 +44,7 @@ test("v2 runtime routes each run through its own compiler", async () => {
                   target: "task",
                   local_ref: "t",
                   value: { goal: { text: "hello" }, current_scope: { text: "proceed", disposition: "proceed" } },
-                  sources: [{ source_id: "s", digest: "sha256:0000000000000000000000000000000000000000000000000000000000000001" }],
+                  sources: [{ source_id: "e1", digest: "sha256:0000000000000000000000000000000000000000000000000000000000000001" }],
                 }],
                 compilation: { decision: "reuse", current: [], reason: "no atom" },
                 execution_decisions: [],
@@ -58,7 +59,7 @@ test("v2 runtime routes each run through its own compiler", async () => {
                 questions: [],
               }],
             })
-        const structured = JSON.parse(text) as unknown
+        const structured = isCandidate ? buildStrictCandidateExample("openai", JSON.parse(text)) : JSON.parse(text)
         return {
           data: {
             parts: [{ type: "tool", tool: "StructuredOutput", callID: `structured-${sessionSequence}`, state: { status: "completed", input: structured } }],

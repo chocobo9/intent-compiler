@@ -4,11 +4,15 @@ import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
-import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
+import { createIntentCompilerV2 as createCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
 import type { CompilerModelV2, CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
 import { digestOf, digestText, type Candidate, type CompilerEvent } from "../src/core/intent-contract.js"
 import { buildAuditReport } from "../src/runtime/audit-report.js"
+
+// Existing repair fixtures use the pre-ledger v2 contract; strict requirement flow is tested separately.
+const createIntentCompilerV2 = (options: Parameters<typeof createCompilerV2>[0]) =>
+  createCompilerV2({ ...options, requirement_integrity: "legacy" })
 
 // Expectations are fixed in development/validation/2026-09-24-repair-batch/SCOPE.md.
 // These use the public compiler and real persistence; model responses are stubs.

@@ -5,14 +5,14 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { createIntentCompilerRuntime } from "../src/harness/runtime-factory.js"
 import { digestText, type CompilerEvent } from "../src/core/intent-contract.js"
-import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
+import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { CHECK_SYSTEM_PROMPT, type OpenCodeModelClient } from "../src/model/opencode-transport.js"
-import { buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
+import { buildStrictCandidateExample, buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
 
 test("OpenCode runtime independently proposes and checks with GPT-6 Luna contracts", async () => {
   const root = mkdtempSync(join(tmpdir(), "opencode-independent-check-"))
-  const inputText = "Example user goal."
+  const inputText = CANDIDATE_EXAMPLE_INPUT
   const event: CompilerEvent = {
     schema_version: 2,
     run_id: "opencode-independent-check",
@@ -41,7 +41,7 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
         const check = JSON.stringify(schema) === JSON.stringify(buildStrictCandidateCheckSchema("openai"))
         assert.equal(proposal || check, true, "runtime must send one of the two complete OpenAI strict schemas")
         const responseText = proposal
-          ? JSON.stringify(candidate)
+          ? JSON.stringify(buildStrictCandidateExample("openai", candidate))
           : JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] })
         const structured = JSON.parse(responseText) as unknown
         return {

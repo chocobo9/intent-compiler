@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
-import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
+import { createIntentCompilerV2 as createCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
 import type { CompilerModelV2Result } from "../src/model/compiler-model-v2.js"
 import { atomRef } from "../src/core/compiled-intent.js"
@@ -18,6 +18,10 @@ import {
   type RunView,
   type SourceRef,
 } from "../src/core/intent-contract.js"
+
+// Existing lifecycle fixtures use the pre-ledger v2 contract; strict requirement flow is tested separately.
+const createIntentCompilerV2 = (options: Parameters<typeof createCompilerV2>[0]) =>
+  createCompilerV2({ ...options, requirement_integrity: "legacy" })
 
 const SOURCE: SourceRef = { source_id: "s-u1", digest: "sha256:0000000000000000000000000000000000000000000000000000000000000001" }
 const TASK_REF: Ref = { id: "t-fix", revision: 0, digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111" }
@@ -190,8 +194,8 @@ test("authorize start marks executing and an accepted completed outcome then a s
   assert.equal(first.disposition, "dispatched")
   const delivery = first.deliveries?.[0]
   assert.ok(delivery)
-  assert.ok(delivery.execution_task)
-  assert.equal("authority" in (delivery.execution_task as unknown as Record<string, unknown>), false)
+  assert.ok(delivery.atom)
+  assert.equal("execution_task" in delivery, false)
 
   const start = await compiler.authorize({
     kind: "start",

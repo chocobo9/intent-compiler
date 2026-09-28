@@ -10,7 +10,7 @@ import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/co
 import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
 import { buildStrictCandidateExample, buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
 
-const candidate = { schema_version: 2, basis: { event_ids: ["e1"], refs: [] }, groups: [] }
+const candidate = { schema_version: 2, basis: { event_ids: ["e1"], refs: [] }, groups: [], source_coverage: [] }
 function input(): CompilerModelV2Input {
   return {
     run_id: "run-1",

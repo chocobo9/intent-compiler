@@ -69,7 +69,6 @@ export type {
   ExecutionReturnPayload,
   ExecutionView,
   ExecutionOutcome,
-  ExecutionTask,
   IntentJudgment,
   IrChange,
   OperationRequest,
