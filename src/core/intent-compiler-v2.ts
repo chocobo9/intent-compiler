@@ -252,6 +252,9 @@ async function advance(
     existing_objects: buildExistingObjectDirectory(snapshot.ir, snapshot.compiled),
     atom_refs: buildAtomRefs(snapshot.compiled),
     executions: execution.list().map(toExecutionView),
+    atom_states: snapshot.atom_states,
+    execution_outcomes: snapshot.execution_outcomes,
+    assessments: snapshot.assessments,
     capabilities: describeCapabilities(capabilities, events),
     budget: {
       requests_used: snapshot.budget.management_requests,
@@ -761,7 +764,7 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     }
   }
   const view = {
-    ir, compiled, dispatchable_atoms: dispatchableAtoms,
+    ir, compiled, atom_states: atoms.snapshot(), dispatchable_atoms: dispatchableAtoms,
     execution_decisions: candidate.groups.flatMap(group => group.execution_decisions),
     eligible_task_ids: eligibility?.task_ids ?? taskIds,
     eligible_execution_ids: eligibility?.execution_ids ?? execution.list().filter(e => e.status === "active").map(e => e.execution_id),
@@ -1205,6 +1208,8 @@ async function runSemanticCheck(
   const basisEventIds = input.events.map((event) => event.event_id)
   const preparedForCheck = input.prepared === undefined ? undefined : {
     ir: input.prepared.ir,
+    compiled: input.prepared.compiled,
+    atom_states: input.prepared.atom_states,
     dispatchable_atoms: input.prepared.dispatchable_atoms,
     eligible_task_ids: input.prepared.eligible_task_ids,
     eligible_execution_ids: input.prepared.eligible_execution_ids,
@@ -1263,7 +1268,15 @@ async function runSemanticCheck(
     }
   }
   input.recordCall(startedAt, "ok", undefined, result.call?.usage, result.call?.text)
-  const findings = resolveCheckEvidence(verdict.findings, [...(input.source_events ?? []), ...input.events], input.ir, input.compiled)
+  // The checker may cite either prior facts or exact newly prepared IR entries.
+  // Resolve both versions separately: overlaying records would lose the prior revision.
+  const sources = [...(input.source_events ?? []), ...input.events]
+  const priorFindings = resolveCheckEvidence(verdict.findings, sources, input.ir, input.compiled)
+  const preparedFindings = input.prepared === undefined ? priorFindings
+    : resolveCheckEvidence(verdict.findings, sources, input.prepared.ir, input.prepared.compiled)
+  const findings = priorFindings.map((finding, index) => ({
+    ...finding, evidence_resolved: finding.evidence_resolved || preparedFindings[index]!.evidence_resolved,
+  }))
   const blocking = findings.filter((finding) => finding.evidence_resolved === true)
   return {
     record: {

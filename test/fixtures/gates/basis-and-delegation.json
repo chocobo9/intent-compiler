@@ -40,8 +40,8 @@
     },
     {
       "id": "basis-names-an-event-not-in-this-batch",
-      "clauses": ["D.401"],
-      "authority": { "clause": "D.401" },
+      "clauses": ["D.405"],
+      "authority": { "clause": "D.405" },
       "why": "basis 只能指向本批待处理事件",
       "base": "batch",
       "candidate": { "basis": { "event_ids": ["ev-from-another-batch"] } },
@@ -49,8 +49,8 @@
     },
     {
       "id": "no-group-names-a-task",
-      "clauses": ["C.rules.6", "D.401"],
-      "authority": { "clause": "D.401" },
+      "clauses": ["C.rules.6", "D.405"],
+      "authority": { "clause": "D.405" },
       "why": "带用户委托的批次必须有组命名任务，否则委托没有登记",
       "base": "batch",
       "candidate": {
@@ -73,8 +73,8 @@
     },
     {
       "id": "empty-basis-and-no-task-r11b",
-      "clauses": ["C.rules.7", "C.rules.6", "D.401"],
-      "authority": { "clause": "D.401" },
+      "clauses": ["C.rules.7", "C.rules.6", "D.405"],
+      "authority": { "clause": "D.405" },
       "why": "r11b 的真实形态：模型用空 basis + 反问代替工作，两道门同时命中",
       "base": "batch",
       "candidate": {

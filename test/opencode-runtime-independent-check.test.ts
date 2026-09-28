@@ -87,6 +87,10 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
   assert.equal(prompts[1]!.body.system, CHECK_SYSTEM_PROMPT)
   assert.match(prompts[0]!.body.system, /management model/i)
   assert.equal(JSON.parse(prompts[0]!.body.parts[0]!.text).contract.schema_version, 2)
+  assert.equal(JSON.parse(prompts[0]!.body.parts[0]!.text).contract.example_input, inputText)
   assert.equal(JSON.parse(prompts[1]!.body.parts[0]!.text).contract.check_contract.length > 0, true)
   assert.equal(advanced.deliveries?.length, 1)
+  const prepared = JSON.parse(prompts[1]!.body.parts[0]!.text).prepared
+  assert.deepEqual(prepared.compiled.t1.atoms[0], advanced.deliveries![0]!.atom)
+  assert.equal(prepared.atom_states[0].status, "ready")
 })

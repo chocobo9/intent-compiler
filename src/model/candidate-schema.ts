@@ -30,12 +30,13 @@ const ATOM_REQUIRED = [
 const ATOM_PROPERTIES = {
   atom_id: { type: "string", minLength: 1 },
   revision: { type: "integer", minimum: 0 },
-  goal_refs: { type: "array", items: { $ref: "#/definitions/ref" } },
-  task: { type: "string", minLength: 1 },
-  inputs: { type: "array", items: { $ref: "#/definitions/atom_input" } },
-  outputs: { type: "array", items: { $ref: "#/definitions/atom_output" } },
+  goal_refs: { type: "array", description: "Provenance, not instructions. Management binds assigned IR content references from coverage.", items: { $ref: "#/definitions/ref" } },
+  task: { type: "string", minLength: 1, description: "The complete instruction delivered to the executor, who receives this Atom without IR. For fully specified requirements, carry their applicable operative text here, including interface/configuration structures and all behavior, conditions, defaults, exceptions and shared rules. Organize it for this unit; do not summarize away details or replace them with feature names, references, or claims that they are preserved. Keep illustrative values illustrative. Leave unspecified internal implementation choices open. This field may be long and multiline." },
+  inputs: { type: "array", description: "Supplied material, its role and allowed use; [] if none. Requirement references do not substitute for task instructions.", items: { $ref: "#/definitions/atom_input" } },
+  outputs: { type: "array", description: "Usable products this unit must return, with their required form. These are products, not a list of actions.", items: { $ref: "#/definitions/atom_output" } },
   constraints: {
     type: "array",
+    description: "Normally []. Optional verbatim duplicates of entire assigned IR requirements with identical scope. Do not put paraphrases or implementation preferences here; preserve operative behavior in task regardless.",
     items: {
       type: "object",
       additionalProperties: false,
@@ -57,6 +58,7 @@ const ATOM_PROPERTIES = {
   optional_tools: { type: "array", items: { type: "string", minLength: 1 } },
   authority: {
     type: "object",
+    description: "Operations and resources needed by this authorized unit within host capabilities. A source or a plan alone does not grant broader access.",
     additionalProperties: false,
     required: ["basis", "rules", "lifetime", "delegation"],
     properties: {
@@ -66,9 +68,10 @@ const ATOM_PROPERTIES = {
       delegation: { const: "not_supported" },
     },
   },
-  preconditions: { type: "array", items: { $ref: "#/definitions/condition" } },
+  preconditions: { type: "array", description: "Conditions required before this unit may start. Incoming Relations already require accepted predecessor results.", items: { $ref: "#/definitions/condition" } },
   completion: {
     type: "array",
+    description: "Successful results and evidence for this unit's assigned work. Preserve the scope of each requirement: a final whole-task criterion need not block an intermediate handoff unless that handoff requires it. A blocker report is not an alternative to successful implementation or verification.",
     items: {
       type: "object",
       additionalProperties: false,
@@ -79,8 +82,8 @@ const ATOM_PROPERTIES = {
       },
     },
   },
-  return_when: { type: "array", items: { type: "string", minLength: 1 } },
-  intent_judgments: { type: "array", items: { $ref: "#/definitions/judgment" } },
+  return_when: { type: "array", description: "When to hand back control on success, failure or a blocker. Returning does not itself satisfy completion.", items: { type: "string", minLength: 1 } },
+  intent_judgments: { type: "array", description: "Consequential supported interpretations, inferred arrangements or unresolved meaning and their execution consequences. These cannot replace required behavior in task or certify that omitted details are preserved.", items: { $ref: "#/definitions/judgment" } },
 } as const
 
 export const CANDIDATE_JSON_SCHEMA = {
@@ -164,6 +167,7 @@ export const CANDIDATE_JSON_SCHEMA = {
       ],
     },
     ir_change: {
+      description: "Maintain the one task IR's current goal, scope and requirements from user meaning and sources. Preserve unchanged requirements. Plan choices and execution reports are not new user requirements.",
       oneOf: [
         {
           type: "object",
@@ -288,6 +292,7 @@ export const CANDIDATE_JSON_SCHEMA = {
       properties: ATOM_PROPERTIES,
     },
     relation: {
+      description: "A real operational dependency between exact Atom versions. requires names the accepted result the successor needs, not mere list order or the entire final goal by default.",
       type: "object",
       additionalProperties: false,
       required: ["predecessor", "successor", "requires", "conditions", "basis"],
@@ -300,6 +305,7 @@ export const CANDIDATE_JSON_SCHEMA = {
       },
     },
     draft: {
+      description: "The task's whole execution plan. For replacement, submit changed Atoms and all applicable Relations; management retains unchanged Atoms. Include known later work and assign shared requirements to every affected unit.",
       type: "object",
       additionalProperties: false,
       required: ["local_ref", "task_id", "intent_basis", "atoms", "relations", "attachments"],
@@ -324,6 +330,7 @@ export const CANDIDATE_JSON_SCHEMA = {
       properties: { ...ATOM_PROPERTIES, previous_atom_ref: { $ref: "#/definitions/ref" } },
     },
     coverage: {
+      description: "Where each current requirement goes: applicable Atoms, paused work or unresolved work. Assignment and references do not provide missing behavior.",
       type: "object",
       additionalProperties: false,
       required: ["requirement", "disposition", "refs", "explanation"],
@@ -414,6 +421,7 @@ export const CANDIDATE_JSON_SCHEMA = {
         },
         assessments: {
           type: "array",
+          description: "Evaluate returned products and evidence against the exact Atom and current requirements. Insufficient evidence is unknown; an unmet condition is not_satisfied. Do not weaken the criteria to accept a blocker or an executor's completion claim.",
           items: {
             type: "object",
             additionalProperties: false,

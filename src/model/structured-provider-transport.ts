@@ -6,6 +6,7 @@ import type {
 } from "./compiler-model-v2.js"
 import { CANDIDATE_JSON_SCHEMA } from "./candidate-schema.js"
 import { canonicalJson } from "../core/intent-contract.js"
+import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
 
 export interface StructuredProviderTransportOptions {
   endpoint?: string
@@ -55,17 +56,8 @@ export class StructuredProviderTransportError extends Error {
 }
 
 const SYSTEM_PROMPT = [
-  "You are the read-only management model for an Intent Compiler v2.",
-  "Your user message is one JSON object whose parts have fixed roles:",
-  "- existing_objects: a management-built index of current task and atom identities, versions, digests, and short summaries. For an existing task, choose its exact task_id from this directory; copy its atom Ref exactly when superseding an atom. Do not derive a task id from the project name, event, or executor label.",
-  "- events: this batch's pending events. When one of them is a user_input, its payload.text IS the user delegation — that text is the work you must compile now, and it is the only source of work in the batch.",
-  "- ir and compiled: the task's current state. They are frequently empty on a first turn; an empty IR is a normal starting point, not a reason to refuse, to answer 'reuse', or to ask the user to restate the delegation. A path in prior IR or Compiled Intent is management-authored content, even when it has a source reference. A source reference proves where a claim came from, not that the cited user text supports the path. Preserve a path as a user restriction only when the cited user-authored text explicitly limits work to that path and the restriction still applies. When no applicable user text limits the file, keep the requested behavior as the task and let the executor locate the file within the already authorized workspace and operations; do not add permissions or widen scope.",
-  "- capabilities: host facts (allowed operations, workspace root, material paths the executor can read). They bound what the executor may use; they are not the task.",
-  "- budget and contract: how to answer and what this batch may spend. The contract describes the required output format; its fields are never material and never sources.",
-  "Valid source_id values are exactly the event ids in events. A contract field name, a path, or any other string is not a source.",
+  MANAGEMENT_SYSTEM_PROMPT,
   "Return exactly one Candidate as a JSON text response matching the supplied JSON Schema.",
-  "Compile the delegated work into atoms; do not reply with a description of what you would do, and do not report the batch as having no delegation while events carry one.",
-  "Do not execute the task, call tools, write files, or return a business answer.",
 ].join(" ")
 
 export function createStructuredProviderTransport<Request extends CompilerModelV2Input | CompilerModelV2CheckInput = CompilerModelV2Input>(

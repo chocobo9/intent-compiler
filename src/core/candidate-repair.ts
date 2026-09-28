@@ -27,11 +27,17 @@ function inputBasis(input: unknown): { digest: string; eventIds: string[] } | un
   return {
     digest: digestOf({
       events: input.events,
+      source_events: input.source_events ?? [],
+      source_segments: input.source_segments ?? [],
+      event_source_refs: input.event_source_refs ?? [],
       ir: input.ir,
       compiled: input.compiled,
       existing_objects: input.existing_objects ?? null,
       atom_refs: input.atom_refs,
       executions: input.executions,
+      atom_states: input.atom_states ?? null,
+      execution_outcomes: input.execution_outcomes ?? null,
+      assessments: input.assessments ?? null,
       capabilities: input.capabilities ?? null,
       contract: input.contract,
     }),
@@ -55,7 +61,7 @@ export function candidateRepairContext(
     ...(before === undefined ? {} : { basis_digest: before.digest }),
     ...(current === undefined ? {} : { current_basis_digest: current.digest }),
     basis_status: before === undefined || current === undefined ? "unavailable" : before.digest === current.digest ? "unchanged" : "changed",
-    instruction: "This is a rejected draft, not accepted work. Return a complete candidate; use this draft as the explicit revision starting point. Reconcile changed or unavailable input basis with all current events and state before preserving any content. Equal basis fingerprints mean only equal supplied input values, not semantic correctness. No check result, execution permission, or acceptance is inherited. Rejection reasons can be mistaken; do not change correct content merely to satisfy an unsupported objection.",
+    instruction: "This is a rejected draft, not accepted work. Start from it and repair the supported error and all its consequences under the current contract. Preserve unrelated correct fields; returning a complete candidate does not mean regenerating the plan. A representation error does not authorize changing user meaning, and a semantic correction must reach every affected IR item and Atom field, coverage entry and Relation. Reconcile changed or unavailable input basis, including historical sources, before retaining content. Equal basis fingerprints mean equal supplied values, not semantic correctness. No check result, permission or acceptance is inherited. Evaluate rejection reasons against the supplied sources; do not satisfy unsupported objections by changing correct work.",
   }
 }
 

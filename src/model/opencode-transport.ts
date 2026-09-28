@@ -12,6 +12,7 @@ import type {
 } from "./compiler-model-v2.js"
 import { buildStrictCandidateExample, buildStrictCandidateSchema } from "./candidate-schema-strict.js"
 import { buildStrictCandidateCheckSchema } from "./candidate-check-schema-strict.js"
+import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
 
 /**
  * The OpenCode surface used by this Adapter is intentionally narrow.  The
@@ -99,11 +100,9 @@ const MODEL_SYSTEM_PROMPT = [
 ].join(" ")
 
 const MODEL_SYSTEM_PROMPT_V2 = [
-  "You are the read-only management model for an Intent Compiler v2.",
+  MANAGEMENT_SYSTEM_PROMPT,
   "Interpret the supplied v2 Compiler request and return exactly one JSON result matching the supplied JSON Schema through OpenCode's StructuredOutput response channel.",
   "OpenCode's internal StructuredOutput submission is allowed only to return the schema-constrained management result. All business tools remain disabled. Do not execute the task, inspect or modify the workspace, access Compiler state, write files, return business answers, or invent execution identities.",
-  "If the request includes schema_rejected_draft, it is prior JSON rejected by the Candidate schema, not a valid Candidate or accepted work. Use it and validation_errors only as revision context; return one complete schema-valid Candidate while preserving the supplied input facts.",
-  "Preserve the current delegation, material roles, output scope, and uncertainty; deterministic code validates references, versions, and authority.",
 ].join(" ")
 
 export const CHECK_SYSTEM_PROMPT = [
@@ -111,6 +110,7 @@ export const CHECK_SYSTEM_PROMPT = [
   "Return exactly one JSON object matching the supplied JSON Schema.",
   "Use OpenCode's internal StructuredOutput submission only for this check result; business tools remain disabled. Do not execute the task or perform business work.",
   "You may only report inconsistencies with the original input and the current IR.",
+  "Compare the entire delegation with prepared.ir and the whole prepared.compiled plan, including waiting and retained Atoms and Relations. Use prepared.atom_states to distinguish history; the dispatchable subset alone is not the plan.",
   "Do not supply the business answer, widen or narrow Authority, or rewrite the candidate.",
 ].join(" ")
 

@@ -197,13 +197,14 @@ test("U2 a user update with reuse is checked against the prepared IR and work wi
   assert.ok(checked, "reuse must not bypass user-update checking")
   const prepared = checked.prepared
   assert.ok(prepared)
-  assert.deepEqual(Object.keys(prepared).sort(), ["dispatchable_atoms", "eligible_execution_ids", "eligible_task_ids", "ir"])
+  assert.deepEqual(Object.keys(prepared).sort(), ["atom_states", "compiled", "dispatchable_atoms", "eligible_execution_ids", "eligible_task_ids", "ir"])
   assert.deepEqual(prepared.ir, h.store.current().ir)
   assert.ok(prepared.dispatchable_atoms.some(atom => atom.task === h.dispatch.atom.task))
   assert.deepEqual(prepared.eligible_task_ids, ["t1"])
   assert.deepEqual(prepared.eligible_execution_ids, [])
   assert.ok(Array.isArray(checked.candidate.groups[0]?.execution_decisions))
-  assert.equal("compiled" in prepared, false, "the candidate and prior compiled state already carry the source plans; prepared contains the exact dispatch projection")
+  assert.deepEqual(prepared.compiled, h.store.current().compiled)
+  assert.deepEqual(prepared.atom_states, h.store.current().atom_states)
   assert.deepEqual(h.store.current().compiled.t1, old)
   assert.equal(h.start().ok, true)
 })
@@ -424,16 +425,24 @@ test("U4 a valid waiting outcome reports host capability rather than candidate f
 test("U2 the checker receives isolated input and cannot rewrite the object to commit", async () => {
   const h = await setup()
   const original = h.store.current().ir
+  const originalCompiled = structuredClone(h.store.current().compiled)
+  const originalStates = structuredClone(h.store.current().atom_states)
   h.setPropose(async i => proposed(reuse(i)))
   h.setVerify(async i => {
     i.ir.t1!.goal.text = "checker mutation"
-    const prepared = (i as CompilerModelV2CheckInput & { prepared?: { ir: typeof original } }).prepared
-    if (prepared) prepared.ir.t1!.goal.text = "prepared view mutation"
+    const prepared = i.prepared
+    if (prepared) {
+      prepared.ir.t1!.goal.text = "prepared view mutation"
+      prepared.compiled.t1!.atoms[0]!.task = "checker rewrites work"
+      prepared.atom_states[0]!.status = "failed"
+    }
     return pass(i)
   })
   await h.compiler.acceptEvent(event("e2", "Keep the current work."))
   assert.equal((await h.compiler.advance({ runId: RUN })).ok, true)
   assert.deepEqual(h.store.current().ir, original)
+  assert.deepEqual(h.store.current().compiled, originalCompiled)
+  assert.deepEqual(h.store.current().atom_states, originalStates)
 })
 
 test("U3 explicit continuation of an unchanged atom preserves its active lifecycle", async () => {

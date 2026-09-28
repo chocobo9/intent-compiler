@@ -48,6 +48,7 @@ const sourceRefWithQuote = { oneOf: [{
 
 const goalValue = {
   type: "object",
+  description: "The whole intended user result, not just the currently executable step.",
   additionalProperties: false,
   required: ["text"],
   properties: { text },
@@ -55,6 +56,7 @@ const goalValue = {
 
 const scopeValue = {
   type: "object",
+  description: "What the current delegation permits, pauses or leaves conditional. Do not lower the requested result because of host limitations.",
   additionalProperties: false,
   required: ["text", "disposition"],
   properties: {
@@ -122,6 +124,7 @@ function valueFor(profile: StrictSchemaProfile, target: ValueTarget): SchemaNode
   if (target === "current_scope") {
     return {
       type: "object",
+      description: scopeValue.description,
       additionalProperties: false,
       required: ["text", "disposition"],
       properties: {
@@ -155,10 +158,11 @@ function valueFor(profile: StrictSchemaProfile, target: ValueTarget): SchemaNode
   }
   return {
     type: "object",
+    description: "One coherent requirement within the task IR. Select its complete operative source passages and necessary context, interpret their role and scope, and retain unchanged subrules on revision.",
     additionalProperties: false,
     required: ["text", "about", "scope", "support"],
     properties: {
-      text: stringOrNull(),
+      text: { ...stringOrNull(), description: "A short interpretation label. Management separately stores the selected original text; this label does not replace that specification or the Atom's executable instructions." },
       about: arrayOrNull(ref),
       scope: arrayOrNull(scopeItem),
       support: arrayOrNull(supportItem),
@@ -235,10 +239,11 @@ function transform(node: unknown, profile: StrictSchemaProfile): unknown {
   const value = node as SchemaNode
   if (typeof value.$ref === "string") return value
   if (Array.isArray(value.oneOf)) {
+    const { oneOf, ...annotations } = value
     const keyword = profile === "openai" ? "anyOf" : "oneOf"
-    return { [keyword]: value.oneOf.map((branch) => transformUnionVariant(branch, profile)) }
+    return { ...annotations, [keyword]: oneOf.map((branch: unknown) => transformUnionVariant(branch, profile)) }
   }
-  if (Array.isArray(value.anyOf)) return { anyOf: value.anyOf.map((branch) => transformUnionVariant(branch, profile)) }
+  if (Array.isArray(value.anyOf)) return { ...value, anyOf: value.anyOf.map((branch) => transformUnionVariant(branch, profile)) }
   if (profile === "openai" && Object.prototype.hasOwnProperty.call(value, "const")) {
     const { const: constant, ...rest } = value
     return { ...rest, enum: [constant] }

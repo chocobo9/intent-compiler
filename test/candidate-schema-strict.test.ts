@@ -6,6 +6,18 @@ import { CANDIDATE_CHECK_JSON_SCHEMA, validateCandidateCheckSchema } from "../sr
 import { createCompilerModelV2, V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
 import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
 import { Ajv } from "ajv"
+import { CANDIDATE_JSON_SCHEMA } from "../src/model/candidate-schema.js"
+
+test("provider schema preserves field instructions including nullable IR content text", () => {
+  const schema = buildStrictCandidateSchema("openai") as Record<string, any>
+  const canonical = CANDIDATE_JSON_SCHEMA as Record<string, any>
+  assert.equal(schema.definitions.atom_draft.properties.task.description, canonical.definitions.atom_draft.properties.task.description)
+  assert.equal(schema.definitions.atom_draft.properties.completion.description, canonical.definitions.atom_draft.properties.completion.description)
+  const content = schema.definitions.ir_change.anyOf.find((branch: any) => branch.properties.action.enum.includes("create") && branch.properties.target?.enum.includes("content"))
+  assert.ok(content)
+  assert.ok(content.properties.value.properties.text.anyOf, "IR text still has its nullable strict shape")
+  assert.ok(content.properties.value.properties.text.description, "conversion must not discard the field instruction on a nullable union")
+})
 
 test("strict generation requires a non-null source disposition array even when empty", () => {
   const validate = new Ajv({ allErrors: true, strict: false }).compile(buildStrictCandidateSchema("openai"))

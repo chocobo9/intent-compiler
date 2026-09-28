@@ -15,8 +15,8 @@
     },
     {
       "id": "scope-does-not-allow-when-the-scope-is-paused",
-      "clauses": ["D.517"],
-      "authority": { "clause": "D.517" },
+      "clauses": ["D.521"],
+      "authority": { "clause": "D.521" },
       "kind": "conditions",
       "condition": { "kind": "scope_allows" },
       "context": {
@@ -27,8 +27,8 @@
     },
     {
       "id": "scope-does-not-allow-when-the-scope-is-withdrawn",
-      "clauses": ["D.517"],
-      "authority": { "clause": "D.517" },
+      "clauses": ["D.521"],
+      "authority": { "clause": "D.521" },
       "kind": "conditions",
       "condition": { "kind": "scope_allows" },
       "context": {
@@ -39,7 +39,7 @@
     },
     {
       "id": "conditional-scope-cannot-be-evaluated",
-      "clauses": ["D.333"],
+      "clauses": ["D.337"],
       "known_issue": "F2",
       "authority": { "behaviour": "current", "fact": "F2" },
       "kind": "conditions",
@@ -80,7 +80,7 @@
     },
     {
       "id": "user-confirmation-is-not-implemented-yet",
-      "clauses": ["D.200"],
+      "clauses": ["D.202"],
       "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "其余 Condition 类型（artifact_exists、user_confirms、object_version_matches）仍按 unsupported 处理并拒绝" },
       "kind": "conditions",
       "why": "user_confirms 还没实现：返回 unsupported 挡住动作，所以 Relation 不能顶替用户确认",
@@ -90,8 +90,8 @@
     },
     {
       "id": "an-unknown-condition-kind-is-never-silently-allowed",
-      "clauses": ["D.483"],
-      "authority": { "clause": "D.483" },
+      "clauses": ["D.487"],
+      "authority": { "clause": "D.487" },
       "kind": "conditions",
       "condition": { "kind": "the-moon-is-full" },
       "context": {},
@@ -99,7 +99,7 @@
     },
     {
       "id": "all-combines-its-children",
-      "clauses": ["D.483"],
+      "clauses": ["D.487"],
       "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "条件支持 all/any 组合，解析后由代码判断" },
       "kind": "conditions",
       "condition": {
@@ -114,7 +114,7 @@
     },
     {
       "id": "any-is-satisfied-when-one-child-is",
-      "clauses": ["D.483"],
+      "clauses": ["D.487"],
       "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "条件支持 all/any 组合，解析后由代码判断" },
       "kind": "conditions",
       "condition": {

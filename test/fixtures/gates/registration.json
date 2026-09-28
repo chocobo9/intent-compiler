@@ -68,7 +68,7 @@
   "cases": [
     {
       "id": "two-atoms-declare-one-output-with-two-formats",
-      "clauses": ["D.475"],
+      "clauses": ["D.479"],
       "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "唯一保留的两条硬拒" },
       "why": "一份交付物不能同时是 artifact 和 text——同批内自相矛盾",
       "base": "two-atoms",
@@ -82,7 +82,7 @@
     },
     {
       "id": "two-atoms-declare-one-binding-differently",
-      "clauses": ["D.475"],
+      "clauses": ["D.479"],
       "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "唯一保留的两条硬拒" },
       "why": "同批两个原子对同一 binding 的 role 说法不同，是真相矛盾",
       "base": "two-atoms-one-binding",
@@ -96,7 +96,7 @@
     },
     {
       "id": "two-atoms-declare-one-binding-the-same-way-is-accepted",
-      "clauses": ["D.475"],
+      "clauses": ["D.479"],
       "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "只有 **format** 不一致才算矛盾" },
       "why": "合法路径：两个原子用同一份材料、同一角色，不该被拒",
       "base": "two-atoms-one-binding",
@@ -136,7 +136,7 @@
     },
     {
       "id": "an-atom-restates-an-existing-output-with-another-format",
-      "clauses": ["D.475"],
+      "clauses": ["D.479"],
       "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "形状不同的既有 id 由代码 `revise` 成原子声明的值（原子赢），不再拒绝" },
       "why": "已存在的 id 形状不同时以原子为准并记 declaration_changes，不再拒绝（r11d 的过严规则就在这里）",
       "base": "existing-task",
@@ -150,7 +150,7 @@
     },
     {
       "id": "an-atom-restates-an-existing-output-with-the-same-format",
-      "clauses": ["D.475"],
+      "clauses": ["D.479"],
       "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "`description` 是散文，措辞不同不算第二次声明" },
       "why": "措辞不同但 format 相同不算第二次声明——r11d 正是被两句话的不同措辞整批作废",
       "base": "existing-task",
