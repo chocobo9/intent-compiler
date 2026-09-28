@@ -1,0 +1,16 @@
+{
+  "id": "typesafe-opencode-compatibility",
+  "provenance": {
+    "source": "local transport compatibility fixture",
+    "preprocessing": "none",
+    "scope": "checks only model request, response, parsing and audit; not Intent understanding"
+  },
+  "state": "The label is blue.",
+  "questions": {
+    "label": {
+      "type": "choice",
+      "instructions": "Which label is explicitly stated in the document?",
+      "criteria": {"blue": "The label is blue.", "red": "The label is red.", "none": "Neither label is stated."}
+    }
+  }
+}

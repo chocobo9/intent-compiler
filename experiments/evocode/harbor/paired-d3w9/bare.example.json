@@ -1,0 +1,40 @@
+{
+  "job_name": "paired-deepseek-d3w9-bare-7r-20260925-001",
+  "jobs_dir": "<set-unique-results-directory>",
+  "n_attempts": 1,
+  "timeout_multiplier": 1.0,
+  "orchestrator": {
+    "retry": {
+      "max_retries": 0
+    },
+    "n_concurrent_trials": 1,
+    "type": "local"
+  },
+  "environment": {
+    "force_build": false,
+    "type": "docker"
+  },
+  "agents": [
+    {
+      "import_path": "paired_opencode_agent:OpenCodeBare",
+      "kwargs": {
+        "variant": "max"
+      },
+      "model_name": "deepseek/deepseek-flash",
+      "override_setup_timeout_sec": 360
+    }
+  ],
+  "tasks": [
+    {
+      "path": "<set-local-task-directory>"
+    }
+  ],
+  "artifacts": [
+    "/app"
+  ],
+  "verifier": {
+    "multiround_max_round": 7,
+    "multiround_start_round": 1,
+    "multiround_stop_on_failed_round": false
+  }
+}

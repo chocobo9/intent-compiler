@@ -1,0 +1,288 @@
+{
+  "note": "夹具的共用底座。cases 用 base 引用这里，再按需要打补丁（对象递归合并、数组整体替换）。digest 一律写成占位值：机械层会用被引用原文的真实摘要改写 sources 里的 digest，模型本来就写不出 sha256。",
+  "bases": {
+    "batch": {
+      "events": [
+        {
+          "schema_version": 2,
+          "run_id": "run-fixture",
+          "event_id": "ev-1",
+          "kind": "user_input",
+          "source": { "producer_id": "host", "channel": "user" },
+          "payload": { "text": "Fix the failing parser bug in src/parser.ts and prove it with a test." }
+        }
+      ],
+      "ir": {},
+      "compiled": {},
+      "candidate": {
+        "schema_version": 2,
+        "basis": { "event_ids": ["ev-1"], "refs": [] },
+        "groups": [
+          {
+            "local_ref": "g1",
+            "task_refs": ["t1"],
+            "depends_on": [],
+            "ir_changes": [
+              {
+                "action": "create",
+                "target": "task",
+                "local_ref": "t1",
+                "value": {
+                  "goal": { "text": "Fix the failing parser bug." },
+                  "current_scope": { "text": "Fix it and prove it with a test.", "disposition": "proceed" }
+                },
+                "sources": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }]
+              }
+            ],
+            "compilation": {
+              "decision": "replace",
+              "drafts": [
+                {
+                  "local_ref": "ci-1",
+                  "task_id": "t1",
+                  "intent_basis": [],
+                  "atoms": [
+                    {
+                      "atom_id": "a1",
+                      "revision": 0,
+                      "goal_refs": [],
+                      "task": "Fix the failing parser bug and prove it with a test.",
+                      "inputs": [],
+                      "outputs": [
+                        { "output_id": "o1", "description": "The parser fix and its test.", "format": "artifact" }
+                      ],
+                      "constraints": [],
+                      "optional_tools": ["read", "edit", "bash"],
+                      "authority": {
+                        "basis": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }],
+                        "rules": [
+                          {
+                            "operation_id": "read",
+                            "resource_ref": { "source_id": "ev-1", "digest": "sha256:placeholder" },
+                            "input_refs": [],
+                            "output_refs": [],
+                            "conditions": [],
+                            "allowed_use": "Read the parser and its tests."
+                          },
+                          {
+                            "operation_id": "edit",
+                            "resource_ref": { "source_id": "ev-1", "digest": "sha256:placeholder" },
+                            "input_refs": [],
+                            "output_refs": [],
+                            "conditions": [],
+                            "allowed_use": "Change the parser and its test."
+                          },
+                          {
+                            "operation_id": "bash",
+                            "resource_ref": { "source_id": "ev-1", "digest": "sha256:placeholder" },
+                            "input_refs": [],
+                            "output_refs": [],
+                            "conditions": [],
+                            "allowed_use": "Run the test."
+                          }
+                        ],
+                        "lifetime": "this_execution",
+                        "delegation": "not_supported"
+                      },
+                      "preconditions": [],
+                      "completion": [
+                        { "text": "The test passes with the fix and fails without it.", "evidence_required": "the verifier output" }
+                      ],
+                      "return_when": ["the test run finishes"],
+                      "intent_judgments": []
+                    }
+                  ],
+                  "relations": [],
+                  "attachments": []
+                }
+              ]
+            },
+            "execution_decisions": [],
+            "assessments": [],
+            "coverage": [
+              {
+                "requirement": { "local_ref": "t1" },
+                "disposition": "assigned",
+                "refs": [{ "local_ref": "a1" }],
+                "explanation": "a1 is the fix and its test."
+              }
+            ],
+            "checks": [],
+            "questions": []
+          }
+        ]
+      }
+    },
+    "existing-task": {
+      "events": [
+        {
+          "schema_version": 2,
+          "run_id": "run-fixture",
+          "event_id": "ev-1",
+          "kind": "user_input",
+          "source": { "producer_id": "host", "channel": "user" },
+          "payload": { "text": "Also run the test after the fix." }
+        }
+      ],
+      "ir": {
+        "t1": {
+          "task_id": "t1",
+          "revision": 3,
+          "goal": { "text": "Fix the failing parser bug.", "sources": [] },
+          "bindings": [],
+          "outputs": [
+            { "output_id": "o1", "revision": 1, "description": "The parser fix and its test.", "format": "artifact", "sources": [] }
+          ],
+          "content": [],
+          "current_scope": { "text": "Fix it and prove it with a test.", "disposition": "proceed", "sources": [] },
+          "unresolved": []
+        }
+      },
+      "compiled": {},
+      "candidate": {
+        "schema_version": 2,
+        "basis": { "event_ids": ["ev-1"], "refs": [] },
+        "groups": [
+          {
+            "local_ref": "g1",
+            "task_refs": ["t1"],
+            "depends_on": [],
+            "ir_changes": [],
+            "compilation": {
+              "decision": "replace",
+              "drafts": [
+                {
+                  "local_ref": "ci-1",
+                  "task_id": "t1",
+                  "intent_basis": [],
+                  "atoms": [
+                    {
+                      "atom_id": "a1",
+                      "revision": 0,
+                      "goal_refs": [],
+                      "task": "Fix the failing parser bug and prove it with a test.",
+                      "inputs": [],
+                      "outputs": [
+                        { "output_id": "o1", "description": "The parser fix and its test.", "format": "artifact" }
+                      ],
+                      "constraints": [],
+                      "optional_tools": ["read", "edit", "bash"],
+                      "authority": {
+                        "basis": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }],
+                        "rules": [
+                          {
+                            "operation_id": "edit",
+                            "resource_ref": { "source_id": "ev-1", "digest": "sha256:placeholder" },
+                            "input_refs": [],
+                            "output_refs": [],
+                            "conditions": [],
+                            "allowed_use": "Change the parser and its test."
+                          }
+                        ],
+                        "lifetime": "this_execution",
+                        "delegation": "not_supported"
+                      },
+                      "preconditions": [],
+                      "completion": [
+                        { "text": "The test passes with the fix and fails without it.", "evidence_required": "the verifier output" }
+                      ],
+                      "return_when": ["the test run finishes"],
+                      "intent_judgments": []
+                    }
+                  ],
+                  "relations": [],
+                  "attachments": []
+                }
+              ]
+            },
+            "execution_decisions": [],
+            "assessments": [],
+            "coverage": [
+              {
+                "requirement": { "local_ref": "t1" },
+                "disposition": "assigned",
+                "refs": [{ "local_ref": "a1" }],
+                "explanation": "a1 is the fix and its test."
+              }
+            ],
+            "checks": [],
+            "questions": []
+          }
+        ]
+      }
+    },
+    "compiled-task": {
+      "events": [
+        {
+          "schema_version": 2,
+          "run_id": "run-fixture",
+          "event_id": "ev-1",
+          "kind": "user_input",
+          "source": { "producer_id": "host", "channel": "user" },
+          "payload": { "text": "Keep going with the fix." }
+        }
+      ],
+      "ir": {
+        "t1": {
+          "task_id": "t1",
+          "revision": 3,
+          "goal": { "text": "Fix the failing parser bug.", "sources": [] },
+          "bindings": [],
+          "outputs": [
+            { "output_id": "o1", "revision": 1, "description": "The parser fix and its test.", "format": "artifact", "sources": [] }
+          ],
+          "content": [],
+          "current_scope": { "text": "Fix it and prove it with a test.", "disposition": "proceed", "sources": [] },
+          "unresolved": []
+        }
+      },
+      "compiled": {
+        "t1": {
+          "schema_version": 2,
+          "artifact_type": "compiled_intent",
+          "compiled_intent_id": "compiled-1",
+          "task_id": "t1",
+          "compiled_revision": 1,
+          "intent_basis": [],
+          "atoms": [
+            {
+              "atom_id": "a1",
+              "revision": 0,
+              "goal_refs": [],
+              "task": "Fix the failing parser bug and prove it with a test.",
+              "inputs": [],
+              "outputs": [
+                { "output_id": "o1", "description": "The parser fix and its test.", "format": "artifact" }
+              ],
+              "constraints": [],
+              "optional_tools": ["read", "edit", "bash"],
+              "authority": {
+                "basis": [{ "source_id": "ev-1", "digest": "sha256:8b3db6a5e30fd82ed4705d6e8b58f4591cacdce78d15e4e5631a633a7c644aa4" }],
+                "rules": [
+                  {
+                    "operation_id": "edit",
+                    "resource_ref": { "source_id": "ev-1", "digest": "sha256:8b3db6a5e30fd82ed4705d6e8b58f4591cacdce78d15e4e5631a633a7c644aa4" },
+                    "input_refs": [],
+                    "output_refs": [],
+                    "conditions": [],
+                    "allowed_use": "Change the parser and its test."
+                  }
+                ],
+                "lifetime": "this_execution",
+                "delegation": "not_supported"
+              },
+              "preconditions": [],
+              "completion": [
+                { "text": "The test passes with the fix and fails without it.", "evidence_required": "the verifier output" }
+              ],
+              "return_when": ["the test run finishes"],
+              "intent_judgments": []
+            }
+          ],
+          "relations": [],
+          "attachments": []
+        }
+      }
+    }
+  }
+}

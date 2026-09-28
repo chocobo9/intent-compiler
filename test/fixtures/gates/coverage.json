@@ -1,0 +1,86 @@
+{
+  "note": "coverage 是“这次编译出来的工作去哪了”的唯一机器可见记录。缺它，一个只做准备工作的原子就能冒充交付（2026-09-23 的验收增补）。",
+  "cases": [
+    {
+      "id": "replace-with-atoms-but-no-coverage",
+      "clauses": ["C.coverage_contract.4"],
+      "authority": { "clause": "C.coverage_contract.4" },
+      "why": "编译了新原子却不写去向：整组拒，理由回给模型在预算内改",
+      "base": "batch",
+      "edits": [{ "path": "candidate.groups.0.coverage", "value": [] }],
+      "expect_gates": ["coverage-missing"]
+    },
+    {
+      "id": "coverage-points-somewhere-else",
+      "clauses": ["C.coverage_contract.4"],
+      "authority": { "clause": "C.coverage_contract.4" },
+      "why": "写了一条 coverage，但既不指本任务也不指它承载的原子",
+      "base": "batch",
+      "edits": [
+        {
+          "path": "candidate.groups.0.coverage",
+          "value": [
+            {
+              "requirement": { "local_ref": "unrelated" },
+              "disposition": "assigned",
+              "refs": [{ "local_ref": "a-elsewhere" }],
+              "explanation": "This entry names neither the task nor its atom."
+            }
+          ]
+        }
+      ],
+      "expect_gates": ["coverage-missing"]
+    },
+    {
+      "id": "paused-coverage-still-counts-as-a-destination",
+      "clauses": ["K.rules.3", "C.coverage_contract.5"],
+      "authority": { "clause": "K.rules.3" },
+      "why": "用户暂停的工作写进 coverage disposition=paused 就算记下了，不该逼模型硬编一个原子（也是 K.rules.3 的机械侧基础）",
+      "base": "batch",
+      "edits": [
+        {
+          "path": "candidate.groups.0.coverage",
+          "value": [
+            {
+              "requirement": { "local_ref": "t1" },
+              "disposition": "paused",
+              "refs": [],
+              "explanation": "The user has not confirmed the target file yet."
+            }
+          ]
+        }
+      ],
+      "expect_gates": []
+    },
+    {
+      "id": "unresolved-coverage-still-counts-as-a-destination",
+      "clauses": ["K.rules.3", "C.coverage_contract.5"],
+      "authority": { "clause": "K.rules.3" },
+      "why": "同上：unresolved 也是记下了，不是没写",
+      "base": "batch",
+      "edits": [
+        {
+          "path": "candidate.groups.0.coverage",
+          "value": [
+            {
+              "requirement": { "local_ref": "t1" },
+              "disposition": "unresolved",
+              "refs": [],
+              "explanation": "Which of the two parser entry points is meant is not decided yet."
+            }
+          ]
+        }
+      ],
+      "expect_gates": []
+    },
+    {
+      "id": "replace-with-no-atoms-yet",
+      "clauses": ["C.compilation_contract.2"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "编译器可以产生新的 IR 而暂不产生可执行内容" },
+      "why": "只登记任务、暂时不产出原子是合法的（编译可以先只产生 IR）；此时不要求 coverage",
+      "base": "batch",
+      "edits": [{ "path": "candidate.groups.0.compilation.drafts.0.atoms", "value": [] }],
+      "expect_gates": []
+    }
+  ]
+}

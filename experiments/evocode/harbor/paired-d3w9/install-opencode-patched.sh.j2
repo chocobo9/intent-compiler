@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -eu
+
+test -x /opt/opencode-bun/bun
+test -f /opt/opencode-runtime/packages/opencode/src/index.ts
+test -f /opt/opencode-runtime/packages/opencode/src/session/prompt.ts
+test -f /opt/opencode-runtime/packages/opencode/src/session/llm/request.ts
+test -f /opt/intent-compiler/.opencode/plugins/experiment-runtime.js
+test -f /opt/intent-compiler/dist/adapters/opencode.js
+test -s /run/secrets/opencode-auth.json
+test -n "${DEEPSEEK_API_KEY:-}"
+test "${INTENT_COMPILER_TRANSPORT:-}" = "opencode"
+test "${INTENT_COMPILER_PROVIDER_ID:-}" = "openai"
+test "${INTENT_COMPILER_MODEL_ID:-}" = "gpt-6-luna-fast"
+test "${INTENT_COMPILER_MODEL_VARIANT:-}" = "high"
+test "${INTENT_COMPILER_STORE:-}" = "/opt/intent-data/compiler-store"
+test "${EXPERIMENT_OBSERVER_STORE:-}" = "/opt/intent-data/observer-store"
+
+test "$(jq -r '.version' /opt/opencode-runtime/packages/opencode/package.json)" = "1.18.31"
+jq -e '.openai.type == "oauth" and (.openai.access | length > 0) and (.openai.expires > 0)' /run/secrets/opencode-auth.json >/dev/null
+jq -e '.model == "deepseek/deepseek-flash" and .provider.deepseek.models["deepseek-flash"].options.reasoningEffort == "max" and .plugin[0] == "file:///opt/intent-compiler/.opencode/plugins/experiment-runtime.js"' /opt/intent-data/model/opencode.json >/dev/null
+grep -q 'strict: true' /opt/opencode-runtime/packages/opencode/src/session/prompt.ts
+grep -q 'tools\[key\].strict !== true' /opt/opencode-runtime/packages/opencode/src/session/llm/request.ts
+test -d "$(dirname "$OPENCODE_STRICT_TOOL_EVIDENCE_PATH")"
+touch "$OPENCODE_STRICT_TOOL_EVIDENCE_PATH"
+
+ln -sf /opt/opencode-bun/bun /usr/local/bin/bun
+mkdir -p /usr/local/bin /root/.config/opencode /root/.local/share/opencode /logs/agent
+cp /run/secrets/opencode-auth.json /root/.local/share/opencode/auth.json
+chmod 600 /root/.local/share/opencode/auth.json
+cp /opt/intent-data/model/opencode.json /root/.config/opencode/opencode.json
+cat > /usr/local/bin/opencode <<'SH'
+#!/bin/sh
+set -eu
+exec /usr/local/bin/bun run --cwd /opt/opencode-runtime/packages/opencode src/index.ts "$@"
+SH
+chmod 755 /usr/local/bin/opencode
+
+cli_version="$(opencode --version)"
+test "$cli_version" = "local"
+run_help="$(opencode run --help 2>&1 || true)"
+printf '%s' "$run_help" | grep -q -- "--variant"
+printf '%s' "$run_help" | grep -q -- "--format"
+printf 'container preflight passed: source=1.18.31 cli-mode=%s manager=openai/gpt-6-luna-fast@high executor=deepseek/deepseek-flash@max plugin=mounted strict-patch=present\n' "$cli_version"

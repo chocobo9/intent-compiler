@@ -1,0 +1,144 @@
+{
+  "note": "IR 变更干跑：每一个拒绝点都应该能对到一条条款（design 的目标是“失败可修订、理由具体”，不是静默作废）。",
+  "cases": [
+    {
+      "id": "second-task-ref-does-not-exist",
+      "clauses": ["C.rules.9"],
+      "authority": { "clause": "C.rules.9" },
+      "why": "一组的 task_refs 只能指向本次 ir_changes 之后存在的任务",
+      "base": "batch",
+      "edits": [{ "path": "candidate.groups.0.task_refs", "value": ["t1", "t2"] }],
+      "expect_gates": ["task-refs-unknown"]
+    },
+    {
+      "id": "stale-expected-revision-on-current-scope",
+      "clauses": ["C.ir_change_contract.6"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "revise：指明目标及 expected_revision" },
+      "why": "expected_revision 与实际不符是可修订拒绝，不是静默作废",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.ir_changes",
+          "value": [
+            {
+              "action": "revise",
+              "target": "current_scope",
+              "id": "t1",
+              "expected_revision": 1,
+              "value": { "text": "Fix it, then run the test.", "disposition": "proceed" },
+              "sources": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }]
+            }
+          ]
+        }
+      ],
+      "expect_gates": ["ir-dry-run"]
+    },
+    {
+      "id": "stale-expected-revision-on-an-output",
+      "clauses": ["C.ir_change_contract.6"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "revise：指明目标及 expected_revision" },
+      "why": "对既有对象改形状要带对的 revision",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.ir_changes",
+          "value": [
+            {
+              "action": "revise",
+              "target": "output",
+              "id": "o1",
+              "expected_revision": 9,
+              "value": { "description": "The parser fix.", "format": "artifact" },
+              "sources": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }]
+            }
+          ]
+        }
+      ],
+      "expect_gates": ["ir-dry-run"]
+    },
+    {
+      "id": "revise-an-output-with-the-right-revision-is-accepted",
+      "clauses": ["C.ir_change_contract.6"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "revise：指明目标及 expected_revision" },
+      "why": "合法路径：带对 revision 的 revise 不该被拒",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.ir_changes",
+          "value": [
+            {
+              "action": "revise",
+              "target": "output",
+              "id": "o1",
+              "expected_revision": 1,
+              "value": { "description": "The parser fix and its regression test.", "format": "artifact" },
+              "sources": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }]
+            }
+          ]
+        }
+      ],
+      "expect_gates": []
+    },
+    {
+      "id": "create-an-unknown-target",
+      "clauses": ["C.ir_change_contract.1", "C.ir_change_contract.3"],
+      "authority": { "clause": "C.ir_change_contract.1" },
+      "why": "create 只支持 task/binding/output/content",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.ir_changes",
+          "value": [
+            {
+              "action": "create",
+              "target": "widget",
+              "local_ref": "w1",
+              "value": {},
+              "sources": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }]
+            }
+          ]
+        }
+      ],
+      "expect_gates": ["ir-dry-run"]
+    },
+    {
+      "id": "unsupported-ir-action",
+      "clauses": ["C.ir_change_contract.1"],
+      "authority": { "clause": "C.ir_change_contract.1" },
+      "why": "只有 create/revise/retire/preserve 四种动作",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.ir_changes",
+          "value": [
+            {
+              "action": "merge",
+              "target": "task",
+              "id": "t1",
+              "sources": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }]
+            }
+          ]
+        }
+      ],
+      "expect_gates": ["ir-dry-run"]
+    },
+    {
+      "id": "preserve-only-group-with-no-destination",
+      "clauses": ["C.rules.6"],
+      "authority": { "clause": "C.rules.6" },
+      "why": "只写 preserve、不写 coverage、也不提问的组，等于这一批什么都没发生",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.ir_changes",
+          "value": [
+            { "action": "preserve", "reason": "nothing changed", "sources": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }] }
+          ]
+        },
+        { "path": "candidate.groups.0.compilation", "value": { "decision": "reuse", "current": [], "reason": "nothing changed" } },
+        { "path": "candidate.groups.0.coverage", "value": [] }
+      ],
+      "expect_gates": ["no-destination"]
+    }
+  ]
+}

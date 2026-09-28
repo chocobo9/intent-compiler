@@ -1,0 +1,166 @@
+{
+  "note": "交付物/材料的登记（2026-09-24 决定）：形状只在原子声明一处；IR 条目由代码按原子派生。同批两个原子说法冲突才是真相矛盾。",
+  "bases": {
+    "two-atoms": {
+      "extends": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.1",
+          "value": {
+            "atom_id": "a2",
+            "revision": 0,
+            "goal_refs": [],
+            "task": "Run the regression test again.",
+            "inputs": [],
+            "outputs": [{ "output_id": "o1", "description": "The parser fix and its test.", "format": "artifact" }],
+            "constraints": [],
+            "optional_tools": ["read", "bash"],
+            "authority": {
+              "basis": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }],
+              "rules": [
+                {
+                  "operation_id": "bash",
+                  "resource_ref": { "source_id": "ev-1", "digest": "sha256:placeholder" },
+                  "input_refs": [],
+                  "output_refs": [],
+                  "conditions": [],
+                  "allowed_use": "Run the test."
+                }
+              ],
+              "lifetime": "this_execution",
+              "delegation": "not_supported"
+            },
+            "preconditions": [],
+            "completion": [{ "text": "The test run finishes.", "evidence_required": "the verifier output" }],
+            "return_when": ["the test run finishes"],
+            "intent_judgments": []
+          }
+        }
+      ]
+    },
+    "two-atoms-one-binding": {
+      "extends": "two-atoms",
+      "edits": [
+        {
+          "path": "ir.t1.bindings",
+          "value": [
+            {
+              "binding_id": "b1",
+              "revision": 0,
+              "role": "task_data",
+              "purpose": "the delegated text",
+              "ref": { "source_id": "ev-1", "digest": "sha256:placeholder" },
+              "sources": []
+            }
+          ]
+        },
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.0.inputs",
+          "value": [{ "binding_id": "b1", "ref": { "source_id": "ev-1", "digest": "sha256:placeholder" }, "role": "task_data", "use": "read the delegation" }]
+        },
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.1.inputs",
+          "value": [{ "binding_id": "b1", "ref": { "source_id": "ev-1", "digest": "sha256:placeholder" }, "role": "task_data", "use": "read the delegation" }]
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "two-atoms-declare-one-output-with-two-formats",
+      "clauses": ["D.475"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "唯一保留的两条硬拒" },
+      "why": "一份交付物不能同时是 artifact 和 text——同批内自相矛盾",
+      "base": "two-atoms",
+      "edits": [
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.1.outputs",
+          "value": [{ "output_id": "o1", "description": "The same deliverable, described as text.", "format": "text" }]
+        }
+      ],
+      "expect_gates": ["registration-output"]
+    },
+    {
+      "id": "two-atoms-declare-one-binding-differently",
+      "clauses": ["D.475"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "唯一保留的两条硬拒" },
+      "why": "同批两个原子对同一 binding 的 role 说法不同，是真相矛盾",
+      "base": "two-atoms-one-binding",
+      "edits": [
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.1.inputs.0.role",
+          "value": "example"
+        }
+      ],
+      "expect_gates": ["registration-binding"]
+    },
+    {
+      "id": "two-atoms-declare-one-binding-the-same-way-is-accepted",
+      "clauses": ["D.475"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "只有 **format** 不一致才算矛盾" },
+      "why": "合法路径：两个原子用同一份材料、同一角色，不该被拒",
+      "base": "two-atoms-one-binding",
+      "expect_gates": []
+    },
+    {
+      "id": "an-atom-binds-material-the-ir-records-as-missing",
+      "clauses": ["C.rules.4"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "唯一保留的两条硬拒" },
+      "why": "IR 明确记为缺失材料（没有 ref）的 binding，原子不能自己补上一个 ref——那是委托事实",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "ir.t1.bindings",
+          "value": [{ "binding_id": "b-missing", "revision": 0, "role": "task_data", "purpose": "the spec the user has not sent yet", "sources": [] }]
+        },
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.0.inputs",
+          "value": [{ "binding_id": "b-missing", "ref": { "source_id": "ev-1", "digest": "sha256:placeholder" }, "role": "task_data", "use": "read the spec" }]
+        }
+      ],
+      "expect_gates": ["missing-material-binding"]
+    },
+    {
+      "id": "an-atom-declares-a-new-output",
+      "clauses": ["C.ir_change_contract.3"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "新 id 由代码按原子声明创建" },
+      "why": "新 id 由代码按原子自己的声明登记，不需要模型再写一遍 output create",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.0.outputs",
+          "value": [{ "output_id": "o-new", "description": "A short summary of the fix.", "format": "text" }]
+        }
+      ],
+      "expect_gates": []
+    },
+    {
+      "id": "an-atom-restates-an-existing-output-with-another-format",
+      "clauses": ["D.475"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "形状不同的既有 id 由代码 `revise` 成原子声明的值（原子赢），不再拒绝" },
+      "why": "已存在的 id 形状不同时以原子为准并记 declaration_changes，不再拒绝（r11d 的过严规则就在这里）",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.0.outputs",
+          "value": [{ "output_id": "o1", "description": "The parser fix and its test.", "format": "text" }]
+        }
+      ],
+      "expect_gates": []
+    },
+    {
+      "id": "an-atom-restates-an-existing-output-with-the-same-format",
+      "clauses": ["D.475"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "`description` 是散文，措辞不同不算第二次声明" },
+      "why": "措辞不同但 format 相同不算第二次声明——r11d 正是被两句话的不同措辞整批作废",
+      "base": "existing-task",
+      "edits": [
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.0.outputs.0.description",
+          "value": "The parser fix together with the test that proves it."
+        }
+      ],
+      "expect_gates": []
+    }
+  ]
+}

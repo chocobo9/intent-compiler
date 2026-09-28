@@ -1,0 +1,87 @@
+{
+  "job_name": "paired-deepseek-d3w9-intent-7r-20260925-001",
+  "jobs_dir": "<set-unique-results-directory>",
+  "n_attempts": 1,
+  "timeout_multiplier": 1.0,
+  "agent_timeout_multiplier": null,
+  "verifier_timeout_multiplier": null,
+  "agent_setup_timeout_multiplier": null,
+  "environment_build_timeout_multiplier": null,
+  "debug": false,
+  "orchestrator": {
+    "type": "local",
+    "n_concurrent_trials": 1,
+    "quiet": false,
+    "retry": {
+      "max_retries": 0,
+      "include_exceptions": null,
+      "exclude_exceptions": [
+        "VerifierOutputParseError",
+        "VerifierTimeoutError",
+        "RewardFileNotFoundError",
+        "RewardFileEmptyError",
+        "AgentTimeoutError"
+      ],
+      "wait_multiplier": 1.0,
+      "min_wait_sec": 1.0,
+      "max_wait_sec": 60.0
+    },
+    "kwargs": {}
+  },
+  "environment": {
+    "type": "docker",
+    "import_path": null,
+    "force_build": false,
+    "delete": true,
+    "override_cpus": null,
+    "override_memory_mb": null,
+    "override_storage_mb": null,
+    "override_gpus": null,
+    "suppress_override_warnings": false,
+    "kwargs": {}
+  },
+  "verifier": {
+    "override_timeout_sec": null,
+    "max_timeout_sec": null,
+    "disable": false,
+    "multiround_continue_successes_per_round": 1,
+    "multiround_state_cache_policy": "success",
+    "multiround_resume_preflight_policy": "strict",
+    "multiround_max_round": 7,
+    "multiround_start_round": 1,
+    "multiround_aggregate_start_round": null,
+    "multiround_aggregate_end_round": null,
+    "multiround_resume_source": null,
+    "multiround_resume_trial_name": null,
+    "multiround_resume_state_image": null,
+    "multiround_resume_state_archive": null,
+    "multiround_resume_state_snapshot_id": null,
+    "multiround_stop_on_failed_round": false
+  },
+  "metrics": [],
+  "agents": [
+    {
+      "name": null,
+      "import_path": "intent_opencode_agent:OpenCodePatched",
+      "model_name": "deepseek/deepseek-flash",
+      "override_timeout_sec": null,
+      "override_setup_timeout_sec": 360,
+      "max_timeout_sec": null,
+      "kwargs": {
+        "dispatch_snapshot_path": "<set-local-compiler-snapshot-file>",
+        "variant": "max",
+        "experiment_run_id": "paired-deepseek-d3w9-intent-20260925-001"
+      },
+      "env": {}
+    }
+  ],
+  "datasets": [],
+  "tasks": [
+    {
+      "path": "<set-local-task-directory>"
+    }
+  ],
+  "artifacts": [
+    "/app"
+  ]
+}

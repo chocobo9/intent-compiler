@@ -1,0 +1,131 @@
+{
+  "note": "条件求值（execution-state.evaluateCondition）：只有三种能求值，其余一律 unsupported 并挡住它保护的动作——不静默放行。这里也是 F2 的现场：current_scope 的第四种 disposition 没人认。",
+  "cases": [
+    {
+      "id": "scope-allows-when-the-scope-proceeds",
+      "clauses": ["C.rules.16"],
+      "authority": { "clause": "C.rules.16" },
+      "kind": "conditions",
+      "condition": { "kind": "scope_allows" },
+      "context": {
+        "intent": { "task_id": "t1" },
+        "ir": { "t1": { "current_scope": { "disposition": "proceed" } } }
+      },
+      "expect": "satisfied"
+    },
+    {
+      "id": "scope-does-not-allow-when-the-scope-is-paused",
+      "clauses": ["D.517"],
+      "authority": { "clause": "D.517" },
+      "kind": "conditions",
+      "condition": { "kind": "scope_allows" },
+      "context": {
+        "intent": { "task_id": "t1" },
+        "ir": { "t1": { "current_scope": { "disposition": "paused" } } }
+      },
+      "expect": "unsatisfied"
+    },
+    {
+      "id": "scope-does-not-allow-when-the-scope-is-withdrawn",
+      "clauses": ["D.517"],
+      "authority": { "clause": "D.517" },
+      "kind": "conditions",
+      "condition": { "kind": "scope_allows" },
+      "context": {
+        "intent": { "task_id": "t1" },
+        "ir": { "t1": { "current_scope": { "disposition": "withdrawn" } } }
+      },
+      "expect": "unsatisfied"
+    },
+    {
+      "id": "conditional-scope-cannot-be-evaluated",
+      "clauses": ["D.333"],
+      "known_issue": "F2",
+      "authority": { "behaviour": "current", "fact": "F2" },
+      "kind": "conditions",
+      "why": "IR 的类型与合同都写着 disposition 有第四种 conditional，求值器只认三种，于是它保护的动作永远被挡",
+      "condition": { "kind": "scope_allows" },
+      "context": {
+        "intent": { "task_id": "t1" },
+        "ir": { "t1": { "current_scope": { "disposition": "conditional" } } }
+      },
+      "expect": "unsupported"
+    },
+    {
+      "id": "capability-available-when-the-host-offers-the-operation",
+      "clauses": ["C.rules.16"],
+      "authority": { "clause": "C.rules.16" },
+      "kind": "conditions",
+      "condition": { "kind": "capability_available", "expectation": "bash" },
+      "context": { "capabilities": { "operations": ["read", "write", "edit", "bash"] } },
+      "expect": "satisfied"
+    },
+    {
+      "id": "capability-missing-when-the-host-does-not-offer-it",
+      "clauses": ["C.rules.16"],
+      "authority": { "clause": "C.rules.16" },
+      "kind": "conditions",
+      "condition": { "kind": "capability_available", "expectation": "webfetch" },
+      "context": { "capabilities": { "operations": ["read", "write", "edit", "bash"] } },
+      "expect": "unsatisfied"
+    },
+    {
+      "id": "capability-unknown-when-there-is-no-catalog",
+      "clauses": ["C.rules.16"],
+      "authority": { "clause": "C.rules.16" },
+      "kind": "conditions",
+      "condition": { "kind": "capability_available", "expectation": "bash" },
+      "context": {},
+      "expect": "unsupported"
+    },
+    {
+      "id": "user-confirmation-is-not-implemented-yet",
+      "clauses": ["D.200"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "其余 Condition 类型（artifact_exists、user_confirms、object_version_matches）仍按 unsupported 处理并拒绝" },
+      "kind": "conditions",
+      "why": "user_confirms 还没实现：返回 unsupported 挡住动作，所以 Relation 不能顶替用户确认",
+      "condition": { "kind": "user_confirms", "refs": [] },
+      "context": {},
+      "expect": "unsupported"
+    },
+    {
+      "id": "an-unknown-condition-kind-is-never-silently-allowed",
+      "clauses": ["D.483"],
+      "authority": { "clause": "D.483" },
+      "kind": "conditions",
+      "condition": { "kind": "the-moon-is-full" },
+      "context": {},
+      "expect": "unsupported"
+    },
+    {
+      "id": "all-combines-its-children",
+      "clauses": ["D.483"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "条件支持 all/any 组合，解析后由代码判断" },
+      "kind": "conditions",
+      "condition": {
+        "kind": "all",
+        "conditions": [
+          { "kind": "capability_available", "expectation": "bash" },
+          { "kind": "capability_available", "expectation": "edit" }
+        ]
+      },
+      "context": { "capabilities": { "operations": ["edit", "read"] } },
+      "expect": "unsatisfied"
+    },
+    {
+      "id": "any-is-satisfied-when-one-child-is",
+      "clauses": ["D.483"],
+      "authority": { "doc": "development/CURRENT-DESIGN.md", "quote": "条件支持 all/any 组合，解析后由代码判断" },
+      "kind": "conditions",
+      "condition": {
+        "kind": "any",
+        "conditions": [
+          { "kind": "capability_available", "expectation": "bash" },
+          { "kind": "capability_available", "expectation": "edit" }
+        ]
+      },
+      "context": { "capabilities": { "operations": ["edit", "read"] } },
+      "expect": "satisfied"
+    }
+  ]
+}

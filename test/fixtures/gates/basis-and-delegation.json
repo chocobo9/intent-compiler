@@ -1,0 +1,149 @@
+{
+  "note": "basis 与“这次委托有没有去向”——两块最常撞的门槛。每个 case 的 expect_gates 是必须命中的门槛全集：多了少了都算失败。",
+  "cases": [
+    {
+      "id": "clean-user-input-batch",
+      "why": "基线：一个合法候选必须一条都不撞。防止把规则越收越严。",
+      "base": "batch",
+      "clauses": ["C.rules.6", "C.rules.7"],
+      "authority": { "clause": "C.rules.6" },
+      "expect_gates": []
+    },
+    {
+      "id": "basis-empty-with-user-input",
+      "clauses": ["C.rules.7"],
+      "authority": { "clause": "C.rules.7" },
+      "why": "空 basis 在有用户委托的批次里等于宣称没事可做",
+      "base": "batch",
+      "candidate": { "basis": { "event_ids": [] } },
+      "expect_gates": ["basis"]
+    },
+    {
+      "id": "basis-empty-without-user-input",
+      "clauses": ["C.rules.7"],
+      "known_issue": "F13",
+      "authority": { "behaviour": "current", "fact": "F13" },
+      "why": "合同第 7 条写“空 basis 只在本批没有用户委托时才成立”，实现与 §3.5 却一律拒绝空 basis。这里记的是当前行为。",
+      "base": "batch",
+      "events": [
+        {
+          "schema_version": 2,
+          "run_id": "run-fixture",
+          "event_id": "ev-2",
+          "kind": "execution_progress",
+          "source": { "producer_id": "executor", "channel": "executor" },
+          "payload": { "note": "still working" }
+        }
+      ],
+      "candidate": { "basis": { "event_ids": [] } },
+      "expect_gates": ["basis"]
+    },
+    {
+      "id": "basis-names-an-event-not-in-this-batch",
+      "clauses": ["D.401"],
+      "authority": { "clause": "D.401" },
+      "why": "basis 只能指向本批待处理事件",
+      "base": "batch",
+      "candidate": { "basis": { "event_ids": ["ev-from-another-batch"] } },
+      "expect_gates": ["basis"]
+    },
+    {
+      "id": "no-group-names-a-task",
+      "clauses": ["C.rules.6", "D.401"],
+      "authority": { "clause": "D.401" },
+      "why": "带用户委托的批次必须有组命名任务，否则委托没有登记",
+      "base": "batch",
+      "candidate": {
+        "groups": [
+          {
+            "local_ref": "g1",
+            "task_refs": [],
+            "depends_on": [],
+            "ir_changes": [],
+            "compilation": { "decision": "reuse", "current": [], "reason": "nothing to compile" },
+            "execution_decisions": [],
+            "assessments": [],
+            "coverage": [],
+            "checks": [],
+            "questions": []
+          }
+        ]
+      },
+      "expect_gates": ["delegation-not-recorded"]
+    },
+    {
+      "id": "empty-basis-and-no-task-r11b",
+      "clauses": ["C.rules.7", "C.rules.6", "D.401"],
+      "authority": { "clause": "D.401" },
+      "why": "r11b 的真实形态：模型用空 basis + 反问代替工作，两道门同时命中",
+      "base": "batch",
+      "candidate": {
+        "basis": { "event_ids": [] },
+        "groups": [
+          {
+            "local_ref": "g1",
+            "task_refs": [],
+            "depends_on": [],
+            "ir_changes": [],
+            "compilation": { "decision": "reuse", "current": [], "reason": "waiting for permission" },
+            "execution_decisions": [],
+            "assessments": [],
+            "coverage": [],
+            "checks": [],
+            "questions": [{ "text": "Should I proceed?", "affects": [] }]
+          }
+        ]
+      },
+      "expect_gates": ["basis", "delegation-not-recorded"]
+    },
+    {
+      "id": "question-without-naming-a-task",
+      "clauses": ["C.rules.6"],
+      "known_issue": "F1",
+      "authority": { "behaviour": "current", "fact": "F1" },
+      "why": "合同同时写着“可以提问并说明为什么还编译不了”和“必须有组命名任务”。只提问、不命名任务的候选目前被拒——两条话自相矛盾。",
+      "base": "batch",
+      "candidate": {
+        "groups": [
+          {
+            "local_ref": "g1",
+            "task_refs": [],
+            "depends_on": [],
+            "ir_changes": [],
+            "compilation": { "decision": "reuse", "current": [], "reason": "only a question this batch" },
+            "execution_decisions": [],
+            "assessments": [],
+            "coverage": [],
+            "checks": [],
+            "questions": [{ "text": "Which parser file do you mean?", "affects": [] }]
+          }
+        ]
+      },
+      "expect_gates": ["delegation-not-recorded"]
+    },
+    {
+      "id": "question-with-a-task-is-accepted",
+      "clauses": ["C.rules.6"],
+      "authority": { "clause": "C.rules.6" },
+      "why": "合法路径：认领任务、写 reuse、把问题放进 questions，就没有目的地这道门不会响",
+      "base": "existing-task",
+      "candidate": {
+        "groups": [
+          {
+            "local_ref": "g1",
+            "task_refs": ["t1"],
+            "depends_on": [],
+            "ir_changes": [],
+            "compilation": { "decision": "reuse", "current": [], "reason": "only a question this batch" },
+            "execution_decisions": [],
+            "assessments": [],
+            "coverage": [],
+            "checks": [],
+            "questions": [{ "text": "Which parser file do you mean?", "affects": ["t1"] }]
+          }
+        ]
+      },
+      "expect_gates": []
+    }
+  ]
+}

@@ -1,0 +1,158 @@
+{
+  "note": "原子身份：atom_id + revision 指向一份内容。内容变了必须升 revision，否则台账会按同一个键继承旧生命周期（r11 push 候选撞过这关）。",
+  "bases": {
+    "compiled-task-with-candidate": {
+      "extends": "compiled-task",
+      "edits": [
+        {
+          "path": "candidate",
+          "value": {
+            "schema_version": 2,
+            "basis": { "event_ids": ["ev-1"], "refs": [] },
+            "groups": [
+              {
+                "local_ref": "g1",
+                "task_refs": ["t1"],
+                "depends_on": [],
+                "ir_changes": [],
+                "compilation": {
+                  "decision": "replace",
+                  "drafts": [
+                    {
+                      "local_ref": "ci-1",
+                      "task_id": "t1",
+                      "intent_basis": [],
+                      "atoms": [
+                        {
+                          "atom_id": "a1",
+                          "revision": 0,
+                          "goal_refs": [],
+                          "task": "Fix the failing parser bug and prove it with a test.",
+                          "inputs": [],
+                          "outputs": [
+                            { "output_id": "o1", "description": "The parser fix and its test.", "format": "artifact" }
+                          ],
+                          "constraints": [],
+                          "optional_tools": ["read", "edit", "bash"],
+                          "authority": {
+                            "basis": [{ "source_id": "ev-1", "digest": "sha256:placeholder" }],
+                            "rules": [
+                              {
+                                "operation_id": "edit",
+                                "resource_ref": { "source_id": "ev-1", "digest": "sha256:placeholder" },
+                                "input_refs": [],
+                                "output_refs": [],
+                                "conditions": [],
+                                "allowed_use": "Change the parser and its test."
+                              }
+                            ],
+                            "lifetime": "this_execution",
+                            "delegation": "not_supported"
+                          },
+                          "preconditions": [],
+                          "completion": [
+                            { "text": "The test passes with the fix and fails without it.", "evidence_required": "the verifier output" }
+                          ],
+                          "return_when": ["the test run finishes"],
+                          "intent_judgments": []
+                        }
+                      ],
+                      "relations": [],
+                      "attachments": []
+                    }
+                  ]
+                },
+                "execution_decisions": [],
+                "assessments": [],
+                "coverage": [
+                  {
+                    "requirement": { "local_ref": "t1" },
+                    "disposition": "assigned",
+                    "refs": [{ "local_ref": "a1" }],
+                    "explanation": "a1 is the fix and its test."
+                  }
+                ],
+                "checks": [],
+                "questions": []
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "cases": [
+    {
+      "id": "same-atom-id-and-revision-with-the-same-content",
+      "why": "基线：重新提出同一份内容必须被接受（幂等），否则每次重编译都会作废",
+      "clauses": ["C.atom_contract.8"],
+      "authority": { "clause": "C.atom_contract.8" },
+      "base": "compiled-task-with-candidate",
+      "expect_gates": []
+    },
+    {
+      "id": "same-atom-id-and-revision-with-different-content",
+      "clauses": ["C.atom_contract.8"],
+      "authority": { "clause": "C.atom_contract.8" },
+      "why": "内容变了却用同一个 id+revision：会继承旧原子的生命周期，必须拒",
+      "base": "compiled-task-with-candidate",
+      "edits": [
+        { "path": "candidate.groups.0.compilation.drafts.0.atoms.0.task", "value": "Also rewrite the changelog." }
+      ],
+      "expect_gates": ["atom-revision"]
+    },
+    {
+      "id": "same-atom-id-with-a-new-revision-and-different-content",
+      "clauses": ["C.atom_contract.8"],
+      "authority": { "clause": "C.atom_contract.8" },
+      "why": "合法路径：内容变了同时升 revision，就得到自己的生命周期记录",
+      "base": "compiled-task-with-candidate",
+      "edits": [
+        { "path": "candidate.groups.0.compilation.drafts.0.atoms.0.revision", "value": 1 },
+        { "path": "candidate.groups.0.compilation.drafts.0.atoms.0.task", "value": "Also rewrite the changelog." }
+      ],
+      "expect_gates": []
+    },
+    {
+      "id": "previous-atom-ref-points-at-an-unknown-atom",
+      "clauses": ["C.atom_contract.9"],
+      "authority": { "clause": "C.atom_contract.9" },
+      "why": "接替关系只能指向输入里给过的原子引用",
+      "base": "compiled-task-with-candidate",
+      "edits": [
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.0.previous_atom_ref",
+          "value": { "id": "a9", "revision": 0, "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000009" }
+        }
+      ],
+      "expect_gates": ["build-previous-atom-ref"]
+    },
+    {
+      "id": "previous-atom-ref-carries-the-wrong-digest",
+      "clauses": ["C.atom_contract.9"],
+      "authority": { "clause": "C.atom_contract.9" },
+      "why": "引用一个存在的原子但摘要对不上：说明它指的不是那份内容",
+      "base": "compiled-task-with-candidate",
+      "edits": [
+        {
+          "path": "candidate.groups.0.compilation.drafts.0.atoms.0.previous_atom_ref",
+          "value": { "id": "a1", "revision": 0, "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000" }
+        }
+      ],
+      "expect_gates": ["build-previous-atom-ref"]
+    },
+    {
+      "id": "stored-atom-still-carries-a-placeholder-source-digest",
+      "clauses": ["C.atom_contract.8"],
+      "known_issue": "F14",
+      "authority": { "behaviour": "current", "fact": "F14" },
+      "why": "存档里的原子是 2026-09-24“代码改写摘要”之前写入的，摘要还是占位值；候选侧的同一份内容会被改写成真摘要，于是同内容被误判成“内容变了”。续跑旧 run 时会走到这里。",
+      "base": "compiled-task-with-candidate",
+      "edits": [
+        { "path": "compiled.t1.atoms.0.authority.basis.0.digest", "value": "sha256:placeholder" },
+        { "path": "compiled.t1.atoms.0.authority.rules.0.resource_ref.digest", "value": "sha256:placeholder" }
+      ],
+      "expect_gates": ["atom-revision"]
+    }
+  ]
+}

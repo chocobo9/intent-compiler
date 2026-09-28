@@ -1,0 +1,80 @@
+{
+  "job_name": "intent-on-d1w2-r12",
+  "jobs_dir": "V:/d1w2-r12-jobs",
+  "n_attempts": 1,
+  "n_concurrent_trials": 1,
+  "environment": {
+    "type": "docker",
+    "env": {
+      "DEEPSEEK_API_KEY": "${DEEPSEEK_API_KEY}",
+      "INTENT_COMPILER_STORE": "/opt/intent-data/store",
+      "INTENT_COMPILER_MODEL_DIRECTORY": "/opt/intent-data/model",
+      "INTENT_COMPILER_PROVIDER_ID": "deepseek",
+      "INTENT_COMPILER_MODEL_ID": "deepseek-flash",
+      "INTENT_COMPILER_TRANSPORT": "opencode",
+      "INTENT_COMPILER_AGENT": "build",
+      "EXPERIMENT_ARM_MODE": "compiler",
+      "EXPERIMENT_OBSERVER_STORE": "/opt/intent-data/observer",
+      "EXPERIMENT_OBSERVER_AUTO_REGISTER": "1",
+      "EXPERIMENT_ARM_ID": "compiler-v2",
+      "NO_COLOR": "1",
+      "TERM": "dumb",
+      "CI": "1"
+    },
+    "mounts": [
+      {
+        "type": "bind",
+        "source": "D:/huawei/intent_compiler/project",
+        "target": "/opt/intent-compiler",
+        "read_only": true
+      },
+      {
+        "type": "bind",
+        "source": "D:/huawei/intent_compiler/project/results/evocodebench/intent-on/runtime-r12",
+        "target": "/opt/intent-data"
+      }
+    ]
+  },
+  "agents": [
+    {
+      "name": "opencode",
+      "model_name": "deepseek/deepseek-flash",
+      "resume_trajectory": true,
+      "env": {
+        "NO_COLOR": "1",
+        "TERM": "dumb",
+        "CI": "1"
+      },
+      "kwargs": {
+        "variant": "max",
+        "opencode_config": {
+          "model": "deepseek/deepseek-flash",
+          "plugin": [
+            "file:///opt/intent-compiler/.opencode/plugins/experiment-runtime.js"
+          ],
+          "provider": {
+            "deepseek": {
+              "models": {
+                "deepseek-flash": {
+                  "options": {
+                    "reasoningEffort": "max"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "tasks": [
+    { "path": "D:/huawei/EvoCodeBench/data/evocodebench_wotraj/theme_d1_w2_code_build_brownfield_modification" }
+  ]
+}
+
+
+
+
+
+
+

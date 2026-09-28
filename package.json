@@ -1,0 +1,48 @@
+{
+  "name": "opencode-intent-compiler-experiment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "description": "Intent Compiler experiment package with deterministic candidate, Observer, adapters, and OpenCode runtime code; real-chain validation is not complete.",
+  "scripts": {
+    "clean:dist": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "clean:test": "node -e \"require('node:fs').rmSync('.test-dist',{recursive:true,force:true})\"",
+    "build": "npm run clean:dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && npm run clean:test && tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js && npm run clean:test",
+    "gate:replay": "node experiments/evocode/gate-replay.mjs",
+    "check": "npm run typecheck"
+  },
+  "bin": {
+    "experiment-observer": "./dist/cli/observer-cli.js",
+    "intent-current-compiled-intent": "./dist/cli/current-compiled-intent.js",
+    "intent-opencode-jsonl": "./dist/cli/opencode-jsonl.js",
+    "intent-prdcheck-evidence": "./dist/cli/prdcheck-evidence.js",
+    "intent-prdcheck-run-config": "./dist/cli/prdcheck-run-config.js",
+    "intent-real-chain-preflight": "./dist/cli/real-chain-preflight.js",
+    "intent-cost-compare": "./dist/cli/cost-compare.js",
+    "intent-cost-summary": "./dist/cli/cost-summary.js",
+    "intent-audit-report": "./dist/cli/audit-report.js",
+    "intent-v2-deepseek-smoke": "./dist/cli/v2-deepseek-smoke.js",
+    "intent-workspace-snapshot": "./dist/cli/workspace-snapshot.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.3",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
+  }
+}

@@ -1,0 +1,3 @@
+# Official adapter, unmodified. Python is optional experiment tooling, not a core dependency.
+system-one-adapter @ git+https://github.com/typesafe-ai/system-one-adapter-python.git@adffc2eab300a4fa3c0e92252d4ffd6ceaa53700
+typesafe-sdk==0.7.0

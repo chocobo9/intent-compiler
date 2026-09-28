@@ -1,0 +1,180 @@
+{
+  "schema": 1,
+  "source_kind": "Harbor official verifier multiround_results.json",
+  "runs": [
+    {
+      "source": "EvoCodeBench/harbor_results/paired-deepseek-d3w9-20260925-007/bare/paired-deepseek-d3w9-bare-7r-20260925-007/r1__tjG4mgL/verifier/multiround_results.json",
+      "source_sha256": "67eca1aab171421eb5ee4762b788979889b338641eac8b2e394bdd7001e1765b",
+      "rounds": [
+        {
+          "round": 1,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 2,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 3,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 4,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 5,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 6,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 7,
+          "reward": 0.0,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "source": "EvoCodeBench/harbor_results/paired-deepseek-d3w9-20260925-007/intent/paired-deepseek-d3w9-intent-7r-20260925-007/r1__5MtftGu/verifier/multiround_results.json",
+      "source_sha256": "67eca1aab171421eb5ee4762b788979889b338641eac8b2e394bdd7001e1765b",
+      "rounds": [
+        {
+          "round": 1,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 2,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 3,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 4,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 5,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 6,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 7,
+          "reward": 0.0,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "source": "EvoCodeBench/harbor_results/paired-deepseek-d3w9-20260925-008/intent/paired-deepseek-d3w9-intent-r7-20260925-008/r1__sfUK7FP/verifier/multiround_results.json",
+      "source_sha256": "1ffce28a80730ba16f47b56ec355e7516123f6225dddfbc7701f6820f5ab34a4",
+      "rounds": [
+        {
+          "round": 7,
+          "reward": 0.0,
+          "status": "completed"
+        }
+      ]
+    },
+    {
+      "source": "EvoCodeBench/harbor_results/intent-sol-dpipe-20260927-002/intent-sol-dpipe-20260927-002/task__p2Kr5Wm/verifier/multiround_results.json",
+      "source_sha256": "2abdd87b6a7401136a0cca0f68dc96c2864a7082a9348758fb40082d99b20cac",
+      "rounds": [
+        {
+          "round": 1,
+          "reward": 1.0,
+          "status": "completed"
+        },
+        {
+          "round": 2,
+          "reward": 1.0,
+          "status": "completed"
+        },
+        {
+          "round": 3,
+          "reward": 1.0,
+          "status": "completed"
+        },
+        {
+          "round": 4,
+          "reward": 1.0,
+          "status": "completed"
+        },
+        {
+          "round": 5,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 6,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 7,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 8,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 9,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 10,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 11,
+          "reward": 1.0,
+          "status": "completed"
+        },
+        {
+          "round": 12,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 13,
+          "reward": 1.0,
+          "status": "completed"
+        },
+        {
+          "round": 14,
+          "reward": 0.0,
+          "status": "completed"
+        },
+        {
+          "round": 15,
+          "reward": 0.0,
+          "status": "completed"
+        }
+      ]
+    }
+  ]
+}

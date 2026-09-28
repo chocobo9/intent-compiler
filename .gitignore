@@ -1,0 +1,29 @@
+node_modules/
+dist/
+.test-dist/
+.env
+.env.local
+.env.*.local
+*.env
+.env.*
+!.env.example
+
+# Local research notes and generated experiment evidence.
+/AGENTS.md
+/CONTEXT.md
+/README.md
+/docs/
+/development/
+/results/
+/experiments/**/README.md
+/experiments/evocode/intent-on-d3w9-r1-qwen-r4.json
+/experiments/evocode/contract-*.mjs
+/test/contract-enforcement.test.ts
+
+# Runtime output and local caches.
+__pycache__/
+*.pyc
+*.log
+*.db
+*.db-wal
+*.db-shm

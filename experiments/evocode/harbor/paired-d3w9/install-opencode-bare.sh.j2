@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -eu
+test -x /opt/opencode-bun/bun
+test -f /opt/opencode-runtime/packages/opencode/src/index.ts
+test "$(jq -r '.version' /opt/opencode-runtime/packages/opencode/package.json)" = "1.18.31"
+test -s /opt/opencode-model/opencode.json
+test -n "${DEEPSEEK_API_KEY:-}"
+jq -e '.model == "deepseek/deepseek-flash" and .provider.deepseek.models["deepseek-flash"].options.reasoningEffort == "max" and (has("plugin") | not)' /opt/opencode-model/opencode.json >/dev/null
+ln -sf /opt/opencode-bun/bun /usr/local/bin/bun
+mkdir -p /usr/local/bin /root/.config/opencode /logs/agent
+cp /opt/opencode-model/opencode.json /root/.config/opencode/opencode.json
+cat > /usr/local/bin/opencode <<'SH'
+#!/bin/sh
+set -eu
+exec /usr/local/bin/bun run --cwd /opt/opencode-runtime/packages/opencode src/index.ts "$@"
+SH
+chmod 755 /usr/local/bin/opencode
+cli_version="$(opencode --version)"
+test "$cli_version" = "local"
+printf 'paired bare container ready: OpenCode=1.18.31 executor=deepseek/deepseek-flash@max plugin=absent\n'
