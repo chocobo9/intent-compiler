@@ -254,7 +254,10 @@ export class ParentGeneration {
       } else {
         if (!original || seen.has(group.local_ref)) return this.reject("CI group does not belong to this parent", result)
         seen.add(group.local_ref)
-        for (const key of ["task_refs", "depends_on", "execution_decisions", "assessments", "checks"] as const) {
+        // task_refs/depends_on are structural identity and stay the parent's.
+        // assessments/checks are the CI stage's own judgement about executions:
+        // it authors them, so there is nothing to copy and nothing to compare.
+        for (const key of ["task_refs", "depends_on", "execution_decisions"] as const) {
           if (digestOf(group[key]) !== digestOf(original[key])) return this.reject(`CI cannot change parent ${key}; report parent_issues`, result)
         }
       }

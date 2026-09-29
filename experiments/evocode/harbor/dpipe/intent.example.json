@@ -45,7 +45,7 @@
     "max_timeout_sec": null,
     "disable": false,
     "multiround_continue_successes_per_round": 1,
-    "multiround_state_cache_policy": "success",
+    "multiround_state_cache_policy": "all",
     "multiround_resume_preflight_policy": "strict",
     "multiround_max_round": 15,
     "multiround_start_round": 1,

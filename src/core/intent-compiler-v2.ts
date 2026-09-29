@@ -204,6 +204,12 @@ async function advance(
   snapshot = store.current()
   const sourceEvents = selectSourceEvents(store.readEvents(), events, snapshot.ir)
   const availableSources = [...sourceEvents, ...events]
+  /**
+   * Resolution may cite anything this run recorded — a restated judgement about
+   * an earlier return still points at that return's event.  What the model is
+   * *offered* (`source_segments`, `event_source_refs`) stays this batch only.
+   */
+  const resolvableSources = store.readEvents().map(row => row.event)
   if (events.length === 0) {
     return {
       ok: true,
@@ -308,7 +314,7 @@ async function advance(
     checkRequired: model.verify !== undefined,
     remaining: () => requestLimit - attemptsLog.length,
     currentBasis: generationBasis,
-    call: callPropose, resolve: candidate => resolveSourceRefs(candidate, availableSources),
+    call: callPropose, resolve: candidate => resolveSourceRefs(candidate, resolvableSources),
     validateBasis: candidate => validateCandidateBasis(candidate, events),
     directory: ir => buildExistingObjectDirectory(ir, snapshot.compiled),
   }) : undefined
@@ -337,7 +343,7 @@ async function advance(
     if (attempt?.kind === "propose" && activeRepairContext !== undefined) {
       attempt.candidate_changes = candidateChanges(activeRepairContext.candidate, result.candidate)
     }
-    sourceRefs = resolveSourceRefs(result.candidate, availableSources)
+    sourceRefs = resolveSourceRefs(result.candidate, resolvableSources)
     if (strictRequirements && sourceRefs.unresolved > 0) {
       return [`candidate sources must cite a resolvable user text span or event; ${sourceRefs.unresolved} unresolved reference(s): ${JSON.stringify(sourceRefs.unresolvedRefs)}`]
     }
@@ -597,8 +603,8 @@ async function advance(
       compiled,
       retry: attempts > 1,
     }),
-    assessments: collectAssessments(candidate, acceptedEventIds, mgmtSequence),
-    checks: collectChecks(candidate, acceptedEventIds, mgmtSequence),
+    assessments: collectAssessments(candidate, acceptedEventIds, mgmtSequence, snapshot.assessments),
+    checks: collectChecks(candidate, acceptedEventIds, mgmtSequence, snapshot.checks),
     questions: collectQuestions(candidate, acceptedEventIds, mgmtSequence),
     coverage: collectCoverage(candidate, acceptedEventIds, mgmtSequence),
     ...(semanticChecks.length === 0 ? {} : { semantic_checks: semanticChecks }),
@@ -1517,22 +1523,91 @@ function statusForModelError(code: "transport" | "json" | "schema" | undefined):
   return "schema_failed"
 }
 
-function collectAssessments(candidate: Candidate, eventIds: string[], sequence: number): AssessmentRecord[] {
-  return candidate.groups.flatMap((group) => group.assessments.map((assessment) => ({
-    ...assessment,
-    basis_event_ids: eventIds,
-    sequence,
-    ...(group.task_refs[0] === undefined ? {} : { task_id: group.task_refs[0] }),
-  })))
+/**
+ * The CI stage authors assessments and checks, so a batch may restate a
+ * judgement the store already holds.  Identity ignores the batch bookkeeping
+ * (basis events, sequence) and keeps one record per distinct judgement.
+ */
+function assessmentIdentity(record: {
+  target_ref?: unknown
+  criteria_refs?: unknown
+  evidence_refs?: unknown
+  result?: unknown
+  explanation?: unknown
+  method?: unknown
+}): string {
+  return digestOf({
+    target_ref: record.target_ref ?? null,
+    criteria_refs: record.criteria_refs ?? null,
+    evidence_refs: record.evidence_refs ?? null,
+    result: record.result ?? null,
+    explanation: record.explanation ?? null,
+    method: record.method ?? null,
+  })
 }
 
-function collectChecks(candidate: Candidate, eventIds: string[], sequence: number): CheckRecord[] {
-  return candidate.groups.flatMap((group) => group.checks.map((check) => ({
-    ...check,
-    basis_event_ids: eventIds,
-    sequence,
-    ...(group.task_refs[0] === undefined ? {} : { task_id: group.task_refs[0] }),
-  })))
+function checkIdentity(record: {
+  scenario?: unknown
+  expected?: unknown
+  observed_in_candidate?: unknown
+  sources?: unknown
+  unresolved?: unknown
+}): string {
+  return digestOf({
+    scenario: record.scenario ?? null,
+    expected: record.expected ?? null,
+    observed_in_candidate: record.observed_in_candidate ?? null,
+    sources: record.sources ?? null,
+    unresolved: record.unresolved ?? null,
+  })
+}
+
+function collectAssessments(
+  candidate: Candidate,
+  eventIds: string[],
+  sequence: number,
+  existing: readonly AssessmentRecord[] = [],
+): AssessmentRecord[] {
+  const seen = new Set(existing.map(assessmentIdentity))
+  const records: AssessmentRecord[] = []
+  for (const group of candidate.groups) {
+    for (const assessment of group.assessments) {
+      const identity = assessmentIdentity(assessment)
+      if (seen.has(identity)) continue
+      seen.add(identity)
+      records.push({
+        ...assessment,
+        basis_event_ids: eventIds,
+        sequence,
+        ...(group.task_refs[0] === undefined ? {} : { task_id: group.task_refs[0] }),
+      })
+    }
+  }
+  return records
+}
+
+function collectChecks(
+  candidate: Candidate,
+  eventIds: string[],
+  sequence: number,
+  existing: readonly CheckRecord[] = [],
+): CheckRecord[] {
+  const seen = new Set(existing.map(checkIdentity))
+  const records: CheckRecord[] = []
+  for (const group of candidate.groups) {
+    for (const check of group.checks) {
+      const identity = checkIdentity(check)
+      if (seen.has(identity)) continue
+      seen.add(identity)
+      records.push({
+        ...check,
+        basis_event_ids: eventIds,
+        sequence,
+        ...(group.task_refs[0] === undefined ? {} : { task_id: group.task_refs[0] }),
+      })
+    }
+  }
+  return records
 }
 
 function collectQuestions(candidate: Candidate, eventIds: string[], sequence: number): QuestionRecord[] {
