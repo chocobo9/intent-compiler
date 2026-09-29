@@ -244,22 +244,27 @@ export class ParentGeneration {
     const seen = new Set<string>()
     const groups: Candidate["groups"] = []
     for (const group of child.groups) {
-      const original = derived ? undefined : parent.candidate.groups.find(candidate => candidate.local_ref === group.local_ref)
       if (derived) {
+        // An assessment batch binds by task: the parent skeleton's local_refs
+        // are the compiler's own labels, so they are not the child's to copy.
         if (group.task_refs.length !== 1) return this.reject("an execution assessment needs one existing task per group: task_refs must name exactly one task", result)
         const taskId = group.task_refs[0] as string
         if (parent.ir[taskId] === undefined) return this.reject(`assessment group names unknown task ${taskId}`, result)
         if (seen.has(taskId)) return this.reject(`assessment names task ${taskId} more than once`, result)
         seen.add(taskId)
-      } else {
-        if (!original || seen.has(group.local_ref)) return this.reject("CI group does not belong to this parent", result)
-        seen.add(group.local_ref)
-        // task_refs/depends_on are structural identity and stay the parent's.
-        // assessments/checks are the CI stage's own judgement about executions:
-        // it authors them, so there is nothing to copy and nothing to compare.
-        for (const key of ["task_refs", "depends_on", "execution_decisions"] as const) {
-          if (digestOf(group[key]) !== digestOf(original[key])) return this.reject(`CI cannot change parent ${key}; report parent_issues`, result)
-        }
+        const skeleton = parent.candidate.groups.find(candidate => candidate.task_refs[0] === taskId)
+        groups.push({ ...group, depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] })
+        continue
+      }
+      // A delegation batch binds by group identity; everything structural (task
+      // identity, dependencies, retained IR changes) is filled by this code, so
+      // the child never reproduces it.
+      const original = parent.candidate.groups.find(candidate => candidate.local_ref === group.local_ref)
+      if (!original || seen.has(group.local_ref)) return this.reject("CI group does not belong to this parent", result)
+      seen.add(group.local_ref)
+      const boundTask = original.task_refs[0]
+      if (boundTask === undefined || parent.ir[boundTask] === undefined) {
+        return this.reject(`group ${group.local_ref} is not bound to a stored task`, result)
       }
       if (group.compilation.decision === "replace") for (const draft of group.compilation.drafts) {
         if (draft.task_id !== (original ?? group).task_refs[0]) return this.reject("Compiled Intent belongs to another IR", result)
@@ -277,8 +282,15 @@ export class ParentGeneration {
           }
         }
       }
-      groups.push(derived ? { ...group, ir_changes: [] } : { ...group, ir_changes: structuredClone(original!.ir_changes),
-        questions: [...original!.questions, ...group.questions.filter(q => !original!.questions.some(p => digestOf(p) === digestOf(q)))] })
+      groups.push({
+        ...group,
+        task_refs: [...original.task_refs],
+        depends_on: [...original.depends_on],
+        ir_changes: derived ? [] : structuredClone(original.ir_changes),
+        ...(derived
+          ? {}
+          : { questions: [...original.questions, ...group.questions.filter(q => !original.questions.some(p => digestOf(p) === digestOf(q)))] }),
+      } as Candidate["groups"][number])
     }
     this.state.issues = []
     return { ...result, candidate: { schema_version: 2,
