@@ -1,4 +1,5 @@
 import type { StrictSchemaProfile } from "./candidate-schema-strict.js"
+import { CANDIDATE_CHECK_JSON_SCHEMA } from "./candidate-check-schema.js"
 
 /**
  * Strict-mode schema for the independent check.  It is written out directly
@@ -58,10 +59,11 @@ export function buildStrictCandidateCheckSchema(profile: StrictSchemaProfile = "
     $id: "https://intent-compiler.local/schema/candidate-check-v2.json",
     type: "object",
     additionalProperties: false,
-    required: ["schema_version", "verdict", "findings"],
+    required: ["schema_version", "verdict", "findings", "repair_target"],
     properties: {
       schema_version: profile === "gemini" ? { enum: [2] } : { const: 2 },
       verdict: { enum: ["consistent", "inconsistent"] },
+      repair_target: nullable(CANDIDATE_CHECK_JSON_SCHEMA.properties.repair_target),
       findings: { type: "array", items: finding },
     },
   }

@@ -1,4 +1,4 @@
-import { digestOf, isRecord, type Candidate } from "./intent-contract.js"
+import { digestOf, digestText, isRecord, type Candidate } from "./intent-contract.js"
 
 /** A rejected draft is a starting point, never an accepted intent or permission. */
 export interface CandidateRepairContext {
@@ -53,16 +53,49 @@ export function candidateRepairContext(
 ): CandidateRepairContext {
   const before = inputBasis(sourceInput)
   const current = inputBasis(currentInput)
+  const draft = responseDraft(candidate, currentInput)
   return {
     source_request_id: sourceRequestId,
-    candidate: structuredClone(candidate),
-    candidate_digest: digestOf(candidate),
+    candidate: draft,
+    candidate_digest: digestOf(draft),
     basis_event_ids: before?.eventIds ?? [],
     ...(before === undefined ? {} : { basis_digest: before.digest }),
     ...(current === undefined ? {} : { current_basis_digest: current.digest }),
     basis_status: before === undefined || current === undefined ? "unavailable" : before.digest === current.digest ? "unchanged" : "changed",
-    instruction: "This is a rejected draft, not accepted work. Start from it and repair the supported error and all its consequences under the current contract. Preserve unrelated correct fields; returning a complete candidate does not mean regenerating the plan. A representation error does not authorize changing user meaning, and a semantic correction must reach every affected IR item and Atom field, coverage entry and Relation. Reconcile changed or unavailable input basis, including historical sources, before retaining content. Equal basis fingerprints mean equal supplied values, not semantic correctness. No check result, permission or acceptance is inherited. Evaluate rejection reasons against the supplied sources; do not satisfy unsupported objections by changing correct work.",
+    instruction: "This is a rejected draft, not accepted work or a complete inventory of the task. Determine what must remain from the current delegation, valid retained requirements and applicable updates; preserve unrelated correct fields and restore still-required content missing from this draft. Repair the supported error and its consequences throughout IR selections, Atom fields, coverage and Relations. If the rule is supported but its citation is wrong, correct the citation; if the rule itself lacks support, correct its meaning rather than inventing support. Valid normalized content selections are expressed here as response-compatible segment_id or span selectors for the same text. Copy these unchanged selectors exactly; do not paraphrase or recompute their ranges. A source left invalid or unavailable still needs correction against current input. Returning a complete candidate does not mean regenerating the plan or its identities. Reconcile changed or unavailable input basis, including historical sources, before retaining content. Equal basis fingerprints mean equal supplied values, not semantic correctness. No check result, permission or acceptance is inherited. Evaluate rejection reasons against the supplied sources; do not satisfy unsupported objections by changing correct work.",
   }
+}
+
+/** Change only addressing syntax, never the selected text or a rejected citation. */
+function responseDraft(candidate: Candidate, input: unknown): Candidate {
+  const draft = structuredClone(candidate)
+  if (!isRecord(input)) return draft
+  const texts = new Map<string, string>()
+  for (const event of [...(Array.isArray(input.source_events) ? input.source_events : []), ...(Array.isArray(input.events) ? input.events : [])]) {
+    if (isRecord(event) && typeof event.event_id === "string" && isRecord(event.source) && event.source.channel === "user"
+      && isRecord(event.payload) && typeof event.payload.text === "string") texts.set(event.event_id, event.payload.text)
+  }
+  const segments = Array.isArray(input.source_segments) ? input.source_segments.filter(isRecord) : []
+  for (const group of draft.groups) for (const change of group.ir_changes) {
+    if ((change.action !== "create" && change.action !== "revise") || change.target !== "content") continue
+    for (const source of change.sources) {
+      if (source.quote !== undefined || source.segment_id !== undefined) continue
+      const text = texts.get(source.source_id), span = source.span
+      if (text === undefined || source.digest !== digestText(text) || !span || span.unit !== "utf16"
+        || !Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end <= span.start || span.end > text.length) continue
+      const selected = text.slice(span.start, span.end)
+      const segment = segments.find(item => item.source_id === source.source_id && typeof item.segment_id === "string"
+        && isRecord(item.span) && item.span.unit === "utf16" && item.span.start === span.start && item.span.end === span.end && item.text === selected)
+      // A whole segment keeps its concise id; anything smaller keeps the exact
+      // code-computed span. Never rewrite a span into a hand-copied quote: that
+      // is the addressing form a model is most likely to reproduce wrongly.
+      if (segment) {
+        source.segment_id = segment.segment_id as string
+        delete source.span
+      }
+    }
+  }
+  return draft
 }
 
 /** Exact JSON differences for audit only; no path or count participates in admission. */

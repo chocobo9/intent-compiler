@@ -5,24 +5,69 @@ test -x /opt/opencode-bun/bun
 test -f /opt/opencode-runtime/packages/opencode/src/index.ts
 test -f /opt/opencode-runtime/packages/opencode/src/session/prompt.ts
 test -f /opt/opencode-runtime/packages/opencode/src/session/llm/request.ts
+test -f /opt/opencode-runtime/packages/opencode/src/session/management-stream-observer.ts
 test -f /opt/intent-compiler/.opencode/plugins/experiment-runtime.js
 test -f /opt/intent-compiler/dist/adapters/opencode.js
+grep -q 'experimental.execution.drain' /opt/opencode-runtime/packages/opencode/src/cli/cmd/run.ts
+grep -Fq 'InstanceStore.Service.use((store) => store.provide(' /opt/opencode-runtime/packages/opencode/src/cli/cmd/run.ts
+grep -Fq 'await executionHooks()' /opt/opencode-runtime/packages/opencode/src/cli/cmd/run.ts
+grep -q 'Intent Compiler execution drain missing' /opt/opencode-runtime/packages/opencode/src/cli/cmd/run.ts
+grep -q 'await drainExecution()' /opt/opencode-runtime/packages/opencode/src/cli/cmd/run.ts
+grep -q 'experimental.execution.drain' /opt/intent-compiler/dist/adapters/opencode.js
 test -s /run/secrets/opencode-auth.json
 
 test "${INTENT_COMPILER_TRANSPORT:-}" = "opencode"
-test "${INTENT_COMPILER_PROVIDER_ID:-}" = "openai"
-test "${INTENT_COMPILER_MODEL_ID:-}" = "gpt-5.6-sol"
-test "${INTENT_COMPILER_MODEL_VARIANT:-}" = "medium-fast"
 test "${INTENT_COMPILER_STORE:-}" = "/opt/intent-data/compiler-store"
 test "${EXPERIMENT_OBSERVER_STORE:-}" = "/opt/intent-data/observer-store"
 
 test "$(jq -r '.version' /opt/opencode-runtime/packages/opencode/package.json)" = "1.18.31"
-jq -e '.openai.type == "oauth" and (.openai.access | length > 0) and (.openai.expires > 0)' /run/secrets/opencode-auth.json >/dev/null
-jq -e '.model == "openai/gpt-5.6-sol" and .provider.openai.models["gpt-5.6-sol"].options.reasoningEffort == "medium" and .provider.openai.models["gpt-5.6-sol"].variants["medium-fast"].reasoningEffort == "medium" and .provider.openai.models["gpt-5.6-sol"].variants["medium-fast"].serviceTier == "priority" and .plugin[0] == "file:///opt/intent-compiler/.opencode/plugins/experiment-runtime.js"' /opt/intent-data/model/opencode.json >/dev/null
+# The frozen runtime, auth file and OpenCode config must all match one
+# supported executor profile exactly; a mismatch is rejected before any model call.
+case "${INTENT_COMPILER_PROVIDER_ID:-}" in
+  openai)
+    jq -e '.openai.type == "oauth" and (.openai.access | length > 0) and (.openai.expires > 0)' /run/secrets/opencode-auth.json >/dev/null
+    case "${INTENT_COMPILER_MODEL_ID:-}" in
+      gpt-5.6-sol)
+        test "${INTENT_COMPILER_EXECUTOR_MODEL_ID:-}" = "gpt-5.6-sol"
+        test "${INTENT_COMPILER_MODEL_VARIANT:-}" = "medium-fast"
+        jq -e '.model == "openai/gpt-5.6-sol" and .provider.openai.models["gpt-5.6-sol"].options.reasoningEffort == "medium" and .provider.openai.models["gpt-5.6-sol"].variants["medium-fast"].reasoningEffort == "medium" and .provider.openai.models["gpt-5.6-sol"].variants["medium-fast"].serviceTier == "priority" and .plugin[0] == "file:///opt/intent-compiler/.opencode/plugins/experiment-runtime.js"' /opt/intent-data/model/opencode.json >/dev/null
+        profile_label="manager=openai/gpt-5.6-sol@medium-fast executor=openai/gpt-5.6-sol@medium"
+        ;;
+      gpt-6-luna-fast)
+        test "${INTENT_COMPILER_EXECUTOR_MODEL_ID:-}" = "gpt-6-luna-fast"
+        test "${INTENT_COMPILER_MODEL_VARIANT:-}" = "high-fast"
+        jq -e '.model == "openai/gpt-6-luna-fast" and .provider.openai.models["gpt-6-luna-fast"].options.reasoningEffort == "high" and .provider.openai.models["gpt-6-luna-fast"].variants["high-fast"].reasoningEffort == "high" and .provider.openai.models["gpt-6-luna-fast"].variants["high-fast"].serviceTier == "priority" and .plugin[0] == "file:///opt/intent-compiler/.opencode/plugins/experiment-runtime.js"' /opt/intent-data/model/opencode.json >/dev/null
+        profile_label="manager=openai/gpt-6-luna-fast@high-fast executor=openai/gpt-6-luna-fast@high-fast"
+        ;;
+      *)
+        echo "unsupported openai model: ${INTENT_COMPILER_MODEL_ID:-<unset>}" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  deepseek)
+    test "${INTENT_COMPILER_MODEL_ID:-}" = "deepseek-flash"
+    test "${INTENT_COMPILER_EXECUTOR_MODEL_ID:-}" = "deepseek-flash"
+    test "${INTENT_COMPILER_MODEL_VARIANT:-}" = "low"
+    jq -e '.deepseek.type == "api" and (.deepseek.key | length > 0)' /run/secrets/opencode-auth.json >/dev/null
+    jq -e '.model == "deepseek/deepseek-flash" and .provider.deepseek.models["deepseek-flash"].options.reasoningEffort == "max" and .provider.deepseek.models["deepseek-flash"].variants.low.reasoningEffort == "low" and .provider.deepseek.models["deepseek-flash"].variants.max.reasoningEffort == "max" and .plugin[0] == "file:///opt/intent-compiler/.opencode/plugins/experiment-runtime.js"' /opt/intent-data/model/opencode.json >/dev/null
+    profile_label="manager=deepseek/deepseek-flash@low executor=deepseek/deepseek-flash@max"
+    ;;
+  *)
+    echo "unsupported executor profile: provider ${INTENT_COMPILER_PROVIDER_ID:-<unset>}" >&2
+    exit 1
+    ;;
+esac
 grep -q 'strict: true' /opt/opencode-runtime/packages/opencode/src/session/prompt.ts
 grep -q 'tools\[key\].strict !== true' /opt/opencode-runtime/packages/opencode/src/session/llm/request.ts
 test -d "$(dirname "$OPENCODE_STRICT_TOOL_EVIDENCE_PATH")"
 touch "$OPENCODE_STRICT_TOOL_EVIDENCE_PATH"
+test -n "${OPENCODE_MANAGEMENT_STREAM_LOG:-}"
+test -d "$(dirname "$OPENCODE_MANAGEMENT_STREAM_LOG")"
+touch "$OPENCODE_MANAGEMENT_STREAM_LOG"
+
+# Check the frozen compiler's model-specific tool list before any model call.
+/opt/opencode-bun/bun -e 'import { openCodeOperationsForModel } from "/opt/intent-compiler/dist/runtime/opencode-operations.js"; const expected = openCodeOperationsForModel(process.env.INTENT_COMPILER_EXECUTOR_MODEL_ID); const actual = openCodeOperationsForModel(process.env.INTENT_COMPILER_EXECUTOR_MODEL_ID, process.env.INTENT_COMPILER_OPERATIONS); if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error("dpipe executor capabilities differ from the frozen runtime profile");'
 
 ln -sf /opt/opencode-bun/bun /usr/local/bin/bun
 mkdir -p /usr/local/bin /root/.config/opencode /root/.local/share/opencode /logs/agent
@@ -41,4 +86,4 @@ test "$cli_version" = "local"
 run_help="$(opencode run --help 2>&1 || true)"
 printf '%s' "$run_help" | grep -q -- "--variant"
 printf '%s' "$run_help" | grep -q -- "--format"
-printf 'container preflight passed: source=1.18.31 cli-mode=%s manager=openai/gpt-5.6-sol@medium-fast executor=openai/gpt-5.6-sol@medium plugin=mounted strict-patch=present\n' "$cli_version"
+printf 'container preflight passed: source=1.18.31 cli-mode=%s %s plugin=mounted strict-patch=present\n' "$cli_version" "$profile_label"

@@ -85,15 +85,15 @@
     {
       "id": "same-atom-id-and-revision-with-the-same-content",
       "why": "基线：重新提出同一份内容必须被接受（幂等），否则每次重编译都会作废",
-      "clauses": ["C.atom_contract.8"],
-      "authority": { "clause": "C.atom_contract.8" },
+      "clauses": ["C.atom_contract.11"],
+      "authority": { "clause": "C.atom_contract.11" },
       "base": "compiled-task-with-candidate",
       "expect_gates": []
     },
     {
       "id": "same-atom-id-and-revision-with-different-content",
-      "clauses": ["C.atom_contract.8"],
-      "authority": { "clause": "C.atom_contract.8" },
+      "clauses": ["C.atom_contract.11"],
+      "authority": { "clause": "C.atom_contract.11" },
       "why": "内容变了却用同一个 id+revision：会继承旧原子的生命周期，必须拒",
       "base": "compiled-task-with-candidate",
       "edits": [
@@ -103,8 +103,8 @@
     },
     {
       "id": "same-atom-id-with-a-new-revision-and-different-content",
-      "clauses": ["C.atom_contract.8"],
-      "authority": { "clause": "C.atom_contract.8" },
+      "clauses": ["C.atom_contract.11"],
+      "authority": { "clause": "C.atom_contract.11" },
       "why": "合法路径：内容变了同时升 revision，就得到自己的生命周期记录",
       "base": "compiled-task-with-candidate",
       "edits": [
@@ -115,8 +115,8 @@
     },
     {
       "id": "previous-atom-ref-points-at-an-unknown-atom",
-      "clauses": ["C.atom_contract.9"],
-      "authority": { "clause": "C.atom_contract.9" },
+      "clauses": ["C.atom_contract.12"],
+      "authority": { "clause": "C.atom_contract.12" },
       "why": "接替关系只能指向输入里给过的原子引用",
       "base": "compiled-task-with-candidate",
       "edits": [
@@ -129,8 +129,8 @@
     },
     {
       "id": "previous-atom-ref-carries-the-wrong-digest",
-      "clauses": ["C.atom_contract.9"],
-      "authority": { "clause": "C.atom_contract.9" },
+      "clauses": ["C.atom_contract.12"],
+      "authority": { "clause": "C.atom_contract.12" },
       "why": "引用一个存在的原子但摘要对不上：说明它指的不是那份内容",
       "base": "compiled-task-with-candidate",
       "edits": [
@@ -143,7 +143,7 @@
     },
     {
       "id": "stored-atom-still-carries-a-placeholder-source-digest",
-      "clauses": ["C.atom_contract.8"],
+      "clauses": ["C.atom_contract.11"],
       "known_issue": "F14",
       "authority": { "behaviour": "current", "fact": "F14" },
       "why": "存档里的原子是 2026-09-24“代码改写摘要”之前写入的，摘要还是占位值；候选侧的同一份内容会被改写成真摘要，于是同内容被误判成“内容变了”。续跑旧 run 时会走到这里。",

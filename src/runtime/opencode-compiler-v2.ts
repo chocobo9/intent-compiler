@@ -2,6 +2,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path"
 import type { IntentCompilerV2 } from "../core/intent-compiler-v2.js"
 import type { OpenCodeModelClient } from "../model/opencode-transport.js"
 import { createIntentCompilerRuntime } from "../harness/runtime-factory.js"
+import { openCodeOperationsForModel } from "./opencode-operations.js"
 
 export interface OpenCodeCompilerRuntimeV2Options {
   readonly client: OpenCodeModelClient
@@ -46,10 +47,10 @@ export function createOpenCodeCompilerRuntimeV2(
   const modelId = requiredEnv(env, "INTENT_COMPILER_MODEL_ID")
   const variant = env.INTENT_COMPILER_MODEL_VARIANT
   const agent = env.INTENT_COMPILER_AGENT
-  const operations = (env.INTENT_COMPILER_OPERATIONS ?? "read,write,edit,bash,glob,grep")
-    .split(",")
-    .map((operation) => operation.trim())
-    .filter((operation) => operation.length > 0)
+  const operations = openCodeOperationsForModel(
+    env.INTENT_COMPILER_EXECUTOR_MODEL_ID ?? modelId,
+    env.INTENT_COMPILER_OPERATIONS,
+  )
   const transport = env.INTENT_COMPILER_TRANSPORT === "deepseek-structured"
     ? "deepseek-structured" as const
     : env.INTENT_COMPILER_TRANSPORT === "dashscope"

@@ -1,125 +1,102 @@
-import type { Candidate } from "../core/intent-contract.js"
+import { digestText, type Atom, type Candidate, type SourceRef } from "../core/intent-contract.js"
 
-const SOURCE = {
-  source_id: "input-event-id",
-  digest: "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+const goal = "Implement bundle and inspect commands in the provided workspace."
+const common = "For either command, when a required input file is missing, print INPUT_MISSING followed by a newline to stderr, exit 2 and do not create an output file. Successful commands exit 0."
+const bundleInput = 'bundle accepts a config file path and an output file path. The config is an object with an items array of objects containing string fields source and label: source names a UTF-8 input file and label names the entry. For example {"items":[{"source":"sample.txt","label":"demo"}]}; sample.txt and demo are replaceable example values.'
+const format = 'The bundle file is a JSON array of objects with string fields label and body: label is the entry name and body is the complete UTF-8 file text.'
+const bundleBehavior = "bundle reads the input files and writes entries in items order using the bundle file format. An empty input file has body \"\"; an empty items array produces []."
+const inspect = "inspect accepts a bundle file path and writes each label to stdout in array order, followed by a newline per label. An empty array writes no characters. Validate inspect using an actual output file from the accepted bundle implementation."
+
+export const CANDIDATE_EXAMPLE_INPUT = [goal, common, bundleInput, format, bundleBehavior, inspect].join("\n\n")
+const source = { source_id: "input-event-id", digest: digestText(CANDIDATE_EXAMPLE_INPUT) }
+const span = (text: string): SourceRef => {
+  const start = CANDIDATE_EXAMPLE_INPUT.indexOf(text)
+  if (start < 0) throw new Error(`example passage is not in the example input: ${text.slice(0, 40)}`)
+  return { ...source, span: { unit: "utf16", start, end: start + text.length } }
 }
-const REQUIREMENT_SOURCE = { ...SOURCE, quote: 'Build a file-copy command in the provided workspace. It takes a JSON config with string fields source and destination naming the input and output files, for example {"source":"sample.txt","destination":"copy.txt"}. Copy the input file bytes to the output file. When the input is missing, exit 1 and print MISSING_INPUT to stderr.' }
-const EMPTY_SOURCE = { ...SOURCE, quote: "With an empty file, write an empty output file." }
-export const CANDIDATE_EXAMPLE_INPUT = `${REQUIREMENT_SOURCE.quote} ${EMPTY_SOURCE.quote}`
+const ref = (local_ref: string) => ({ local_ref })
+
+function atom(atom_id: string, task: string, outputs: Atom["outputs"], completion: Atom["completion"]): Atom {
+  return {
+    atom_id, revision: 0, goal_refs: [], task, inputs: [], outputs, constraints: [],
+    optional_tools: ["read", "edit", "bash"],
+    authority: {
+      basis: [span(goal)],
+      rules: ["read", "edit", "bash"].map(operation_id => ({
+        operation_id, resource_ref: source, input_refs: [], output_refs: [], conditions: [],
+        allowed_use: `${operation_id} for this command's implementation and validation within the provided workspace.`,
+      })),
+      lifetime: "this_execution", delegation: "not_supported",
+    },
+    preconditions: [], completion,
+    return_when: ["Return the implementation, actual products and completion evidence on success. On failure or a blocker, return the facts and unmet completion conditions for management; that report does not satisfy completion."],
+    intent_judgments: [],
+  }
+}
 
 export const CANDIDATE_EXAMPLE: Candidate = {
   schema_version: 2,
-  basis: { event_ids: ["input-event-id"], refs: [] },
+  basis: { event_ids: [source.source_id], refs: [] },
   source_coverage: [],
   groups: [{
-    local_ref: "g1",
-    task_refs: ["t1"],
-    depends_on: [],
-    ir_changes: [
-      {
-        action: "create",
-        target: "task",
-        local_ref: "t1",
-        value: {
-          goal: { text: "Deliver a file-copy command with the requested missing-input and empty-file behavior." },
-          current_scope: { text: "Implement and validate the command in the provided workspace.", disposition: "proceed" },
-        },
-        sources: [SOURCE],
-      },
-      {
-        action: "create",
-        target: "content",
-        local_ref: "r1",
-        value: { text: "File copying and missing-input handling.", about: [], scope: [{ target_id: "t1" }], support: [] },
-        sources: [REQUIREMENT_SOURCE],
-      },
-      {
-        action: "create",
-        target: "content",
-        local_ref: "r2",
-        value: { text: "With an empty file, write an empty output file.", about: [], scope: [{ target_id: "t1" }], support: [] },
-        sources: [EMPTY_SOURCE],
-      },
-    ],
+    local_ref: "g1", task_refs: ["t1"], depends_on: [],
+    ir_changes: [{
+      action: "create", target: "task", local_ref: "t1",
+      value: { goal: { text: goal }, current_scope: { text: "Implement and validate both commands in the provided workspace.", disposition: "proceed" } },
+      sources: [span(goal)],
+    }, ...[
+      { id: "r-common", label: "Authorized commands and their shared missing-input and success behavior.", passages: [goal, common] },
+      { id: "r-format", label: "The format produced by bundle and consumed by inspect.", passages: [format] },
+      { id: "r-bundle", label: "Bundle configuration, ordered reading and empty-input behavior.", passages: [bundleInput, bundleBehavior] },
+      { id: "r-inspect", label: "Inspect output and validation using the predecessor's real product.", passages: [inspect] },
+    ].map(({ id, label, passages }) => ({
+      action: "create" as const, target: "content" as const, local_ref: id,
+      value: { text: label, about: [], scope: [{ target_id: "t1" }], support: [] },
+      sources: passages.map(span),
+    }))],
     compilation: {
       decision: "replace",
       drafts: [{
-        local_ref: "ci-1",
-        task_id: "t1",
-        intent_basis: [],
-        atoms: [{
-          atom_id: "a1",
-          revision: 0,
-          goal_refs: [],
-          task: "Implement a file-copy command in the provided workspace. Accept a JSON config with string fields source and destination: source names the input file and destination names the output file. The sample paths are examples, not fixed filenames. Copy the input bytes to the output file. When the input file is missing, exit with code 1 and print MISSING_INPUT to stderr. For an empty existing input file, write an empty output file; do not treat it as missing. Choose the internal implementation to fit the workspace. Return the implementation and evidence for the config interface, copying, missing input and empty input.",
-          inputs: [],
-          outputs: [{ output_id: "o1", description: "File-copy command implementation and verification evidence.", format: "artifact" }],
-          constraints: [],
-          optional_tools: ["read", "edit", "bash"],
-          authority: {
-            basis: [SOURCE],
-            rules: [
-              {
-                operation_id: "read",
-                resource_ref: SOURCE,
-                input_refs: [],
-                output_refs: [],
-                conditions: [],
-                allowed_use: "Read the workspace material this goal needs.",
-              },
-              {
-                operation_id: "edit",
-                resource_ref: SOURCE,
-                input_refs: [],
-                output_refs: [],
-                conditions: [],
-                allowed_use: "Implement the file-copy command in the provided workspace.",
-              },
-              {
-                operation_id: "bash",
-                resource_ref: SOURCE,
-                input_refs: [],
-                output_refs: [],
-                conditions: [],
-                allowed_use: "Build and run the checks this goal names.",
-              },
-            ],
-            lifetime: "this_execution",
-            delegation: "not_supported",
-          },
-          preconditions: [],
-          completion: [
-            { text: "The JSON config's source and destination string fields select the input and output files; an existing input is copied byte-for-byte.", evidence_required: "The config, command invocation and comparison of input and output bytes using paths different from the illustrative sample" },
-            { text: "Missing input exits 1 and writes MISSING_INPUT to stderr.", evidence_required: "A focused missing-input test result" },
-            { text: "An empty input writes an empty output file.", evidence_required: "The empty-file test and resulting output artifact" },
-          ],
-          return_when: ["Return the implementation and completion evidence on success. If blocked, return the blocking facts and identify the unmet completion conditions for management; the blocker report is not completion."],
-          intent_judgments: [],
+        local_ref: "ci-1", task_id: "t1", intent_basis: [],
+        atoms: [
+          atom("a-bundle", [
+            "Implement and validate bundle in the provided workspace. Keep unspecified internal design open.",
+            bundleInput, format, bundleBehavior, common,
+            "Return the implementation, actual generated bundle files and evidence for the rules above so inspect can consume an accepted output.",
+          ].join("\n\n"), [
+            { output_id: "bundle-code", description: "Bundle implementation and validation evidence.", format: "artifact" },
+            { output_id: "bundle-files", description: "Actual bundle output files used in validation, with their locations and input cases for the consumer.", format: "artifact" },
+          ], [
+            { text: "The items array and source/label fields select the files and names; the output follows the specified label/body format and items order, including both empty cases.", evidence_required: "Config and input files, invocation, actual JSON output and comparison with input text/order, including empty file and empty items cases; sample values remain replaceable" },
+            { text: "Missing required input prints INPUT_MISSING plus newline to stderr, exits 2 and creates no output file; successful cases exit 0.", evidence_required: "Missing config/input and success invocations with stdout/stderr, exit codes and output-file observations" },
+          ]),
+          atom("a-inspect", [
+            "Implement and validate inspect in the provided workspace after management accepts bundle's required products. Keep unspecified internal design open.",
+            format, inspect, common,
+            "Consume the actual predecessor bundle file; do not claim it exists before its accepted return. Return implementation and evidence for the rules above.",
+          ].join("\n\n"), [
+            { output_id: "inspect-code", description: "Inspect implementation and evidence consuming the actual accepted bundle output.", format: "artifact" },
+          ], [
+            { text: "For the specified bundle format, stdout contains labels in array order, each with a newline; the empty array produces no characters.", evidence_required: "Actual accepted predecessor file and inspect invocation/output, including an empty-array case" },
+            { text: "Missing input prints INPUT_MISSING plus newline to stderr and exits 2 without creating an output file; successful cases exit 0.", evidence_required: "Missing-input and success invocations with stderr, exit codes and output observations" },
+          ]),
+        ],
+        relations: [{
+          predecessor: ref("a-bundle"), successor: ref("a-inspect"),
+          requires: "Accepted bundle implementation, actual generated bundle files with their locations and input cases, and validation evidence; inspect consumes these products for its validation.",
+          conditions: [], basis: [span(inspect)],
         }],
-        relations: [],
         attachments: [],
       }],
     },
-    execution_decisions: [],
-    assessments: [],
-    coverage: [{
-      requirement: { local_ref: "t1" },
-      disposition: "assigned",
-      refs: [{ local_ref: "a1" }],
-      explanation: "a1 is the deliverable for the example goal.",
-    }, {
-      requirement: { local_ref: "r1" },
-      disposition: "assigned",
-      refs: [{ local_ref: "a1" }],
-      explanation: "The complete deliverable requirement is assigned to a1.",
-    }, {
-      requirement: { local_ref: "r2" },
-      disposition: "assigned",
-      refs: [{ local_ref: "a1" }],
-      explanation: "A separate behavioral rule belongs to the same cohesive deliverable.",
-    }],
-    checks: [],
-    questions: [],
+    execution_decisions: [], assessments: [],
+    coverage: [
+      { requirement: ref("t1"), disposition: "assigned", refs: [ref("a-bundle"), ref("a-inspect")], explanation: "Both commands deliver the whole task." },
+      { requirement: ref("r-common"), disposition: "assigned", refs: [ref("a-bundle"), ref("a-inspect")], explanation: "The shared behavior applies to both commands; neither unit alone is assigned the whole implementation." },
+      { requirement: ref("r-format"), disposition: "assigned", refs: [ref("a-bundle"), ref("a-inspect")], explanation: "Bundle produces this format and inspect consumes it." },
+      { requirement: ref("r-bundle"), disposition: "assigned", refs: [ref("a-bundle")], explanation: "Only bundle implements the configuration and production behavior." },
+      { requirement: ref("r-inspect"), disposition: "assigned", refs: [ref("a-inspect")], explanation: "Inspect implements consumption and its evidence depends on bundle's accepted product." },
+    ],
+    checks: [], questions: [],
   }],
 }

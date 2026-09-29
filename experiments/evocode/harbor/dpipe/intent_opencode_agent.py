@@ -1,5 +1,6 @@
 import json
 import base64
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,8 +17,8 @@ class OpenCodePatched(OpenCode):
         experiment_run_id: str,
         **kwargs,
     ):
-        if variant != "medium":
-            raise ValueError("This frozen run requires executor variant=medium")
+        if variant not in ("medium", "high", "high-fast", "max"):
+            raise ValueError("Unsupported frozen executor variant")
         self._run_variant = variant
         self._dispatch_snapshot_path = Path(dispatch_snapshot_path)
         self._experiment_run_id = experiment_run_id
@@ -30,8 +31,9 @@ class OpenCodePatched(OpenCode):
         return Path(__file__).with_name("install-opencode-patched.sh.j2")
 
     def create_run_agent_commands(self, instruction: str) -> list[ExecInput]:
-        if self.model_name != "openai/gpt-5.6-sol":
-            raise ValueError("This frozen run requires openai/gpt-5.6-sol")
+        expected={"openai/gpt-5.6-sol":"medium", "openai/gpt-6-luna-fast":"high-fast", "deepseek/deepseek-flash":"max"}
+        if expected.get(self.model_name) != self._run_variant:
+            raise ValueError("Executor model/variant does not match a supported frozen profile")
         commands = super().create_run_agent_commands(instruction)
         if not commands:
             raise RuntimeError("OpenCode produced no run command")
@@ -44,6 +46,10 @@ class OpenCodePatched(OpenCode):
             f" run --variant={self._run_variant} --format=json -- ",
             1,
         )
+        # The upstream command pipes OpenCode into tee. Preserve the process
+        # failure instead of returning tee's successful exit code.
+        commands[-1].command = "bash -o pipefail -c " + shlex.quote(commands[-1].command)
+        self._run_command_count = len(commands)
         round_num = self._active_round
         produced_at = datetime.now(timezone.utc).isoformat()
         for item in commands:
@@ -84,10 +90,24 @@ class OpenCodePatched(OpenCode):
             )
             if staged.return_code != 0:
                 raise RuntimeError(f"Could not stage current round source chunk: {staged.return_code}")
-        await super().run_round(instruction, round_num, environment, context)
+        try:
+            await super().run_round(instruction, round_num, environment, context)
+        finally:
+            try:
+                captured = await environment.exec(
+                    command=f"python3 /opt/intent-data/audit/capture-host.py --round {int(round_num)}",
+                    cwd="/app",
+                )
+                if captured.return_code != 0:
+                    print(f"Round {round_num} evidence capture failed: {captured.return_code}")
+            except Exception as exc:
+                # Container/transport failure while capturing must not replace
+                # the execution or management exception that caused shutdown.
+                print(f"Round {round_num} evidence capture unavailable: {type(exc).__name__}")
 
     async def run(self, instruction, environment, context) -> None:
         await super().run(instruction, environment, context)
+        self._check_command_results()
         snapshot = self._read_snapshot(required=True)
         dispatches = snapshot.get("dispatches")
         if not isinstance(dispatches, list) or not dispatches:
@@ -100,10 +120,41 @@ class OpenCodePatched(OpenCode):
                 f"No executor start persisted for round {self._active_round}; "
                 "stopping before the official verifier"
             )
+        returned = {item.get("execution_id") for item in snapshot.get("execution_outcomes", [])}
+        if not new_executions.issubset(returned):
+            raise RuntimeError(
+                f"Executor return missing for round {self._active_round}; "
+                "stopping before the official verifier"
+            )
+        # advance pops the queue before calling the model; an empty queue is not
+        # evidence of successful processing (including after a process exit).
+        handled = {
+            event_id
+            for record in snapshot.get("management_log", [])
+            if record.get("status") == "accepted"
+            for event_id in record.get("trigger_event_ids", [])
+        }
+        if any(f"{execution_id}:return" not in handled for execution_id in new_executions):
+            raise RuntimeError(
+                f"Management has not processed the executor return for round {self._active_round}; "
+                "stopping before the official verifier"
+            )
         print(
             f"Harbor dispatch gate: round {self._active_round} started "
             f"{len(new_executions)} execution(s)"
         )
+
+    def _check_command_results(self):
+        for index in range(self._run_command_count):
+            path = self.logs_dir / f"command-{index}" / "return-code.txt"
+            if not path.is_file():
+                raise RuntimeError(f"Executor command {index} exit status missing")
+            code = path.read_text(encoding="utf-8").strip()
+            if code != "0":
+                raise RuntimeError(
+                    f"Executor command {index} failed with exit code {code}; "
+                    "stopping before the official verifier"
+                )
 
     def _read_snapshot(self, *, required: bool):
         snapshot_path = self._dispatch_snapshot_path

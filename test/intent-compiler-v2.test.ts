@@ -8,7 +8,7 @@ import { createIntentCompilerV2 as createCompilerV2 } from "../src/core/intent-c
 import { atomRef } from "../src/core/compiled-intent.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
 import type { CompilerModelV2Input, CompilerModelV2Result } from "../src/model/compiler-model-v2.js"
-import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
+import { CANDIDATE_EXAMPLE } from "./fixtures/copy-candidate.js"
 import { digestText } from "../src/core/intent-contract.js"
 import type {
   Atom,
@@ -545,7 +545,7 @@ test("v2 rejects a candidate that never records where the compiled work goes", a
   assert.deepEqual(view.pending_event_ids, ["e1"])
 })
 
-test("the shipped candidate example is accepted, dispatched, and records its coverage", async () => {
+test("the file-copy fixture is accepted, dispatched, and records its coverage", async () => {
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "intent-v2-")), runId: "run-1" })
   const example = JSON.parse(JSON.stringify(CANDIDATE_EXAMPLE)) as Candidate
   example.basis.event_ids = ["e1"]

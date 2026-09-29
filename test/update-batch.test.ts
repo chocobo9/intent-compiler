@@ -7,7 +7,7 @@ import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 as createCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
-import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
+import { CANDIDATE_EXAMPLE } from "./fixtures/copy-candidate.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 import type { CompilerModelV2, CompilerModelV2CheckInput, CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
 import { digestText, type Candidate, type CompilerEvent, type Atom } from "../src/core/intent-contract.js"
@@ -171,8 +171,8 @@ test("an explicit user path limit reaches the proposal and check requests and st
   const checkPrompt = JSON.stringify(checkInput.contract)
   assert.match(proposalPrompt, /source reference proves where a claim came from, not that the cited user text supports the path/i)
   assert.match(checkPrompt, /source reference proves where a claim came from, not that the cited user text supports the path/i)
-  assert.match(proposalPrompt, /preserve a path as a user restriction only when/i)
-  assert.match(checkPrompt, /preserve still-applicable user path restrictions and host-provided access boundaries/i)
+  assert.match(proposalPrompt, /preserve an exclusive path restriction only when/i)
+  assert.match(checkPrompt, /preserve still-applicable user path restrictions with their original operation\/result scope, and host-provided access boundaries/i)
   assert.match(checkPrompt, /does not prove that only that file may be modified/i)
 
   const delivery = advanced.deliveries?.[0]?.atom as Atom | undefined

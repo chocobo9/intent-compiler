@@ -5,6 +5,7 @@ import {
   StructuredProviderTransportError,
 } from "../src/model/structured-provider-transport.js"
 import { V2_CHECK_CONTRACT, V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
+import { MANAGEMENT_SYSTEM_PROMPT } from "../src/model/management-instructions.js"
 
 test("structured transport sends the candidate schema and parses usage", async () => {
   let captured: RequestInit | undefined
@@ -45,7 +46,7 @@ test("structured transport sends the candidate schema and parses usage", async (
   assert.equal(body.response_format.json_schema.schema.$id, "https://intent-compiler.local/schema/candidate-v2.json")
 })
 
-test("provider requests carry path grounding rules for both generation and checking", async () => {
+test("provider requests transmit the complete supplied contracts and shared management instructions", async () => {
   const requests: Array<{ messages: Array<{ role: string; content: string }> }> = []
   const transport = createStructuredProviderTransport({
     endpoint: "https://api.example.invalid/v1/chat/completions",
@@ -71,14 +72,9 @@ test("provider requests carry path grounding rules for both generation and check
   const proposal = JSON.parse(requests[0]!.messages[1]!.content)
   const check = JSON.parse(requests[1]!.messages[1]!.content)
   const system = requests[0]!.messages[0]!.content
-  const groundingRule = /source reference proves where a claim came from, not that the cited user text supports the path/i
-  assert.match(system, groundingRule)
-  assert.match(JSON.stringify(proposal.contract), groundingRule)
-  assert.match(JSON.stringify(check.contract), groundingRule)
-  assert.match(JSON.stringify(proposal.contract), /within the already authorized workspace and operations/i)
-  assert.match(JSON.stringify(proposal.contract), /preserve a path as a user restriction only when/i)
-  assert.match(JSON.stringify(check.contract), /preserve still-applicable user path restrictions and host-provided access boundaries/i)
-  assert.match(JSON.stringify(check.contract), /does not prove that only that file may be modified/i)
+  assert.ok(system.includes(MANAGEMENT_SYSTEM_PROMPT))
+  assert.deepEqual(proposal.contract, V2_COMPILER_CONTRACT)
+  assert.deepEqual(check.contract, V2_CHECK_CONTRACT)
 })
 
 test("structured transport reports unsupported response_format distinctly", async () => {

@@ -121,7 +121,7 @@ test("strict ir_change keeps one value shape per target instead of one merged bl
   assert.equal("format" in (taskCreate?.properties?.value?.properties ?? {}), false)
 })
 
-test("strict content changes require an exact user quote or supplied source segment", () => {
+test("strict content changes address their text by segment or a code-checked span, never a hand-written quote", () => {
   const schema = buildStrictCandidateSchema("openai") as Record<string, any>
   const branches = schema.definitions.ir_change.anyOf as Array<Record<string, any>>
   for (const action of ["create", "revise"]) {
@@ -129,9 +129,15 @@ test("strict content changes require an exact user quote or supplied source segm
     assert.equal(content?.properties?.sources?.items?.$ref, "#/definitions/source_ref_with_quote")
   }
   const source = schema.definitions.source_ref_with_quote
-  assert.equal(source.anyOf[0].required.includes("quote"), true)
-  assert.equal(source.anyOf[1].required.includes("segment_id"), true)
-  assert.equal(source.anyOf.every((branch: any) => !("span" in branch.properties)), true)
+  assert.equal(source.anyOf.some((branch: any) => "quote" in branch.properties), false,
+    "a model must not hand-write a passage; the schema only offers segment_id or span")
+  assert.equal(source.anyOf.some((branch: any) => branch.required.includes("segment_id")), true)
+  // A numeric range is code-verified, so a model never has to reproduce a
+  // passage exactly.
+  const spanBranch = source.anyOf.find((branch: any) => "span" in branch.properties)
+  assert.equal(spanBranch?.required.includes("span"), true)
+  assert.equal(spanBranch?.properties.span.required.includes("start"), true)
+  assert.equal(spanBranch?.properties.span.required.includes("end"), true)
 })
 
 test("null-valued optional fields from strict providers are stripped before canonical validation", async () => {

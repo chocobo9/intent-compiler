@@ -49,6 +49,7 @@ import { V2_CHECK_CONTRACT, V2_COMPILER_CONTRACT } from "../model/compiler-model
 import { bindCurrentRequirements, selectSourceEvents } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
 import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
+import { ParentGeneration, type ParentGenerationState } from "./parent-generation.js"
 
 export interface IntentCompilerV2Options {
   store: IntentStoreV2
@@ -261,6 +262,7 @@ async function advance(
       max_requests: snapshot.budget.max_management_requests,
     },
     contract: V2_COMPILER_CONTRACT,
+    ...(events.some(event => event.kind === "user_input") ? {} : { assessment_batch: true as const }),
     ...(previousRejection === undefined ? {} : { previous_rejection: previousRejection }),
   }
   if (priorFailure?.candidate !== undefined) {
@@ -276,23 +278,41 @@ async function advance(
   // raised: a failed batch is diagnosed from this record, not re-run.  The text
   // is bounded so one runaway answer cannot bloat the store.
   const attemptsLog: ManagementAttemptRecord[] = []
+  const callUsage: Array<CompilerModelV2Usage | undefined> = []
+  const requestLimit = Math.min(snapshot.budget.max_management_requests,
+    snapshot.budget.max_total_management_requests - snapshot.budget.total_management_requests)
   let activeRepairContext: CandidateRepairContext | undefined
   // Every model call is measured on its own, so cost attribution is a reading
   // and not an inference from token counts.
-  const proposeTimed = async (request: CompilerModelV2Input): Promise<CompilerModelV2Result> => {
+  const callPropose = async (request: CompilerModelV2Input): Promise<CompilerModelV2Result> => {
+    request = { ...request, budget: { requests_used: attemptsLog.length, max_requests: requestLimit } }
     activeRepairContext = request.repair_context === undefined ? undefined : structuredClone(request.repair_context)
     const startedAt = new Date().toISOString()
     const result = await model.propose(structuredClone(request))
     const usage = result.call?.usage ?? result.error?.diagnostic?.opencode_response?.usage
-    recordManagementCall(store, `mgmt-${mgmtSequence}`, "propose", startedAt, new Date().toISOString(), result.ok ? "ok" : "error", result.error?.code, usage, result.error?.diagnostic)
+    callUsage.push(usage)
+    recordManagementCall(store, `mgmt-${mgmtSequence}`, "propose", startedAt, new Date().toISOString(), result.ok ? "ok" : "error", result.error?.code, usage, result.error?.diagnostic, request.generation_stage)
     attemptsLog.push({
       kind: "propose",
+      ...(request.generation_stage === undefined ? {} : { generation_stage: request.generation_stage, request: structuredClone(request) }),
       ...(result.error?.diagnostic === undefined ? {} : { failure_diagnostic: result.error.diagnostic }),
       ...boundedAttemptText(result.call?.text),
       ...(activeRepairContext === undefined ? {} : { repair_context: activeRepairContext }),
     })
     return result
   }
+  const generationBasis = () => digestOf({ state: managementBasis(store.current(), store.readEvents()),
+    capabilities: describeCapabilities(capabilities, events), contract: modelInput.contract })
+  const generation = strictRequirements ? new ParentGeneration({
+    input: modelInput, sourceBasis: generationBasis(), restored: priorFailure?.generation,
+    checkRequired: model.verify !== undefined,
+    remaining: () => requestLimit - attemptsLog.length,
+    currentBasis: generationBasis,
+    call: callPropose, resolve: candidate => resolveSourceRefs(candidate, availableSources),
+    validateBasis: candidate => validateCandidateBasis(candidate, events),
+    directory: ir => buildExistingObjectDirectory(ir, snapshot.compiled),
+  }) : undefined
+  const proposeTimed = (request: CompilerModelV2Input) => generation ? generation.propose(request) : callPropose(request)
   /** Attach the issues an attempt produced to that attempt's own record. */
   const attachIssues = (kind: "propose" | "check", raised: readonly string[]): void => {
     for (let index = attemptsLog.length - 1; index >= 0; index -= 1) {
@@ -303,7 +323,7 @@ async function advance(
   }
   let proposalInput = modelInput
   let proposal = await proposeTimed(proposalInput)
-  let attempts = 1
+  let attempts = attemptsLog.length
   // Source references are resolved — and their digests written — before any
   // other check runs, so every later comparison sees a reference that resolves.
   let sourceRefs: SourceRefStats = { total: 0, resolved: 0, normalized: 0, unresolved: 0, unresolvedRefs: [] }
@@ -312,13 +332,14 @@ async function advance(
     prepared = undefined
     if (!result.ok || result.candidate === undefined) return proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements)
     result.candidate = structuredClone(result.candidate)
-    sourceRefs = resolveSourceRefs(result.candidate, availableSources)
-    if (strictRequirements && sourceRefs.unresolved > 0) {
-      return [`candidate sources must cite a resolvable user text span or event; ${sourceRefs.unresolved} unresolved reference(s): ${JSON.stringify(sourceRefs.unresolvedRefs)}`]
-    }
+    // Compare what management received and returned, before resolving selectors.
     const attempt = attemptsLog.at(-1)
     if (attempt?.kind === "propose" && activeRepairContext !== undefined) {
       attempt.candidate_changes = candidateChanges(activeRepairContext.candidate, result.candidate)
+    }
+    sourceRefs = resolveSourceRefs(result.candidate, availableSources)
+    if (strictRequirements && sourceRefs.unresolved > 0) {
+      return [`candidate sources must cite a resolvable user text span or event; ${sourceRefs.unresolved} unresolved reference(s): ${JSON.stringify(sourceRefs.unresolvedRefs)}`]
     }
     const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements)
     if (candidateErrors.length > 0) return candidateErrors
@@ -327,6 +348,7 @@ async function advance(
     return []
   }
   let issues = issuesFor(proposal)
+  generation?.feedback(issues)
   attachIssues("propose", issues)
   const semanticChecks: SemanticCheckRecord[] = []
   const checkUsage: Array<NonNullable<SemanticCheckRecord["usage"]> | undefined> = []
@@ -336,16 +358,18 @@ async function advance(
   // candidate: it is recorded with verdict `unavailable` and fails the batch as
   // infrastructure, never as "the checker said no".
   let checkFailure: { kind: "transport" | "deterministic"; message: string } | undefined
+  const deadlineFailures = () => attemptsLog.filter(attempt => attempt.failure_diagnostic?.request_timeout_ms !== undefined).length
   // One management request proposes; a batch that compiles new atoms then gets
   // an independent check of the same candidate.  Transport failures re-send the
   // same request, revisions carry the reasons back, and every request counts
   // against the per-batch budget, so a slow provider cannot loop here.
   for (;;) {
-    if (managementBasis(store.current(), store.readEvents()) !== basisDigest) break
+    if (managementBasis(store.current(), store.readEvents()) !== basisDigest || (generation && generation.state.source_basis !== generationBasis())) break
+    if (!proposal.ok && deadlineFailures() >= 2) break
     if (proposal.ok && proposal.candidate !== undefined && issues.length === 0) {
       if (model.verify === undefined || semanticCheckTaskIds(proposal.candidate, events).length === 0) break
       // A configured, applicable check must fit within the same batch budget.
-      const maxAttempts = snapshot.budget.max_management_requests
+      const maxAttempts = requestLimit
       if (attempts + 1 > maxAttempts) {
         checkBudgetExhausted = true
         issues = ["no request budget remains for the independent check; a batch that compiles new atoms is not accepted unverified"]
@@ -362,13 +386,14 @@ async function advance(
         sequence: mgmtSequence,
         budget: { requests_used: attempts, max_requests: maxAttempts },
           recordCall: (startedAt, status, errorCode, usage, text, failureDiagnostic) => {
+          callUsage.push(usage)
           recordManagementCall(store, `mgmt-${mgmtSequence}`, "check", startedAt, new Date().toISOString(), status, errorCode, usage, failureDiagnostic)
           attemptsLog.push({ kind: "check", ...(failureDiagnostic === undefined ? {} : { failure_diagnostic: failureDiagnostic }), ...boundedAttemptText(text), prepared_digest: prepared?.view.digest })
         },
       })
       let check = await runCheck()
       if (check === undefined) break
-      attempts += 1
+      attempts = attemptsLog.length
       semanticChecks.push(check.record)
       checkUsage.push(check.usage)
       attachIssues("check", check.issues)
@@ -377,17 +402,17 @@ async function advance(
       // mismatch is not — with the strict-decoding transports we use, the
       // provider is constrained to the schema we sent, so re-sending the same
       // contract would spend minutes to fail identically (r11c).
-      if (check.failure?.kind === "transport" && attempts + 1 <= maxAttempts) {
+      if (check.failure?.kind === "transport" && deadlineFailures() < 2 && attempts + 1 <= maxAttempts) {
         check = await runCheck()
         if (check !== undefined) {
-          attempts += 1
+          attempts = attemptsLog.length
           semanticChecks.push(check.record)
           checkUsage.push(check.usage)
           attachIssues("check", check.issues)
         }
       }
       if (check === undefined) break
-      if (managementBasis(store.current(), store.readEvents()) !== basisDigest) break
+      if (managementBasis(store.current(), store.readEvents()) !== basisDigest || (generation && generation.state.source_basis !== generationBasis())) break
       if (check.failure !== undefined) {
         checkFailure = check.failure
         break
@@ -397,6 +422,8 @@ async function advance(
       if (check.issues.length === 0) break
       semanticRejected = true
       issues = check.issues
+      if (check.repair_target === "ir") generation?.invalidate(issues)
+      else generation?.feedback(issues)
     } else if (issues.length === 0 && !isRetryableTransportFailure(proposal)) {
       // Terminal model error (provider rejection, unparseable output): repeating
       // the same request would only spend budget.
@@ -406,8 +433,9 @@ async function advance(
     // the check that must follow it still fits: propose + check is two
     // requests.  Without a check, each revision costs one request.
     const checkRequired = model.verify !== undefined
-    if (issues.length > 0 && checkRequired && attempts + 2 > snapshot.budget.max_management_requests) break
-    if (attempts >= snapshot.budget.max_management_requests) break
+    if (proposal.budget_exhausted) { checkBudgetExhausted = true; break }
+    const requiredCalls = generation?.requiredCalls() ?? (checkRequired ? 2 : 1)
+    if (attempts + requiredCalls > requestLimit) break
     // A later proposal has its own outcome; an older check rejection remains in
     // the attempt history but cannot classify a new mechanical/provider error.
     semanticRejected = false
@@ -432,12 +460,54 @@ async function advance(
       proposalInput = nextInput
       proposal = await proposeTimed(proposalInput)
     }
-    attempts += 1
+    attempts = attemptsLog.length
     issues = issuesFor(proposal)
+    generation?.feedback(issues)
     attachIssues("propose", issues)
   }
-  const stale = managementBasis(store.current(), store.readEvents()) !== basisDigest
+  const stale = managementBasis(store.current(), store.readEvents()) !== basisDigest || !!(generation && generation.state.source_basis !== generationBasis())
   const completedAt = new Date().toISOString()
+  const deferred = proposal.deferredAssessment ?? []
+  if (deferred.length > 0 && !stale) {
+    // The stored IR is the whole task's blueprint and only a user delegation
+    // revises it, so a returned execution that exposes an IR defect is recorded
+    // as a question for the next input. The batch still commits: the return is
+    // consumed, the IR and plan are untouched, and the run continues.
+    const acceptedEventIds = events.map(event => event.event_id)
+    store.applyDeltas({
+      management_requests: attempts,
+      management_log_record: managementRecord({
+        sequence: mgmtSequence,
+        startedAt,
+        completedAt,
+        triggerEventIds: acceptedEventIds,
+        request: modelInput,
+        requestDigest: digestOf(modelInput),
+        readBasisDigest: basisDigest,
+        ...(proposal.call === undefined ? {} : { call: proposal.call }),
+        sourceRefs,
+        attempts: attemptsLog,
+        generation: generation?.state,
+        status: "accepted",
+        errorCode: "assessment_deferred",
+        errorMessage: `the stored IR needs a user delegation before this return can be assessed: ${deferred.join("; ")}`,
+        ir: snapshot.ir,
+        compiled: snapshot.compiled,
+        retry: attempts > 1,
+      }),
+      questions: deferred.map(text => ({ text, affects: [], basis_event_ids: acceptedEventIds, sequence: mgmtSequence })),
+      ...budgetDeltas(callUsage[0], callUsage.slice(1)),
+    })
+    return {
+      ok: true,
+      run_id: snapshot.run_id,
+      disposition: "waiting",
+      pending_events: [],
+      compiled_revisions: revisionMap(snapshot.compiled),
+      ir_revisions: irRevisionMap(snapshot.ir),
+      questions: [...deferred],
+    }
+  }
   if (stale || !proposal.ok || !proposal.candidate || issues.length > 0 || checkFailure !== undefined) {
     const message = stale ? "input or execution state changed while management was running; draft retained without commit" : checkFailure !== undefined
       ? checkFailure.message
@@ -448,12 +518,12 @@ async function advance(
     // recorded as such (status/error_code), and it never sets semanticRejected.
     const status = stale ? "validation_failed" : checkFailure !== undefined
       ? checkFailure.kind === "transport" ? "transport_failed" : "schema_failed"
-      : issues.length > 0 && proposal.ok ? "validation_failed" : statusForModelError(proposal.error?.code)
+      : issues.length > 0 && (proposal.ok || proposal.validation_failed) ? "validation_failed" : statusForModelError(proposal.error?.code)
     const errorCode = stale ? "stale_basis" : checkFailure !== undefined
       ? "check_unavailable"
-      : checkBudgetExhausted ? "budget_exhausted"
+      : checkBudgetExhausted || proposal.budget_exhausted ? "budget_exhausted"
         : semanticRejected ? "semantic_unresolved"
-          : proposal.error?.code ?? "invalid_candidate"
+          : proposal.validation_failed ? "invalid_candidate" : proposal.error?.code ?? "invalid_candidate"
     store.applyDeltas({
       management_requests: attempts,
       management_log_record: managementRecord({
@@ -469,6 +539,7 @@ async function advance(
         candidate: proposal.candidate,
         sourceRefs,
         attempts: attemptsLog,
+        generation: generation?.state,
         status,
         errorCode,
         errorMessage: message,
@@ -477,10 +548,10 @@ async function advance(
         retry: attempts > 1,
       }),
       ...(semanticChecks.length === 0 ? {} : { semantic_checks: semanticChecks }),
-      ...budgetDeltas(proposal.call?.usage ?? proposal.error?.diagnostic?.opencode_response?.usage, checkUsage),
+      ...budgetDeltas(callUsage[0], callUsage.slice(1)),
     })
     store.requeuePending(events.map((event) => event.event_id))
-    const retryable = stale ? false : checkFailure !== undefined
+    const retryable = stale || deadlineFailures() >= 2 ? false : checkFailure !== undefined
       ? checkFailure.kind === "transport"
       : issues.length === 0 && isRetryableTransportFailure(proposal)
     return failure(
@@ -519,6 +590,7 @@ async function advance(
       candidate,
       sourceRefs,
       attempts: attemptsLog,
+        generation: generation?.state,
       declarationChanges,
       status: "accepted",
       ir,
@@ -530,10 +602,7 @@ async function advance(
     questions: collectQuestions(candidate, acceptedEventIds, mgmtSequence),
     coverage: collectCoverage(candidate, acceptedEventIds, mgmtSequence),
     ...(semanticChecks.length === 0 ? {} : { semantic_checks: semanticChecks }),
-    ...budgetDeltas(proposal.call?.usage ?? proposal.error?.diagnostic?.opencode_response?.usage, checkUsage),
-    ...(proposal.call?.usage?.cache_read_tokens === undefined ? {} : { management_cache_read_tokens: proposal.call.usage.cache_read_tokens }),
-    ...(proposal.call?.usage?.cache_write_tokens === undefined ? {} : { management_cache_write_tokens: proposal.call.usage.cache_write_tokens }),
-    ...(proposal.call?.usage?.cost === undefined ? {} : { management_cost: proposal.call.usage.cost }),
+    ...budgetDeltas(callUsage[0], callUsage.slice(1)),
   })
 
   return {
@@ -842,6 +911,7 @@ function recordManagementCall(
   errorCode: string | undefined,
   usage: CompilerModelV2Usage | undefined,
   failureDiagnostic?: CompilerModelV2FailureDiagnostic,
+  generationStage?: "ir" | "ci",
 ): void {
   const snapshot = store.current()
   const sequence = snapshot.management_call_sequence + 1
@@ -850,6 +920,7 @@ function recordManagementCall(
       call_id: `call-${sequence}`,
       request_id: requestId,
       kind,
+      ...(generationStage === undefined ? {} : { generation_stage: generationStage }),
       started_at: startedAt,
       completed_at: completedAt,
       duration_ms: Math.max(0, Date.parse(completedAt) - Date.parse(startedAt)),
@@ -1193,6 +1264,7 @@ async function runSemanticCheck(
   },
 ): Promise<{
   record: SemanticCheckRecord
+  repair_target?: "ir" | "ci"
   issues: string[]
   usage?: NonNullable<SemanticCheckRecord["usage"]>
   /**
@@ -1252,7 +1324,8 @@ async function runSemanticCheck(
     input.recordCall(startedAt, "error", result.error?.code ?? "schema", failedUsage, result.call?.text, result.error?.diagnostic)
     // A quoted answer that did not fit the contract is deterministic for the
     // strict-decoding transports this project uses; a missing answer is not.
-    const kind = result.error?.code === "transport" || result.error?.code === "json" ? "transport" : "deterministic"
+    const kind = result.error?.diagnostic?.retryable === false ? "deterministic"
+      : result.error?.code === "transport" || result.error?.code === "json" ? "transport" : "deterministic"
     return {
       record: {
         basis_event_ids: basisEventIds,
@@ -1279,6 +1352,7 @@ async function runSemanticCheck(
   }))
   const blocking = findings.filter((finding) => finding.evidence_resolved === true)
   return {
+    ...(verdict.repair_target === undefined ? {} : { repair_target: verdict.repair_target }),
     record: {
       basis_event_ids: basisEventIds,
       sequence: input.sequence,
@@ -1365,6 +1439,7 @@ function toExecutionView(execution: ReturnType<ExecutionStateManager["list"]>[nu
 }
 
 interface ManagementRecordInput {
+  generation?: ParentGenerationState
   sequence: number
   startedAt: string
   completedAt: string
@@ -1399,6 +1474,7 @@ function managementRecord(input: ManagementRecordInput): ManagementRequestRecord
     duration_ms: durationMs,
     request: input.request,
     request_digest: input.requestDigest,
+    ...(input.generation === undefined ? {} : { generation: structuredClone(input.generation) }),
     ...(input.preparedDigest === undefined ? {} : { prepared_digest: input.preparedDigest }),
     ...(input.readBasisDigest === undefined ? {} : { read_basis_digest: input.readBasisDigest }),
     ...(input.attempts === undefined || input.attempts.length === 0 ? {} : { attempts: input.attempts }),
@@ -1505,6 +1581,7 @@ export function proposalIssues(
  */
 function isRetryableTransportFailure(proposal: CompilerModelV2Result): boolean {
   if (proposal.ok || proposal.candidate !== undefined) return false
+  if (proposal.error?.diagnostic?.retryable === false) return false
   const code = proposal.error?.code
   if (code !== "transport" && code !== "json") return false
   return !/response_format|not supported|unavailable|HTTP (400|401|403|404|422)\b/iu.test(proposal.error?.message ?? "")

@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { candidateIssues, resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 import { evaluateCondition } from "../src/core/execution-state.js"
-import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
+import { CANDIDATE_EXAMPLE } from "./fixtures/copy-candidate.js"
 
 /**
  * Offline conformance fixtures: one fixed input per clause, answered by the

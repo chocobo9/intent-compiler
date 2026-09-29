@@ -122,9 +122,13 @@ export function bindCurrentRequirements(
     if (!item) continue // A task-level coverage entry remains legal, but cannot cover an IR requirement.
     if (covered.has(id)) throw new Error(`IR content ${id} has duplicate coverage entries`)
     covered.add(id)
-    if ("revision" in entry.requirement && (
-      entry.requirement.revision !== item.revision || entry.requirement.digest !== digestOf(item)
-    )) throw new Error(`IR content ${id} coverage names a stale revision`)
+    if ("revision" in entry.requirement) {
+      // The revision is the model's own claim and must be current.  The digest
+      // is code-owned: a model cannot hash an item it just created in this same
+      // batch, so a placeholder digest is written back instead of rejected.
+      if (entry.requirement.revision !== item.revision) throw new Error(`IR content ${id} coverage names a stale revision`)
+      entry.requirement.digest = digestOf(item)
+    }
     if (entry.disposition === "assigned" || entry.disposition === "supported") {
       if (entry.refs.length === 0) throw new Error(`IR content ${id} has no assigned Atom`)
       for (const destination of entry.refs) {
@@ -132,9 +136,12 @@ export function bindCurrentRequirements(
         const target = atoms.get(atomId) ?? retained.get(atomId)
         if (!target) throw new Error(`IR content ${id} points to unknown Atom ${atomId}`)
         if ("revision" in destination) {
-          if (atoms.has(atomId) || destination.revision !== target.revision || destination.digest !== atomRef(target).digest) {
-            throw new Error(`IR content ${id} points to a stale or unbound Atom revision ${atomId}; use local_ref for new Atoms`)
+          if (destination.revision !== target.revision) {
+            throw new Error(`IR content ${id} points to an Atom revision ${atomId} that is not the current one`)
           }
+          // Same principle: the destination digest is written by code, so an
+          // Atom created in this batch never needs the model to hash it.
+          destination.digest = atomRef(target).digest
         }
         assigned.set(atomId, [...(assigned.get(atomId) ?? []), contentRef(item)])
       }

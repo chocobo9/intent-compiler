@@ -1,4 +1,5 @@
 import { test } from "node:test"
+import { stageCandidate, repairCandidate } from "./fixtures/stage-candidate.js"
 import assert from "node:assert/strict"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -8,8 +9,10 @@ import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 import { candidateRepairContext } from "../src/core/candidate-repair.js"
 import { createCompilerModelV2, type CompilerModelV2Input, type CompilerModelV2CheckInput } from "../src/model/compiler-model-v2.js"
-import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
-import { digestText, type Candidate, type CompilerEvent } from "../src/core/intent-contract.js"
+import { CANDIDATE_EXAMPLE } from "./fixtures/copy-candidate.js"
+import { digestOf, digestText, type Candidate, type CompilerEvent } from "../src/core/intent-contract.js"
+import { Ajv } from "ajv"
+import { buildGenerationSchema } from "../src/model/generation-schema.js"
 
 // Fixed model responses exercise the real source/prepare/check/repair/commit/
 // return path. They do not measure a model's ability to understand this task.
@@ -59,10 +62,11 @@ function plan(includeSharedRule: boolean): Candidate {
 
 test("whole prepared CI reaches checking and repair before first dispatch, then acceptance releases its successor", async () => {
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "semantic-compilation-")), runId: event.run_id })
-  // Four calls are needed to exercise reject -> repair -> check in one batch.
-  store.applyDeltas({ max_management_requests: 4 })
+  // IR + CI + check + repaired CI + check preserve one fixed parent.
+  store.applyDeltas({ max_management_requests: 5 })
   const proposals: CompilerModelV2Input[] = []
   const checks: CompilerModelV2CheckInput[] = []
+  const validateResponse = new Ajv({ strict: false }).compile(buildGenerationSchema("ci"))
   let returned = false
   const model = createCompilerModelV2(async input => {
     proposals.push(structuredClone(input))
@@ -71,22 +75,44 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
       assert.deepEqual(input.atom_states, store.current().atom_states)
       assert.deepEqual(input.assessments, store.current().assessments)
       assert.equal(input.execution_outcomes?.[0]?.state_claim, "completed")
+      if (input.generation_stage === "ci") {
+        assert.equal(input.assessment_batch, true, "a returned execution is assessed by the CI stage, not by an IR stage")
+        assert.deepEqual(input.generation_repair!.ir_proposal!.groups.map(group => group.local_ref), ["t1"],
+          "an assessment batch receives the stored task groups it owes an answer for")
+        assert.deepEqual(input.generation_repair!.ir_proposal!.groups[0]!.assessments, [],
+          "the stored plan carries no decision this batch must copy")
+      }
       const predecessor = input.compiled.t1!.atoms[0]!
-      return JSON.stringify({ schema_version: 2, basis: { event_ids: ["return"], refs: [] }, source_coverage: [], groups: [{
+      return JSON.stringify(stageCandidate(input, { schema_version: 2, basis: { event_ids: ["return"], refs: [] }, source_coverage: [], groups: [{
         local_ref: "accept", task_refs: ["t1"], depends_on: [], ir_changes: [],
         compilation: { decision: "reuse", current: [compiledIntentRef(input.compiled.t1!)], reason: "Accepted export implementation releases verify." },
         execution_decisions: [], assessments: [{ target_ref: atomRef(predecessor), criteria_refs: predecessor.goal_refs, evidence_refs: [{ source_id: "return", digest: "resolved-by-management" }], result: "satisfied", explanation: "Returned export implementation and evidence satisfy the required handoff.", method: "model" }],
         coverage: [], checks: [], questions: [],
-      }] })
+      }] }))
     }
     assert.deepEqual(store.current().compiled, {}, "rejected or unchecked work must not be committed")
-    if (proposals.length === 2) {
+    if (input.generation_stage === "ci" && input.generation_repair?.ci_proposal) {
       assert.ok(input.validation_errors?.some(error => error.includes("waiting verify Atom")))
-      assert.ok(input.repair_context?.candidate)
+      const repaired = repairCandidate(input)
+      assert.equal(input.parent_basis, digestOf(input.ir))
+      assert.equal(validateResponse(stageCandidate(input, repaired)), true,
+        "a CI repair must use its own response format without re-emitting parent source selections: " + JSON.stringify(validateResponse.errors))
+      const compilation = repaired.groups[0]!.compilation
+      assert.equal(compilation.decision, "replace")
+      if (compilation.decision !== "replace") throw Error("fixture")
+      const correct = plan(true).groups[0]!.compilation
+      if (correct.decision !== "replace") throw Error("fixture")
+      compilation.drafts[0]!.atoms[1]!.task = correct.drafts[0]!.atoms[1]!.task
+      compilation.drafts[0]!.atoms[1]!.completion = correct.drafts[0]!.atoms[1]!.completion
+      return JSON.stringify(stageCandidate(input, repaired))
     }
-    return JSON.stringify(plan(proposals.length > 1))
+    const first = plan(false)
+    first.groups[0]!.ir_changes[1]!.sources = [{ ...source, segment_id: "s1" }]
+    return JSON.stringify(stageCandidate(input, first))
   }, async input => {
     checks.push(structuredClone(input))
+    if (checks.length === 2) assert.deepEqual(input.candidate.groups[0]!.ir_changes, checks[0]!.candidate.groups[0]!.ir_changes,
+      "repairing Atom behavior must preserve the exact normalized IR selections")
     const prepared = input.prepared!
     assert.equal(Object.keys(prepared.ir).length, 1)
     assert.equal(prepared.ir.t1!.content.length, 3)
@@ -98,16 +124,24 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
     const requirement = waiting.goal_refs.find(ref => ref.id === "r3")!
     assert.ok(requirement, "shared provenance exists even when the instruction omits its behavior")
     return JSON.stringify(checks.length === 1 ? {
-      schema_version: 2, verdict: "inconsistent", findings: [{ dimension: "D7", claim: "waiting verify Atom omits shared missing-input behavior", expected: passages[2], observed: waiting.task, refs: [requirement] }],
+      schema_version: 2, verdict: "inconsistent", repair_target: "ci", findings: [{ dimension: "D7", claim: "waiting verify Atom omits shared missing-input behavior", expected: passages[2], observed: waiting.task, refs: [requirement] }],
     } : { schema_version: 2, verdict: "consistent", findings: [] })
   })
   const compiler = createIntentCompilerV2({ store, model })
   await compiler.acceptEvent(event)
   const first = await compiler.advance({ runId: event.run_id })
+  assert.equal(validateResponse(stageCandidate(proposals[2]!, repairCandidate(proposals[2]!))), true,
+    "CI repair must remain response-compatible while its parent is fixed: " + JSON.stringify(validateResponse.errors))
   assert.equal(first.ok, true, first.message)
   assert.equal(checks.length, 2)
+  assert.deepEqual(proposals.map(input => input.generation_stage), ["ir", "ci", "ci"])
+  assert.equal(proposals[2]!.assessment_batch, undefined, "a user batch keeps the IR/CI split")
+  assert.equal(proposals[1]!.parent_basis, proposals[2]!.parent_basis, "child repair must preserve the actual parent")
+  assert.deepEqual(proposals[1]!.ir, proposals[2]!.ir, "CI repair must receive the same actual parent text and scopes")
   assert.equal(store.current().semantic_checks[0]!.findings[0]!.evidence_resolved, true, "newly prepared IR refs must be usable check evidence")
   assert.deepEqual(store.current().compiled, checks[1]!.prepared!.compiled)
+  assert.ok(checks[0]!.candidate.groups[0]!.ir_changes[1]!.sources[0]!.span,
+    "preparing a response draft must not mutate the recorded rejected candidate")
   assert.deepEqual(first.deliveries!.map(delivery => delivery.atom_id), ["a1"])
   assert.equal("execution_task" in first.deliveries![0]!, false)
   assert.deepEqual(first.deliveries![0]!.atom, store.current().compiled.t1!.atoms[0])
@@ -125,8 +159,17 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
   assert.equal(second.ok, true, second.message)
   assert.deepEqual(second.deliveries?.map(delivery => delivery.atom_id), ["a2"])
   assert.deepEqual(store.current().compiled, checks[1]!.prepared!.compiled, "acceptance reuses the whole plan")
+  assert.deepEqual(proposals.map(input => input.generation_stage), ["ir", "ci", "ci", "ci"],
+    "a returned execution is assessed by the CI stage alone; no IR stage runs for it")
+  assert.equal(proposals.at(-1)!.assessment_batch, true)
 
   const priorInput = proposals.at(-1)!
+  const changedSource = structuredClone(proposals[0]!)
+  changedSource.events[0]!.payload = { text: "A changed source must not be silently substituted into an old selection." }
+  const stale = candidateRepairContext("old", checks[0]!.candidate, proposals[0], changedSource)
+  assert.equal(stale.basis_status, "changed")
+  assert.deepEqual(stale.candidate.groups[0]!.ir_changes, checks[0]!.candidate.groups[0]!.ir_changes,
+    "unavailable or digest-mismatched content selections must remain visibly unreconciled")
   const withHistory = { ...priorInput, source_events: [event] }
   const revisedHistory = structuredClone(withHistory)
   revisedHistory.source_events[0]!.payload = { text: "An earlier requirement with different meaning." }

@@ -36,6 +36,7 @@ export interface OpenCodeClient {
   session?: {
     create?: NonNullable<OpenCodeModelClient["session"]>["create"]
     prompt?: NonNullable<OpenCodeModelClient["session"]>["prompt"]
+    abort?: NonNullable<OpenCodeModelClient["session"]>["abort"]
     messages?: (options: { path: { id: string } }) => Promise<unknown>
   }
 }
@@ -110,8 +111,9 @@ export interface OpenCodeAdapterHooks {
     output: OpenCodeSystemTransformOutput,
   ) => Promise<void>
   "tool.execute.before": (input: ToolHookInput, output: ToolBeforeOutput) => void
-  "tool.execute.after": (input: ToolHookInput, output: ToolAfterOutput) => void
+  "tool.execute.after": (input: ToolHookInput, output: ToolAfterOutput) => Promise<void>
   event: (input: { event: ObserverEventEnvelope }) => Promise<void>
+  "experimental.execution.drain": (input: { sessionID: string }) => Promise<void>
   dispose: () => Promise<void>
 }
 
@@ -177,6 +179,17 @@ export function createOpenCodeAdapter(options: OpenCodeAdapterOptions): OpenCode
   const managed: ManagedInputs = { sessions: new Set(), messages: new Set() }
   const reconciliations = new Map<string, Promise<boolean>>()
   const v2Calls = new Map<string, { runId: string; executionId: string; hostCallId: string }>()
+  const pendingWork = new Set<Promise<void>>()
+  const workErrors: unknown[] = []
+  const terminalWork = new Map<string, Promise<void>>()
+  const track = (work: Promise<void>): Promise<void> => {
+    pendingWork.add(work)
+    void work.then(
+      () => pendingWork.delete(work),
+      error => { pendingWork.delete(work); workErrors.push(error) },
+    )
+    return work
+  }
 
   const adapter: OpenCodeAdapter = {
     hooks: () => ({
@@ -198,22 +211,49 @@ export function createOpenCodeAdapter(options: OpenCodeAdapterOptions): OpenCode
         authorizeV2Tool(options, pending, v2Calls, input, output)
       },
       "tool.execute.after": (input, output) => {
-        if (options.ignoreSession?.(input.sessionID)) return
-        void options.observer.toolAfter?.(input, output)
-        recordV2OperationResult(options, v2Calls, input, output)
+        if (options.ignoreSession?.(input.sessionID)) return Promise.resolve()
+        return track((async () => {
+          await options.observer.toolAfter?.(input, output)
+          await recordV2OperationResult(options, v2Calls, input, output)
+        })())
       },
-      event: async ({ event }) => {
+      event: ({ event }) => {
         const sessionId = eventSessionId(event)
-        if (sessionId && options.ignoreSession?.(sessionId)) return
-        await onEvent(options, pending, reconciliations, event)
+        if (sessionId && options.ignoreSession?.(sessionId)) return Promise.resolve()
+        if (sessionId && isTerminalEvent(event)) {
+          const existing = terminalWork.get(sessionId)
+          if (existing) return existing
+          // The host publishes terminal events without awaiting plugin handlers.
+          // Track the entire return/assessment, not only Observer reconciliation.
+          const preceding = [...pendingWork]
+          const work = track((async () => {
+            await Promise.all(preceding)
+            await onEvent(options, pending, reconciliations, event)
+          })())
+          terminalWork.set(sessionId, work)
+          void work.then(() => terminalWork.delete(sessionId), () => terminalWork.delete(sessionId))
+          return work
+        }
+        return track(onEvent(options, pending, reconciliations, event))
+      },
+      "experimental.execution.drain": async ({ sessionID }) => {
+        // The CLI must call this while the SDK and management sessions are live.
+        // Explicit delivery also closes the race with the host's void event bus.
+        await Promise.allSettled([
+          adapter.hooks().event({ event: { type: "session.idle", properties: { sessionID } } }),
+        ])
+        while (pendingWork.size) await Promise.allSettled([...pendingWork])
+        if (workErrors.length) throw new AggregateError(workErrors, "OpenCode Compiler return processing failed")
       },
       dispose: async () => {
         await adapter.dispose()
       },
     }),
     dispose: async () => {
+      while (pendingWork.size) await Promise.allSettled([...pendingWork])
       await Promise.allSettled(reconciliations.values())
       await options.observer.dispose?.()
+      if (workErrors.length) throw new AggregateError(workErrors, "OpenCode Compiler hooks failed before shutdown")
     },
   }
   return adapter
@@ -265,17 +305,17 @@ function authorizeV2Tool(
   })
 }
 
-function recordV2OperationResult(
+async function recordV2OperationResult(
   options: OpenCodeAdapterOptions,
   v2Calls: Map<string, { runId: string; executionId: string; hostCallId: string }>,
   input: ToolHookInput,
   output: ToolAfterOutput,
-): void {
+): Promise<void> {
   if (!isV2Compiler(options.compiler)) return
   const call = v2Calls.get(v2CallKey(input.sessionID, input.callID))
   if (!call) return
   const compiler = options.compiler
-  void (async () => {
+  try {
     const receipt = await compiler.acceptEvent({
       schema_version: 2,
       run_id: call.runId,
@@ -292,17 +332,21 @@ function recordV2OperationResult(
     })
     if (!receipt.ok && receipt.status !== "duplicate") {
       // The Observer still records the tool result; Compiler event failure is not silently ignored.
-      void options.observer.observeEvent({
+      await options.observer.observeEvent({
         type: "opencode.v2.operation_result_rejected",
         properties: { sessionID: input.sessionID, callID: input.callID, code: receipt.code, message: receipt.message },
       })
+      throw new OpenCodeAdapterError("OPERATION_RESULT_REJECTED", receipt.message ?? receipt.code ?? "Compiler rejected tool result")
     }
-  })().catch((error: unknown) => {
-    void options.observer.observeEvent({
+  } catch (error: unknown) {
+    await options.observer.observeEvent({
       type: "opencode.v2.operation_result_failed",
       properties: { sessionID: input.sessionID, callID: input.callID, error: errorMessage(error) },
     })
-  })
+    throw error
+  } finally {
+    v2Calls.delete(v2CallKey(input.sessionID, input.callID))
+  }
 }
 
 function v2ExecutionIdsForSession(pending: Map<string, PendingDelivery>, sessionId: string): string[] {
@@ -870,6 +914,40 @@ async function onEvent(
         delivery.v2Returned ||
         !delivery.v2ExecutionIds
       ) continue
+      // Reconciliation confirms that records were captured, not that the work
+      // succeeded. Give management the actual assistant report and tool errors.
+      const messages = await readSessionMessages(options.client, sessionId)
+      const inputIndex = messages.findIndex(message => message.info?.id === delivery.messageId)
+      const report = messages.slice(inputIndex < 0 ? 0 : inputIndex + 1)
+        .filter(message => message.info?.role === "assistant")
+        .map(message => ({
+          message_id: message.info?.id,
+          finish: message.info?.finish,
+          error: message.info?.error,
+          text: (message.parts ?? []).filter(part => part.type === "text").map(part => part.text ?? "").join("\n"),
+          tool_errors: (message.parts ?? []).filter(part => part.type === "tool" && part.state?.status === "error")
+            .map(part => ({ tool: part.tool, error: part.state?.error })),
+          // What the executor actually observed: management judges the Atom's
+          // completion criteria against these recorded results, not against the
+          // executor's own summary of them.
+          tool_results: (message.parts ?? []).filter(part => part.type === "tool" && part.state?.status === "completed")
+            .map(part => ({
+              tool: part.tool,
+              ...(part.state?.input === undefined ? {} : { input: boundedFact(part.state.input) }),
+              ...(part.state?.output === undefined ? {} : { output: boundedFact(part.state.output) }),
+            })),
+        }))
+      const reportText = report.map(message => message.text).filter(Boolean).join("\n\n")
+      // The executor proposes the Atom's status from what it actually observed:
+      // a turn that ended normally, produced tool work, and hit no tool error
+      // claims completion.  Management still decides whether to accept it, and a
+      // blocked or empty turn claims nothing.
+      const toolErrors = report.flatMap(message => message.tool_errors ?? [])
+      const toolWork = report.flatMap(message => message.tool_results ?? [])
+      const claimsCompletion = succeeded
+        && report.at(-1)?.finish === "stop"
+        && toolErrors.length === 0
+        && toolWork.length > 0
       for (let index = 0; index < delivery.v2ExecutionIds.length; index += 1) {
         const executionId = delivery.v2ExecutionIds[index] as string
         const dispatched = delivery.v2Deliveries?.[index]
@@ -880,7 +958,7 @@ async function onEvent(
             `execution ${executionId} has no matching v2 dispatch payload`,
           )
         }
-        const stateClaim = succeeded ? "completed" as const : "stopped" as const
+        const stateClaim = claimsCompletion ? "completed" as const : "stopped" as const
         const outcome: ExecutionOutcome = {
           schema_version: 2,
           execution_id: executionId,
@@ -889,7 +967,7 @@ async function onEvent(
             revision: dispatched.atom.revision,
             digest: dispatched.digest,
           },
-          suggested_status: succeeded ? "completed" : "ready",
+          suggested_status: claimsCompletion ? "completed" : "ready",
           product_refs: [],
           file_changes: [],
           evidence_refs: [],
@@ -904,7 +982,9 @@ async function onEvent(
           execution_id: executionId,
           payload: {
             state_claim: stateClaim,
-            reason: succeeded ? "opencode-sdk-reconciliation-succeeded" : "opencode-sdk-reconciliation-failed",
+            reason: succeeded ? "executor-stopped-awaiting-management-assessment" : "opencode-sdk-reconciliation-failed",
+            text: reportText || "Executor ended without a textual report; management must inspect recorded operations and evidence.",
+            executor_report: report,
             outcome,
           },
         })
@@ -998,8 +1078,8 @@ async function readSessionMessages(client: OpenCodeClient, sessionId: string): P
 }
 
 interface SdkMessageLike {
-  info?: { id?: string }
-  parts?: Array<{ id?: string; type?: string; text?: string }>
+  info?: { id?: string; role?: string; finish?: string; error?: unknown }
+  parts?: Array<{ id?: string; type?: string; text?: string; tool?: string; state?: { status?: string; error?: unknown; input?: unknown; output?: unknown } }>
 }
 
 function mutateTextPartsInPlace(parts: Array<{ type?: string; text?: string }>, renderedText: string): void {
@@ -1096,6 +1176,24 @@ function isTerminalEvent(event: ObserverEventEnvelope): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * One execution can produce long tool output; the return keeps what management
+ * needs to judge the Atom without letting a single command bloat the record.
+ */
+const REPORT_FACT_LIMIT = 2000
+function boundedFact(value: unknown): unknown {
+  if (typeof value === "string") {
+    return value.length > REPORT_FACT_LIMIT ? `${value.slice(0, REPORT_FACT_LIMIT)}…(${value.length} chars)` : value
+  }
+  let text: string
+  try {
+    text = JSON.stringify(value)
+  } catch {
+    text = String(value)
+  }
+  return text.length > REPORT_FACT_LIMIT ? `${text.slice(0, REPORT_FACT_LIMIT)}…(${text.length} chars)` : text
 }
 
 export interface ExperimentRuntimePluginContext {

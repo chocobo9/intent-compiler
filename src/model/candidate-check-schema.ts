@@ -16,6 +16,7 @@ export const CANDIDATE_CHECK_JSON_SCHEMA = {
   properties: {
     schema_version: { const: 2 },
     verdict: { enum: ["consistent", "inconsistent"] },
+    repair_target: { type: "string", enum: ["ir", "ci"], description: "For inconsistent results, identify whether the parent IR needs repair or only its compiled plan needs repair." },
     findings: {
       type: "array",
       items: {

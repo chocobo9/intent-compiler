@@ -28,6 +28,7 @@ import {
 } from "./intent-contract.js"
 import type { DispatchRecord, ExecutionRecord } from "./execution-state.js"
 import type { CandidateChanges, CandidateRepairContext } from "./candidate-repair.js"
+import type { ParentGenerationState } from "./parent-generation.js"
 
 export interface V2StoreOptions {
   storeDir: string
@@ -41,6 +42,7 @@ export interface V2EventRecord {
 }
 
 export interface ManagementRequestRecord {
+  generation?: ParentGenerationState
   request_id: string
   sequence: number
   trigger_event_ids: string[]
@@ -105,9 +107,14 @@ export interface ManagementRequestRecord {
 
 /** One management call inside a batch: its raw answer and the issues it produced. */
 export interface ManagementAttemptRecord {
+  generation_stage?: "ir" | "ci"
+  request?: unknown
   kind: "propose" | "check"
   failure_diagnostic?: {
     phase: string
+    request_timeout_ms?: number
+    cancellation_confirmed?: boolean
+    retryable?: boolean
     response_received?: boolean
     stream_started?: boolean
     stream_completed?: boolean
@@ -185,6 +192,7 @@ export interface DeniedCallRecord {
  * how long, and with what usage.
  */
 export interface ManagementCallRecord {
+  generation_stage?: "ir" | "ci"
   call_id: string
   request_id: string
   kind: "propose" | "check"
@@ -195,6 +203,9 @@ export interface ManagementCallRecord {
   error_code?: string
   failure_diagnostic?: {
     phase: string
+    request_timeout_ms?: number
+    cancellation_confirmed?: boolean
+    retryable?: boolean
     response_received?: boolean
     stream_started?: boolean
     stream_completed?: boolean
@@ -528,6 +539,12 @@ export class IntentStoreV2 {
     // taking the queue. Historical accepted records keep their original meaning.
     const handledUsers = new Set(snapshot.management_log.filter(row => row.status === "accepted").flatMap(row => row.trigger_event_ids))
     snapshot.unresolved_user_event_ids = this.readEvents().filter(row => row.event.kind === "user_input" && !handledUsers.has(row.event.event_id)).map(row => row.event.event_id)
+    // A process can exit after popPending but before return assessment commits.
+    // Restore such returns from the event journal; queue emptiness is not an ack.
+    snapshot.pending_event_ids = [...new Set([...snapshot.pending_event_ids,
+      ...this.readEvents().filter(row => row.event.kind === "execution_return" && !handledUsers.has(row.event.event_id))
+        .map(row => row.event.event_id),
+    ])]
     if (snapshot.assessments === undefined) snapshot.assessments = []
     if (snapshot.checks === undefined) snapshot.checks = []
     if (snapshot.questions === undefined) snapshot.questions = []

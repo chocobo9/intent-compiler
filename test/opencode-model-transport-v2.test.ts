@@ -28,6 +28,33 @@ function clientFor(prompt: NonNullable<NonNullable<OpenCodeModelClient["session"
   return { session: { create: async () => ({ data: { id: "structured-session" } }), prompt } }
 }
 
+test("a management deadline cancels the isolated host session before permitting a retry", async () => {
+  let aborted = false
+  let promptSignal: AbortSignal | undefined
+  const transport = createOpenCodeModelTransportV2({
+    directory: resolve("management"), providerId: "openai", modelId: "test", timeoutMs: 15,
+    client: { session: {
+      create: async () => ({ data: { id: "slow-ir" } }),
+      prompt: async request => { promptSignal = request.signal; return new Promise(() => {}) },
+      abort: async request => {
+        assert.equal(request.path.id, "slow-ir")
+        assert.equal(request.query.directory, resolve("management"))
+        aborted = true
+        return { data: true }
+      },
+    } },
+  })
+  await assert.rejects(transport(input()), (error: unknown) => {
+    assert.ok(error instanceof OpenCodeModelTransportError)
+    assert.equal(error.code, "SESSION_PROMPT_TIMEOUT")
+    assert.equal(aborted, true)
+    assert.equal(promptSignal?.aborted, true)
+    assert.equal(error.diagnostic?.cancellation_confirmed, true)
+    assert.equal(error.diagnostic?.retryable, true)
+    return true
+  })
+})
+
 test("v2 OpenCode transport accepts StructuredOutput info.structured and preserves usage", async () => {
   let created = false
   const client: OpenCodeModelClient = {

@@ -4,11 +4,13 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { createIntentCompilerRuntime } from "../src/harness/runtime-factory.js"
-import { digestText, type CompilerEvent } from "../src/core/intent-contract.js"
+import { digestText, type Candidate, type CompilerEvent } from "../src/core/intent-contract.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { CHECK_SYSTEM_PROMPT, type OpenCodeModelClient } from "../src/model/opencode-transport.js"
-import { buildStrictCandidateExample, buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
+import { buildStrictCandidateExample } from "../src/model/candidate-schema-strict.js"
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
+import { buildGenerationSchema } from "../src/model/generation-schema.js"
+import { stageCandidate } from "./fixtures/stage-candidate.js"
 
 test("OpenCode runtime independently proposes and checks with GPT-6 Luna contracts", async () => {
   const root = mkdtempSync(join(tmpdir(), "opencode-independent-check-"))
@@ -24,7 +26,7 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
   const candidate = JSON.parse(JSON.stringify(CANDIDATE_EXAMPLE)
     .replaceAll("<triggered-event-id>", event.event_id)
     .replaceAll("input-event-id", event.event_id)
-    .replaceAll("sha256:0000000000000000000000000000000000000000000000000000000000000001", digestText(inputText))) as unknown
+    .replaceAll("sha256:0000000000000000000000000000000000000000000000000000000000000001", digestText(inputText))) as Candidate
   const calls: Array<{ kind: "session.create" | "session.prompt"; id?: string; body?: any }> = []
   let sessionSequence = 0
   const client: OpenCodeModelClient = {
@@ -37,12 +39,14 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
       prompt: async request => {
         calls.push({ kind: "session.prompt", id: request.path.id, body: request.body })
         const schema = request.body.format?.schema
-        const proposal = JSON.stringify(schema) === JSON.stringify(buildStrictCandidateSchema("openai"))
+        const input = JSON.parse(request.body.parts[0].text)
+        const stage = input.generation_stage as "ir" | "ci" | undefined
+        const proposal = stage !== undefined && JSON.stringify(schema) === JSON.stringify(buildGenerationSchema(stage, "openai"))
         const check = JSON.stringify(schema) === JSON.stringify(buildStrictCandidateCheckSchema("openai"))
-        assert.equal(proposal || check, true, "runtime must send one of the two complete OpenAI strict schemas")
+        assert.equal(proposal || check, true, "runtime must send the IR, CI or independent-check OpenAI strict schema")
         const responseText = proposal
-          ? JSON.stringify(buildStrictCandidateExample("openai", candidate))
-          : JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] })
+          ? JSON.stringify(stageCandidate(input, buildStrictCandidateExample("openai", candidate) as unknown as Candidate))
+          : JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [], repair_target: null })
         const structured = JSON.parse(responseText) as unknown
         return {
           data: {
@@ -72,25 +76,27 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
   const advanced = await compiler.advance({ runId: event.run_id })
 
   assert.equal(advanced.ok, true)
-  assert.deepEqual(calls.map(call => call.kind), ["session.create", "session.prompt", "session.create", "session.prompt"])
+  assert.deepEqual(calls.map(call => call.kind), ["session.create", "session.prompt", "session.create", "session.prompt", "session.create", "session.prompt"])
   const prompts = calls.filter((call): call is typeof call & { body: NonNullable<typeof call.body> } => call.kind === "session.prompt")
-  assert.equal(prompts.length, 2)
+  assert.equal(prompts.length, 3)
+  assert.equal(new Set(prompts.map(prompt => prompt.id)).size, 3)
   assert.notEqual(prompts[0]!.id, prompts[1]!.id)
   for (const prompt of prompts) {
     assert.deepEqual(prompt.body.model, { providerID: "openai", modelID: "gpt-6-luna-fast" })
     assert.equal(prompt.body.variant, "high")
     assert.equal(prompt.body.format?.retryCount, 0)
   }
-  assert.deepEqual(prompts[0]!.body.format?.schema, buildStrictCandidateSchema("openai"))
-  assert.deepEqual(prompts[1]!.body.format?.schema, buildStrictCandidateCheckSchema("openai"))
+  assert.deepEqual(prompts[0]!.body.format?.schema, buildGenerationSchema("ir", "openai"))
+  assert.deepEqual(prompts[1]!.body.format?.schema, buildGenerationSchema("ci", "openai"))
+  assert.deepEqual(prompts[2]!.body.format?.schema, buildStrictCandidateCheckSchema("openai"))
   assert.notEqual(prompts[0]!.body.system, prompts[1]!.body.system)
-  assert.equal(prompts[1]!.body.system, CHECK_SYSTEM_PROMPT)
+  assert.equal(prompts[2]!.body.system, CHECK_SYSTEM_PROMPT)
   assert.match(prompts[0]!.body.system, /management model/i)
   assert.equal(JSON.parse(prompts[0]!.body.parts[0]!.text).contract.schema_version, 2)
   assert.equal(JSON.parse(prompts[0]!.body.parts[0]!.text).contract.example_input, inputText)
-  assert.equal(JSON.parse(prompts[1]!.body.parts[0]!.text).contract.check_contract.length > 0, true)
+  assert.equal(JSON.parse(prompts[2]!.body.parts[0]!.text).contract.check_contract.length > 0, true)
   assert.equal(advanced.deliveries?.length, 1)
-  const prepared = JSON.parse(prompts[1]!.body.parts[0]!.text).prepared
+  const prepared = JSON.parse(prompts[2]!.body.parts[0]!.text).prepared
   assert.deepEqual(prepared.compiled.t1.atoms[0], advanced.deliveries![0]!.atom)
   assert.equal(prepared.atom_states[0].status, "ready")
 })

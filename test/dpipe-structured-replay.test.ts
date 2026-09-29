@@ -10,7 +10,9 @@ import { buildStrictCandidateSchema } from "../src/model/candidate-schema-strict
 import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { sourceSegments } from "../src/core/source-payload.js"
-import { digestText, type CompilerEvent } from "../src/core/intent-contract.js"
+import { stageCandidate } from "./fixtures/stage-candidate.js"
+import { buildGenerationSchema } from "../src/model/generation-schema.js"
+import { digestText, type Candidate, type CompilerEvent } from "../src/core/intent-contract.js"
 
 const fixtureRoot = resolve("test/fixtures/dpipe-structured-004")
 const original = () => JSON.parse(readFileSync(join(fixtureRoot, "candidate.json"), "utf8"))
@@ -26,11 +28,12 @@ function replay(structured: unknown) {
       prompt: async input => {
         prompts++
         assert.equal(input.body.format?.retryCount, 0)
-        assert.deepEqual(input.body.format?.schema, buildStrictCandidateSchema("openai"))
         const sent = JSON.parse(input.body.parts[0].text)
+        assert.deepEqual(input.body.format?.schema, sent.generation_stage ? buildGenerationSchema(sent.generation_stage, "openai") : buildStrictCandidateSchema("openai"))
         const validate = new Ajv({ strict: false }).compile(input.body.format!.schema as object)
         assert.equal(validate(JSON.parse(sent.contract.example_candidate)), true)
-        return { parts: [{ type: "tool", tool: "StructuredOutput", state: { status: "completed", input: structured } }], info: { structured, tokens: { input: 30913, output: 11773 } } }
+        const response = sent.generation_stage ? stageCandidate(sent, structured as Candidate) : structured
+        return { parts: [{ type: "tool", tool: "StructuredOutput", state: { status: "completed", input: response } }], info: { structured: response, tokens: { input: 30913, output: 11773 } } }
       },
     } },
   })
@@ -78,7 +81,7 @@ test("real -004 output fails the actual generation contract and preserves all si
 test("a shape-valid -004 expectation still cannot drop the eight unselected source headings", async () => {
   const { model, prompts } = replay(expectationFixture(false)), event = userEvent()
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "dpipe-gap-")), runId: event.run_id })
-  store.applyDeltas({ max_management_requests: 1 })
+  store.applyDeltas({ max_management_requests: 2 })
   const compiler = createIntentCompilerV2({ store, model })
   await compiler.acceptEvent(event)
   const result = await compiler.advance({ runId: event.run_id })
@@ -92,7 +95,7 @@ test("a shape-valid -004 expectation still cannot drop the eight unselected sour
 test("complete offline dpipe expectation preserves original rules through strict output, IR, relations and gated dispatch", async () => {
   const { model, prompts } = replay(expectationFixture(true)), event = userEvent()
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "dpipe-chain-")), runId: event.run_id })
-  store.applyDeltas({ max_management_requests: 1 })
+  store.applyDeltas({ max_management_requests: 2 })
   const compiler = createIntentCompilerV2({ store, model })
   await compiler.acceptEvent(event)
   const result = await compiler.advance({ runId: event.run_id })
@@ -117,5 +120,5 @@ test("complete offline dpipe expectation preserves original rules through strict
     assert.ok(compiled.atoms.some(atom => atom.atom_id === relation.predecessor.id))
     assert.ok(compiled.atoms.some(atom => atom.atom_id === relation.successor.id))
   }
-  assert.equal(prompts(), 1)
+  assert.equal(prompts(), 2)
 })

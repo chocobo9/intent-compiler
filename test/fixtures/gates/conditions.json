@@ -3,8 +3,8 @@
   "cases": [
     {
       "id": "scope-allows-when-the-scope-proceeds",
-      "clauses": ["C.rules.16"],
-      "authority": { "clause": "C.rules.16" },
+      "clauses": ["C.rules.17"],
+      "authority": { "clause": "C.rules.17" },
       "kind": "conditions",
       "condition": { "kind": "scope_allows" },
       "context": {
@@ -53,8 +53,8 @@
     },
     {
       "id": "capability-available-when-the-host-offers-the-operation",
-      "clauses": ["C.rules.16"],
-      "authority": { "clause": "C.rules.16" },
+      "clauses": ["C.rules.17"],
+      "authority": { "clause": "C.rules.17" },
       "kind": "conditions",
       "condition": { "kind": "capability_available", "expectation": "bash" },
       "context": { "capabilities": { "operations": ["read", "write", "edit", "bash"] } },
@@ -62,8 +62,8 @@
     },
     {
       "id": "capability-missing-when-the-host-does-not-offer-it",
-      "clauses": ["C.rules.16"],
-      "authority": { "clause": "C.rules.16" },
+      "clauses": ["C.rules.17"],
+      "authority": { "clause": "C.rules.17" },
       "kind": "conditions",
       "condition": { "kind": "capability_available", "expectation": "webfetch" },
       "context": { "capabilities": { "operations": ["read", "write", "edit", "bash"] } },
@@ -71,8 +71,8 @@
     },
     {
       "id": "capability-unknown-when-there-is-no-catalog",
-      "clauses": ["C.rules.16"],
-      "authority": { "clause": "C.rules.16" },
+      "clauses": ["C.rules.17"],
+      "authority": { "clause": "C.rules.17" },
       "kind": "conditions",
       "condition": { "kind": "capability_available", "expectation": "bash" },
       "context": {},

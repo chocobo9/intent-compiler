@@ -1,4 +1,5 @@
 import { test } from "node:test"
+import { stageCandidate } from "./fixtures/stage-candidate.js"
 import assert from "node:assert/strict"
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -47,7 +48,7 @@ function candidate(): Candidate {
 
 async function run(proposal: Candidate) {
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "requirements-")), runId: "run1" })
-  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async () => JSON.stringify(proposal)) })
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, proposal))) })
   const event: CompilerEvent = { schema_version: 2, run_id: "run1", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } }
   await compiler.acceptEvent(event)
   return { result: await compiler.advance({ runId: "run1" }), store }
@@ -70,14 +71,15 @@ test("current IR requirements are bound to the Atom and only the Atom is deliver
   assert.equal("interpretation" in delivered!, false)
 })
 
-test("a run without a checker can accept its last permitted proposal call", async () => {
+test("a run without a checker can accept its last permitted CI call", async () => {
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "one-proposal-")), runId: "one" })
-  store.applyDeltas({ max_management_requests: 1 })
-  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async () => JSON.stringify(candidate())) })
+  store.applyDeltas({ max_management_requests: 2 })
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, candidate()))) })
   await compiler.acceptEvent({ schema_version: 2, run_id: "one", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
   const result = await compiler.advance({ runId: "one" })
   assert.equal(result.ok, true, result.message)
-  assert.equal(store.current().management_calls.length, 1)
+  assert.equal(store.current().management_calls.length, 2)
+  assert.deepEqual(store.current().management_calls.map(call => call.generation_stage), ["ir", "ci"])
   assert.equal(store.current().management_calls[0]!.kind, "propose")
 })
 
@@ -170,7 +172,7 @@ test("accepted result releases a dependent Atom on reuse, and revised acceptance
   draft.atoms.push({ ...structuredClone(draft.atoms[0]!), atom_id: "a2", task: "Deliver the report using the accepted CSV implementation" })
   draft.relations = [{ predecessor: { local_ref: "a1" }, successor: { local_ref: "a2" }, requires: "Accepted CSV implementation", conditions: [], basis: [source] }]
   group.coverage[2]!.refs = [{ local_ref: "a2" }]
-  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async () => JSON.stringify(proposal)) })
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, proposal))) })
   await compiler.acceptEvent({ schema_version: 2, run_id: "chain", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
   const first = await compiler.advance({ runId: "chain" })
   assert.deepEqual(first.deliveries?.map(delivery => delivery.atom_id), ["a1"])
@@ -236,7 +238,7 @@ test("a quote that does not occur in the user event cannot become a requirement 
   change.sources = [{ source_id: "e1", digest: digestText(raw), quote: "ERROR: invented" } as SourceRef]
   const { result, store } = await run(proposal)
   assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /resolvable user text span/)
+  assert.match(result.message ?? "", /IR sources do not resolve; correct selections before compiling work/)
   assert.deepEqual(store.current().ir, {})
 })
 
@@ -247,15 +249,18 @@ test("a repeated quote cannot silently choose the first occurrence", async () =>
   change.sources = [{ source_id: "e1", digest: digestText(raw), quote: "file" } as SourceRef]
   const { result } = await run(proposal)
   assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /resolvable user text span/)
+  assert.match(result.message ?? "", /IR sources do not resolve; correct selections before compiling work/)
 })
 
 test("a compiled task cannot omit the IR requirement ledger", async () => {
   const proposal = candidate()
   proposal.groups[0]!.ir_changes = proposal.groups[0]!.ir_changes.filter(change => change.action === "preserve" || change.target !== "content")
-  const { result } = await run(proposal)
+  const { result, store } = await run(proposal)
   assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /needs source-backed IR.content requirements/)
+  assert.match(result.message ?? "", /source_coverage\[0\] names unknown or ambiguous IR r1/)
+  assert.deepEqual(store.current().ir, {})
+  assert.deepEqual(store.current().compiled, {})
+  assert.ok(store.current().management_calls.every(call => call.generation_stage === "ir"), "missing requirement entries must fail before CI generation")
 })
 
 test("every current requirement needs an explicit destination", async () => {
@@ -273,7 +278,7 @@ test("requirement text must cite a resolvable user span", async () => {
   change.sources = [{ source_id: "unknown", digest: digestText(raw), span: { unit: "utf16", start: 0, end: 5 } }]
   const { result } = await run(proposal)
   assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /resolvable user text span/)
+  assert.match(result.message ?? "", /IR sources do not resolve; correct selections before compiling work/)
 })
 
 test("a requirement cannot lose its task or output scope", async () => {
@@ -283,7 +288,7 @@ test("a requirement cannot lose its task or output scope", async () => {
   change.value = { text: "Implement CSV.", about: [], scope: [], support: [] }
   const { result } = await run(proposal)
   assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /needs a resolvable task, input or output scope/)
+  assert.match(result.message ?? "", /IR content r1 needs actual selected text and an already declared scope target/)
 })
 
 test("paused requirements cannot launch an Atom with no assigned work", async () => {
@@ -307,8 +312,8 @@ test("a later revision keeps prior exact requirements and replaces only the chan
     store,
     model: createCompilerModelV2(
       async input => {
-        seenSources.push((input.source_events ?? []).map(event => event.event_id))
-        return JSON.stringify(proposal)
+        if (input.generation_stage === "ir") seenSources.push((input.source_events ?? []).map(event => event.event_id))
+        return JSON.stringify(stageCandidate(input, proposal))
       },
       async input => {
         checked.push({
@@ -355,7 +360,7 @@ test("a later revision keeps prior exact requirements and replaces only the chan
 test("an IR requirement change cannot reuse old compiled work", async () => {
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "requirements-")), runId: "run3" })
   let proposal = candidate()
-  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async () => JSON.stringify(proposal)) })
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, proposal))) })
   await compiler.acceptEvent({ schema_version: 2, run_id: "run3", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
   assert.equal((await compiler.advance({ runId: "run3" })).ok, true)
   const current = store.current().compiled.t1
@@ -368,6 +373,12 @@ test("an IR requirement change cannot reuse old compiled work", async () => {
   group.ir_changes = [{ action: "revise", target: "content", id: "r2", expected_revision: 0,
     value: { text: update, about: [], scope: [{ target_id: "t1" }], support: [] },
     sources: [{ source_id: "e2", digest: digestText(update), span: { unit: "utf16", start: 0, end: update.length } }] }]
+  // Keep the parent update valid so this test still reaches the reuse guard.
+  const replacementSource = { source_id: "e2", digest: digestText(update), span: { unit: "utf16" as const, start: 0, end: update.length } }
+  proposal.source_coverage = [
+    { source: replacementSource, disposition: "normative", requirements: [{ local_ref: "r2" }], reason: "The updated error rule", basis: [] },
+    { source: { ...source, span: { unit: "utf16", start: 15, end: raw.length } }, disposition: "superseded", requirements: [], reason: "The user replaces the old error text", basis: [replacementSource] },
+  ]
   group.compilation = { decision: "reuse", current: [compiledIntentRef(current)], reason: "unchanged" }
   await compiler.acceptEvent({ schema_version: 2, run_id: "run3", event_id: "e2", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: update } })
   const result = await compiler.advance({ runId: "run3" })
@@ -397,7 +408,7 @@ test("an update covering two tasks keeps their requirements in separate executio
   const second = JSON.parse(JSON.stringify(proposal.groups[0]).replaceAll('"t1"', '"t2"').replaceAll('"a1"', '"a2"').replaceAll('"r1"', '"r3"').replaceAll('"r2"', '"r4"').replaceAll('"g1"', '"g2"')) as Candidate["groups"][number]
   proposal.groups.push(second)
   proposal.source_coverage![0]!.requirements.push({ local_ref: "r3" }, { local_ref: "r4" })
-  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async () => JSON.stringify(proposal)) })
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, proposal))) })
   await compiler.acceptEvent({ schema_version: 2, run_id: "multi", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
   const first = await compiler.advance({ runId: "multi" })
   assert.equal(first.ok, true, first.message)
@@ -416,7 +427,7 @@ test("an update covering two tasks keeps their requirements in separate executio
 test("raising an Atom revision retires the earlier ready revision even without a supersession hint", async () => {
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "atom-revision-")), runId: "revision" })
   let proposal = candidate()
-  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async () => JSON.stringify(proposal)) })
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, proposal))) })
   await compiler.acceptEvent({ schema_version: 2, run_id: "revision", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
   const first = await compiler.advance({ runId: "revision" })
   assert.equal(first.ok, true, first.message)

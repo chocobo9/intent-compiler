@@ -70,6 +70,41 @@ function covered(text: string, start: number, end: number, spans: readonly { sta
   return !text.slice(cursor, end).trim()
 }
 
+/**
+ * The host quotes a whole instruction when it passes it as one command-line
+ * argument. Those wrapper bytes are the transport's, not the user's words, so
+ * no selection has to adopt them and a revision may leave them out.
+ */
+export function hostQuotedBounds(text: string): { start: number; end: number } | undefined {
+  if (text.length < 3 || !text.startsWith("\"") || !text.endsWith("\"")) return undefined
+  const inner = text.slice(1, -1)
+  if (!inner.includes(" ") || inner.includes("\"")) return undefined
+  return { start: 1, end: text.length - 1 }
+}
+
+/** Every byte in the range is selected, whitespace, or the host's own wrapper. */
+function disposed(text: string, start: number, end: number, spans: readonly { start: number; end: number }[]): boolean {
+  const wrapper = hostQuotedBounds(text)
+  const ranges = [...spans].sort((a, b) => a.start - b.start)
+  let cursor = start
+  const allowed = (from: number, to: number): boolean => {
+    for (let index = from; index < to; index += 1) {
+      const character = text[index]!
+      if (/\s/u.test(character)) continue
+      if (wrapper && (index < wrapper.start || index >= wrapper.end)) continue
+      return false
+    }
+    return true
+  }
+  for (const range of ranges) {
+    if (range.end <= cursor || range.start >= end) continue
+    if (!allowed(cursor, Math.min(range.start, end))) return false
+    cursor = Math.max(cursor, range.end)
+    if (cursor >= end) return true
+  }
+  return allowed(cursor, end)
+}
+
 /** Closed source accounting, without guessing whether the model chose the right role. */
 export function validateSourceCoverage(candidate: Candidate, currentEvents: readonly CompilerEvent[], sources: readonly CompilerEvent[], previous: Record<string, TaskIntent>, current: Record<string, TaskIntent>): void {
   if (!Array.isArray(candidate.source_coverage)) throw new Error("source_coverage must explicitly list remaining source dispositions (or [] when all text is selected into IR)")
@@ -88,6 +123,14 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   // adoption decision. Derive its exact destination rather than asking for a
   // second copy. Other text still needs an explicit model-authored disposition.
   const selectedSources = items.filter(item => item.text_origin === "source").flatMap(item => item.sources)
+  // The contract requires sources on every ir_change, so citing the text a
+  // task, scope, binding or output change is based on is required behavior.
+  // Such a citation declares where that text goes as well; it just cannot
+  // dispose of a paragraph on its own (see the segment loop below).
+  const citedSources = candidate.groups
+    .filter(group => group.task_refs.some(taskId => taskIds.has(taskId)))
+    .flatMap(group => group.ir_changes.flatMap(change => change.sources))
+    .filter(source => source.span !== undefined)
   for (const item of items) if (item.text_origin === "source") adoptedByItem.set(item, item.sources)
 
   for (const [index, entry] of entries.entries()) {
@@ -100,7 +143,12 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
         const matches = items.filter(item => item.item_id === id)
         if (matches.length !== 1) throw new Error(`source_coverage[${index}] names unknown or ambiguous IR ${id}`)
         const item = matches[0]!
-        if ("revision" in ref && (item.revision !== ref.revision || digestOf(item) !== ref.digest)) throw new Error(`source_coverage[${index}] names stale IR ${id}`)
+        if ("revision" in ref) {
+          // Revision is the model's claim and must be current; the digest is
+          // code-owned and written back, exactly as for content sources.
+          if (item.revision !== ref.revision) throw new Error(`source_coverage[${index}] names stale IR ${id}`)
+          ref.digest = digestOf(item)
+        }
         return item
       })
       if (!covered(text, span.start, span.end, spansFor(recipients.flatMap(item => item.sources), entry.source.source_id))) throw new Error(`normative source_coverage[${index}] omits source text from its IR destinations`)
@@ -117,7 +165,17 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     }
   }
   for (const segment of sourceSegments(currentEvents)) {
-    if (!covered(texts.get(segment.source_id)!, segment.span.start, segment.span.end, spansFor([...selectedSources, ...entries.map(entry => entry.source)], segment.source_id))) throw new Error(`source segment ${segment.source_id}/${segment.segment_id} has no complete disposition; select its operative text into IR or explicitly classify its remaining text`)
+    const text = texts.get(segment.source_id)!
+    const entrySources = entries.map(entry => entry.source)
+    const stored = spansFor([...selectedSources, ...entrySources], segment.source_id)
+    // A change's citation can only account for the remainder of a paragraph
+    // that the batch actually stores as a requirement or classifies.
+    if (!stored.some(span => span.start < segment.span.end && segment.span.start < span.end)) {
+      throw new Error(`source segment ${segment.source_id}/${segment.segment_id} has no complete disposition: no content selection or source_coverage entry names it; select its operative text into IR or explicitly classify its remaining text`)
+    }
+    if (!disposed(text, segment.span.start, segment.span.end, spansFor([...selectedSources, ...citedSources, ...entrySources], segment.source_id))) {
+      throw new Error(`source segment ${segment.source_id}/${segment.segment_id} has no complete disposition; select its operative text into IR or explicitly classify its remaining text`)
+    }
   }
   for (const item of items) for (const source of item.sources) {
     const span = validSpan(source, texts), text = texts.get(source.source_id)!
@@ -126,6 +184,6 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   }
   for (const source of oldSources) {
     const span = validSpan(source, texts), text = texts.get(source.source_id)!
-    if (!covered(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))) throw new Error(`previously normative source ${source.source_id} was dropped without an explicit superseded disposition and current change basis`)
+    if (!disposed(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))) throw new Error(`previously normative source ${source.source_id} was dropped without an explicit superseded disposition and current change basis`)
   }
 }

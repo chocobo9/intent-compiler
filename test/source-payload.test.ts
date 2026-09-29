@@ -88,3 +88,62 @@ test("unknown segment selectors fail resolution and cannot fall back to a plausi
   adopt(c, { ...ref(e), segment_id: "s999" }, "r")
   assert.equal(resolveSourceRefs(c, [e]).unresolved, 1)
 })
+
+test("a task's own citation accounts for the rest of its paragraph, so a span sub-selection is accepted", () => {
+  const text = "Create the file, verify its bytes, then stop."
+  const e = event("e", text), c = candidate()
+  const span = (start: number, end: number) => ({ source_id: "e", digest: digestText(text), span: { unit: "utf16" as const, start, end } })
+  c.groups[0]!.ir_changes = [
+    { action: "create", target: "task", local_ref: "t",
+      value: { goal: { text: "Create the file" }, current_scope: { text: "Create the file", disposition: "proceed" } },
+      sources: [span(0, text.length)] },
+    { action: "create", target: "content", local_ref: "r",
+      value: { text: "Create the file", about: [], scope: [{ target_id: "t" }], support: [] },
+      sources: [span(0, "Create the file".length)] },
+  ]
+  assert.equal(resolveSourceRefs(c, [e]).unresolved, 0)
+  const ir = task(item("r", c.groups[0]!.ir_changes[1]!.sources))
+  materializeSourceContent(ir, c.groups[0]!.ir_changes, [e])
+  assert.doesNotThrow(() => validateSourceCoverage(c, [e], [e], {}, { t: ir }))
+  assert.equal(ir.content[0]!.text, "Create the file")
+})
+
+test("a citation on a task change cannot dispose of a paragraph by itself", () => {
+  const text = "Create the file, verify its bytes, then stop."
+  const e = event("e", text), c = candidate()
+  c.groups[0]!.ir_changes = [{ action: "create", target: "task", local_ref: "t",
+    value: { goal: { text: "Create the file" }, current_scope: { text: "Create the file", disposition: "proceed" } },
+    sources: [{ source_id: "e", digest: digestText(text), span: { unit: "utf16", start: 0, end: text.length } }] }]
+  assert.equal(resolveSourceRefs(c, [e]).unresolved, 0)
+  assert.throws(() => validateSourceCoverage(c, [e], [e], {}, { t: task() }), /no complete disposition/)
+})
+
+test("a span outside its source is unresolvable rather than a silent guess", () => {
+  const e = event("e", "One rule."), c = candidate()
+  c.groups[0]!.ir_changes = [{ action: "create", target: "content", local_ref: "r",
+    value: { text: "One rule.", about: [], scope: [{ target_id: "t" }], support: [] },
+    sources: [{ source_id: "e", digest: digestText("One rule."), span: { unit: "utf16", start: 0, end: 500 } }] }]
+  assert.equal(resolveSourceRefs(c, [e]).unresolved, 1)
+})
+
+test("the host's own argument quoting need not be adopted as requirement text", () => {
+  const inner = "One rule, then stop."
+  const e = event("e", `"${inner}"`), c = candidate()
+  c.groups[0]!.ir_changes = [{ action: "create", target: "content", local_ref: "r",
+    value: { text: "One rule", about: [], scope: [{ target_id: "t" }], support: [] },
+    sources: [{ source_id: "e", digest: digestText(`"${inner}"`), span: { unit: "utf16", start: 1, end: 1 + inner.length } }] }]
+  assert.equal(resolveSourceRefs(c, [e]).unresolved, 0)
+  const ir = task(item("r", c.groups[0]!.ir_changes[0]!.sources))
+  materializeSourceContent(ir, c.groups[0]!.ir_changes, [e])
+  assert.doesNotThrow(() => validateSourceCoverage(c, [e], [e], {}, { t: ir }))
+  assert.equal(ir.content[0]!.text, inner, "the transport's wrapper is not part of the user's requirement")
+})
+
+test("a revision still cannot drop operative user text inside its own paragraph", () => {
+  const text = "First rule stays. Second rule is dropped."
+  const e = event("e", text), c = candidate()
+  const before = task(item("r", [ref(e)]))
+  const after = task(item("r", [ref(e, "First rule stays.")]))
+  adopt(c, ref(e, "First rule stays."), "r")
+  assert.throws(() => validateSourceCoverage(c, [e], [e], { t: before }, { t: after }), /no complete disposition|dropped without/)
+})

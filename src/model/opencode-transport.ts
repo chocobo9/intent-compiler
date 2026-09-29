@@ -13,6 +13,7 @@ import type {
 import { buildStrictCandidateExample, buildStrictCandidateSchema } from "./candidate-schema-strict.js"
 import { buildStrictCandidateCheckSchema } from "./candidate-check-schema-strict.js"
 import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
+import { buildGenerationSchema, generationContract, generationStageInstruction } from "./generation-schema.js"
 
 /**
  * The OpenCode surface used by this Adapter is intentionally narrow.  The
@@ -26,6 +27,7 @@ export interface OpenCodeModelClient {
       readonly body: { readonly title: string }
     }) => Promise<unknown>
     readonly prompt?: (request: {
+      readonly signal?: AbortSignal
       readonly path: { readonly id: string }
       readonly query: { readonly directory: string }
       readonly body: {
@@ -42,6 +44,11 @@ export interface OpenCodeModelClient {
         readonly parts: readonly [{ readonly type: "text"; readonly text: string }]
       }
     }) => Promise<unknown>
+    readonly abort?: (request: {
+      readonly path: { readonly id: string }
+      readonly query: { readonly directory: string }
+      readonly signal?: AbortSignal
+    }) => Promise<unknown>
   }
 }
 
@@ -53,6 +60,8 @@ export interface OpenCodeModelTransportOptions {
   readonly variant?: string
   readonly agent?: string
   readonly onSessionCreated?: (sessionId: string) => void
+  /** Total time for one v2 management prompt, including a continuously flowing response. */
+  readonly timeoutMs?: number
 }
 
 export type OpenCodeModelTransportV2Options = OpenCodeModelTransportOptions
@@ -77,6 +86,8 @@ export type OpenCodeModelTransportErrorCode =
   | "MODEL_ERROR_RESPONSE"
   | "EMPTY_STRUCTURED_RESPONSE"
   | "STRUCTURED_RESULT_INVALID"
+  | "SESSION_PROMPT_TIMEOUT"
+  | "TIMEOUT_INVALID"
 
 export class OpenCodeModelTransportError extends Error {
   readonly code: OpenCodeModelTransportErrorCode
@@ -160,7 +171,7 @@ export function createOpenCodeModelTransport(options: OpenCodeModelTransportOpti
 export function createOpenCodeModelTransportV2(
   options: OpenCodeModelTransportV2Options,
 ): OpenCodeModelTransportV2 {
-  return createOpenCodeV2Transport(
+  const legacy = createOpenCodeV2Transport(
     options,
     MODEL_SYSTEM_PROMPT_V2,
     buildStrictCandidateSchema("openai"),
@@ -176,6 +187,19 @@ export function createOpenCodeModelTransportV2(
       }
     },
   )
+  return async (request) => {
+    const stage = "generation_stage" in request ? request.generation_stage : undefined
+    if (stage !== "ir" && stage !== "ci") return legacy(request)
+    const parentBasis = "parent_basis" in request && typeof request.parent_basis === "string" ? request.parent_basis : undefined
+    const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
+    const transport = createOpenCodeV2Transport(
+      options,
+      `${generationStageInstruction(stage, assessing)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
+      buildGenerationSchema(stage, "openai"),
+      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", parentBasis, assessing) }),
+    )
+    return transport(request)
+  }
 }
 
 /**
@@ -222,6 +246,7 @@ function createOpenCodeV2Transport(
       agent,
       requestText: serializedRequest,
       system,
+      timeoutMs: options.timeoutMs ?? 300_000,
       format: {
         type: "json_schema",
         schema,
@@ -263,6 +288,9 @@ function validateOptions(options: OpenCodeModelTransportOptions): void {
   if (options.variant !== undefined && (typeof options.variant !== "string" || options.variant.trim().length === 0)) {
     throw new OpenCodeModelTransportError("VARIANT_INVALID", "OpenCode model transport variant must be non-empty text when supplied")
   }
+  if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || options.timeoutMs <= 0 || options.timeoutMs > 2_147_483_647)) {
+    throw new OpenCodeModelTransportError("TIMEOUT_INVALID", "OpenCode management timeoutMs must be a positive timer-safe integer")
+  }
 }
 
 async function callSessionCreate(client: OpenCodeModelClient, directory: string): Promise<unknown> {
@@ -293,6 +321,7 @@ async function callSessionPrompt(
     readonly agent: string
     readonly requestText: string
     readonly system: string
+    readonly timeoutMs?: number
     readonly format?: {
       readonly type: "json_schema"
       readonly schema: unknown
@@ -302,7 +331,7 @@ async function callSessionPrompt(
 ): Promise<unknown> {
   let response: unknown
   try {
-    response = await client.session!.prompt!({
+    const promptRequest = {
       path: { id: input.sessionId },
       query: { directory: input.directory },
       body: {
@@ -319,8 +348,12 @@ async function callSessionPrompt(
         ...(input.format === undefined ? {} : { format: input.format }),
         parts: [{ type: "text", text: input.requestText }],
       },
-    })
+    } satisfies Parameters<NonNullable<NonNullable<OpenCodeModelClient["session"]>["prompt"]>>[0]
+    response = input.timeoutMs === undefined
+      ? await client.session!.prompt!(promptRequest)
+      : await promptWithDeadline(client, promptRequest, input.timeoutMs)
   } catch (error: unknown) {
+    if (error instanceof OpenCodeModelTransportError) throw error
     throw new OpenCodeModelTransportError(
       "SESSION_PROMPT_FAILED",
       `OpenCode session.prompt failed: ${sanitizeProviderMessage(errorMessage(error))}`,
@@ -352,6 +385,53 @@ async function callSessionPrompt(
         },
       },
     )
+  }
+}
+
+/** A timeout must stop the host generation, not merely stop awaiting its HTTP response. */
+async function promptWithDeadline(
+  client: OpenCodeModelClient,
+  request: Parameters<NonNullable<NonNullable<OpenCodeModelClient["session"]>["prompt"]>>[0],
+  timeoutMs: number,
+): Promise<unknown> {
+  const promptAbort = new AbortController()
+  const expired = Symbol("management deadline")
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const response = await Promise.race([
+      client.session!.prompt!({ ...request, signal: promptAbort.signal }),
+      new Promise<typeof expired>(resolve => { timer = setTimeout(() => resolve(expired), timeoutMs) }),
+    ])
+    if (response !== expired) return response
+
+    let confirmed = false
+    const cancelAbort = new AbortController()
+    let cancelTimer: ReturnType<typeof setTimeout> | undefined
+    try {
+      if (client.session?.abort) {
+        const cancelled = await Promise.race([
+          client.session.abort({ path: request.path, query: request.query, signal: cancelAbort.signal }),
+          new Promise<undefined>(resolve => { cancelTimer = setTimeout(() => resolve(undefined), 10_000) }),
+        ])
+        // OpenCode acknowledges only after cancelling the named session.
+        confirmed = cancelled === true || (isRecord(cancelled) && !cancelled.error && cancelled.data === true)
+      }
+    } catch { /* Unknown cancellation status must prevent another generation. */ }
+    finally {
+      if (cancelTimer !== undefined) clearTimeout(cancelTimer)
+      cancelAbort.abort()
+      promptAbort.abort()
+    }
+    throw new OpenCodeModelTransportError(
+      "SESSION_PROMPT_TIMEOUT",
+      `OpenCode management prompt exceeded ${timeoutMs}ms; session cancellation ${confirmed ? "confirmed" : "unconfirmed; automatic retry blocked"}`,
+      undefined,
+      { phase: "opencode_session_prompt_timeout", request_timeout_ms: timeoutMs,
+        cancellation_confirmed: confirmed, retryable: confirmed,
+        opencode_response: { session_id: request.path.id } },
+    )
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
 }
 

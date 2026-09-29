@@ -7,6 +7,8 @@ import type {
 import { CANDIDATE_JSON_SCHEMA } from "./candidate-schema.js"
 import { canonicalJson } from "../core/intent-contract.js"
 import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
+import type { StrictSchemaProfile } from "./candidate-schema-strict.js"
+import { buildGenerationSchema, generationContract, generationStageInstruction } from "./generation-schema.js"
 
 export interface StructuredProviderTransportOptions {
   endpoint?: string
@@ -19,6 +21,8 @@ export interface StructuredProviderTransportOptions {
   /** Schema sent to the provider.  Strict mode typically needs the strict
    *  variant from candidate-schema-strict. */
   schema?: unknown
+  /** Stage generation profile; legacy/check schemas remain supplied through schema. */
+  schemaProfile?: StrictSchemaProfile
   /** Extra body fields, e.g. {"enable_thinking": false} for Qwen. */
   bodyExtras?: Record<string, unknown>
   /** Assemble the answer from a server-sent-event stream.  A provider that
@@ -77,6 +81,14 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
       throw new StructuredProviderTransportError("API_KEY_REQUIRED", "DEEPSEEK_API_KEY is required for the structured management transport", undefined, undefined, { phase: "configuration", response_received: false })
     }
     const startedAt = new Date().toISOString()
+    const stageValue = "generation_stage" in request ? request.generation_stage : undefined
+    const stage = stageValue === "ir" || stageValue === "ci" ? stageValue : undefined
+    const profile = strict ? options.schemaProfile ?? (providerId === "groq" || endpoint.includes("dashscope") ? "groq" : "openai") : undefined
+    const parentBasis = "parent_basis" in request && typeof request.parent_basis === "string" ? request.parent_basis : undefined
+    const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
+    const stageRequest = stage !== undefined && "example_candidate" in request.contract
+      ? { ...request, contract: generationContract(request.contract, stage, profile, parentBasis, assessing) }
+      : request
     let response: Response
     try {
       response = await fetchImpl(endpoint, {
@@ -89,15 +101,15 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
         body: JSON.stringify({
           model: modelId,
           messages: [
-            { role: "system", content: options.systemPrompt ?? SYSTEM_PROMPT },
-            { role: "user", content: canonicalJson(request) },
+            { role: "system", content: stage === undefined ? options.systemPrompt ?? SYSTEM_PROMPT : `${generationStageInstruction(stage, assessing)} Return one JSON text response matching the supplied stage Schema.` },
+            { role: "user", content: canonicalJson(stageRequest) },
           ],
           response_format: {
             type: "json_schema",
             json_schema: {
-              name: "candidate_v2",
+              name: stage === undefined ? "candidate_v2" : `${stage}_proposal_v2`,
               strict,
-              schema: options.schema ?? CANDIDATE_JSON_SCHEMA,
+              schema: stage === undefined ? options.schema ?? CANDIDATE_JSON_SCHEMA : buildGenerationSchema(stage, profile),
             },
           },
           ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
