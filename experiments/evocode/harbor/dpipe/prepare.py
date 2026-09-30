@@ -60,7 +60,10 @@ initializer.write_text(
 subprocess.run(["node", str(initializer)], check=True)
 snapshot_path=data/"compiler-store"/"v2-runs"/run_id/"snapshot.json"
 snapshot=json.loads(snapshot_path.read_text(encoding="utf-8"))
-snapshot["budget"].update(max_management_requests=6, max_total_management_requests=180)
+# One batch has to afford a legitimate IR<->CI round trip, not just three
+# stages plus one repair: IR + CI + check is already 3, a CI rejection that
+# returns to the IR stage costs 2 more, and a mechanical defect costs another.
+snapshot["budget"].update(max_management_requests=8, max_total_management_requests=180)
 snapshot_path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
 provenance=run/"provenance"
 provenance.mkdir()
@@ -75,9 +78,9 @@ for command, name in ((["rev-parse", "HEAD"], "compiler-head.txt"), (["status", 
 }, indent=2), encoding="utf-8")
 (provenance/"management-policy.json").write_text(json.dumps({
     "prompt_timeout_ms": 300000, "cancellation_timeout_ms": 10000,
-    "max_deadline_failures_per_batch": 2, "max_management_requests_per_batch": 6,
+    "max_deadline_failures_per_batch": 2, "max_management_requests_per_batch": 8,
     "max_total_management_requests": 180, "rounds": 15,
-    "budget_basis": "15 rounds with user and return batches; three stages plus one repair allowance",
+    "budget_basis": "15 rounds with user and return batches; three stages, one legitimate IR<->CI round trip and one mechanical repair",
 }, indent=2), encoding="utf-8")
 shutil.copy2(src/"environment"/"Dockerfile",task/"environment"/"Dockerfile")
 shutil.copy2(src/"steps"/"round-1"/"instruction.md",task/"instruction.md")
