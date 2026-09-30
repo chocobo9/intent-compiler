@@ -22,10 +22,14 @@ export function sourceSegments(events: readonly CompilerEvent[]): SourceSegment[
   })
 }
 
-function validSpan(source: SourceRef, texts: Map<string, string>): NonNullable<SourceRef["span"]> {
+/** How a message writes one event id: an alias when the request showed one, else the id. */
+export type EventIdDisplay = (eventId: string) => string
+const identityDisplay: EventIdDisplay = (eventId) => eventId
+
+function validSpan(source: SourceRef, texts: Map<string, string>, display: EventIdDisplay = identityDisplay): NonNullable<SourceRef["span"]> {
   const text = texts.get(source.source_id), span = source.span
   if (text === undefined || !span || span.unit !== "utf16" || !Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end <= span.start || span.end > text.length || source.digest !== digestText(text)) {
-    throw new Error(`source payload requires a resolvable user text span: ${source.source_id}`)
+    throw new Error(`source payload requires a resolvable user text span: ${display(source.source_id)}`)
   }
   return span
 }
@@ -35,7 +39,7 @@ function sourceTexts(events: readonly CompilerEvent[]): Map<string, string> {
 }
 
 /** Interpretation never overwrites selected source bytes. Adjacent selections merge. */
-export function materializeSourceContent(task: TaskIntent, changes: readonly IrChange[], events: readonly CompilerEvent[]): void {
+export function materializeSourceContent(task: TaskIntent, changes: readonly IrChange[], events: readonly CompilerEvent[], display: EventIdDisplay = identityDisplay): void {
   const ids = new Set(changes.flatMap(change => change.action === "create" && change.target === "content" ? [change.local_ref] : change.action === "revise" && change.target === "content" ? [change.id] : []))
   const texts = sourceTexts(events)
   for (const item of task.content) {
@@ -43,7 +47,7 @@ export function materializeSourceContent(task: TaskIntent, changes: readonly IrC
     if (item.sources.length === 0) throw new Error(`IR content ${item.item_id} has no selected normative source`)
     const sources: SourceRef[] = []
     for (const sourceId of texts.keys()) {
-      const spans = item.sources.filter(source => source.source_id === sourceId).map(source => validSpan(source, texts)).sort((a, b) => a.start - b.start)
+      const spans = item.sources.filter(source => source.source_id === sourceId).map(source => validSpan(source, texts, display)).sort((a, b) => a.start - b.start)
       for (const span of spans) {
         const last = sources.at(-1)
         if (last?.source_id === sourceId && last.span!.end >= span.start) last.span!.end = Math.max(last.span!.end, span.end)
@@ -139,11 +143,14 @@ export interface SourceCoverageOptions {
    * carried delegation is rejected; acknowledgment alone does not register it.
    */
   carriedEventIds?: ReadonlySet<string>
+  /** How a message writes one event id: the alias this request showed, when it did. */
+  display?: EventIdDisplay
 }
 
 /** Closed source accounting, without guessing whether the model chose the right role. */
 export function validateSourceCoverage(candidate: Candidate, currentEvents: readonly CompilerEvent[], sources: readonly CompilerEvent[], previous: Record<string, TaskIntent>, current: Record<string, TaskIntent>, options: SourceCoverageOptions = {}): void {
   if (!Array.isArray(candidate.source_coverage)) throw new Error("source_coverage must explicitly list remaining source dispositions (or [] when all text is selected into IR)")
+  const display = options.display ?? identityDisplay
   const entries = candidate.source_coverage
   const texts = sourceTexts(sources)
   const currentIds = new Set(currentEvents.filter(event => userText(event) !== undefined).map(event => event.event_id))
@@ -152,7 +159,7 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   const oldItems = Object.entries(previous).filter(([id]) => taskIds.has(id)).flatMap(([, task]) => task.content)
   const activeSources = items.flatMap(item => item.sources)
   const oldSources = oldItems.flatMap(item => item.sources)
-  const spansFor = (refs: readonly SourceRef[], sourceId: string) => refs.filter(ref => ref.source_id === sourceId).map(ref => validSpan(ref, texts))
+  const spansFor = (refs: readonly SourceRef[], sourceId: string) => refs.filter(ref => ref.source_id === sourceId).map(ref => validSpan(ref, texts, display))
   const superseded: SourceRef[] = []
   const adoptedByItem = new Map<ContentItem, SourceRef[]>()
   // Selecting source text into an IR item is already the model's normative
@@ -170,7 +177,7 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   for (const item of items) if (item.text_origin === "source") adoptedByItem.set(item, item.sources)
 
   for (const [index, entry] of entries.entries()) {
-    const span = validSpan(entry.source, texts), text = texts.get(entry.source.source_id)!
+    const span = validSpan(entry.source, texts, display), text = texts.get(entry.source.source_id)!
     if (!entry.reason.trim()) throw new Error(`source_coverage[${index}] needs a role/revision explanation`)
     if (entry.disposition === "normative") {
       if (entry.requirements.length === 0) throw new Error(`normative source_coverage[${index}] has no IR destination`)
@@ -194,7 +201,7 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
       const overlapping = spansFor(activeSources, entry.source.source_id).some(active => text.slice(Math.max(active.start, span.start), Math.min(active.end, span.end)).trim() && active.start < span.end && span.start < active.end)
       if (overlapping) throw new Error(`source_coverage[${index}] classifies actively adopted text as ${entry.disposition}`)
       if (entry.disposition === "superseded") {
-        if (!entry.basis.some(ref => currentIds.has(ref.source_id) && validSpan(ref, texts))) throw new Error(`superseded source_coverage[${index}] needs the current user's change as basis`)
+        if (!entry.basis.some(ref => currentIds.has(ref.source_id) && validSpan(ref, texts, display))) throw new Error(`superseded source_coverage[${index}] needs the current user's change as basis`)
         if (!covered(text, span.start, span.end, spansFor(oldSources, entry.source.source_id))) throw new Error(`superseded source_coverage[${index}] was not previously normative text`)
         superseded.push(entry.source)
       }
@@ -235,7 +242,7 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
       // is not an acknowledgment of the earlier delegation.
       || entries.some(entry => entry.source.source_id === eventId)
     if (!named) {
-      throw new Error(`carried delegation ${eventId} has no disposition: select its operative text into IR content, or write a source_coverage entry naming its passage (and a question when it still cannot be compiled)`)
+      throw new Error(`carried delegation ${display(eventId)} has no disposition: select its operative text into IR content, or write a source_coverage entry naming its passage (and a question when it still cannot be compiled)`)
     }
   }
   const allEntrySources = candidate.source_coverage.map(entry => entry.source)
@@ -245,19 +252,19 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     // A change's citation can only account for the remainder of a paragraph
     // that the batch actually stores as a requirement or classifies.
     if (!stored.some(span => span.start < segment.span.end && segment.span.start < span.end)) {
-      throw new Error(`source segment ${segment.source_id}/${segment.segment_id} has no complete disposition: no content selection or source_coverage entry names it; select its operative text into IR or explicitly classify its remaining text`)
+      throw new Error(`source segment ${display(segment.source_id)}/${segment.segment_id} has no complete disposition: no content selection or source_coverage entry names it; select its operative text into IR or explicitly classify its remaining text`)
     }
     if (!disposed(text, segment.span.start, segment.span.end, spansFor([...selectedSources, ...citedSources, ...allEntrySources], segment.source_id))) {
-      throw new Error(`source segment ${segment.source_id}/${segment.segment_id} has no complete disposition; select its operative text into IR or explicitly classify its remaining text`)
+      throw new Error(`source segment ${display(segment.source_id)}/${segment.segment_id} has no complete disposition; select its operative text into IR or explicitly classify its remaining text`)
     }
   }
   for (const item of items) for (const source of item.sources) {
-    const span = validSpan(source, texts), text = texts.get(source.source_id)!
+    const span = validSpan(source, texts, display), text = texts.get(source.source_id)!
     const retained = oldItems.filter(old => old.item_id === item.item_id).flatMap(old => old.sources).filter(old => !currentIds.has(old.source_id))
-    if (!covered(text, span.start, span.end, spansFor([...(adoptedByItem.get(item) ?? []), ...retained], source.source_id))) throw new Error(`new normative selection ${source.source_id} in ${item.item_id} has no matching source_coverage assignment`)
+    if (!covered(text, span.start, span.end, spansFor([...(adoptedByItem.get(item) ?? []), ...retained], source.source_id))) throw new Error(`new normative selection ${display(source.source_id)} in ${item.item_id} has no matching source_coverage assignment`)
   }
   for (const source of oldSources) {
-    const span = validSpan(source, texts), text = texts.get(source.source_id)!
-    if (!disposed(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))) throw new Error(`previously normative source ${source.source_id} was dropped without an explicit superseded disposition and current change basis`)
+    const span = validSpan(source, texts, display), text = texts.get(source.source_id)!
+    if (!disposed(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))) throw new Error(`previously normative source ${display(source.source_id)} was dropped without an explicit superseded disposition and current change basis`)
   }
 }

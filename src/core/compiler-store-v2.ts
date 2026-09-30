@@ -8,6 +8,7 @@ import {
 } from "node:fs"
 import { randomBytes } from "node:crypto"
 import { dirname, isAbsolute, join, resolve } from "node:path"
+import type { SourceAliasEntry } from "./source-aliases.js"
 import {
   canonicalJson,
   digestOf,
@@ -167,6 +168,12 @@ export interface ManagementRequestRecord {
 export interface ManagementAttemptRecord {
   generation_stage?: "ir" | "ci"
   request?: unknown
+  /**
+   * The event identities this request presented as short aliases, recorded
+   * next to the request that used them.  It is never sent to the model: the
+   * model reads the alias, this record says which event it stood for.
+   */
+  source_aliases?: SourceAliasEntry[]
   /** The exact input sent to the independent check, recorded with the attempt. */
   check_input?: unknown
   /** The full prepared view behind `prepared_digest` (its `digest` field is that digest). */
@@ -547,18 +554,31 @@ export class IntentStoreV2 {
     appendFileSync(join(this.dir, "check-inputs.jsonl"), `${canonicalJson(entry)}\n`, "utf8")
   }
 
-  readEvents(): V2EventRecord[] {
-    if (!existsSync(this.eventsPath)) return []
+  /**
+   * The raw event journal, with the count of lines that could not be parsed.
+   * Callers that derive identities from it need to know a line was skipped:
+   * a dropped record's sequence can otherwise be handed out again, and the id
+   * derived from it would later name a different event.  Normal reads keep
+   * ignoring corrupt lines — the store still serves the records it can read.
+   */
+  readEventJournal(): { records: V2EventRecord[]; malformed: number } {
+    if (!existsSync(this.eventsPath)) return { records: [], malformed: 0 }
     const records: V2EventRecord[] = []
+    let malformed = 0
     for (const line of readFileSync(this.eventsPath, "utf8").split(/\r?\n/)) {
       if (!line.trim()) continue
       try {
         records.push(JSON.parse(line) as V2EventRecord)
       } catch {
         // Corrupt lines are retained for inspection but do not poison in-memory state.
+        malformed += 1
       }
     }
-    return records.sort((a, b) => a.sequence - b.sequence)
+    return { records: records.sort((a, b) => a.sequence - b.sequence), malformed }
+  }
+
+  readEvents(): V2EventRecord[] {
+    return this.readEventJournal().records
   }
 
   current(): V2RunSnapshot {

@@ -1,5 +1,6 @@
 import { digestOf, type Candidate, type TaskIntent } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
+import { aliasDisplay, decodeIRProposal, expressIRRequest, type SourceAliasEntry, type SourceAliasIndex } from "./source-aliases.js"
 import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
 import type { CompilerModelV2Input, CompilerModelV2Result } from "../model/compiler-model-v2.js"
 import type { IRProposal, CIProposal } from "../model/generation-schema.js"
@@ -28,9 +29,15 @@ interface Options {
   checkRequired: boolean
   remaining(): number
   currentBasis(): string
-  call(input: CompilerModelV2Input): Promise<CompilerModelV2Result>
+  /**
+   * The wire copy of one stage request, with the alias table it presented.
+   * The table travels beside the request, never inside it: the model reads
+   * aliases, the call record keeps what they stood for.
+   */
+  call(input: CompilerModelV2Input, meta?: { source_aliases?: SourceAliasEntry[] }): Promise<CompilerModelV2Result>
+  aliases: SourceAliasIndex
   resolve(candidate: Candidate): SourceRefReport
-  validateBasis(candidate: Candidate): { ok: boolean; message?: string }
+  validateBasis(candidate: Candidate, display: (eventId: string) => string): { ok: boolean; message?: string }
   directory(ir: Record<string, TaskIntent>): CompilerModelV2Input["existing_objects"]
 }
 
@@ -53,14 +60,14 @@ interface SourceRefReport {
  * statistics, so the batch spent its budget re-sending the same defect.  A
  * passage a repair cannot locate is not a reason it can fix.
  */
-function unresolvedSources(report: SourceRefReport): string {
+function unresolvedSources(report: SourceRefReport, display: (eventId: string) => string): string {
   const refs = report.unresolvedRefs ?? []
   const shown = refs.map((ref) => {
     const selector = ref.segment_id !== undefined ? `segment_id=${ref.segment_id}`
       : ref.quote !== undefined ? `quote=${JSON.stringify(ref.quote.length > 60 ? `${ref.quote.slice(0, 60)}…` : ref.quote)}`
       : ref.span === undefined ? "no selector"
       : `span=${ref.span.unit}:${ref.span.start}-${ref.span.end}`
-    return `${ref.source_id} (${selector}): ${ref.reason ?? "unresolved"}`
+    return `${display(ref.source_id)} (${selector}): ${ref.reason ?? "unresolved"}`
   })
   const hidden = Math.max(0, report.unresolved - refs.length)
   const list = shown.length === 0 ? ""
@@ -73,6 +80,13 @@ function unresolvedSources(report: SourceRefReport): string {
 /** Owns parent preparation, child admission and restoration at one generation seam. */
 export class ParentGeneration {
   readonly state: ParentGenerationState
+  /**
+   * The alias table of the last IR-stage request: the wire form of the events
+   * that request displayed.  Feedback written for that request renders event
+   * ids through this table, so the model is never asked to fix an id it has
+   * not seen.
+   */
+  private stageAliases: readonly SourceAliasEntry[] = []
   constructor(private readonly options: Options) {
     const restored = options.restored
     // A batch that carries no user delegation assesses recorded execution: its
@@ -99,6 +113,9 @@ export class ParentGeneration {
   }
 
   requiredCalls(): number { return (this.state.phase === "ir" ? 2 : 1) + Number(this.options.checkRequired) }
+
+  /** How the current IR-stage request wrote these events; full ids when it did not. */
+  display(eventId: string): string { return aliasDisplay(this.stageAliases)(eventId) }
 
   feedback(issues: string[]): void { if (issues.length) this.state.issues = [...issues] }
 
@@ -160,13 +177,13 @@ export class ParentGeneration {
         // internal CandidateGroup shape so downstream code sees one type.
         execution_decisions: [], assessments: [], checks: [] })),
     }
-    const basis = this.options.validateBasis(candidate)
+    const basis = this.options.validateBasis(candidate, (eventId) => this.display(eventId))
     if (!basis.ok) throw Error(basis.message ?? "IR names the wrong input events")
     if (this.options.input.events.some(event => event.kind === "user_input") && candidate.groups.length === 0) {
       throw Error("User input needs an IR task and explicit handling of its requirements or uncertainty")
     }
     const sourceReport = this.options.resolve(candidate)
-    if (sourceReport.unresolved > 0) throw Error(unresolvedSources(sourceReport))
+    if (sourceReport.unresolved > 0) throw Error(unresolvedSources(sourceReport, (eventId) => this.display(eventId)))
     const sources = [...(this.options.input.source_events ?? []), ...this.options.input.events]
     const state = new IntentStateManager(this.options.input.ir)
     let ir = state.snapshot()
@@ -181,7 +198,7 @@ export class ParentGeneration {
       ir = result.tasks
       const task = ir[group.task_refs[0]!]
       if (!task) throw Error("IR group names an unknown task")
-      materializeSourceContent(task, group.ir_changes, sources)
+      materializeSourceContent(task, group.ir_changes, sources, (eventId) => this.display(eventId))
       const targets = new Set([task.task_id, ...task.outputs.map(o => o.output_id), ...task.bindings.map(b => b.binding_id)])
       for (const item of task.content) {
         if (!item.text.trim() || !item.sources.length || !item.scope.length || item.scope.some(s => !targets.has(s.target_id))) {
@@ -190,7 +207,8 @@ export class ParentGeneration {
       }
     }
     const carriedEventIds = new Set((this.options.input.carried_delegations ?? []).map((delegation) => delegation.event_id))
-    validateSourceCoverage(candidate, this.options.input.events, sources, this.options.input.ir, ir, { carriedEventIds })
+    validateSourceCoverage(candidate, this.options.input.events, sources, this.options.input.ir, ir,
+      { carriedEventIds, display: (eventId) => this.display(eventId) })
     return { ir, candidate, digest: digestOf(ir) }
   }
 
@@ -198,7 +216,7 @@ export class ParentGeneration {
     if (this.options.remaining() < this.requiredCalls()) return {
       ok: false, budget_exhausted: true, error: { code: "schema", message: "Insufficient request budget to generate the remaining parent/child stages and required check" },
     }
-    const stageInput = (stage: "ir" | "ci"): CompilerModelV2Input => {
+    const stageInput = (stage: "ir" | "ci"): { request: CompilerModelV2Input; aliases: SourceAliasEntry[] } => {
       // Request trimming (v1, semantics-preserving): each stage keeps the whole
       // current IR and every schema/validation/commit rule; it only stops
       // re-sending bodies the operation cannot use.  An IR edit carries the
@@ -247,7 +265,7 @@ export class ParentGeneration {
       const offeredRefs = this.state.derived === true && stage === "ir" && base.event_source_refs !== undefined
         ? base.event_source_refs.filter(ref => userTextIds.has(ref.source_id))
         : base.event_source_refs
-      return { ...base, ...(offeredRefs === undefined ? {} : { event_source_refs: offeredRefs }),
+      const assembled: CompilerModelV2Input = { ...base, ...(offeredRefs === undefined ? {} : { event_source_refs: offeredRefs }),
         generation_stage: stage, ir: structuredClone(ir),
         existing_objects: this.options.directory(ir),
         ...(stage === "ci" ? { parent_basis: this.state.parent!.digest } : {}),
@@ -270,19 +288,30 @@ export class ParentGeneration {
           text: this.state.rejected_response.text, errors: this.state.rejected_response.errors,
         } } : {}),
       }
+      // Only the IR stage presents aliases: the CI stage keeps the full
+      // identities the plan, the check and the store use.  The table is built
+      // from what this assembled request actually shows, so an event the
+      // request does not display is never decodable by its alias.
+      if (stage === "ci") return { request: assembled, aliases: [] }
+      const expressed = expressIRRequest(assembled, this.options.aliases)
+      this.stageAliases = expressed.aliases
+      return expressed
     }
     if (this.state.phase === "ir") {
-      const result = await this.options.call(stageInput("ir"))
+      const stage = stageInput("ir")
+      const result = await this.options.call(stage.request, { source_aliases: stage.aliases })
       if (!result.ok || !result.ir_proposal) return result.ok ? this.reject("IR stage returned no IR proposal") : this.failed(result, "ir")
+      const decoded = decodeIRProposal(result.ir_proposal, stage.aliases)
+      if (!decoded.ok) return this.reject(decoded.message, result)
       delete this.state.rejected_response
-      this.state.ir_proposal = structuredClone(result.ir_proposal)
-      try { this.state.parent = this.prepare(result.ir_proposal) }
+      this.state.ir_proposal = structuredClone(decoded.proposal)
+      try { this.state.parent = this.prepare(decoded.proposal) }
       catch (error) { return this.reject(error instanceof Error ? error.message : String(error), result) }
       this.state.phase = "ci"
       this.state.issues = []
     }
     if (this.options.currentBasis() !== this.options.sourceBasis) return this.reject("Input changed before CI generation; the parent is stale")
-    const result = await this.options.call(stageInput("ci"))
+    const result = await this.options.call(stageInput("ci").request)
     if (!result.ok || !result.ci_proposal) return result.ok ? this.reject("CI stage returned no compiled proposal") : this.failed(result, "ci")
     delete this.state.rejected_response
     const child = result.ci_proposal

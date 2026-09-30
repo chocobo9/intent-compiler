@@ -9,6 +9,7 @@ import { canonicalJson } from "../core/intent-contract.js"
 import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
 import type { StrictSchemaProfile } from "./candidate-schema-strict.js"
 import { buildGenerationSchema, generationContract, generationStageInstruction } from "./generation-schema.js"
+import { isSourceAlias } from "../core/source-aliases.js"
 
 export interface StructuredProviderTransportOptions {
   endpoint?: string
@@ -86,8 +87,11 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
     const profile = strict ? options.schemaProfile ?? (providerId === "groq" || endpoint.includes("dashscope") ? "groq" : "openai") : undefined
     const parentBasis = "parent_basis" in request && typeof request.parent_basis === "string" ? request.parent_basis : undefined
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
+    // The IR stage writes event aliases; its example must not show a full id.
+    const firstEventId = stage === "ir" ? request.events?.[0]?.event_id : undefined
+    const sourceAlias = typeof firstEventId === "string" && isSourceAlias(firstEventId) ? firstEventId : undefined
     const stageRequest = stage !== undefined && "example_candidate" in request.contract
-      ? { ...request, contract: generationContract(request.contract, stage, profile, parentBasis, assessing) }
+      ? { ...request, contract: generationContract(request.contract, stage, profile, parentBasis, assessing, sourceAlias) }
       : request
     let response: Response
     try {

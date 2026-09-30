@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { existsSync, mkdtempSync, readFileSync } from "node:fs"
+import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
@@ -11,7 +11,7 @@ import { V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
 import { ParentGeneration } from "../src/core/parent-generation.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
-import { digestOf } from "../src/core/intent-contract.js"
+import { digestOf, digestText } from "../src/core/intent-contract.js"
 
 function parent() {
   const c = structuredClone(CANDIDATE_EXAMPLE)
@@ -187,13 +187,15 @@ test("a rejected IR answer is told which source references failed and why", asyn
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
   const retry = requests.filter(request => request.generation_stage === "ir")[1]!
+  assert.deepEqual(retry.events.map(event => event.event_id), ["e1"],
+    "the retry offers the same alias for the same event")
   const feedback = retry.validation_errors!.join("\n")
   assert.match(feedback, /IR sources do not resolve; 5 reference\(s\) failed the source gate/)
   assert.match(feedback, /spliced-input-event-id \(segment_id=s1\): source_unknown/)
-  assert.match(feedback, /input-event-id \(segment_id=s99\): segment_unknown/)
-  assert.match(feedback, /input-event-id \(segment_id=s1\): selector_conflict/)
-  assert.match(feedback, /input-event-id \(quote="a paraphrase the user never wrote"\): quote_unresolved/)
-  assert.match(feedback, /input-event-id \(span=utf16:0-9999\): span_invalid/)
+  assert.match(feedback, /e1 \(segment_id=s99\): segment_unknown/)
+  assert.match(feedback, /e1 \(segment_id=s1\): selector_conflict/)
+  assert.match(feedback, /e1 \(quote="a paraphrase the user never wrote"\): quote_unresolved/)
+  assert.match(feedback, /e1 \(span=utf16:0-9999\): span_invalid/)
   assert.match(feedback, /Showing all 5/)
   assert.match(retry.generation_repair!.issues!.join("\n"), /IR sources do not resolve/)
 })
@@ -222,6 +224,160 @@ test("a failure list longer than the cap keeps the exact count and says it is ca
   assert.match(feedback, /22 reference\(s\) failed the source gate/)
   assert.match(feedback, /Showing the first 20 of 22 \(2 more are not listed\)/)
   assert.equal((feedback.match(/invented-event-\d+ \(/g) ?? []).length, 20)
+})
+
+test("an IR request shows this run's aliases and no full event id", async () => {
+  const requests: CompilerModelV2Input[] = []
+  const { store, compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
+    return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+  })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  const ir = requests.find(request => request.generation_stage === "ir")!
+  assert.deepEqual(ir.events.map(event => event.event_id), ["e1"])
+  assert.ok((ir.source_segments ?? []).every(segment => segment.source_id === "e1"),
+    "segments are addressed by the event's alias")
+  assert.deepEqual(ir.event_source_refs?.map(ref => ref.source_id), ["e1"])
+  // Everything the model reads, minus the static example (the provider
+  // transport re-expresses that example; this fake transport hands the
+  // contract through untouched).
+  const { contract: _contract, ...wire } = structuredClone(ir)
+  assert.equal(JSON.stringify(wire).includes("input-event-id"), false,
+    "no field of the request leaks the stored event id")
+  const attempt = (store.current().management_log.at(-1)!.attempts ?? [])
+    .find(entry => entry.kind === "propose" && entry.generation_stage === "ir")!
+  assert.deepEqual(attempt.source_aliases,
+    [{ alias: "e1", event_id: "input-event-id", digest: digestText(CANDIDATE_EXAMPLE_INPUT) }],
+    "the call record carries the mapping the request used")
+})
+
+test("one event keeps the same alias in later batches, including inside the IR body", async () => {
+  const requests: CompilerModelV2Input[] = []
+  let irCalls = 0
+  const { store, compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
+    if (input.generation_stage === "ci") {
+      if (irCalls === 1) return JSON.stringify(child(input.parent_basis!))
+      // The stored plan stands: reuse it, keeping the group the IR stage named.
+      return JSON.stringify({ schema_version: 2, basis: { event_ids: ["later-turn"], refs: [] },
+        parent_basis: input.parent_basis!, parent_issues: [],
+        groups: [{ local_ref: "g2", task_refs: ["t1"], depends_on: [],
+          compilation: { decision: "reuse", current: [compiledIntentRef(store.current().compiled.t1!)], reason: "the stored plan is unchanged" },
+          execution_decisions: [], assessments: [], coverage: [], checks: [], questions: [] }] })
+    }
+    if (++irCalls === 1) return JSON.stringify(parent())
+    return JSON.stringify({ schema_version: 2, basis: { event_ids: ["later-turn"], refs: [] }, source_coverage: [],
+      groups: [{ local_ref: "g2", task_refs: ["t1"], depends_on: [],
+        ir_changes: [{ action: "preserve", reason: "the stored IR stands", sources: [] }],
+        questions: [{ text: "What exact output should the status command print?", affects: [] }] }] })
+  })
+  const first = await compiler.advance({ runId: "parent" })
+  assert.equal(first.ok, true, `${first.message} ${JSON.stringify(first.code)}`)
+  await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "later-turn", kind: "user_input",
+    source: { channel: "user", producer_id: "user" }, payload: { text: "Add a status command that prints ok." } })
+  const later = await compiler.advance({ runId: "parent" })
+  assert.equal(later.ok, true, `${later.message} ${JSON.stringify(later.code)}`)
+  const second = requests.filter(request => request.generation_stage === "ir")[1]!
+  assert.deepEqual(second.events.map(event => event.event_id), ["e2"])
+  const task = second.ir.t1!
+  assert.deepEqual(task.goal.sources.map(source => source.source_id), ["e1"],
+    "the event compiled in the first batch keeps its alias in the later request")
+  assert.ok(task.content[0]!.sources.every(source => source.source_id === "e1"),
+    "the stored IR body is shown under the same alias")
+  const attempt = (store.current().management_log.at(-1)!.attempts ?? [])
+    .find(entry => entry.kind === "propose" && entry.generation_stage === "ir")!
+  assert.deepEqual(attempt.source_aliases?.map(entry => entry.alias), ["e2", "e1"],
+    "the request offers the new turn's alias and the already-cited event's alias")
+})
+
+test("an alias this request did not offer is rejected by name, not by journal lookup", async () => {
+  const requests: CompilerModelV2Input[] = []
+  const { store, compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
+    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    const proposal = parent()
+    if (requests.filter(request => request.generation_stage === "ir").length === 1) {
+      proposal.basis = { event_ids: ["e9"], refs: [] }
+      for (const change of proposal.groups[0]!.ir_changes) {
+        if (change.action !== "create" || change.target !== "content") continue
+        change.sources = [{ source_id: "e7", digest: "sha256:x", segment_id: "s1" }]
+        break
+      }
+    }
+    return JSON.stringify(proposal)
+  })
+  store.applyDeltas({ max_management_requests: 6 })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  const feedback = requests.filter(request => request.generation_stage === "ir")[1]!.validation_errors!.join("\n")
+  assert.match(feedback, /2 reference\(s\) name an alias this request did not offer/)
+  assert.match(feedback, /basis\.event_ids\[0\] names e9: alias_not_offered/)
+  assert.match(feedback, /groups\[0\]\.ir_changes\[1\]\.sources\[0\] names e7: alias_not_offered/)
+  assert.match(feedback, /This request offered e1;/)
+  const record = store.current().management_log.at(-1)!
+  assert.match((record.attempts?.[0]?.issues ?? []).join("\n"), /alias_not_offered/,
+    "the rejection is recorded on the attempt that produced it")
+  assert.ok(store.current().ir.t1 !== undefined, "the retry still commits normally")
+})
+
+test("a full-id answer and an alias answer reach the same IR, plan and dispatch", async () => {
+  const aliasAnswer = () => JSON.parse(JSON.stringify(parent()).split('"input-event-id"').join('"e1"')) as ReturnType<typeof parent>
+  const run = async (answer: () => unknown) => {
+    const { store, compiler } = await setup(async input =>
+      JSON.stringify(input.generation_stage === "ir" ? answer() : child(input.parent_basis!)))
+    const result = await compiler.advance({ runId: "parent" })
+    assert.equal(result.ok, true, result.message)
+    return { store, result }
+  }
+  const withIds = await run(parent)
+  const withAliases = await run(aliasAnswer)
+  assert.deepEqual(withAliases.store.current().ir, withIds.store.current().ir,
+    "the code restores the alias before validation and materialization, so the stored IR is identical")
+  assert.deepEqual(withAliases.store.current().compiled, withIds.store.current().compiled)
+  assert.deepEqual(withAliases.result.deliveries, withIds.result.deliveries)
+})
+
+test("a journal that cannot be verified stops the batch before any alias is derived", async () => {
+  let calls = 0
+  const { store, compiler, storeDir } = await setup(async input => {
+    calls += 1
+    return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+  })
+  const journal = join(storeDir, "v2-runs", "parent", "events.jsonl")
+  appendFileSync(journal, "{ this line never parses\n", "utf8")
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, "storage_unverified")
+  assert.match(result.message ?? "", /1 line\(s\) do not parse/)
+  assert.equal(calls, 0, "the model is never asked to repair the store")
+  assert.ok(store.current().pending_event_ids.includes("input-event-id"), "the batch is requeued, not consumed")
+})
+
+test("a conflicting or digest-mismatched journal record also stops the batch", async () => {
+  let calls = 0
+  const { store, compiler, storeDir } = await setup(async () => { calls += 1; return JSON.stringify({}) })
+  const journal = join(storeDir, "v2-runs", "parent", "events.jsonl")
+  appendFileSync(journal, `${JSON.stringify({ sequence: 2, event: { schema_version: 2, run_id: "parent",
+    event_id: "later", kind: "user_input", source: { channel: "user", producer_id: "user" },
+    payload: { text: "later" } }, digest: "sha256:0000" })}\n`, "utf8")
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, "storage_unverified")
+  assert.match(result.message ?? "", /recorded digest of event later does not match/)
+  assert.equal(calls, 0)
+  assert.ok(store.current().pending_event_ids.includes("input-event-id"))
+})
+
+test("the IR-stage contract and example are written in the alias form", async () => {
+  const { generationContract } = await import("../src/model/generation-schema.js")
+  const ir = generationContract(V2_COMPILER_CONTRACT, "ir", undefined, undefined, false, "e1")
+  assert.match(ir.reference_contract, /short event aliases/)
+  assert.match(ir.example_candidate, /"source_id": "e1"/)
+  assert.equal(ir.example_candidate.includes("input-event-id"), false)
+  const ci = generationContract(V2_COMPILER_CONTRACT, "ci", undefined, "parent")
+  assert.match(ci.reference_contract, /short event aliases/, "the clause covers both forms")
+  assert.match(ci.example_candidate, /input-event-id/, "the CI example keeps the full identity it copies from the parent")
 })
 
 test("an older IR draft loses its execution-facing fields when it is re-sent", async () => {
@@ -253,6 +409,7 @@ test("an older IR draft loses its execution-facing fields when it is re-sent", a
     restored: { source_basis: "basis-1", phase: "ir", ir_proposal: oldProposal as never, issues: [] },
     checkRequired: false, remaining: () => 5, currentBasis: () => "basis-1",
     call: async (request) => { seen = request; return { ok: false, error: { code: "schema", message: "stub" } } },
+    aliases: { lookup: () => undefined },
     resolve: () => ({ unresolved: 0 }), validateBasis: () => ({ ok: true }), directory: () => ({ tasks: [] }),
   })
   const result = await generation.propose(input)
@@ -278,11 +435,11 @@ test("an uncompiled delegation beyond the carried cap keeps its text and is list
   assert.equal((await compiler.advance({ runId: "parent" })).ok, false)
   const irStage = requests.find(request => request.generation_stage === "ir")
   assert.ok(irStage, "the IR stage ran for the batch")
-  assert.deepEqual(irStage.carried_delegations?.map(entry => entry.event_id), ["input-event-id", "gap-2", "gap-3"],
-    "the three oldest uncompiled delegations ride along with their text")
-  assert.deepEqual(irStage.gap_event_ids, ["gap-4"], "the delegation beyond the cap is still visible by id")
+  assert.deepEqual(irStage.carried_delegations?.map(entry => entry.event_id), ["e1", "e2", "e3"],
+    "the three oldest uncompiled delegations ride along with their text, under this run's aliases")
+  assert.deepEqual(irStage.gap_event_ids, ["e4"], "the delegation beyond the cap is still visible by id")
   const offered = new Set((irStage.source_segments ?? []).map(segment => segment.source_id))
-  for (const id of ["input-event-id", "gap-2", "gap-3", "gap-4", "gap-5"]) {
+  for (const id of ["e1", "e2", "e3", "e4", "e5"]) {
     assert.ok(offered.has(id), `${id} keeps its text in the IR-stage request`)
   }
 })
@@ -307,10 +464,12 @@ test("a turn answers its own delegation and carries the earlier uncompiled one a
   assert.equal(second.ok, false)
   const carriedRequests = seen.filter(input => input.carried_delegations !== undefined)
   assert.ok(carriedRequests.length > 0, "the turn's batch carries the earlier uncompiled delegation")
-  assert.deepEqual(carriedRequests[0]!.events.map(event => event.event_id), ["next-turn", "input-event-id"])
+  assert.deepEqual(carriedRequests[0]!.events.map(event => event.event_id), ["e2", "e1"])
   assert.deepEqual(carriedRequests[0]!.carried_delegations, [{
-    event_id: "input-event-id", sequence: 1, failed_batches: 0, stalled: false,
+    event_id: "e1", sequence: 1, failed_batches: 0, stalled: false,
   }])
+  // This defect is reported through the CI-stage candidate check, and that
+  // request still shows full ids, so its message keeps naming the full id.
   assert.match(second.message!, /carried delegation input-event-id is missing from basis\.event_ids/)
   assert.deepEqual(store.carriedDelegations().map(gap => ({ id: gap.event_id, failed: gap.failed_batches })),
     [{ id: "input-event-id", failed: 2 }, { id: "next-turn", failed: 2 }])
@@ -420,7 +579,9 @@ test("a checker identifying an IR defect repairs the parent before recompiling a
 })
 
 test("changed host facts invalidate a saved temporary parent before resume", async () => {
+  const requests: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
     if (input.generation_stage === "ir") return JSON.stringify(parent())
     throw Error("CI connection interrupted")
   })
@@ -430,12 +591,17 @@ test("changed host facts invalidate a saved temporary parent before resume", asy
     capabilities: { operations: ["read", "edit", "bash"], workspace_root: "D:/changed-authorized-workspace" },
     model: createCompilerModelV2(async input => {
       stages.push(input.generation_stage!)
+      requests.push(structuredClone(input))
       return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
     }, consistent),
   })
   const result = await resumed.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
   assert.deepEqual(stages, ["ir", "ci"])
+  const irRequests = requests.filter(request => request.generation_stage === "ir")
+  assert.ok(irRequests.length >= 2, "both the failed batch and the resumed batch asked for an IR stage")
+  assert.ok(irRequests.every(request => request.events[0]!.event_id === "e1"),
+    "a resume rebuilds the same alias from the journal")
 })
 
 test("Resume returns a rejected stage response to that stage and clears its feedback before compiling", async () => {

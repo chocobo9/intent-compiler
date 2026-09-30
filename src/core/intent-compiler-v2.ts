@@ -33,6 +33,7 @@ import {
 } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
 import { AtomStateLedger, atomRef, buildCompiledIntents, compiledIntentRef, type BuildCompiledIntentOptions } from "./compiled-intent.js"
+import { buildSourceAliasIndex, type SourceAliasEntry, type SourceAliasIndex } from "./source-aliases.js"
 import { ExecutionStateManager } from "./execution-state.js"
 import { candidateChanges, candidateRepairContext, type CandidateRepairContext } from "./candidate-repair.js"
 import { IntentStoreV2, STALLED_DELEGATION_BATCHES, type AssessmentRecord, type CheckRecord, type DeclarationChangeRecord, type ExecutionOutcomeRecord, type ManagementAttemptRecord, type ManagementRequestRecord, type QuestionRecord, type V2AdvanceDeltas, type V2RunSnapshot } from "./compiler-store-v2.js"
@@ -237,6 +238,23 @@ async function advance(
     return failure(snapshot.run_id, "budget_exhausted", "total management request budget for this run is exhausted")
   }
 
+  // Source aliases replace a long event id on the wire with `e{sequence}`.  The
+  // alias has to mean the same event for the whole run, so it is derived only
+  // from a journal that parses completely and has no conflicting identities.
+  // A journal that cannot be trusted stops the batch before any call: a wrong
+  // alias is accepted silently, and no model retry can repair the store.
+  // Only a batch that carries user input runs the IR stage, and only that
+  // stage presents aliases; a return-assessment batch keeps the full ids it
+  // has always used and is not blocked by a journal it never reads for this.
+  const aliasIndex = strictRequirements && events.some((event) => event.kind === "user_input")
+    ? buildSourceAliasIndex(store.readEventJournal())
+    : undefined
+  if (aliasIndex !== undefined && !aliasIndex.ok) {
+    store.requeuePending(events.map((event) => event.event_id))
+    return failure(snapshot.run_id, "storage_unverified", aliasIndex.message)
+  }
+  const sourceAliases: SourceAliasIndex = aliasIndex !== undefined && aliasIndex.ok ? aliasIndex.index : { lookup: () => undefined }
+
   // Retain the reasons and the exact rejected draft. This supplies a revision
   // starting point; it does not guarantee local repair or reuse a check result.
   const pendingIds = new Set(events.map((event) => event.event_id))
@@ -314,7 +332,7 @@ async function advance(
   let activeRepairContext: CandidateRepairContext | undefined
   // Every model call is measured on its own, so cost attribution is a reading
   // and not an inference from token counts.
-  const callPropose = async (request: CompilerModelV2Input): Promise<CompilerModelV2Result> => {
+  const callPropose = async (request: CompilerModelV2Input, meta?: { source_aliases?: SourceAliasEntry[] }): Promise<CompilerModelV2Result> => {
     request = { ...request, budget: { requests_used: attemptsLog.length, max_requests: requestLimit } }
     activeRepairContext = request.repair_context === undefined ? undefined : structuredClone(request.repair_context)
     const startedAt = new Date().toISOString()
@@ -325,6 +343,7 @@ async function advance(
     attemptsLog.push({
       kind: "propose",
       ...(request.generation_stage === undefined ? {} : { generation_stage: request.generation_stage, request: structuredClone(request) }),
+      ...(meta?.source_aliases === undefined ? {} : { source_aliases: structuredClone(meta.source_aliases) }),
       ...(result.error?.diagnostic === undefined ? {} : { failure_diagnostic: result.error.diagnostic }),
       ...boundedAttemptText(result.call?.text),
       ...(activeRepairContext === undefined ? {} : { repair_context: activeRepairContext }),
@@ -338,8 +357,8 @@ async function advance(
     checkRequired: model.verify !== undefined,
     remaining: () => requestLimit - attemptsLog.length,
     currentBasis: generationBasis,
-    call: callPropose, resolve: candidate => resolveSourceRefs(candidate, resolvableSources),
-    validateBasis: candidate => validateCandidateBasis(candidate, events),
+    call: callPropose, aliases: sourceAliases, resolve: candidate => resolveSourceRefs(candidate, resolvableSources),
+    validateBasis: (candidate, display) => validateCandidateBasis(candidate, events, display),
     directory: ir => buildExistingObjectDirectory(ir, snapshot.compiled),
   }) : undefined
   const proposeTimed = (request: CompilerModelV2Input) => generation ? generation.propose(request) : callPropose(request)
@@ -360,7 +379,11 @@ async function advance(
   let prepared: ReturnType<typeof prepareCandidate> | undefined
   const issuesFor = (result: CompilerModelV2Result): string[] => {
     prepared = undefined
-    if (!result.ok || result.candidate === undefined) return proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements)
+    // Feedback lands in the next request this batch makes.  When that request
+    // is the IR stage it presents aliases, so its messages name the events the
+    // same way; a CI-stage request keeps the ids it shows.
+    const display = (eventId: string) => generation?.state.phase === "ir" ? generation.display(eventId) : eventId
+    if (!result.ok || result.candidate === undefined) return proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements, carriedEventIds, display)
     result.candidate = structuredClone(result.candidate)
     // Compare what management received and returned, before resolving selectors.
     const attempt = attemptsLog.at(-1)
@@ -371,7 +394,7 @@ async function advance(
     if (strictRequirements && sourceRefs.unresolved > 0) {
       return [`candidate sources must cite a resolvable user text span or event; ${sourceRefs.unresolved} unresolved reference(s): ${JSON.stringify(sourceRefs.unresolvedRefs)}`]
     }
-    const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements, carriedEventIds)
+    const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements, carriedEventIds, display)
     if (candidateErrors.length > 0) return candidateErrors
     try { prepared = prepareCandidate(snapshot, result.candidate, events, availableSources, strictRequirements, capabilities) }
     catch (error) { return [`${errorMessage(error)}${applicationHint(errorMessage(error))}`] }
@@ -1119,7 +1142,11 @@ function inspect(
   }
 }
 
-export function validateCandidateBasis(candidate: Candidate, events: readonly CompilerEvent[]): { ok: boolean; message?: string } {
+export function validateCandidateBasis(
+  candidate: Candidate,
+  events: readonly CompilerEvent[],
+  displayEventId: (eventId: string) => string = (eventId) => eventId,
+): { ok: boolean; message?: string } {
   const eventIds = new Set(events.map((event) => event.event_id))
   if (!Array.isArray(candidate.basis.event_ids) || candidate.basis.event_ids.length === 0) {
     const carriesUserInput = events.some((event) => event.kind === "user_input")
@@ -1132,7 +1159,7 @@ export function validateCandidateBasis(candidate: Candidate, events: readonly Co
   }
   for (const eventId of candidate.basis.event_ids) {
     if (typeof eventId !== "string" || !eventIds.has(eventId)) {
-      return { ok: false, message: `candidate basis references unknown event ${String(eventId)}` }
+      return { ok: false, message: `candidate basis references unknown event ${displayEventId(String(eventId))}` }
     }
   }
   return { ok: true }
@@ -1752,12 +1779,14 @@ export function proposalIssues(
   buildOptions: BuildCompiledIntentOptions,
   strictRequirements = false,
   carriedEventIds: ReadonlySet<string> = new Set(),
+  /** How the next request writes each event id: an alias when it showed one. */
+  displayEventId: (eventId: string) => string = (eventId) => eventId,
 ): string[] {
   // A generation stage rejects with a sentence, not a schema path; the sentence
   // still has to tell the model what to change, or the batch spends its whole
   // budget re-sending the same defect (20260929 resume, rounds 2-4).
   if (!proposal.ok || !proposal.candidate) return (proposal.schema_errors ?? []).map((issue) => `${issue}${applicationHint(issue)}`)
-  return candidateIssues(proposal.candidate, events, ir, compiled, buildOptions, strictRequirements, carriedEventIds)
+  return candidateIssues(proposal.candidate, events, ir, compiled, buildOptions, strictRequirements, carriedEventIds, displayEventId)
 }
 
 /**
@@ -1803,20 +1832,21 @@ export function candidateIssues(
   buildOptions: BuildCompiledIntentOptions,
   strictRequirements = false,
   carriedEventIds: ReadonlySet<string> = new Set(),
+  displayEventId: (eventId: string) => string = (eventId) => eventId,
 ): string[] {
   const issues: string[] = []
   const eventIds = events.map((event) => event.event_id)
   const carriesUserInput = events.some((event) => event.kind === "user_input")
-  const basisCheck = validateCandidateBasis(candidate, events)
+  const basisCheck = validateCandidateBasis(candidate, events, displayEventId)
   if (!basisCheck.ok) {
-    issues.push(`${basisCheck.message ?? "candidate basis is invalid"}; pending event ids for this batch: ${eventIds.join(", ")}`)
+    issues.push(`${basisCheck.message ?? "candidate basis is invalid"}; pending event ids for this batch: ${eventIds.map(displayEventId).join(", ")}`)
   }
   // A carried delegation is an unresolved task from an earlier turn.  The batch
   // has to name it, so "the previous turn's work" cannot silently fall out of
   // the accounting while the new turn proceeds.
   for (const eventId of carriedEventIds) {
     if (!candidate.basis.event_ids.includes(eventId)) {
-      issues.push(`carried delegation ${eventId} is missing from basis.event_ids: it is an unresolved task from an earlier turn; name it, then select its operative text into IR content or dispose its passage in source_coverage with a question explaining what is still missing`)
+      issues.push(`carried delegation ${displayEventId(eventId)} is missing from basis.event_ids: it is an unresolved task from an earlier turn; name it, then select its operative text into IR content or dispose its passage in source_coverage with a question explaining what is still missing`)
     }
   }
   if (carriesUserInput && !candidate.groups.some((group) => group.task_refs.length > 0)) {
