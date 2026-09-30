@@ -104,6 +104,28 @@ test("an IR selecting only the tail records the head as a code default and reach
   assert.deepEqual(store.current().compiled, {})
 })
 
+test("stage requests drop the bodies their operation cannot use and keep the whole IR", async () => {
+  const requests: CompilerModelV2Input[] = []
+  const { compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
+    return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+  })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  const irStage = requests.find(request => request.generation_stage === "ir")!
+  const ciStage = requests.find(request => request.generation_stage === "ci")!
+  assert.equal(irStage.source_events, undefined, "the raw prior-event list is redundant with the segments and the IR")
+  assert.equal(irStage.compiled, undefined, "an IR edit does not carry plan bodies")
+  assert.equal(irStage.executions, undefined)
+  assert.equal(irStage.assessments, undefined)
+  assert.ok((irStage.source_segments ?? []).length > 0, "this batch's own text stays addressable")
+  assert.equal(ciStage.source_segments, undefined, "a compile does not re-send the raw source history")
+  assert.equal(ciStage.source_events, undefined)
+  assert.ok(ciStage.compiled, "the plan stays available to the compile stage")
+  assert.equal(ciStage.ir.t1!.content.length, 4, "the whole current IR stays in both stages")
+  assert.deepEqual(irStage.ir, {}, "the first IR stage starts from the stored IR, not from a plan")
+})
+
 test("a turn answers its own delegation and carries the earlier uncompiled one as an unresolved task", async () => {
   const seen: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
@@ -286,7 +308,7 @@ test("an execution return is assessed by the CI stage alone and can never become
       if (!returned) return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
       // The assessment batch: no IR stage ran, so this stage authors the
       // decisions the plan is committed from, with the return as evidence.
-      const atom = input.compiled.t1!.atoms[0]!
+      const atom = input.compiled!.t1!.atoms[0]!
       return JSON.stringify({
         schema_version: 2,
         basis: { event_ids: ["return"], refs: [] },
@@ -294,7 +316,7 @@ test("an execution return is assessed by the CI stage alone and can never become
         parent_issues: [],
         groups: [{
           local_ref: "t1", task_refs: ["t1"], depends_on: [],
-          compilation: { decision: "reuse", current: [compiledIntentRef(input.compiled.t1!)], reason: "the plan is unchanged" },
+          compilation: { decision: "reuse", current: [compiledIntentRef(input.compiled!.t1!)], reason: "the plan is unchanged" },
           execution_decisions: [],
           assessments: [{
             target_ref: atomRef(atom), criteria_refs: atom.goal_refs,

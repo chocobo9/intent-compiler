@@ -22,8 +22,10 @@ export interface CandidateChanges {
 
 /** Fingerprint supplied facts, not budget counters or recursively nested repair history. */
 function inputBasis(input: unknown): { digest: string; eventIds: string[] } | undefined {
-  if (!isRecord(input) || !Array.isArray(input.events) || !isRecord(input.ir) || !isRecord(input.compiled)
-    || !isRecord(input.atom_refs) || !Array.isArray(input.executions) || !isRecord(input.contract)) return undefined
+  // Stage-scoped requests legitimately omit bodies their operation cannot use
+  // (an IR-stage request carries no compiled plan); the fingerprint covers what
+  // that request did supply, so a missing body is fingerprinted as absent.
+  if (!isRecord(input) || !Array.isArray(input.events) || !isRecord(input.ir) || !isRecord(input.contract)) return undefined
   return {
     digest: digestOf({
       events: input.events,
@@ -31,10 +33,10 @@ function inputBasis(input: unknown): { digest: string; eventIds: string[] } | un
       source_segments: input.source_segments ?? [],
       event_source_refs: input.event_source_refs ?? [],
       ir: input.ir,
-      compiled: input.compiled,
+      compiled: input.compiled ?? null,
       existing_objects: input.existing_objects ?? null,
-      atom_refs: input.atom_refs,
-      executions: input.executions,
+      atom_refs: input.atom_refs ?? null,
+      executions: input.executions ?? null,
       atom_states: input.atom_states ?? null,
       execution_outcomes: input.execution_outcomes ?? null,
       assessments: input.assessments ?? null,

@@ -312,7 +312,13 @@ test("a later revision keeps prior exact requirements and replaces only the chan
     store,
     model: createCompilerModelV2(
       async input => {
-        if (input.generation_stage === "ir") seenSources.push((input.source_events ?? []).map(event => event.event_id))
+        if (input.generation_stage === "ir") {
+          // Retained prior text must still be offered: it now travels as the
+          // addressed segments the current IR cites, not as a raw event list.
+          const batchIds = new Set(input.events.map(event => event.event_id))
+          seenSources.push([...new Set((input.source_segments ?? []).map(segment => segment.source_id))]
+            .filter(id => !batchIds.has(id)))
+        }
         return JSON.stringify(stageCandidate(input, proposal))
       },
       async input => {

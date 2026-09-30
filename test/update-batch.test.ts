@@ -64,15 +64,15 @@ function explicitPathCandidate(userText: string): Candidate {
 function reuse(input: CompilerModelV2Input): Candidate {
   return { schema_version: 2, basis: { event_ids: input.events.map(e => e.event_id), refs: [] }, groups: [{
     local_ref: "g1", task_refs: ["t1"], depends_on: [], ir_changes: [],
-    compilation: { decision: "reuse", current: [compiledIntentRef(input.compiled.t1!)], reason: "Work content remains applicable." },
-    execution_decisions: input.executions.filter(e => e.status === "active").map(e => ({ execution_id: e.execution_id, decision: "continue", reason: "Unchanged work remains authorized.", basis: [] })),
+    compilation: { decision: "reuse", current: [compiledIntentRef(input.compiled!.t1!)], reason: "Work content remains applicable." },
+    execution_decisions: input.executions!.filter(e => e.status === "active").map(e => ({ execution_id: e.execution_id, decision: "continue", reason: "Unchanged work remains authorized.", basis: [] })),
     assessments: [], coverage: [{ requirement: { local_ref: "t1" }, disposition: "assigned", refs: [], explanation: "The existing work still carries the request." }], checks: [], questions: [],
   }] }
 }
 const UPDATE_TEXT = "Keep the existing fix goal. Preserve None. Defer tests until the implementation is ready. Do not access the linked PR."
 function updatedCandidate(input: CompilerModelV2Input, selectedTaskId = "t1"): Candidate {
   const source = { source_id: input.events[0]!.event_id, digest: digestText(UPDATE_TEXT) }
-  const existing = input.compiled.t1!
+  const existing = input.compiled!.t1!
   const priorAtom = existing.atoms[0]!
   const exactPriorRef = input.existing_objects!.tasks.find(task => task.task_id === "t1")!.atoms[0]!.ref
   const c = candidate()
@@ -88,7 +88,7 @@ function updatedCandidate(input: CompilerModelV2Input, selectedTaskId = "t1"): C
     value: { text: UPDATE_TEXT, disposition: "proceed" },
     sources: [source],
   }]
-  group.execution_decisions = input.executions.filter(e => e.status === "active").map(e => ({
+  group.execution_decisions = input.executions!.filter(e => e.status === "active").map(e => ({
     execution_id: e.execution_id,
     decision: "stop" as const,
     reason: "The updated work supersedes the active execution.",

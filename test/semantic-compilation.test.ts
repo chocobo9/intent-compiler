@@ -82,10 +82,10 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
         assert.deepEqual(input.generation_repair!.ir_proposal!.groups[0]!.assessments, [],
           "the stored plan carries no decision this batch must copy")
       }
-      const predecessor = input.compiled.t1!.atoms[0]!
+      const predecessor = input.compiled!.t1!.atoms[0]!
       return JSON.stringify(stageCandidate(input, { schema_version: 2, basis: { event_ids: ["return"], refs: [] }, source_coverage: [], groups: [{
         local_ref: "accept", task_refs: ["t1"], depends_on: [], ir_changes: [],
-        compilation: { decision: "reuse", current: [compiledIntentRef(input.compiled.t1!)], reason: "Accepted export implementation releases verify." },
+        compilation: { decision: "reuse", current: [compiledIntentRef(input.compiled!.t1!)], reason: "Accepted export implementation releases verify." },
         execution_decisions: [], assessments: [{ target_ref: atomRef(predecessor), criteria_refs: predecessor.goal_refs, evidence_refs: [{ source_id: "return", digest: "resolved-by-management" }], result: "satisfied", explanation: "Returned export implementation and evidence satisfy the required handoff.", method: "model" }],
         coverage: [], checks: [], questions: [],
       }] }))

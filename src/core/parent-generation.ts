@@ -1,6 +1,6 @@
 import { digestOf, type Candidate, type TaskIntent } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
-import { materializeSourceContent, validateSourceCoverage } from "./source-payload.js"
+import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
 import type { CompilerModelV2Input, CompilerModelV2Result } from "../model/compiler-model-v2.js"
 import type { IRProposal, CIProposal } from "../model/generation-schema.js"
 
@@ -159,7 +159,34 @@ export class ParentGeneration {
       ok: false, budget_exhausted: true, error: { code: "schema", message: "Insufficient request budget to generate the remaining parent/child stages and required check" },
     }
     const stageInput = (stage: "ir" | "ci"): CompilerModelV2Input => {
-      const { repair_context, schema_rejected_draft, ...base } = request
+      // Request trimming (v1, semantics-preserving): each stage keeps the whole
+      // current IR and every schema/validation/commit rule; it only stops
+      // re-sending bodies the operation cannot use.  An IR edit carries the
+      // source text of this batch plus the events the current IR already cites
+      // (so retained spans stay addressable), and no compiled plan or execution
+      // evidence; a CI compile re-sends neither raw source history nor anything
+      // the plan does not consume.
+      const {
+        repair_context: _repairContext, schema_rejected_draft: _schemaRejected,
+        source_events: priorSources, source_segments: _allSegments,
+        compiled: plan, atom_refs: atomRefs, executions: executionView,
+        execution_outcomes: outcomes, assessments: assessmentRecords, ...shared
+      } = request
+      const cited = new Set<string>()
+      for (const task of Object.values(this.options.input.ir)) {
+        for (const ref of [...task.goal.sources, ...task.current_scope.sources, ...task.content.flatMap(item => item.sources)]) {
+          cited.add(ref.source_id)
+        }
+      }
+      const base: CompilerModelV2Input = stage === "ir"
+        ? {
+          ...shared,
+          source_segments: sourceSegments([
+            ...(priorSources ?? []).filter(event => cited.has(event.event_id)),
+            ...this.options.input.events,
+          ]),
+        }
+        : { ...shared, compiled: plan, atom_refs: atomRefs, executions: executionView, execution_outcomes: outcomes, assessments: assessmentRecords }
       const ir = stage === "ci" ? this.state.parent!.ir : this.options.input.ir
       // An assessment batch repairs the stored IR from the user's own text: do
       // not offer the execution return as a citable source for that stage.

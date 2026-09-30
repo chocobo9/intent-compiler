@@ -39,11 +39,15 @@ export interface CompilerModelV2Input {
   /** Management-computed identities for the current events; digest values are not model-authored. */
   event_source_refs?: SourceRef[]
   ir: Record<string, TaskIntent>
-  compiled: Record<string, CompiledIntent>
+  /**
+   * Plan bodies are omitted from an IR-stage request: that operation cannot
+   * use them, and the stage keeps the whole current IR for retained context.
+   */
+  compiled?: Record<string, CompiledIntent>
   /** Compact management-built index of the exact existing identities available to a revision. */
   existing_objects?: ExistingObjectDirectory
-  atom_refs: Record<string, Ref[]>
-  executions: ExecutionView[]
+  atom_refs?: Record<string, Ref[]>
+  executions?: ExecutionView[]
   /** Existing management records, supplied together so retained work and returns can be interpreted. */
   atom_states?: AtomStateRecord[]
   execution_outcomes?: ExecutionOutcomeRecord[]
