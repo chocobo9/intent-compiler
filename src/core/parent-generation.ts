@@ -149,7 +149,8 @@ export class ParentGeneration {
         }
       }
     }
-    validateSourceCoverage(candidate, this.options.input.events, sources, this.options.input.ir, ir)
+    const carriedEventIds = new Set((this.options.input.carried_delegations ?? []).map((delegation) => delegation.event_id))
+    validateSourceCoverage(candidate, this.options.input.events, sources, this.options.input.ir, ir, { carriedEventIds })
     return { ir, candidate, digest: digestOf(ir) }
   }
 

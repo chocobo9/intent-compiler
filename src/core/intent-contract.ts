@@ -513,6 +513,12 @@ export interface RunView {
   current_compiled: Record<string, CompiledIntent>
   pending_event_ids: string[]
   unresolved_user_event_ids?: string[]
+  /**
+   * Earlier user delegations that are not registered in the IR yet.  Each one is
+   * an unresolved task: the next batch carries it until its text is adopted or
+   * explicitly classified, and it is never silently set aside.
+   */
+  delegation_gaps?: Array<{ event_id: string; sequence: number; failed_batches: number; stalled: boolean; last_error?: string }>
   execution_eligibility?: { task_ids: string[]; execution_ids: string[] }
   executions: ExecutionView[]
   coverage: CoverageRecord[]

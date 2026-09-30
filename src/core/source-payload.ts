@@ -128,8 +128,21 @@ function disposed(text: string, start: number, end: number, spans: readonly { st
  */
 export const DEFAULT_SOURCE_REASON = "unselected by this batch (code default; not adopted as a requirement)"
 
+export interface SourceCoverageOptions {
+  /**
+   * Delegations carried from earlier turns because no batch has compiled them
+   * yet.  Their text stays addressable and the code default still covers the
+   * passages the model leaves unnamed, but the candidate has to name each
+   * carried delegation at least once: either by selecting its operative text
+   * into IR content, or by writing an explicit source_coverage entry for it
+   * (with a question when it still cannot be compiled).  Silence about a
+   * carried delegation is rejected; acknowledgment alone does not register it.
+   */
+  carriedEventIds?: ReadonlySet<string>
+}
+
 /** Closed source accounting, without guessing whether the model chose the right role. */
-export function validateSourceCoverage(candidate: Candidate, currentEvents: readonly CompilerEvent[], sources: readonly CompilerEvent[], previous: Record<string, TaskIntent>, current: Record<string, TaskIntent>): void {
+export function validateSourceCoverage(candidate: Candidate, currentEvents: readonly CompilerEvent[], sources: readonly CompilerEvent[], previous: Record<string, TaskIntent>, current: Record<string, TaskIntent>, options: SourceCoverageOptions = {}): void {
   if (!Array.isArray(candidate.source_coverage)) throw new Error("source_coverage must explicitly list remaining source dispositions (or [] when all text is selected into IR)")
   const entries = candidate.source_coverage
   const texts = sourceTexts(sources)
@@ -213,6 +226,18 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     }
   }
   if (defaults.length > 0) candidate.source_coverage = [...entries, ...defaults]
+  // A carried delegation is an unresolved task from an earlier turn, not
+  // background for this one.  It may be adopted, or explicitly deferred with a
+  // reason, but it cannot be passed over in silence.
+  for (const eventId of options.carriedEventIds ?? []) {
+    const named = selectedSources.some(source => source.source_id === eventId)
+      // Defaults do not count: falling through to "unselected by this batch"
+      // is not an acknowledgment of the earlier delegation.
+      || entries.some(entry => entry.source.source_id === eventId)
+    if (!named) {
+      throw new Error(`carried delegation ${eventId} has no disposition: select its operative text into IR content, or write a source_coverage entry naming its passage (and a question when it still cannot be compiled)`)
+    }
+  }
   const allEntrySources = candidate.source_coverage.map(entry => entry.source)
   for (const segment of sourceSegments(currentEvents)) {
     const text = texts.get(segment.source_id)!

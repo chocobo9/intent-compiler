@@ -6,6 +6,7 @@ import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
+import type { CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 
@@ -101,6 +102,35 @@ test("an IR selecting only the tail records the head as a code default and reach
   assert.ok(stages.includes("ci"), "the IR stage hands over instead of rejecting an unclassified head")
   assert.deepEqual(store.current().ir, {})
   assert.deepEqual(store.current().compiled, {})
+})
+
+test("a turn answers its own delegation and carries the earlier uncompiled one as an unresolved task", async () => {
+  const seen: CompilerModelV2Input[] = []
+  const { store, compiler } = await setup(async input => {
+    seen.push(structuredClone(input))
+    const proposal = parent()
+    // Keep only this turn's event in basis (on both stages): the carried
+    // delegation then has no destination, and the batch must be sent back.
+    proposal.basis = { event_ids: ["next-turn"], refs: [] }
+    if (input.generation_stage === "ir") return JSON.stringify(proposal)
+    const next = child(input.parent_basis!)
+    next.basis = { event_ids: ["next-turn"], refs: [] }
+    return JSON.stringify(next)
+  })
+  await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "next-turn", kind: "user_input",
+    source: { channel: "user", producer_id: "user" }, payload: { text: "Add a status command that prints ok." } })
+  assert.equal((await compiler.advance({ runId: "parent" })).ok, false)
+  const second = await compiler.advance({ runId: "parent" })
+  assert.equal(second.ok, false)
+  const carriedRequests = seen.filter(input => input.carried_delegations !== undefined)
+  assert.ok(carriedRequests.length > 0, "the turn's batch carries the earlier uncompiled delegation")
+  assert.deepEqual(carriedRequests[0]!.events.map(event => event.event_id), ["next-turn", "input-event-id"])
+  assert.deepEqual(carriedRequests[0]!.carried_delegations, [{
+    event_id: "input-event-id", sequence: 1, failed_batches: 0, stalled: false,
+  }])
+  assert.match(second.message!, /carried delegation input-event-id is missing from basis\.event_ids/)
+  assert.deepEqual(store.carriedDelegations().map(gap => ({ id: gap.event_id, failed: gap.failed_batches })),
+    [{ id: "input-event-id", failed: 2 }, { id: "next-turn", failed: 2 }])
 })
 
 test("resume after a CI transport failure reuses the exact temporary parent without committing it early", async () => {

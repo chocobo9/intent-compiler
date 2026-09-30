@@ -94,6 +94,20 @@ export interface CompilerModelV2Input {
       evidence_resolved: boolean
     }>
   }
+  /**
+   * Earlier user delegations this batch carries because no batch has compiled
+   * them yet.  Their text is already in `events`/`source_segments`: they are
+   * unresolved tasks, not new instructions, and this batch must account for
+   * each one (register its operative text in IR, or dispose its passage in
+   * source_coverage and say in questions what is still missing).
+   */
+  carried_delegations?: Array<{
+    event_id: string
+    sequence: number
+    failed_batches: number
+    stalled: boolean
+    last_error?: string
+  }>
 }
 
 export interface ExistingObjectDirectory {
@@ -367,6 +381,7 @@ export const V2_COMPILER_CONTRACT = Object.freeze({
     "When validation_errors, previous_rejection, repair_context or schema_rejected_draft is present, determine the required work from the current delegation, valid retained requirements and applicable updates. The rejected draft is the object to edit, not a complete inventory: preserve unrelated correct content and restore still-required content missing from it. If a rule is supported but its citation is wrong, fix the citation; if the rule itself is unsupported, correct its meaning and all affected IR selections, Atom fields, assignments and Relations instead of inventing support. Copy unchanged valid references exactly. Return the complete Candidate using existing create/revise/reuse identities, not a wholesale regeneration of objects. Judge original requirements against actual selections and the whole resulting plan, including retained and waiting work. Do not delete behavior or lower success criteria to pass validation. Reconcile changed input first; an evidence_resolved false objection is recorded rather than binding.",
     "Before returning, compare the original delegation with the selected current rules and then with every applicable Atom's concrete task and completion. Could an executor obey the Atom yet violate a specified interface, condition or exception? If so, fill the missing behavior. Does completion reject a user-permitted result for an unsupported preference? If so, remove that restriction. This comparison is part of filling the existing fields, not an additional report or a checks self-certification.",
     "A path in prior IR or Compiled Intent is management-authored content, even when it has a source reference. A source reference proves where a claim came from, not that the cited user text supports the path. Apply each path requirement only to the operation or result the user actually attached it to. A required build, test or delivery location does not by itself restrict all implementation work to that location or require it to exist before any work starts. An input that must already exist is different from a destination the task may create. Host existence/readability facts do not establish permission to create or map a location, nor prove that creation or mapping is forbidden. Use the supplied workspace and access boundaries to decide what authorized work can start; retain an unmet final-location requirement in completion. If the permitted route to that location is unknown, record that specific uncertainty and investigate within existing authority or ask for the missing authorization, without claiming one unverified route is mandatory. Preserve an exclusive path restriction only when the cited user-authored text explicitly limits those operations to that path and the restriction still applies. When no applicable user text limits the file, keep the requested behavior as the task and let the executor locate the file within the already authorized workspace and operations; do not add permissions or widen scope.",
+    "carried_delegations names earlier user delegations that no batch has compiled yet. Their text is in events and source_segments; treat each as an unresolved task you must account for in this batch, not as fresh instruction and not as background. Prefer selecting its operative requirements into IR content, so the plan can compile them; when it genuinely cannot be compiled yet, write a source_coverage entry naming its passage, give the reason, and record the specific missing information in questions. A carried delegation never counts as handled by silence, and it keeps being carried until its text is registered or explicitly classified.",
   ]),
 })
 

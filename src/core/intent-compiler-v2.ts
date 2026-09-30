@@ -35,7 +35,7 @@ import { IntentStateManager } from "./intent-state-v2.js"
 import { AtomStateLedger, atomRef, buildCompiledIntents, compiledIntentRef, type BuildCompiledIntentOptions } from "./compiled-intent.js"
 import { ExecutionStateManager } from "./execution-state.js"
 import { candidateChanges, candidateRepairContext, type CandidateRepairContext } from "./candidate-repair.js"
-import { IntentStoreV2, type AssessmentRecord, type CheckRecord, type DeclarationChangeRecord, type ExecutionOutcomeRecord, type ManagementAttemptRecord, type ManagementRequestRecord, type QuestionRecord, type V2AdvanceDeltas, type V2RunSnapshot } from "./compiler-store-v2.js"
+import { IntentStoreV2, STALLED_DELEGATION_BATCHES, type AssessmentRecord, type CheckRecord, type DeclarationChangeRecord, type ExecutionOutcomeRecord, type ManagementAttemptRecord, type ManagementRequestRecord, type QuestionRecord, type V2AdvanceDeltas, type V2RunSnapshot } from "./compiler-store-v2.js"
 import type {
   CompilerModelV2,
   CompilerModelV2CheckResult,
@@ -202,6 +202,13 @@ async function advance(
 
   const events = store.popPending()
   snapshot = store.current()
+  // Earlier delegations no batch has compiled yet ride along with this turn's
+  // own event: they are unresolved tasks the batch has to account for, so a
+  // failed turn no longer strands the instruction behind it (20260929 run).
+  // popPending hands out the batch as [this turn's own event, ...carried gaps].
+  const carriedDelegations = store.carriedDelegations().filter((gap) =>
+    events.some((event) => event.event_id === gap.event_id) && gap.event_id !== events[0]?.event_id)
+  const carriedEventIds = new Set(carriedDelegations.map((gap) => gap.event_id))
   const sourceEvents = selectSourceEvents(store.readEvents(), events, snapshot.ir)
   const availableSources = [...sourceEvents, ...events]
   /**
@@ -268,6 +275,15 @@ async function advance(
       max_requests: snapshot.budget.max_management_requests,
     },
     contract: V2_COMPILER_CONTRACT,
+    ...(carriedDelegations.length === 0 ? {} : {
+      carried_delegations: carriedDelegations.map((gap) => ({
+        event_id: gap.event_id,
+        sequence: gap.sequence,
+        failed_batches: gap.failed_batches,
+        stalled: gap.stalled,
+        ...(gap.last_error === undefined ? {} : { last_error: gap.last_error }),
+      })),
+    }),
     ...(events.some(event => event.kind === "user_input") ? {} : { assessment_batch: true as const }),
     ...(previousRejection === undefined ? {} : { previous_rejection: previousRejection }),
   }
@@ -347,7 +363,7 @@ async function advance(
     if (strictRequirements && sourceRefs.unresolved > 0) {
       return [`candidate sources must cite a resolvable user text span or event; ${sourceRefs.unresolved} unresolved reference(s): ${JSON.stringify(sourceRefs.unresolvedRefs)}`]
     }
-    const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements)
+    const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements, carriedEventIds)
     if (candidateErrors.length > 0) return candidateErrors
     try { prepared = prepareCandidate(snapshot, result.candidate, events, availableSources, strictRequirements, capabilities) }
     catch (error) { return [`${errorMessage(error)}${applicationHint(errorMessage(error))}`] }
@@ -530,21 +546,24 @@ async function advance(
       : checkBudgetExhausted || proposal.budget_exhausted ? "budget_exhausted"
         : semanticRejected ? "semantic_unresolved"
           : proposal.validation_failed ? "invalid_candidate" : proposal.error?.code ?? "invalid_candidate"
-    // An input that has outlived this many failed batches stops being offered.
-    // Retrying it forever is what starved execution in the 20260929 run: the
-    // queue kept the failed delegation at its head and no later round could
-    // dispatch anything. The event stays in the journal as evidence and the
-    // batch that sets it aside says so in its record.
     const failuresSoFar = new Map<string, number>()
     for (const record of snapshot.management_log) {
       if (record.status === "accepted") continue
       for (const id of record.trigger_event_ids) failuresSoFar.set(id, (failuresSoFar.get(id) ?? 0) + 1)
     }
     const triggerEventIds = events.map((event) => event.event_id)
-    const deferredEventIds = triggerEventIds.filter((id) => (failuresSoFar.get(id) ?? 0) + 1 >= MAX_FAILED_BATCHES_PER_EVENT)
-    const deferredUserIds = events.filter((event) => deferredEventIds.includes(event.event_id) && event.kind === "user_input").map((event) => event.event_id)
-    const deferredMessage = deferredEventIds.length === 0 ? message
-      : `${message}; set aside after ${MAX_FAILED_BATCHES_PER_EVENT} failed batches (no later batch will carry it): ${deferredEventIds.join(", ")}`
+    // A delegation this batch could not compile is an unresolved task, not a
+    // lost one: it rides along with the next turn's batch (never dropped, never
+    // left at the head of the queue).  Past the reporting threshold the record
+    // says so once, so "stalled" is visible without re-reading every attempt.
+    const stalledUserIds = events
+      .filter((event) => event.kind === "user_input" && (failuresSoFar.get(event.event_id) ?? 0) + 1 >= STALLED_DELEGATION_BATCHES)
+      .map((event) => event.event_id)
+    const alreadyReported = new Set(snapshot.questions.flatMap((question) => question.basis_event_ids))
+    const reportedNow = stalledUserIds.filter((id) => !alreadyReported.has(id))
+    const carriedOutcomes = carriedDelegations.map((gap) => ({ event_id: gap.event_id, adopted: false, failed_batches: gap.failed_batches + 1 }))
+    const stalledMessage = stalledUserIds.length === 0 ? message
+      : `${message}; still carried into later batches after ${STALLED_DELEGATION_BATCHES}+ failed batches (not compiled yet): ${stalledUserIds.join(", ")}`
     store.applyDeltas({
       management_requests: attempts,
       management_log_record: managementRecord({
@@ -552,6 +571,7 @@ async function advance(
         startedAt,
         completedAt,
         triggerEventIds,
+        carried: carriedOutcomes,
         request: modelInput,
         requestDigest: digestOf(modelInput),
         preparedDigest: prepared?.view.digest,
@@ -564,34 +584,30 @@ async function advance(
         generation: generation?.state,
         status,
         errorCode,
-        errorMessage: deferredMessage,
-        deferredEventIds,
+        errorMessage: stalledMessage,
         ir: snapshot.ir,
         compiled: snapshot.compiled,
         retry: attempts > 1,
       }),
       ...(semanticChecks.length === 0 ? {} : { semantic_checks: semanticChecks }),
-      ...(deferredUserIds.length === 0 ? {} : {
-        questions: deferredUserIds.map((id) => ({
-          text: `delegation ${id} was not compiled after ${MAX_FAILED_BATCHES_PER_EVENT} failed batches and is no longer queued: ${message}`,
+      ...(reportedNow.length === 0 ? {} : {
+        questions: reportedNow.map((id) => ({
+          text: `delegation ${id} is still not compiled after ${STALLED_DELEGATION_BATCHES} failed batches; it stays carried as an unresolved task: ${message}`,
           affects: [],
           basis_event_ids: [id],
           sequence: mgmtSequence,
         })),
-        // The run stops treating the input as pending work: it is recorded, and
-        // holding execution authority hostage to it would only idle the run.
-        unresolved_user_event_ids: (snapshot.unresolved_user_event_ids ?? []).filter((id) => !deferredEventIds.includes(id)),
       }),
       ...budgetDeltas(callUsage[0], callUsage.slice(1)),
     })
-    store.requeuePending(triggerEventIds.filter((id) => !deferredEventIds.includes(id)))
-    const retryable = deferredEventIds.length > 0 || stale || deadlineFailures() >= 2 ? false : checkFailure !== undefined
+    store.requeuePending(triggerEventIds)
+    const retryable = stale || deadlineFailures() >= 2 ? false : checkFailure !== undefined
       ? checkFailure.kind === "transport"
       : issues.length === 0 && isRetryableTransportFailure(proposal)
     return failure(
       snapshot.run_id,
       errorCode,
-      deferredMessage,
+      stalledMessage,
       retryable,
     )
   }
@@ -616,6 +632,7 @@ async function advance(
       startedAt,
       completedAt,
       triggerEventIds: acceptedEventIds,
+      carried: carriedDelegations.map((gap) => ({ event_id: gap.event_id, adopted: adoptedEventIds(ir).has(gap.event_id), failed_batches: gap.failed_batches })),
       request: modelInput,
       requestDigest: digestOf(modelInput),
       preparedDigest: prepared.view.digest,
@@ -1062,6 +1079,7 @@ function inspect(
     current_compiled: snapshot.compiled,
     pending_event_ids: snapshot.pending_event_ids,
     unresolved_user_event_ids: snapshot.unresolved_user_event_ids ?? [],
+    delegation_gaps: store.carriedDelegations(),
     execution_eligibility: snapshot.execution_eligibility,
     executions: execution.list().map(toExecutionView),
     coverage: snapshot.coverage,
@@ -1462,6 +1480,15 @@ function defaultedSourceCount(candidate: Candidate | undefined): number {
   return candidate === undefined ? 0 : (candidate.source_coverage ?? []).filter(entry => entry.reason === DEFAULT_SOURCE_REASON).length
 }
 
+/** Source events the IR now cites as requirement text. */
+function adoptedEventIds(ir: Record<string, TaskIntent>): Set<string> {
+  const ids = new Set<string>()
+  for (const task of Object.values(ir)) {
+    for (const item of task.content ?? []) for (const source of item.sources ?? []) ids.add(source.source_id)
+  }
+  return ids
+}
+
 function irRevisionMap(ir: V2RunSnapshot["ir"]): Record<string, number> {
   return Object.fromEntries(Object.entries(ir).map(([id, task]) => [id, task.revision]))
 }
@@ -1497,10 +1524,11 @@ interface ManagementRecordInput {
   attempts?: ManagementAttemptRecord[]
   /** Shape changes this batch made to derived IR declarations (recorded, not rejected). */
   declarationChanges?: DeclarationChangeRecord[]
+  /** Earlier uncompiled delegations carried with this batch and whether the IR now registers them. */
+  carried?: Array<{ event_id: string; adopted: boolean; failed_batches: number }>
   status: ManagementRequestRecord["status"]
   errorCode?: string
   errorMessage?: string
-  deferredEventIds?: string[]
   ir: Record<string, TaskIntent>
   compiled: Record<string, CompiledIntent>
   retry?: boolean
@@ -1536,7 +1564,10 @@ function managementRecord(input: ManagementRecordInput): ManagementRequestRecord
     status: input.status,
     ...(input.errorCode === undefined ? {} : { error_code: input.errorCode }),
     ...(input.errorMessage === undefined ? {} : { error_message: input.errorMessage }),
-    ...(input.deferredEventIds === undefined || input.deferredEventIds.length === 0 ? {} : { deferred_event_ids: [...input.deferredEventIds] }),
+    ...(input.carried === undefined || input.carried.length === 0 ? {} : {
+      carried_event_ids: input.carried.map((item) => item.event_id),
+      carried_outcomes: input.carried.map((item) => ({ ...item })),
+    }),
     retry: input.retry ?? false,
     ir_revisions: irRevisionMap(input.ir),
     compiled_revisions: revisionMap(input.compiled),
@@ -1548,14 +1579,6 @@ const ATTEMPT_TEXT_LIMIT = 200_000
 
 /** At most this many unresolved references are listed per batch. */
 const MAX_UNRESOLVED_REFS = 20
-
-/**
- * How many failed batches one event may cost before it is set aside.  Each
- * batch already spends its own request budget on repairs, so this bounds the
- * total cost of an input the model cannot compile, and it keeps a stuck event
- * from being the head of every later batch.
- */
-const MAX_FAILED_BATCHES_PER_EVENT = 3
 
 /** Bound one management answer so a runaway response cannot bloat the store. */
 function boundedAttemptText(text: string | undefined): Pick<ManagementAttemptRecord, "text" | "text_truncated"> {
@@ -1689,12 +1712,13 @@ export function proposalIssues(
   compiled: Record<string, CompiledIntent>,
   buildOptions: BuildCompiledIntentOptions,
   strictRequirements = false,
+  carriedEventIds: ReadonlySet<string> = new Set(),
 ): string[] {
   // A generation stage rejects with a sentence, not a schema path; the sentence
   // still has to tell the model what to change, or the batch spends its whole
   // budget re-sending the same defect (20260929 resume, rounds 2-4).
   if (!proposal.ok || !proposal.candidate) return (proposal.schema_errors ?? []).map((issue) => `${issue}${applicationHint(issue)}`)
-  return candidateIssues(proposal.candidate, events, ir, compiled, buildOptions, strictRequirements)
+  return candidateIssues(proposal.candidate, events, ir, compiled, buildOptions, strictRequirements, carriedEventIds)
 }
 
 /**
@@ -1739,6 +1763,7 @@ export function candidateIssues(
   compiled: Record<string, CompiledIntent>,
   buildOptions: BuildCompiledIntentOptions,
   strictRequirements = false,
+  carriedEventIds: ReadonlySet<string> = new Set(),
 ): string[] {
   const issues: string[] = []
   const eventIds = events.map((event) => event.event_id)
@@ -1746,6 +1771,14 @@ export function candidateIssues(
   const basisCheck = validateCandidateBasis(candidate, events)
   if (!basisCheck.ok) {
     issues.push(`${basisCheck.message ?? "candidate basis is invalid"}; pending event ids for this batch: ${eventIds.join(", ")}`)
+  }
+  // A carried delegation is an unresolved task from an earlier turn.  The batch
+  // has to name it, so "the previous turn's work" cannot silently fall out of
+  // the accounting while the new turn proceeds.
+  for (const eventId of carriedEventIds) {
+    if (!candidate.basis.event_ids.includes(eventId)) {
+      issues.push(`carried delegation ${eventId} is missing from basis.event_ids: it is an unresolved task from an earlier turn; name it, then select its operative text into IR content or dispose its passage in source_coverage with a question explaining what is still missing`)
+    }
   }
   if (carriesUserInput && !candidate.groups.some((group) => group.task_refs.length > 0)) {
     issues.push(
@@ -2196,6 +2229,12 @@ function applicationHint(message: string): string {
   }
   if (/no matching source_coverage assignment/u.test(message)) {
     return " (IR content that cites source text must have a coverage entry, or be selected in this batch's content create/revise)"
+  }
+  if (/carried delegation .* has no disposition/u.test(message)) {
+    return " (this batch carries that earlier delegation: select its operative text into IR content, or write one source_coverage entry naming its passage and a questions[] entry saying what is still missing; the accounting default does not acknowledge it)"
+  }
+  if (/carried delegation .* is missing from basis\.event_ids/u.test(message)) {
+    return " (name every carried delegation from carried_delegations in basis.event_ids together with this turn's own event; they are unresolved tasks this batch must account for)"
   }
   if (/basis references unknown event|names the wrong input events/u.test(message)) {
     return " (basis.event_ids must name exactly this batch's trigger events; an execution return is evidence for assessments, not a basis event)"

@@ -41,6 +41,33 @@ export interface V2EventRecord {
   digest: string
 }
 
+/**
+ * A user delegation that arrived but is not registered in the IR yet.  It is an
+ * unresolved task, not background text: the next batch carries it alongside the
+ * current turn's delegation until its text is adopted into the IR or explicitly
+ * classified, and the run never sets it aside.  The list is derived from the
+ * event journal, the current IR and the batch log; nothing extra is stored.
+ */
+export interface CarriedDelegation {
+  event_id: string
+  sequence: number
+  failed_batches: number
+  /** At or past the reporting threshold: it is still carried, and the batch log says so. */
+  stalled: boolean
+  last_error?: string
+}
+
+/**
+ * How many earlier uncompiled delegations one batch carries with the current
+ * turn.  One batch still has exactly one commit boundary; the carried ones ride
+ * along as unresolved tasks the batch must account for, so a backlog drains
+ * instead of starving later turns.
+ */
+export const MAX_CARRIED_DELEGATIONS = 3
+
+/** Failed batches after which a carried delegation is reported as stalled. */
+export const STALLED_DELEGATION_BATCHES = 3
+
 export interface ManagementRequestRecord {
   generation?: ParentGenerationState
   request_id: string
@@ -111,8 +138,20 @@ export interface ManagementRequestRecord {
    * Trigger events this failed batch stops re-offering.  After a bounded number
    * of failed batches the input is recorded once and the run moves on, instead
    * of carrying it (and everything queued behind it) into every later batch.
+   *
+   * Historical field: batches written before 2026-09-30 set it aside this way.
+   * Current batches carry an uncompiled delegation instead of dropping it, and
+   * report it through `carried_event_ids` / `carried_outcomes`.
    */
   deferred_event_ids?: string[]
+  /** Earlier uncompiled delegations this batch carried with its own event. */
+  carried_event_ids?: string[]
+  /**
+   * What happened to each carried delegation in this batch: whether the
+   * committed IR now cites its text.  A carried delegation that is only
+   * acknowledged stays unresolved and is carried into the next batch again.
+   */
+  carried_outcomes?: Array<{ event_id: string; adopted: boolean; failed_batches: number }>
   retry: boolean
   ir_revisions: Record<string, number>
   compiled_revisions: Record<string, number>
@@ -371,10 +410,8 @@ export class IntentStoreV2 {
 
   pendingEvents(): CompilerEvent[] {
     const events = this.readEvents()
-    const deferred = this.deferredEventIds()
     const sequenceOf = new Map(events.map((record) => [record.event.event_id, record.sequence]))
     return [...new Set([...this.snapshot.pending_event_ids, ...(this.snapshot.unresolved_user_event_ids ?? [])])]
-      .filter((id) => !deferred.has(id))
       .map((id) => events.find((record) => record.event.event_id === id)?.event)
       .filter((event): event is CompilerEvent => event !== undefined)
       // A turn that carries a delegation must be able to answer it, so user
@@ -386,27 +423,104 @@ export class IntentStoreV2 {
   }
 
   /**
-   * One batch is one event.  A batch that carries the whole queue grows with
-   * every failure, and the model then has to close an accounting nobody can
-   * close; the queue therefore hands out its oldest event alone.
+   * One batch is one commit boundary with one current-turn delegation: the
+   * newest user input, so a turn always answers its own instruction.  Earlier
+   * user inputs that no batch has compiled are not replayed in front of it (the
+   * 20260929 run fell rounds behind that way); they ride along as carried
+   * delegations the batch must account for.  With no delegation pending the
+   * batch takes the oldest other event (an execution return or a capability
+   * change) so returns are assessed.
+   *
+   * The returned array is [this turn's own event, ...carried delegations], and
+   * `advance` relies on that order.
    */
   popPending(): CompilerEvent[] {
-    const next = this.pendingEvents()[0]
-    this.snapshot.pending_event_ids = next === undefined
-      ? []
-      : this.snapshot.pending_event_ids.filter((id) => id !== next.event_id)
+    const pending = this.pendingEvents()
+    const primary = pending.filter((event) => event.kind === "user_input").at(-1) ?? pending[0]
+    const batch: CompilerEvent[] = primary === undefined ? [] : [primary]
+    if (primary !== undefined && primary.kind === "user_input") {
+      const byId = new Map(this.readEvents().map((record) => [record.event.event_id, record.event]))
+      for (const gap of this.carriedDelegations()) {
+        if (batch.length > MAX_CARRIED_DELEGATIONS) break
+        if (gap.event_id === primary.event_id) continue
+        const event = byId.get(gap.event_id)
+        if (event !== undefined) batch.push(event)
+      }
+    }
+    const popped = new Set(batch.map((event) => event.event_id))
+    this.snapshot.pending_event_ids = this.snapshot.pending_event_ids.filter((id) => !popped.has(id))
     this.snapshot.budget.management_requests = 0
     this.writeSnapshot()
-    return next === undefined ? [] : [next]
+    return batch
   }
 
   /**
    * Events whose batches failed often enough that the run stops offering them.
    * Derived from the batch log rather than stored beside the queue: the event
    * stays in the journal as evidence, and no later batch inherits it.
+   *
+   * Historical marker only (>= 2026-09-30 a delegation is carried instead of
+   * dropped); reading it keeps old journals readable.
    */
   deferredEventIds(): Set<string> {
     return new Set(this.snapshot.management_log.flatMap((record) => record.deferred_event_ids ?? []))
+  }
+
+  /**
+   * Earlier user delegations that are still unresolved tasks: their text is not
+   * registered in the current IR and no accepted batch deliberately closed
+   * them.  Oldest first, so the furthest-behind work is offered first.
+   */
+  carriedDelegations(): CarriedDelegation[] {
+    const events = this.readEvents().filter((record) => record.event.kind === "user_input")
+    const cited = this.registeredEventIds()
+    const accepted = new Set<string>()
+    const parked = new Set<string>()
+    const failures = new Map<string, number>()
+    const lastError = new Map<string, string>()
+    for (const record of this.snapshot.management_log) {
+      if (record.status === "accepted") {
+        for (const id of record.trigger_event_ids) accepted.add(id)
+        for (const entry of record.candidate?.source_coverage ?? []) {
+          if (entry.disposition === "unresolved") parked.add(entry.source.source_id)
+        }
+        continue
+      }
+      for (const id of record.trigger_event_ids) {
+        failures.set(id, (failures.get(id) ?? 0) + 1)
+        if (record.error_message !== undefined) lastError.set(id, record.error_message)
+      }
+    }
+    return events
+      .filter((record) => {
+        const id = record.event.event_id
+        if (cited.has(id)) return false
+        // A delegation an accepted batch explicitly left unresolved stays an
+        // unresolved task, and one no batch has handled yet has never been
+        // compiled at all.  Everything else was accounted for by its batch.
+        if (parked.has(id)) return true
+        return !accepted.has(id)
+      })
+      .map((record) => {
+        const failed = failures.get(record.event.event_id) ?? 0
+        return {
+          event_id: record.event.event_id,
+          sequence: record.sequence,
+          failed_batches: failed,
+          stalled: failed >= STALLED_DELEGATION_BATCHES,
+          ...(lastError.get(record.event.event_id) === undefined ? {} : { last_error: bounded(lastError.get(record.event.event_id)!, 240) }),
+        }
+      })
+      .sort((a, b) => a.sequence - b.sequence)
+  }
+
+  /** Source event ids the current IR cites as requirement text. */
+  private registeredEventIds(): Set<string> {
+    const ids = new Set<string>()
+    for (const task of Object.values(this.snapshot.ir)) {
+      for (const item of task.content ?? []) for (const source of item.sources ?? []) ids.add(source.source_id)
+    }
+    return ids
   }
 
   requeuePending(eventIds: readonly string[]): void {
@@ -636,6 +750,10 @@ export class IntentStoreV2 {
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(canonicalJson(value)) as T
+}
+
+function bounded(text: string, limit: number): string {
+  return text.length <= limit ? text : `${text.slice(0, limit)}…`
 }
 
 function cloneSnapshot(snapshot: V2RunSnapshot): V2RunSnapshot {

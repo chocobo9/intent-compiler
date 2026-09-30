@@ -141,6 +141,35 @@ test("a citation on a non-content change does not stand in for a disposition", (
   assert.equal(sourceText.slice(defaults[0]!.source.span!.start, defaults[0]!.source.span!.end), "First behavior.")
 })
 
+test("a carried delegation is an unresolved task, not background: silence rejects and an explicit disposition passes", () => {
+  const carried = event("carried", "Add the profile command.\n\nIt prints p05 and p95.")
+  const next = event("next", "Add a status command.")
+  const c = candidate()
+  c.basis.event_ids = ["next", "carried"]
+  const ir = task(item("r-next", [ref(next)], "Status command"))
+  ir.content[0]!.text_origin = "source"
+  const options = { carriedEventIds: new Set(["carried"]) }
+  // The code default covers unnamed passages, but it never acknowledges an
+  // earlier uncompiled delegation on the model's behalf.
+  assert.throws(() => validateSourceCoverage(c, [next, carried], [next, carried], {}, { t: ir }, options),
+    /carried delegation carried has no disposition/)
+  // Parking it explicitly satisfies this batch's accounting; the delegation
+  // stays unregistered, so the next batch carries it again.
+  c.source_coverage!.push({ source: ref(carried), disposition: "unresolved", requirements: [], reason: "Needs the earlier round's command definition before it can be compiled", basis: [] })
+  validateSourceCoverage(c, [next, carried], [next, carried], {}, { t: ir }, options)
+})
+
+test("selecting a carried delegation's text into IR registers it instead of acknowledging it", () => {
+  const carried = event("carried", "Add the profile command.")
+  const next = event("next", "Add a status command.")
+  const c = candidate()
+  c.basis.event_ids = ["next", "carried"]
+  const ir = task(item("r-next", [ref(next)], "Status command"), item("r-carried", [ref(carried)], "Profile command"))
+  for (const content of ir.content) content.text_origin = "source"
+  validateSourceCoverage(c, [next, carried], [next, carried], {}, { t: ir }, { carriedEventIds: new Set(["carried"]) })
+  assert.equal(c.source_coverage!.length, 0, "selected text needs no duplicate bookkeeping and no default for the carried delegation")
+})
+
 test("a normative mapping cannot silently adopt the same source into an unlisted requirement", () => {
   const e = event("e", "Current behavior."), c = candidate()
   adopt(c, ref(e), "r1")
