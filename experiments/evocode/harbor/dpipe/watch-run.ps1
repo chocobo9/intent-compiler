@@ -13,6 +13,11 @@ $data = "D:\huawei\EvoCodeBench\harbor_intent_data\$RunId"
 $job = "D:\huawei\EvoCodeBench\harbor_results\$RunId\$RunId"
 if (-not (Test-Path -LiteralPath $run)) { throw "Run not found: $run" }
 $started = (Get-Item -LiteralPath $run).CreationTime
+# A resumed run writes its own log beside the original launch log; watch the
+# newest one, or the monitor keeps showing the run that was already stopped.
+$logPath = (Get-ChildItem -LiteralPath $run -Filter 'harbor-*.log' -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+if (-not $logPath) { $logPath = "$run\harbor-launch.log" }
 
 function Read-JsonFile([string]$Path) {
     if (Test-Path -LiteralPath $Path) {
@@ -26,7 +31,7 @@ do {
     $lines.Add($RunId)
     $lines.Add("Elapsed: $(([datetime]::Now - $started).ToString('hh\:mm\:ss')) | Ctrl+C closes only this monitor")
     $lines.Add('')
-    $tail = @(Get-Content -LiteralPath "$run\harbor-launch.log" -Tail 100 -ErrorAction SilentlyContinue)
+    $tail = @(Get-Content -LiteralPath $logPath -Tail 100 -ErrorAction SilentlyContinue)
     $roundLine = $tail | Where-Object { $_ -match '=== Round \d+/15' } | Select-Object -Last 1
     $lines.Add("Round: $(if ($roundLine) { $roundLine.Trim() } else { 'Preparing / waiting for progress log' })")
 
@@ -90,7 +95,7 @@ do {
     }
     $lines.Add('')
     $lines.Add('No reliable ETA yet. Missing scores are NOT zero. A quiet executor log does not prove a stall.')
-    $lines.Add("Log: $run\harbor-launch.log")
+    $lines.Add("Log: $logPath")
     if (-not $Once) { Clear-Host }
     $lines | ForEach-Object { Write-Host $_ }
     if (-not $Once) { Start-Sleep -Seconds 10 }
