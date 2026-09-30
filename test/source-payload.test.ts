@@ -23,6 +23,35 @@ test("explicit IR source selections already declare normative destinations witho
   assert.doesNotThrow(() => validateSourceCoverage(c, [e], [e], {}, { t: ir }))
 })
 
+// The generated response schema makes every selector a required, nullable
+// property, so real answers carry `quote: null` and `span: null` beside a
+// `segment_id`.  Treating that placeholder as a second selector rejected whole
+// batches whose selections were valid (20260929 resume, rounds 2-4).
+test("nullable selector placeholders do not make a segment selection unresolvable", () => {
+  const e = event("e", "First behavior.\n\nSecond behavior.")
+  const [segment] = sourceSegments([e])
+  const c = candidate()
+  const change = { action: "create" as const, target: "content" as const, local_ref: "r",
+    value: { text: "Short label", about: [], scope: [{ target_id: "t" }], support: [] },
+    sources: [{ source_id: "e", digest: "sha256:placeholder", segment_id: segment!.segment_id, quote: null, span: null }] }
+  c.groups[0]!.ir_changes = [change as never]
+  const stats = resolveSourceRefs(c, [e])
+  assert.equal(stats.unresolved, 0)
+  assert.equal(stats.resolved, 1)
+  assert.deepEqual(change.sources[0]!.span, segment!.span)
+  assert.equal(change.sources[0]!.digest, digestText((e.payload as { text: string }).text))
+  assert.deepEqual(Object.keys(change.sources[0]!).sort(), ["digest", "source_id", "span"])
+})
+
+test("a real quote beside a segment id is still one selector too many", () => {
+  const e = event("e", "First behavior.\n\nSecond behavior.")
+  const c = candidate()
+  c.groups[0]!.ir_changes = [{ action: "create", target: "content", local_ref: "r",
+    value: { text: "Short label", about: [], scope: [{ target_id: "t" }], support: [] },
+    sources: [{ source_id: "e", digest: "sha256:placeholder", segment_id: "s1", quote: "First behavior.", span: null }] } as never]
+  assert.equal(resolveSourceRefs(c, [e]).unresolved, 1)
+})
+
 test("selected original rules, definitions and formula survive an abbreviated interpretation", () => {
   const text = "## Distribution\n\nLet q=floor(n/k), r=n mod k.\n\nThe first r buckets contain q+1 entries; the others contain q entries.\n\nFor an empty input emit [] and exit 0."
   const e = event("e", text), segments = sourceSegments([e])

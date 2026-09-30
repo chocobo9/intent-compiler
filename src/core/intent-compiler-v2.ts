@@ -1690,7 +1690,10 @@ export function proposalIssues(
   buildOptions: BuildCompiledIntentOptions,
   strictRequirements = false,
 ): string[] {
-  if (!proposal.ok || !proposal.candidate) return proposal.schema_errors ?? []
+  // A generation stage rejects with a sentence, not a schema path; the sentence
+  // still has to tell the model what to change, or the batch spends its whole
+  // budget re-sending the same defect (20260929 resume, rounds 2-4).
+  if (!proposal.ok || !proposal.candidate) return (proposal.schema_errors ?? []).map((issue) => `${issue}${applicationHint(issue)}`)
   return candidateIssues(proposal.candidate, events, ir, compiled, buildOptions, strictRequirements)
 }
 
@@ -2109,20 +2112,25 @@ export function resolveSourceRefs(
         stats.unresolved += 1
         noteUnresolved(value, isRecord(value.span) ? value.span : undefined)
       } else {
+        // The generated response schema carries every selector as a required,
+        // nullable property, so a model writes `quote: null` (and `span: null`)
+        // beside the selector it actually used.  A placeholder null is not a
+        // second selector: only a non-empty string selects a quote.
+        const quote = typeof value.quote === "string" && value.quote.length > 0 ? value.quote : undefined
+        if (value.segment_id === null) delete value.segment_id
         if (typeof value.segment_id === "string") {
           const segment = segments.get(`${value.source_id}\0${value.segment_id}`)
-          if (!segment || value.quote !== undefined) {
+          if (!segment || quote !== undefined) {
             stats.unresolved += 1
             noteUnresolved(value, undefined)
             return
           }
           value.span = { ...segment.span }
           delete value.segment_id
-        }
-        if (typeof value.quote === "string") {
-          const start = text.indexOf(value.quote)
-          const repeated = start >= 0 && text.indexOf(value.quote, start + 1) >= 0
-          if (value.quote.length === 0 || start < 0 || repeated) {
+        } else if (quote !== undefined) {
+          const start = text.indexOf(quote)
+          const repeated = start >= 0 && text.indexOf(quote, start + 1) >= 0
+          if (start < 0 || repeated) {
             // A plausible model-written span must not rescue a missing or
             // ambiguous quote. The whole candidate fails the source gate.
             delete value.span
@@ -2130,9 +2138,12 @@ export function resolveSourceRefs(
             noteUnresolved(value, undefined)
             return
           }
-          value.span = { unit: "utf16", start, end: start + value.quote.length }
-          delete value.quote
+          value.span = { unit: "utf16", start, end: start + quote.length }
         }
+        // Drop the remaining placeholders: a persisted candidate carries the
+        // selector that was used, not three properties with two nulls.
+        if (value.quote !== undefined) delete value.quote
+        if (value.span === null) delete value.span
         const span = isRecord(value.span) ? value.span : undefined
         if (span !== undefined && (span.unit !== "utf16" || !Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end <= span.start || span.end > text.length)) {
           stats.unresolved += 1
@@ -2181,6 +2192,18 @@ function applicationHint(message: string): string {
   }
   if (/no matching source_coverage assignment/u.test(message)) {
     return " (IR content that cites source text must have a coverage entry, or be selected in this batch's content create/revise)"
+  }
+  if (/basis references unknown event|names the wrong input events/u.test(message)) {
+    return " (basis.event_ids must name exactly this batch's trigger events; an execution return is evidence for assessments, not a basis event)"
+  }
+  if (/IR sources do not resolve/u.test(message)) {
+    return " (every selection needs one selector that exists in the supplied source: a segment_id from source_segments, or an explicit span inside that source's text)"
+  }
+  if (/points to unknown Atom/u.test(message)) {
+    return " (name an Atom the draft actually declares: add the Atom to compilation.drafts, or point the coverage entry at an existing atom id)"
+  }
+  if (/has no coverage destination/u.test(message)) {
+    return " (every IR content item of the task needs one coverage entry saying where its work goes: assigned, supported, paused or unresolved)"
   }
   return ""
 }
