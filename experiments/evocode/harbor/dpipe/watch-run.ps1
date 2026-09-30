@@ -50,9 +50,19 @@ do {
         $raw = Get-Content -LiteralPath "$data\audit\management-stream.jsonl" -Tail 1 -ErrorAction Stop
         if ($raw) { $stream = $raw | ConvertFrom-Json }
     } catch {}
+    # The file is appended while this monitor reads it, so a tail can catch a
+    # partial line, several records, or a record whose `at` is unusable.  The
+    # monitor must keep running and skip what it cannot read (2026-09-30 smoke).
+    if ($stream -is [array]) { $stream = $stream[-1] }
+    $streamAt = $null
+    if ($stream -and $stream.at -is [string]) {
+        try { $streamAt = [datetimeoffset]::Parse($stream.at, [System.Globalization.CultureInfo]::InvariantCulture) } catch { $streamAt = $null }
+    }
     if ($stream) {
-        $age = [math]::Max(0, [math]::Round(([datetimeoffset]::UtcNow - [datetimeoffset]::Parse($stream.at)).TotalSeconds))
-        if ($stream.kind -eq 'stream-close') {
+        $age = if ($streamAt) { [math]::Max(0, [math]::Round(([datetimeoffset]::UtcNow - $streamAt).TotalSeconds)) } else { -1 }
+        if ($age -lt 0) {
+            $lines.Add('Management stream: unreadable tail (partial write); skipping this line')
+        } elseif ($stream.kind -eq 'stream-close') {
             $lines.Add("Last management stream ended: $($stream.outcome), $([math]::Round($stream.elapsed_ms / 1000, 1))s; $($age)s ago")
         } else {
             $lines.Add("Management stream: $([math]::Round($stream.elapsed_ms / 1000, 1))s at last update; update age $($age)s")
