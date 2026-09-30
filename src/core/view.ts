@@ -252,9 +252,9 @@ export function selectView(input: SelectViewInput): ViewPlan {
   for (const ref of input.recently_changed ?? []) add(ref, "recent")
   for (const ref of input.last_requested ?? []) add(ref, "requested")
   for (const ref of input.unresolved_item_ids ?? []) add(ref, "status")
-  for (const state of input.atom_states ?? []) {
-    if (state.status === "ready" || state.status === "executing" || state.status === "failed") add(state.atom_id, "status")
-  }
+  // Atom status is manifest-only by design: a ready Atom's body is the largest
+  // object in the state and reading it by default is what this module exists to
+  // avoid.  Atoms enter the slice through referenced/recent/requested refs.
   const itemById = new Map<string, { text: string; revision: number }>()
   for (const task of Object.values(input.ir)) for (const item of task.content) itemById.set(item.item_id, { text: itemBody(item), revision: item.revision })
   const atomById = new Map<string, { text: string; revision: number }>()
