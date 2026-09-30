@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { mkdtempSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
@@ -11,6 +11,7 @@ import { V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
 import { ParentGeneration } from "../src/core/parent-generation.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
+import { digestOf } from "../src/core/intent-contract.js"
 
 function parent() {
   const c = structuredClone(CANDIDATE_EXAMPLE)
@@ -53,12 +54,35 @@ test("CI basis repair names the changed field and supplies the unchanged parent 
   assert.equal(store.current().budget.total_management_requests, 4)
 })
 async function setup(transport: Parameters<typeof createCompilerModelV2>[0], checker = consistent) {
-  const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "parent-generation-")), runId: "parent" })
+  const storeDir = mkdtempSync(join(tmpdir(), "parent-generation-"))
+  const store = new IntentStoreV2({ storeDir, runId: "parent" })
   const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(transport, checker) })
   await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "input-event-id", kind: "user_input",
     source: { channel: "user", producer_id: "user" }, payload: { text: CANDIDATE_EXAMPLE_INPUT } })
-  return { store, compiler }
+  return { store, compiler, storeDir }
 }
+
+test("a check attempt records the input it sent and the prepared view behind its digest", async () => {
+  const { store, compiler, storeDir } = await setup(async input =>
+    JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!)))
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  const record = store.current().management_log.at(-1)!
+  const check = (record.attempts ?? []).find(attempt => attempt.kind === "check")
+  assert.ok(check, "the batch ran an independent check")
+  const view = check.prepared_view as Record<string, unknown>
+  const { digest, ...rest } = view
+  assert.equal(digestOf(rest), digest, "the recorded prepared view matches its own digest")
+  assert.equal(check.prepared_digest, digest, "and that digest is the one recorded on the attempt")
+  const sent = check.check_input as { prepared?: { ir?: unknown }; candidate?: unknown }
+  assert.deepEqual(sent.prepared?.ir, view.ir, "the check input carries the prepared projection")
+  assert.ok(sent.candidate, "the check input carries the candidate it judged")
+  const evidence = join(storeDir, "v2-runs", "parent", "check-inputs.jsonl")
+  assert.ok(existsSync(evidence), "the check input is persisted before the call")
+  const first = JSON.parse(readFileSync(evidence, "utf8").split(/\r?\n/).filter(Boolean)[0]!) as { input?: unknown; prepared_view?: unknown }
+  assert.ok(first.input, "the append-only file carries the check input")
+  assert.ok(first.prepared_view, "and the prepared view")
+})
 
 test("CI generation reads the materialized parent before any child can be committed", async () => {
   const stages: string[] = []

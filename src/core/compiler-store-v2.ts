@@ -161,6 +161,10 @@ export interface ManagementRequestRecord {
 export interface ManagementAttemptRecord {
   generation_stage?: "ir" | "ci"
   request?: unknown
+  /** The exact input sent to the independent check, recorded with the attempt. */
+  check_input?: unknown
+  /** The full prepared view behind `prepared_digest` (its `digest` field is that digest). */
+  prepared_view?: unknown
   kind: "propose" | "check"
   failure_diagnostic?: {
     phase: string
@@ -526,6 +530,15 @@ export class IntentStoreV2 {
   requeuePending(eventIds: readonly string[]): void {
     this.snapshot.pending_event_ids = [...new Set([...this.snapshot.pending_event_ids, ...eventIds])]
     this.writeSnapshot()
+  }
+
+  /**
+   * Append-only evidence for one independent check, written before the call so
+   * a timeout still leaves the exact input and the prepared view behind its
+   * digest on disk.  It never participates in run state.
+   */
+  appendCheckInput(entry: { request_id: string; sequence: number; input: unknown; prepared_view?: unknown }): void {
+    appendFileSync(join(this.dir, "check-inputs.jsonl"), `${canonicalJson(entry)}\n`, "utf8")
   }
 
   readEvents(): V2EventRecord[] {

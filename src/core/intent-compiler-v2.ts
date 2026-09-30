@@ -306,6 +306,8 @@ async function advance(
   // raised: a failed batch is diagnosed from this record, not re-run.  The text
   // is bounded so one runaway answer cannot bloat the store.
   const attemptsLog: ManagementAttemptRecord[] = []
+  /** Captured before a check call so its attempt record carries the exact input. */
+  let capturedCheck: { checkInput: unknown; preparedView?: unknown } | undefined
   const callUsage: Array<CompilerModelV2Usage | undefined> = []
   const requestLimit = Math.min(snapshot.budget.max_management_requests,
     snapshot.budget.max_total_management_requests - snapshot.budget.total_management_requests)
@@ -413,10 +415,32 @@ async function advance(
         prepared: prepared?.view,
         sequence: mgmtSequence,
         budget: { requests_used: attempts, max_requests: maxAttempts },
+        // Persist the exact check input before the call: a timeout must not
+        // erase what the checker was asked to judge, and the full prepared
+        // view is what `prepared_digest` covers.
+        onInput: (checkInput, preparedView) => {
+          try {
+            store.appendCheckInput({
+              request_id: `mgmt-${mgmtSequence}`, sequence: mgmtSequence, input: checkInput,
+              ...(preparedView === undefined ? {} : { prepared_view: preparedView }),
+            })
+          } catch { /* evidence must never fail the batch */ }
+          capturedCheck = { checkInput, ...(preparedView === undefined ? {} : { preparedView }) }
+        },
           recordCall: (startedAt, status, errorCode, usage, text, failureDiagnostic) => {
           callUsage.push(usage)
           recordManagementCall(store, `mgmt-${mgmtSequence}`, "check", startedAt, new Date().toISOString(), status, errorCode, usage, failureDiagnostic)
-          attemptsLog.push({ kind: "check", ...(failureDiagnostic === undefined ? {} : { failure_diagnostic: failureDiagnostic }), ...boundedAttemptText(text), prepared_digest: prepared?.view.digest })
+          attemptsLog.push({
+            kind: "check",
+            ...(failureDiagnostic === undefined ? {} : { failure_diagnostic: failureDiagnostic }),
+            ...boundedAttemptText(text),
+            prepared_digest: prepared?.view.digest,
+            ...(capturedCheck === undefined ? {} : {
+              check_input: capturedCheck.checkInput,
+              ...(capturedCheck.preparedView === undefined ? {} : { prepared_view: capturedCheck.preparedView }),
+            }),
+          })
+          capturedCheck = undefined
         },
       })
       let check = await runCheck()
@@ -1320,6 +1344,11 @@ async function runSemanticCheck(
     budget: { requests_used: number; max_requests: number }
     /** Timing hook so the caller can record this check as its own call. */
     recordCall: (startedAt: string, status: "ok" | "error", errorCode: string | undefined, usage: CompilerModelV2Usage | undefined, text: string | undefined, failureDiagnostic?: CompilerModelV2FailureDiagnostic) => void
+    /**
+     * Called with the exact request about to be sent and the full prepared view
+     * behind its digest, before the model call, so evidence survives a timeout.
+     */
+    onInput?: (checkInput: import("../model/compiler-model-v2.js").CompilerModelV2CheckInput, preparedView: unknown | undefined) => void
   },
 ): Promise<{
   record: SemanticCheckRecord
@@ -1347,20 +1376,24 @@ async function runSemanticCheck(
   }
   let result: CompilerModelV2CheckResult
   const startedAt = new Date().toISOString()
+  const checkRequest: import("../model/compiler-model-v2.js").CompilerModelV2CheckInput = {
+    run_id: input.run_id,
+    events: input.events,
+    source_events: input.source_events ?? [],
+    event_source_refs: eventSourceRefs([...(input.source_events ?? []), ...input.events]),
+    ir: input.ir,
+    compiled: input.compiled,
+    capabilities: input.capabilities,
+    candidate: structuredClone(candidate),
+    ...(preparedForCheck === undefined ? {} : { prepared: structuredClone(preparedForCheck) }),
+    budget: input.budget,
+    contract: V2_CHECK_CONTRACT,
+  }
+  // Record before the call: the evidence must exist even when the call never
+  // returns.  The model still receives a private clone.
+  input.onInput?.(checkRequest, input.prepared)
   try {
-    result = await model.verify(structuredClone({
-      run_id: input.run_id,
-      events: input.events,
-      source_events: input.source_events ?? [],
-      event_source_refs: eventSourceRefs([...(input.source_events ?? []), ...input.events]),
-      ir: input.ir,
-      compiled: input.compiled,
-      capabilities: input.capabilities,
-      candidate: structuredClone(candidate),
-      ...(preparedForCheck === undefined ? {} : { prepared: structuredClone(preparedForCheck) }),
-      budget: input.budget,
-      contract: V2_CHECK_CONTRACT,
-    }))
+    result = await model.verify(structuredClone(checkRequest))
   } catch (error) {
     const message = `independent check failed: ${errorMessage(error)}`
     input.recordCall(startedAt, "error", "transport", undefined, undefined, { phase: "check_transport", exception_chain: exceptionChain(error) })
