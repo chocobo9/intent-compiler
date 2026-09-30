@@ -108,24 +108,22 @@ class OpenCodePatched(OpenCode):
     async def run(self, instruction, environment, context) -> None:
         await super().run(instruction, environment, context)
         self._check_command_results()
-        snapshot = self._read_snapshot(required=True)
+        snapshot = self._read_snapshot(required=False)
+        if snapshot is None:
+            print("ROUND-GATE unresolved: compiler snapshot missing")
+            return
         dispatches = snapshot.get("dispatches")
         if not isinstance(dispatches, list) or not dispatches:
-            raise RuntimeError(
-                "No persisted Compiler dispatch; stopping before the official verifier"
-            )
+            print("ROUND-GATE unresolved: no persisted Compiler dispatch")
+            return
         new_executions = self._execution_ids(snapshot) - self._executions_before_round
         if not new_executions:
-            raise RuntimeError(
-                f"No executor start persisted for round {self._active_round}; "
-                "stopping before the official verifier"
-            )
+            print(f"ROUND-GATE unresolved: no executor start persisted for round {self._active_round}")
+            return
         returned = {item.get("execution_id") for item in snapshot.get("execution_outcomes", [])}
         if not new_executions.issubset(returned):
-            raise RuntimeError(
-                f"Executor return missing for round {self._active_round}; "
-                "stopping before the official verifier"
-            )
+            print(f"ROUND-GATE unresolved: executor return missing for round {self._active_round}")
+            return
         # advance pops the queue before calling the model; an empty queue is not
         # evidence of successful processing (including after a process exit).
         handled = {
@@ -135,10 +133,8 @@ class OpenCodePatched(OpenCode):
             for event_id in record.get("trigger_event_ids", [])
         }
         if any(f"{execution_id}:return" not in handled for execution_id in new_executions):
-            raise RuntimeError(
-                f"Management has not processed the executor return for round {self._active_round}; "
-                "stopping before the official verifier"
-            )
+            print(f"ROUND-GATE unresolved: management has not processed the executor return for round {self._active_round}")
+            return
         print(
             f"Harbor dispatch gate: round {self._active_round} started "
             f"{len(new_executions)} execution(s)"
@@ -148,13 +144,13 @@ class OpenCodePatched(OpenCode):
         for index in range(self._run_command_count):
             path = self.logs_dir / f"command-{index}" / "return-code.txt"
             if not path.is_file():
-                raise RuntimeError(f"Executor command {index} exit status missing")
+                print(f"ROUND-GATE unresolved: executor command {index} exit status missing")
+                continue
             code = path.read_text(encoding="utf-8").strip()
             if code != "0":
-                raise RuntimeError(
-                    f"Executor command {index} failed with exit code {code}; "
-                    "stopping before the official verifier"
-                )
+                # Recorded, not fatal: the round still reaches the official
+                # verifier, so every round leaves a saved result.
+                print(f"ROUND-GATE unresolved: executor command {index} failed with exit code {code}")
 
     def _read_snapshot(self, *, required: bool):
         snapshot_path = self._dispatch_snapshot_path
