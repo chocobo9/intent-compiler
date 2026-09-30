@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { appendFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs"
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
@@ -353,7 +353,7 @@ test("a journal that cannot be verified stops the batch before any alias is deri
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, false)
   assert.equal(result.code, "storage_unverified")
-  assert.match(result.message ?? "", /1 line\(s\) cannot be read as event records/)
+  assert.match(result.message ?? "", /has 1 line\(s\) that cannot be read as event records/)
   assert.equal(calls, 0, "the model is never asked to repair the store")
   assert.ok(store.current().pending_event_ids.includes("input-event-id"), "the batch is requeued, not consumed")
 })
@@ -385,9 +385,25 @@ test("a journal line that parses but is not an event record also stops the batch
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, false)
   assert.equal(result.code, "storage_unverified")
-  assert.match(result.message ?? "", /3 line\(s\) cannot be read as event records/)
+  assert.match(result.message ?? "", /has 3 line\(s\) that cannot be read as event records/)
   assert.equal(calls, 0, "the model is never reached with an unusable journal")
   assert.ok(store.current().pending_event_ids.includes("input-event-id"))
+})
+
+test("a corrupt line for the queued event itself stops instead of reporting unchanged", async () => {
+  let calls = 0
+  const { store, compiler, storeDir } = await setup(async () => { calls += 1; return JSON.stringify({}) })
+  const journal = join(storeDir, "v2-runs", "parent", "events.jsonl")
+  // The one queued delegation's own line is destroyed: the queue still names
+  // it, but the journal can no longer produce its text.
+  writeFileSync(journal, "{ this line never parses\n", "utf8")
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, false, `accepted ${result.disposition} without reporting the damaged store`)
+  assert.equal(result.code, "storage_unverified")
+  assert.match(result.message ?? "", /has 1 line\(s\) that cannot be read as event records/)
+  assert.equal(calls, 0, "the model is never reached while the queue is untrustworthy")
+  assert.deepEqual(store.current().pending_event_ids, ["input-event-id"],
+    "the queued instruction is neither consumed nor dropped")
 })
 
 test("a binding create restores the alias inside value.ref before the IR is applied", async () => {

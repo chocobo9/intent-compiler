@@ -203,6 +203,19 @@ async function advance(
 
   const events = store.popPending()
   snapshot = store.current()
+  // The queue is derived from the event journal, so a line that cannot be read
+  // can hide the very event this batch was popped for: `popPending` then hands
+  // out an empty batch and the run would report `unchanged` while an
+  // instruction sits pending with no readable text.  A damaged journal is a
+  // storage integrity problem, not a quiet no-op and not a model retry, so the
+  // strict flow stops here — before any journal-derived work and before any
+  // call — and leaves the queue exactly as it found it.
+  const journal = strictRequirements ? store.readEventJournal() : undefined
+  if (journal !== undefined && journal.malformed > 0) {
+    store.requeuePending(events.map((event) => event.event_id))
+    return failure(snapshot.run_id, "storage_unverified",
+      `the event journal has ${journal.malformed} line(s) that cannot be read as event records; the run's queue is derived from this journal, so a pending instruction may be invisible. Repair the store; a model retry cannot fix it.`)
+  }
   // Earlier delegations no batch has compiled yet ride along with this turn's
   // own event: they are unresolved tasks the batch has to account for, so a
   // failed turn no longer strands the instruction behind it (20260929 run).
@@ -241,13 +254,11 @@ async function advance(
   // Source aliases replace a long event id on the wire with `e{sequence}`.  The
   // alias has to mean the same event for the whole run, so it is derived only
   // from a journal that parses completely and has no conflicting identities.
-  // A journal that cannot be trusted stops the batch before any call: a wrong
-  // alias is accepted silently, and no model retry can repair the store.
   // Only a batch that carries user input runs the IR stage, and only that
   // stage presents aliases; a return-assessment batch keeps the full ids it
   // has always used and is not blocked by a journal it never reads for this.
-  const aliasIndex = strictRequirements && events.some((event) => event.kind === "user_input")
-    ? buildSourceAliasIndex(store.readEventJournal())
+  const aliasIndex = journal !== undefined && events.some((event) => event.kind === "user_input")
+    ? buildSourceAliasIndex(journal)
     : undefined
   if (aliasIndex !== undefined && !aliasIndex.ok) {
     store.requeuePending(events.map((event) => event.event_id))
