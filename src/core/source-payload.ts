@@ -1,4 +1,4 @@
-import { digestOf, digestText, type Candidate, type CompilerEvent, type ContentItem, type IrChange, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
+import { digestOf, digestText, type Candidate, type CompilerEvent, type ContentItem, type IrChange, type SourceDisposition, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
 
 export function userText(event: CompilerEvent): string | undefined {
   const value = event.payload as { text?: unknown } | undefined
@@ -82,28 +82,51 @@ export function hostQuotedBounds(text: string): { start: number; end: number } |
   return { start: 1, end: text.length - 1 }
 }
 
-/** Every byte in the range is selected, whitespace, or the host's own wrapper. */
-function disposed(text: string, start: number, end: number, spans: readonly { start: number; end: number }[]): boolean {
-  const wrapper = hostQuotedBounds(text)
+const allowedByte = (text: string, index: number, wrapper: { start: number; end: number } | undefined): boolean =>
+  /\s/u.test(text[index]!) || (wrapper !== undefined && (index < wrapper.start || index >= wrapper.end))
+
+/**
+ * The byte ranges of the user's own words that no span accounts for.  Whitespace
+ * and the host's command-line quoting are transport, not requirement text, so
+ * they never need a disposition.
+ */
+export function residualRanges(
+  text: string,
+  start: number,
+  end: number,
+  spans: readonly { start: number; end: number }[],
+  wrapper: { start: number; end: number } | undefined = hostQuotedBounds(text),
+): Array<{ start: number; end: number }> {
   const ranges = [...spans].sort((a, b) => a.start - b.start)
-  let cursor = start
-  const allowed = (from: number, to: number): boolean => {
-    for (let index = from; index < to; index += 1) {
-      const character = text[index]!
-      if (/\s/u.test(character)) continue
-      if (wrapper && (index < wrapper.start || index >= wrapper.end)) continue
-      return false
-    }
-    return true
+  const found: Array<{ start: number; end: number }> = []
+  const push = (from: number, to: number): void => {
+    let first = from, last = to
+    while (first < last && allowedByte(text, first, wrapper)) first += 1
+    while (last > first && allowedByte(text, last - 1, wrapper)) last -= 1
+    if (last > first) found.push({ start: first, end: last })
   }
+  let cursor = start
   for (const range of ranges) {
     if (range.end <= cursor || range.start >= end) continue
-    if (!allowed(cursor, Math.min(range.start, end))) return false
+    if (range.start > cursor) push(cursor, Math.min(range.start, end))
     cursor = Math.max(cursor, range.end)
-    if (cursor >= end) return true
+    if (cursor >= end) return found
   }
-  return allowed(cursor, end)
+  if (end > cursor) push(cursor, end)
+  return found
 }
+
+/** Every byte in the range is selected, whitespace, or the host's own wrapper. */
+function disposed(text: string, start: number, end: number, spans: readonly { start: number; end: number }[]): boolean {
+  return residualRanges(text, start, end, spans).length === 0
+}
+
+/**
+ * The disposition code writes for text a batch never names.  It says what the
+ * accounting says and nothing about meaning: the passage stays available, and a
+ * later delegation may still select it into IR.
+ */
+export const DEFAULT_SOURCE_REASON = "unselected by this batch (code default; not adopted as a requirement)"
 
 /** Closed source accounting, without guessing whether the model chose the right role. */
 export function validateSourceCoverage(candidate: Candidate, currentEvents: readonly CompilerEvent[], sources: readonly CompilerEvent[], previous: Record<string, TaskIntent>, current: Record<string, TaskIntent>): void {
@@ -164,16 +187,37 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
       }
     }
   }
+  // A paragraph this batch never names is not a contradiction to resolve: it is
+  // background for the delegations the batch did make. The code writes that
+  // default itself, so one unmentioned passage cannot invalidate an otherwise
+  // complete batch, and the model writes an entry only to override it. The
+  // default never covers text the batch adopted, cited or classified itself.
+  const entrySources = entries.map(entry => entry.source)
+  const accounted = [...selectedSources, ...citedSources, ...entrySources]
+  const defaults: SourceDisposition[] = []
   for (const segment of sourceSegments(currentEvents)) {
     const text = texts.get(segment.source_id)!
-    const entrySources = entries.map(entry => entry.source)
-    const stored = spansFor([...selectedSources, ...entrySources], segment.source_id)
+    for (const range of residualRanges(text, segment.span.start, segment.span.end, spansFor(accounted, segment.source_id))) {
+      defaults.push({
+        source: { source_id: segment.source_id, digest: digestText(text), span: { unit: "utf16", start: range.start, end: range.end } },
+        disposition: "context",
+        requirements: [],
+        reason: DEFAULT_SOURCE_REASON,
+        basis: [],
+      })
+    }
+  }
+  if (defaults.length > 0) candidate.source_coverage = [...entries, ...defaults]
+  const allEntrySources = candidate.source_coverage.map(entry => entry.source)
+  for (const segment of sourceSegments(currentEvents)) {
+    const text = texts.get(segment.source_id)!
+    const stored = spansFor([...selectedSources, ...allEntrySources], segment.source_id)
     // A change's citation can only account for the remainder of a paragraph
     // that the batch actually stores as a requirement or classifies.
     if (!stored.some(span => span.start < segment.span.end && segment.span.start < span.end)) {
       throw new Error(`source segment ${segment.source_id}/${segment.segment_id} has no complete disposition: no content selection or source_coverage entry names it; select its operative text into IR or explicitly classify its remaining text`)
     }
-    if (!disposed(text, segment.span.start, segment.span.end, spansFor([...selectedSources, ...citedSources, ...entrySources], segment.source_id))) {
+    if (!disposed(text, segment.span.start, segment.span.end, spansFor([...selectedSources, ...citedSources, ...allEntrySources], segment.source_id))) {
       throw new Error(`source segment ${segment.source_id}/${segment.segment_id} has no complete disposition; select its operative text into IR or explicitly classify its remaining text`)
     }
   }

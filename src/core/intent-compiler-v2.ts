@@ -48,7 +48,7 @@ import type {
 import { V2_CHECK_CONTRACT, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
 import { bindCurrentRequirements, selectSourceEvents } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
-import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
+import { DEFAULT_SOURCE_REASON, materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
 import { ParentGeneration, type ParentGenerationState } from "./parent-generation.js"
 
 export interface IntentCompilerV2Options {
@@ -350,7 +350,7 @@ async function advance(
     const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements)
     if (candidateErrors.length > 0) return candidateErrors
     try { prepared = prepareCandidate(snapshot, result.candidate, events, availableSources, strictRequirements, capabilities) }
-    catch (error) { return [errorMessage(error)] }
+    catch (error) { return [`${errorMessage(error)}${applicationHint(errorMessage(error))}`] }
     return []
   }
   let issues = issuesFor(proposal)
@@ -530,13 +530,28 @@ async function advance(
       : checkBudgetExhausted || proposal.budget_exhausted ? "budget_exhausted"
         : semanticRejected ? "semantic_unresolved"
           : proposal.validation_failed ? "invalid_candidate" : proposal.error?.code ?? "invalid_candidate"
+    // An input that has outlived this many failed batches stops being offered.
+    // Retrying it forever is what starved execution in the 20260929 run: the
+    // queue kept the failed delegation at its head and no later round could
+    // dispatch anything. The event stays in the journal as evidence and the
+    // batch that sets it aside says so in its record.
+    const failuresSoFar = new Map<string, number>()
+    for (const record of snapshot.management_log) {
+      if (record.status === "accepted") continue
+      for (const id of record.trigger_event_ids) failuresSoFar.set(id, (failuresSoFar.get(id) ?? 0) + 1)
+    }
+    const triggerEventIds = events.map((event) => event.event_id)
+    const deferredEventIds = triggerEventIds.filter((id) => (failuresSoFar.get(id) ?? 0) + 1 >= MAX_FAILED_BATCHES_PER_EVENT)
+    const deferredUserIds = events.filter((event) => deferredEventIds.includes(event.event_id) && event.kind === "user_input").map((event) => event.event_id)
+    const deferredMessage = deferredEventIds.length === 0 ? message
+      : `${message}; set aside after ${MAX_FAILED_BATCHES_PER_EVENT} failed batches (no later batch will carry it): ${deferredEventIds.join(", ")}`
     store.applyDeltas({
       management_requests: attempts,
       management_log_record: managementRecord({
         sequence: mgmtSequence,
         startedAt,
         completedAt,
-        triggerEventIds: events.map((event) => event.event_id),
+        triggerEventIds,
         request: modelInput,
         requestDigest: digestOf(modelInput),
         preparedDigest: prepared?.view.digest,
@@ -544,26 +559,39 @@ async function advance(
         call: proposal.call,
         candidate: proposal.candidate,
         sourceRefs,
+        sourceDefaults: defaultedSourceCount(proposal.candidate),
         attempts: attemptsLog,
         generation: generation?.state,
         status,
         errorCode,
-        errorMessage: message,
+        errorMessage: deferredMessage,
+        deferredEventIds,
         ir: snapshot.ir,
         compiled: snapshot.compiled,
         retry: attempts > 1,
       }),
       ...(semanticChecks.length === 0 ? {} : { semantic_checks: semanticChecks }),
+      ...(deferredUserIds.length === 0 ? {} : {
+        questions: deferredUserIds.map((id) => ({
+          text: `delegation ${id} was not compiled after ${MAX_FAILED_BATCHES_PER_EVENT} failed batches and is no longer queued: ${message}`,
+          affects: [],
+          basis_event_ids: [id],
+          sequence: mgmtSequence,
+        })),
+        // The run stops treating the input as pending work: it is recorded, and
+        // holding execution authority hostage to it would only idle the run.
+        unresolved_user_event_ids: (snapshot.unresolved_user_event_ids ?? []).filter((id) => !deferredEventIds.includes(id)),
+      }),
       ...budgetDeltas(callUsage[0], callUsage.slice(1)),
     })
-    store.requeuePending(events.map((event) => event.event_id))
-    const retryable = stale || deadlineFailures() >= 2 ? false : checkFailure !== undefined
+    store.requeuePending(triggerEventIds.filter((id) => !deferredEventIds.includes(id)))
+    const retryable = deferredEventIds.length > 0 || stale || deadlineFailures() >= 2 ? false : checkFailure !== undefined
       ? checkFailure.kind === "transport"
       : issues.length === 0 && isRetryableTransportFailure(proposal)
     return failure(
       snapshot.run_id,
       errorCode,
-      message,
+      deferredMessage,
       retryable,
     )
   }
@@ -595,6 +623,7 @@ async function advance(
       call: proposal.call,
       candidate,
       sourceRefs,
+      sourceDefaults: defaultedSourceCount(candidate),
       attempts: attemptsLog,
         generation: generation?.state,
       declarationChanges,
@@ -1428,6 +1457,11 @@ function revisionMap(compiled: V2RunSnapshot["compiled"]): Record<string, number
   return Object.fromEntries(Object.entries(compiled).map(([id, intent]) => [id, intent.compiled_revision]))
 }
 
+/** Passages this batch never classified; validateSourceCoverage recorded them as context. */
+function defaultedSourceCount(candidate: Candidate | undefined): number {
+  return candidate === undefined ? 0 : (candidate.source_coverage ?? []).filter(entry => entry.reason === DEFAULT_SOURCE_REASON).length
+}
+
 function irRevisionMap(ir: V2RunSnapshot["ir"]): Record<string, number> {
   return Object.fromEntries(Object.entries(ir).map(([id, task]) => [id, task.revision]))
 }
@@ -1457,6 +1491,8 @@ interface ManagementRecordInput {
   call?: CompilerModelV2Result["call"]
   candidate?: Candidate
   sourceRefs?: SourceRefStats
+  /** Passages this batch left unclassified; code recorded them as context. */
+  sourceDefaults?: number
   /** Every call this batch made, in order, with the issues each attempt raised. */
   attempts?: ManagementAttemptRecord[]
   /** Shape changes this batch made to derived IR declarations (recorded, not rejected). */
@@ -1464,6 +1500,7 @@ interface ManagementRecordInput {
   status: ManagementRequestRecord["status"]
   errorCode?: string
   errorMessage?: string
+  deferredEventIds?: string[]
   ir: Record<string, TaskIntent>
   compiled: Record<string, CompiledIntent>
   retry?: boolean
@@ -1491,6 +1528,7 @@ function managementRecord(input: ManagementRecordInput): ManagementRequestRecord
     ...(input.call?.text_source === undefined ? {} : { response_text_source: input.call.text_source }),
     ...(input.candidate === undefined ? {} : { candidate: input.candidate, candidate_digest: digestOf(input.candidate) }),
     ...(input.sourceRefs === undefined ? {} : { source_refs: input.sourceRefs }),
+    ...(input.sourceDefaults === undefined || input.sourceDefaults === 0 ? {} : { source_defaults: { count: input.sourceDefaults } }),
     ...(input.call?.provider === undefined ? {} : { provider: input.call.provider }),
     ...(input.call?.model === undefined ? {} : { model: input.call.model }),
     ...(input.call?.agent === undefined ? {} : { agent: input.call.agent }),
@@ -1498,6 +1536,7 @@ function managementRecord(input: ManagementRecordInput): ManagementRequestRecord
     status: input.status,
     ...(input.errorCode === undefined ? {} : { error_code: input.errorCode }),
     ...(input.errorMessage === undefined ? {} : { error_message: input.errorMessage }),
+    ...(input.deferredEventIds === undefined || input.deferredEventIds.length === 0 ? {} : { deferred_event_ids: [...input.deferredEventIds] }),
     retry: input.retry ?? false,
     ir_revisions: irRevisionMap(input.ir),
     compiled_revisions: revisionMap(input.compiled),
@@ -1509,6 +1548,14 @@ const ATTEMPT_TEXT_LIMIT = 200_000
 
 /** At most this many unresolved references are listed per batch. */
 const MAX_UNRESOLVED_REFS = 20
+
+/**
+ * How many failed batches one event may cost before it is set aside.  Each
+ * batch already spends its own request budget on repairs, so this bounds the
+ * total cost of an input the model cannot compile, and it keeps a stuck event
+ * from being the head of every later batch.
+ */
+const MAX_FAILED_BATCHES_PER_EVENT = 3
 
 /** Bound one management answer so a runaway response cannot bloat the store. */
 function boundedAttemptText(text: string | undefined): Pick<ManagementAttemptRecord, "text" | "text_truncated"> {
@@ -2113,6 +2160,27 @@ function applicationHint(message: string): string {
   }
   if (/expected_revision/u.test(message)) {
     return " (use the revision currently recorded in the supplied IR)"
+  }
+  // Source accounting: say the repair, not just the contradiction.  The model
+  // cannot close these by moving a span by a few bytes; it has to change the
+  // requirement or drop the entry.
+  if (/classifies actively adopted text as/u.test(message)) {
+    return " (this passage is still a source of an IR content item in this batch: revise that item's sources so it no longer adopts the text, or remove this entry and let the default cover the passage)"
+  }
+  if (/has no complete disposition/u.test(message)) {
+    return " (select the operative text into IR content, or write one source_coverage entry naming exactly this passage; unselected text is otherwise recorded as context by code)"
+  }
+  if (/omits source text from its IR destinations/u.test(message)) {
+    return " (a normative entry must select text its named IR items also select: widen the item's sources to the full passage, or narrow this entry to the part the item adopts)"
+  }
+  if (/superseded source_coverage/u.test(message)) {
+    return " (withdrawal needs two things: the passage must be text an earlier delegation adopted, and basis must cite the current user text that replaces it; if the IR still adopts this passage, revise that item instead)"
+  }
+  if (/was not previously normative text/u.test(message)) {
+    return " (only text an earlier delegation adopted can be superseded; text that is merely old context needs no entry)"
+  }
+  if (/no matching source_coverage assignment/u.test(message)) {
+    return " (IR content that cites source text must have a coverage entry, or be selected in this batch's content create/revise)"
   }
   return ""
 }

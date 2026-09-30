@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { digestText, type Candidate, type CompilerEvent, type ContentItem, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
-import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "../src/core/source-payload.js"
+import { DEFAULT_SOURCE_REASON, materializeSourceContent, sourceSegments, validateSourceCoverage } from "../src/core/source-payload.js"
 import { resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 
 const event = (id: string, text: string): CompilerEvent => ({ schema_version: 2, run_id: "run", event_id: id, kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text } })
@@ -48,14 +48,36 @@ test("a located heading cannot stand in for the full normative passage", () => {
   assert.throws(() => validateSourceCoverage(c, [e], [e], {}, { t: task(item("r", [ref(e, "## Filter")])) }), /omits source text/)
 })
 
-test("unaccounted source and incorrectly mapped source are rejected", () => {
+test("text the batch never names is recorded as a code default, and a mis-mapped source is still rejected", () => {
   const e = event("e", "First behavior.\n\nSecond behavior.")
   const c = candidate()
   adopt(c, ref(e, "First behavior."), "r1")
-  const ir = task(item("r1", [ref(e, "First behavior.")]), item("r2", [ref(e, "Second behavior.")]))
-  assert.throws(() => validateSourceCoverage(c, [e], [e], {}, { t: ir }), /no complete disposition/)
-  adopt(c, ref(e, "Second behavior."), "r1")
-  assert.throws(() => validateSourceCoverage(c, [e], [e], {}, { t: ir }), /omits source text/)
+  const ir = task(item("r1", [ref(e, "First behavior.")]))
+  ir.content[0]!.text_origin = "source"
+  validateSourceCoverage(c, [e], [e], {}, { t: ir })
+  assert.deepEqual(c.source_coverage!.map(entry => entry.disposition), ["normative", "context"])
+  const [defaulted] = c.source_coverage!.slice(1)
+  assert.equal(defaulted!.reason, DEFAULT_SOURCE_REASON)
+  assert.deepEqual(defaulted!.requirements, [])
+  assert.equal((e.payload as { text: string }).text.slice(defaulted!.source.span!.start, defaulted!.source.span!.end), "Second behavior.")
+  assert.equal(defaulted!.source.digest, digestText((e.payload as { text: string }).text))
+  // Assuming a default for text that is named elsewhere stays a contradiction.
+  const misMapped = candidate()
+  adopt(misMapped, ref(e, "Second behavior."), "r1")
+  assert.throws(() => validateSourceCoverage(misMapped, [e], [e], {}, { t: ir }), /omits source text/)
+})
+
+test("a code default never covers text the batch did adopt", () => {
+  const e = event("e", "Adopted rule.\n\nLeftover framing.")
+  const sourceText = (e.payload as { text: string }).text
+  const c = candidate()
+  adopt(c, ref(e, "Adopted rule."), "r1")
+  const ir = task(item("r1", [ref(e, "Adopted rule.")]))
+  ir.content[0]!.text_origin = "source"
+  validateSourceCoverage(c, [e], [e], {}, { t: ir })
+  const defaults = c.source_coverage!.slice(1)
+  assert.equal(defaults.length, 1, "only the unselected paragraph is defaulted")
+  assert.equal(sourceText.slice(defaults[0]!.source.span!.start, defaults[0]!.source.span!.end), "Leftover framing.")
 })
 
 test("a normative mapping cannot silently adopt the same source into an unlisted requirement", () => {

@@ -86,6 +86,13 @@ export interface ManagementRequestRecord {
     /** The unresolved ones themselves, so the audit can point at them (bounded). */
     unresolvedRefs?: Array<{ source_id: string; span?: { unit: string; start: number; end: number } }>
   }
+  /**
+   * Passages of this batch's user text that no content selection and no model
+   * entry named: code recorded them as context so an omission cannot fail the
+   * batch.  The count is kept here so a commit that skipped text is visible in
+   * the batch log without reading the whole candidate.
+   */
+  source_defaults?: { count: number }
   provider?: string
   model?: string
   agent?: string
@@ -100,6 +107,12 @@ export interface ManagementRequestRecord {
   status: "accepted" | "transport_failed" | "json_failed" | "schema_failed" | "validation_failed"
   error_code?: string
   error_message?: string
+  /**
+   * Trigger events this failed batch stops re-offering.  After a bounded number
+   * of failed batches the input is recorded once and the run moves on, instead
+   * of carrying it (and everything queued behind it) into every later batch.
+   */
+  deferred_event_ids?: string[]
   retry: boolean
   ir_revisions: Record<string, number>
   compiled_revisions: Record<string, number>
@@ -358,17 +371,42 @@ export class IntentStoreV2 {
 
   pendingEvents(): CompilerEvent[] {
     const events = this.readEvents()
+    const deferred = this.deferredEventIds()
+    const sequenceOf = new Map(events.map((record) => [record.event.event_id, record.sequence]))
     return [...new Set([...this.snapshot.pending_event_ids, ...(this.snapshot.unresolved_user_event_ids ?? [])])]
+      .filter((id) => !deferred.has(id))
       .map((id) => events.find((record) => record.event.event_id === id)?.event)
       .filter((event): event is CompilerEvent => event !== undefined)
+      // A turn that carries a delegation must be able to answer it, so user
+      // input goes first; everything else (returns, capability changes) waits
+      // for a turn that has no new delegation, and oldest goes first inside a
+      // class so nothing is starved by later arrivals.
+      .sort((a, b) => ((a.kind === "user_input" ? 0 : 1) - (b.kind === "user_input" ? 0 : 1))
+        || (sequenceOf.get(a.event_id) ?? 0) - (sequenceOf.get(b.event_id) ?? 0))
   }
 
+  /**
+   * One batch is one event.  A batch that carries the whole queue grows with
+   * every failure, and the model then has to close an accounting nobody can
+   * close; the queue therefore hands out its oldest event alone.
+   */
   popPending(): CompilerEvent[] {
-    const pending = this.pendingEvents()
-    this.snapshot.pending_event_ids = []
+    const next = this.pendingEvents()[0]
+    this.snapshot.pending_event_ids = next === undefined
+      ? []
+      : this.snapshot.pending_event_ids.filter((id) => id !== next.event_id)
     this.snapshot.budget.management_requests = 0
     this.writeSnapshot()
-    return pending
+    return next === undefined ? [] : [next]
+  }
+
+  /**
+   * Events whose batches failed often enough that the run stops offering them.
+   * Derived from the batch log rather than stored beside the queue: the event
+   * stays in the journal as evidence, and no later batch inherits it.
+   */
+  deferredEventIds(): Set<string> {
+    return new Set(this.snapshot.management_log.flatMap((record) => record.deferred_event_ids ?? []))
   }
 
   requeuePending(eventIds: readonly string[]): void {
@@ -537,7 +575,10 @@ export class IntentStoreV2 {
     if (snapshot.management_log === undefined) snapshot.management_log = []
     // Recover even if the process stopped after appending an event or after
     // taking the queue. Historical accepted records keep their original meaning.
-    const handledUsers = new Set(snapshot.management_log.filter(row => row.status === "accepted").flatMap(row => row.trigger_event_ids))
+    // A delegated input is consumed either by the batch that compiled it or by
+    // the batch that set it aside; a batch that merely failed owns neither.
+    const handledUsers = new Set(snapshot.management_log.flatMap(row =>
+      row.status === "accepted" ? row.trigger_event_ids : row.deferred_event_ids ?? []))
     snapshot.unresolved_user_event_ids = this.readEvents().filter(row => row.event.kind === "user_input" && !handledUsers.has(row.event.event_id)).map(row => row.event.event_id)
     // A process can exit after popPending but before return assessment commits.
     // Restore such returns from the event journal; queue emptiness is not an ack.
