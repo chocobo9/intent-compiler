@@ -50,11 +50,12 @@ const input = (sourceId: string): CompilerModelV2Input => ({
   generation_repair: { issues: [], ir_proposal: proposal(sourceId) },
 } as unknown as CompilerModelV2Input)
 
-const index = (entries: Array<{ alias: string; event_id: string }>) => ({
+const index = (entries: Array<{ alias: string; event_id: string }>, storedIds = entries.map(entry => entry.event_id)) => ({
   lookup: (id: string) => {
     const found = entries.find(entry => entry.event_id === id)
     return found === undefined ? undefined : { ...found, digest: "sha256:x" }
   },
+  records: (id: string) => storedIds.includes(id),
 })
 
 test("every known source field of an IR request is expressed under its alias", () => {
@@ -114,6 +115,50 @@ test("decode restores the full identity and refuses an alias the request did not
   // A full id is not an alias: decode leaves it to the existing validation.
   const full = decodeIRProposal(proposal("long-event-id"), [{ alias: "e7", event_id: "long-event-id", digest: "sha256:x" }])
   assert.equal(full.ok, true)
+})
+
+test("a binding value's material ref is expressed and restored like change.sources", () => {
+  const bindingProposal = (sourceId: string) => {
+    const value = proposal(sourceId) as unknown as { groups: Array<{ ir_changes: Array<Record<string, unknown>> }> }
+    value.groups[0]!.ir_changes.push({
+      action: "create", target: "binding", local_ref: "b1",
+      value: { ref: ref(sourceId), role: "task_data", purpose: "p" },
+      sources: [ref(sourceId)],
+    })
+    return value as unknown as IRProposal
+  }
+  const wire = expressIRRequest(
+    { ...input("long-event-id"), generation_repair: { issues: [], ir_proposal: bindingProposal("long-event-id") } },
+    index([{ alias: "e7", event_id: "long-event-id" }]),
+  )
+  const wireChange = (wire.request.generation_repair!.ir_proposal as unknown as
+    { groups: Array<{ ir_changes: Array<{ value: { ref: SourceRef } }> }> }).groups[0]!.ir_changes[1]!
+  assert.equal(wireChange.value.ref.source_id, "e7", "the draft's binding material is shown under the alias")
+  const restored = decodeIRProposal(bindingProposal("e7"), [{ alias: "e7", event_id: "long-event-id", digest: "sha256:x" }])
+  assert.equal(restored.ok, true)
+  const storedChange = (restored.ok ? restored.proposal : undefined) as unknown as
+    { groups: Array<{ ir_changes: Array<{ value: { ref: SourceRef } }> }> }
+  assert.equal(storedChange.groups[0]!.ir_changes[1]!.value.ref.source_id, "long-event-id")
+  const refused = decodeIRProposal(bindingProposal("e99"), [{ alias: "e7", event_id: "long-event-id", digest: "sha256:x" }])
+  assert.equal(refused.ok, false)
+  assert.match((refused as { message: string }).message, /groups\[0\]\.ir_changes\[1\]\.value\.ref names e99: alias_not_offered/)
+})
+
+test("a run whose event ids read like aliases presents full ids and never reinterprets them", () => {
+  const built = buildSourceAliasIndex({ records: [event("e1", "first", 1), event("other", "second", 2)], malformed: 0 })
+  assert.equal(built.ok, true)
+  const aliasIndex = built.ok ? built.index : undefined
+  assert.ok(aliasIndex, "the run is still readable, it just presents no aliases")
+  assert.equal(aliasIndex!.lookup("other"), undefined, "the alias e2 is not minted for other-event")
+  assert.equal(aliasIndex!.records("e1"), true)
+  assert.match(aliasIndex!.disabled ?? "", /reads like an alias \(e1\)/)
+  const wire = expressIRRequest(input("other"), aliasIndex!)
+  assert.deepEqual(wire.aliases, [])
+  assert.equal(wire.request.events[0]!.event_id, "other")
+  const decoded = decodeIRProposal(proposal("e1"), [], (id) => aliasIndex!.records(id))
+  assert.equal(decoded.ok, true)
+  assert.deepEqual(decoded.ok && decoded.proposal.basis.event_ids, ["e1"],
+    "a stored id is that event, never another event's alias")
 })
 
 test("an alias index is only built from a journal that fully parses without conflicts", () => {

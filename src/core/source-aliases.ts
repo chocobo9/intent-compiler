@@ -27,6 +27,14 @@ export interface SourceAliasEntry {
 /** The run's verified alias domain: which alias belongs to which stored event. */
 export interface SourceAliasIndex {
   lookup(eventId: string): SourceAliasEntry | undefined
+  /**
+   * True when the run's journal records this id as an event.  A stored id is
+   * always that event, never an alias: a run whose ids could be mistaken for
+   * aliases presents full ids instead (see `disabled`).
+   */
+  records(eventId: string): boolean
+  /** Why this run presents no aliases, when the mechanism is unsafe for it. */
+  disabled?: string
 }
 
 /** The shape this module mints.  A value of this shape must come from a request. */
@@ -55,9 +63,16 @@ export function buildSourceAliasIndex(
     ok: false,
     message: `the event journal cannot be used to derive source aliases: ${detail}. Source aliases stay disabled until the store is repaired; this is a storage integrity problem, not something a model retry can fix.`,
   })
-  if (journal.malformed > 0) return problem(`${journal.malformed} line(s) do not parse`)
+  if (journal.malformed > 0) return problem(`${journal.malformed} line(s) cannot be read as event records`)
   const byEventId = new Map<string, SourceAliasEntry>()
   const byAlias = new Set<string>()
+  const storedIds = new Set<string>()
+  // An event id is any non-empty string, so it may itself read like an alias
+  // (`e2`).  Then one draft's full id and another event's alias are the same
+  // text, and decode could silently pick the wrong one.  Such a run keeps the
+  // full-id form it had before aliases existed: nothing is guessed, and every
+  // id it shows is still accepted exactly as written.
+  const aliasShaped: string[] = []
   for (const record of journal.records) {
     if (!Number.isInteger(record.sequence) || record.sequence <= 0) {
       return problem(`event ${record.event?.event_id ?? "(unknown)"} carries an invalid sequence ${String(record.sequence)}`)
@@ -69,9 +84,19 @@ export function buildSourceAliasIndex(
     // record no longer describes the event it is filed under.
     if (digestOf(record.event) !== record.digest) return problem(`the recorded digest of event ${record.event.event_id} does not match its content`)
     byAlias.add(alias)
+    storedIds.add(record.event.event_id)
+    if (isSourceAlias(record.event.event_id)) aliasShaped.push(record.event.event_id)
     byEventId.set(record.event.event_id, { alias, event_id: record.event.event_id, digest: sourceDigest(record.event) })
   }
-  return { ok: true, index: { lookup: (eventId) => byEventId.get(eventId) } }
+  if (aliasShaped.length > 0) return {
+    ok: true,
+    index: {
+      lookup: () => undefined,
+      records: (eventId) => storedIds.has(eventId),
+      disabled: `an event id in this run reads like an alias (${aliasShaped.slice(0, 3).join(", ")}); this run keeps full event ids`,
+    },
+  }
+  return { ok: true, index: { lookup: (eventId) => byEventId.get(eventId), records: (eventId) => storedIds.has(eventId) } }
 }
 
 /** Render an event id the way the request that offered it wrote it. */
@@ -80,7 +105,7 @@ export function aliasDisplay(aliases: readonly SourceAliasEntry[]): (eventId: st
   return (eventId) => byEventId.get(eventId) ?? eventId
 }
 
-/** True when this draft value is a full id the run records (kept verbatim). */
+/** Rewrite one `SourceRef`'s event identity when it carries one. */
 function mapRef(value: unknown, path: string, resolve: (id: string, path: string) => string): void {
   if (!isRecord(value) || typeof value.source_id !== "string") return
   value.source_id = resolve(value.source_id, path)
@@ -114,8 +139,13 @@ function mapIRProposalSourceIds(proposal: unknown, resolve: (id: string, path: s
     proposal.groups.forEach((group, groupIndex) => {
       if (!isRecord(group) || !Array.isArray(group.ir_changes)) return
       group.ir_changes.forEach((change, changeIndex) => {
-        mapRefList(isRecord(change) ? change.sources : undefined,
-          `groups[${groupIndex}].ir_changes[${changeIndex}].sources`, resolve)
+        if (!isRecord(change)) return
+        const path = `groups[${groupIndex}].ir_changes[${changeIndex}]`
+        mapRefList(change.sources, `${path}.sources`, resolve)
+        // A binding create/revise names its material in value.ref, which the
+        // schema allows to be a SourceRef; it carries an event identity exactly
+        // like change.sources does.
+        if (isRecord(change.value)) mapRef(change.value.ref, `${path}.value.ref`, resolve)
       })
     })
   }
@@ -177,11 +207,16 @@ export function expressIRRequest(
 export function decodeIRProposal(
   proposal: IRProposal,
   aliases: readonly SourceAliasEntry[],
+  isStoredEventId: (eventId: string) => boolean = () => false,
 ): { ok: true; proposal: IRProposal } | { ok: false; message: string } {
   const table = new Map(aliases.map((entry) => [entry.alias, entry.event_id]))
   const unoffered: Array<{ path: string; alias: string }> = []
   const decoded = structuredClone(proposal)
   mapIRProposalSourceIds(decoded, (id, path) => {
+    // An id the run records is that event, never an alias.  A run whose ids
+    // could be read as aliases presents no aliases at all, so this rule and the
+    // table can never disagree about the same text.
+    if (isStoredEventId(id)) return id
     const eventId = table.get(id)
     if (eventId !== undefined) return eventId
     if (isSourceAlias(id)) unoffered.push({ path, alias: id })
@@ -198,18 +233,6 @@ export function decodeIRProposal(
       + (hidden > 0 ? ` Showing the first ${shown.length} of ${unoffered.length} (${hidden} more are not listed): ${list}.` : ` Showing all ${shown.length}: ${list}.`)
       + ` This request offered ${offered}; a reference must name one of them, or a full event id this run records.`,
   }
-}
-
-/**
- * Present an example proposal with one placeholder alias instead of whatever
- * event id the fixture carries.  An IR-stage request shows aliases, so an
- * example that kept a full id would invite the model to copy a value no
- * request ever offered.
- */
-export function expressExampleAlias<T>(proposal: T, alias: string): T {
-  const clone = structuredClone(proposal)
-  mapIRProposalSourceIds(clone, () => alias)
-  return clone
 }
 
 /** Keep the unoffered-alias list bounded, like the source gate's own list. */

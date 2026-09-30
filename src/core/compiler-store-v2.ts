@@ -12,6 +12,7 @@ import type { SourceAliasEntry } from "./source-aliases.js"
 import {
   canonicalJson,
   digestOf,
+  isRecord,
   validateEvent,
   type AssessmentDraft,
   type AtomStatus,
@@ -174,6 +175,8 @@ export interface ManagementAttemptRecord {
    * model reads the alias, this record says which event it stood for.
    */
   source_aliases?: SourceAliasEntry[]
+  /** Why this attempt presented no aliases, when the mechanism is unsafe for the run. */
+  source_aliases_disabled?: string
   /** The exact input sent to the independent check, recorded with the attempt. */
   check_input?: unknown
   /** The full prepared view behind `prepared_digest` (its `digest` field is that digest). */
@@ -568,7 +571,20 @@ export class IntentStoreV2 {
     for (const line of readFileSync(this.eventsPath, "utf8").split(/\r?\n/)) {
       if (!line.trim()) continue
       try {
-        records.push(JSON.parse(line) as V2EventRecord)
+        const parsed: unknown = JSON.parse(line)
+        // Parsing is not enough: `null` or `{"sequence":1}` parse and would
+        // then be read as if they were records.  Anything without the fields
+        // the journal is indexed by counts as a corrupt line, exactly like one
+        // that does not parse, so `readEvents` keeps skipping it instead of
+        // throwing and the alias gate can refuse the run.
+        if (!isRecord(parsed) || !Number.isInteger(parsed.sequence)
+          || !isRecord(parsed.event) || typeof parsed.event.event_id !== "string"
+          || !isRecord(parsed.event.source) || typeof parsed.event.source.channel !== "string"
+          || typeof parsed.digest !== "string") {
+          malformed += 1
+          continue
+        }
+        records.push(parsed as unknown as V2EventRecord)
       } catch {
         // Corrupt lines are retained for inspection but do not poison in-memory state.
         malformed += 1

@@ -310,11 +310,15 @@ test("an alias this request did not offer is rejected by name, not by journal lo
   store.applyDeltas({ max_management_requests: 6 })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
-  const feedback = requests.filter(request => request.generation_stage === "ir")[1]!.validation_errors!.join("\n")
+  const retry = requests.filter(request => request.generation_stage === "ir")[1]!
+  const feedback = retry.validation_errors!.join("\n")
   assert.match(feedback, /2 reference\(s\) name an alias this request did not offer/)
   assert.match(feedback, /basis\.event_ids\[0\] names e9: alias_not_offered/)
   assert.match(feedback, /groups\[0\]\.ir_changes\[1\]\.sources\[0\] names e7: alias_not_offered/)
   assert.match(feedback, /This request offered e1;/)
+  assert.match(retry.schema_rejected_draft?.text ?? "", /"e9"/,
+    "the answer that named the wrong alias comes back as the repair draft")
+  assert.match((retry.schema_rejected_draft?.errors ?? []).join(" "), /alias_not_offered/)
   const record = store.current().management_log.at(-1)!
   assert.match((record.attempts?.[0]?.issues ?? []).join("\n"), /alias_not_offered/,
     "the rejection is recorded on the attempt that produced it")
@@ -349,7 +353,7 @@ test("a journal that cannot be verified stops the batch before any alias is deri
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, false)
   assert.equal(result.code, "storage_unverified")
-  assert.match(result.message ?? "", /1 line\(s\) do not parse/)
+  assert.match(result.message ?? "", /1 line\(s\) cannot be read as event records/)
   assert.equal(calls, 0, "the model is never asked to repair the store")
   assert.ok(store.current().pending_event_ids.includes("input-event-id"), "the batch is requeued, not consumed")
 })
@@ -369,12 +373,71 @@ test("a conflicting or digest-mismatched journal record also stops the batch", a
   assert.ok(store.current().pending_event_ids.includes("input-event-id"))
 })
 
+test("a journal line that parses but is not an event record also stops the batch", async () => {
+  let calls = 0
+  const { store, compiler, storeDir } = await setup(async () => { calls += 1; return JSON.stringify({}) })
+  const journal = join(storeDir, "v2-runs", "parent", "events.jsonl")
+  // All three parse as JSON; none is a record the journal can be read by:
+  // null, a record without its event, and an event without a source channel.
+  appendFileSync(journal, "null\n", "utf8")
+  appendFileSync(journal, `${JSON.stringify({ sequence: 2 })}\n`, "utf8")
+  appendFileSync(journal, `${JSON.stringify({ sequence: 3, event: { event_id: "no-source" }, digest: "sha256:0" })}\n`, "utf8")
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, false)
+  assert.equal(result.code, "storage_unverified")
+  assert.match(result.message ?? "", /3 line\(s\) cannot be read as event records/)
+  assert.equal(calls, 0, "the model is never reached with an unusable journal")
+  assert.ok(store.current().pending_event_ids.includes("input-event-id"))
+})
+
+test("a binding create restores the alias inside value.ref before the IR is applied", async () => {
+  const { store, compiler } = await setup(async input => {
+    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    const proposal = parent()
+    proposal.groups[0]!.ir_changes.push({
+      action: "create", target: "binding", local_ref: "b1",
+      value: { ref: { source_id: "e1", digest: "sha256:x", segment_id: "s1" }, role: "task_data", purpose: "the selected requirement text" },
+      sources: [{ source_id: "e1", digest: "sha256:x", segment_id: "s1" }],
+    } as never)
+    return JSON.stringify(proposal)
+  })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, `${result.message} ${JSON.stringify(result.code)}`)
+  const binding = store.current().ir.t1!.bindings.find(entry => entry.binding_id === "b1")!
+  assert.equal((binding.ref as { source_id?: string }).source_id, "input-event-id",
+    "the material ref is restored with the rest of the answer, not stored as an alias")
+})
+
+test("a run whose event ids can be read as aliases keeps full ids and says why", async () => {
+  const requests: CompilerModelV2Input[] = []
+  const basis = { event_ids: ["e2", "input-event-id"], refs: [] }
+  const { store, compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
+    if (input.generation_stage !== "ir") return JSON.stringify({ ...child(input.parent_basis!), basis })
+    return JSON.stringify({ ...parent(), basis })
+  })
+  await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "e2", kind: "user_input",
+    source: { channel: "user", producer_id: "user" }, payload: { text: "Name this event like an alias." } })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, `${result.message} ${JSON.stringify(result.code)}`)
+  const ir = requests.find(request => request.generation_stage === "ir")!
+  assert.deepEqual(ir.events.map(event => event.event_id), ["e2", "input-event-id"],
+    "a stored id that reads like an alias is shown as itself, never as another event's alias")
+  assert.ok((ir.source_segments ?? []).every(segment => segment.source_id === "e2" || segment.source_id === "input-event-id"))
+  const attempt = (store.current().management_log.at(-1)!.attempts ?? [])
+    .find(entry => entry.kind === "propose" && entry.generation_stage === "ir")!
+  assert.deepEqual(attempt.source_aliases, [], "no aliases are minted for this run")
+  assert.match(attempt.source_aliases_disabled ?? "", /reads like an alias \(e2\)/)
+})
+
 test("the IR-stage contract and example are written in the alias form", async () => {
   const { generationContract } = await import("../src/model/generation-schema.js")
-  const ir = generationContract(V2_COMPILER_CONTRACT, "ir", undefined, undefined, false, "e1")
+  const ir = generationContract(V2_COMPILER_CONTRACT, "ir")
   assert.match(ir.reference_contract, /short event aliases/)
-  assert.match(ir.example_candidate, /"source_id": "e1"/)
-  assert.equal(ir.example_candidate.includes("input-event-id"), false)
+  assert.match(ir.reference_contract, /never copy a source id out of the example/)
+  // The example keeps a placeholder id: copying it must fail loudly instead of
+  // resolving to whichever event happens to carry the first alias.
+  assert.match(ir.example_candidate, /"source_id": "input-event-id"/)
   const ci = generationContract(V2_COMPILER_CONTRACT, "ci", undefined, "parent")
   assert.match(ci.reference_contract, /short event aliases/, "the clause covers both forms")
   assert.match(ci.example_candidate, /input-event-id/, "the CI example keeps the full identity it copies from the parent")
@@ -409,7 +472,7 @@ test("an older IR draft loses its execution-facing fields when it is re-sent", a
     restored: { source_basis: "basis-1", phase: "ir", ir_proposal: oldProposal as never, issues: [] },
     checkRequired: false, remaining: () => 5, currentBasis: () => "basis-1",
     call: async (request) => { seen = request; return { ok: false, error: { code: "schema", message: "stub" } } },
-    aliases: { lookup: () => undefined },
+    aliases: { lookup: () => undefined, records: () => false },
     resolve: () => ({ unresolved: 0 }), validateBasis: () => ({ ok: true }), directory: () => ({ tasks: [] }),
   })
   const result = await generation.propose(input)

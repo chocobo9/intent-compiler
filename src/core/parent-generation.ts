@@ -34,7 +34,11 @@ interface Options {
    * The table travels beside the request, never inside it: the model reads
    * aliases, the call record keeps what they stood for.
    */
-  call(input: CompilerModelV2Input, meta?: { source_aliases?: SourceAliasEntry[] }): Promise<CompilerModelV2Result>
+  call(input: CompilerModelV2Input, meta?: {
+    source_aliases?: SourceAliasEntry[]
+    /** Why this run presents no aliases, when the mechanism is unsafe for it. */
+    source_aliases_disabled?: string
+  }): Promise<CompilerModelV2Result>
   aliases: SourceAliasIndex
   resolve(candidate: Candidate): SourceRefReport
   validateBasis(candidate: Candidate, display: (eventId: string) => string): { ok: boolean; message?: string }
@@ -299,10 +303,24 @@ export class ParentGeneration {
     }
     if (this.state.phase === "ir") {
       const stage = stageInput("ir")
-      const result = await this.options.call(stage.request, { source_aliases: stage.aliases })
+      const disabled = this.options.aliases.disabled
+      const result = await this.options.call(stage.request, {
+        source_aliases: stage.aliases,
+        ...(disabled === undefined ? {} : { source_aliases_disabled: disabled }),
+      })
       if (!result.ok || !result.ir_proposal) return result.ok ? this.reject("IR stage returned no IR proposal") : this.failed(result, "ir")
-      const decoded = decodeIRProposal(result.ir_proposal, stage.aliases)
-      if (!decoded.ok) return this.reject(decoded.message, result)
+      const decoded = decodeIRProposal(result.ir_proposal, stage.aliases, (eventId) => this.options.aliases.records(eventId))
+      if (!decoded.ok) {
+        // The answer that failed stays the repair starting point: the next
+        // request carries it back with the reason, so a repair targets the
+        // draft that actually named the wrong alias.
+        this.state.rejected_response = {
+          stage: "ir",
+          text: result.call?.text ?? JSON.stringify(result.ir_proposal, null, 2),
+          errors: [decoded.message],
+        }
+        return this.reject(decoded.message, result)
+      }
       delete this.state.rejected_response
       this.state.ir_proposal = structuredClone(decoded.proposal)
       try { this.state.parent = this.prepare(decoded.proposal) }

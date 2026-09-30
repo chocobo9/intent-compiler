@@ -253,7 +253,9 @@ async function advance(
     store.requeuePending(events.map((event) => event.event_id))
     return failure(snapshot.run_id, "storage_unverified", aliasIndex.message)
   }
-  const sourceAliases: SourceAliasIndex = aliasIndex !== undefined && aliasIndex.ok ? aliasIndex.index : { lookup: () => undefined }
+  const sourceAliases: SourceAliasIndex = aliasIndex !== undefined && aliasIndex.ok
+    ? aliasIndex.index
+    : { lookup: () => undefined, records: () => false }
 
   // Retain the reasons and the exact rejected draft. This supplies a revision
   // starting point; it does not guarantee local repair or reuse a check result.
@@ -332,7 +334,10 @@ async function advance(
   let activeRepairContext: CandidateRepairContext | undefined
   // Every model call is measured on its own, so cost attribution is a reading
   // and not an inference from token counts.
-  const callPropose = async (request: CompilerModelV2Input, meta?: { source_aliases?: SourceAliasEntry[] }): Promise<CompilerModelV2Result> => {
+  const callPropose = async (request: CompilerModelV2Input, meta?: {
+    source_aliases?: SourceAliasEntry[]
+    source_aliases_disabled?: string
+  }): Promise<CompilerModelV2Result> => {
     request = { ...request, budget: { requests_used: attemptsLog.length, max_requests: requestLimit } }
     activeRepairContext = request.repair_context === undefined ? undefined : structuredClone(request.repair_context)
     const startedAt = new Date().toISOString()
@@ -344,6 +349,7 @@ async function advance(
       kind: "propose",
       ...(request.generation_stage === undefined ? {} : { generation_stage: request.generation_stage, request: structuredClone(request) }),
       ...(meta?.source_aliases === undefined ? {} : { source_aliases: structuredClone(meta.source_aliases) }),
+      ...(meta?.source_aliases_disabled === undefined ? {} : { source_aliases_disabled: meta.source_aliases_disabled }),
       ...(result.error?.diagnostic === undefined ? {} : { failure_diagnostic: result.error.diagnostic }),
       ...boundedAttemptText(result.call?.text),
       ...(activeRepairContext === undefined ? {} : { repair_context: activeRepairContext }),

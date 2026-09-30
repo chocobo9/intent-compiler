@@ -1,5 +1,4 @@
 import { Ajv } from "ajv"
-import { expressExampleAlias } from "../core/source-aliases.js"
 import type { Candidate, CandidateGroup } from "../core/intent-contract.js"
 import { CANDIDATE_JSON_SCHEMA, type CandidateSchemaResult } from "./candidate-schema.js"
 import { CANDIDATE_EXAMPLE } from "./candidate-example.js"
@@ -54,20 +53,18 @@ export function validateGenerationProposal(stage: GenerationStage, value: unknow
 }
 
 /** Project the existing encoding example, without inventing another task. */
-export function buildGenerationExample(stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis = "example-parent-basis", sourceAlias?: string): IRProposal | CIProposal {
+export function buildGenerationExample(stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis = "example-parent-basis"): IRProposal | CIProposal {
   const example = structuredClone(profile === undefined ? CANDIDATE_EXAMPLE : buildStrictCandidateExample(profile)) as Candidate
-  if (stage === "ir") {
-    const proposal: IRProposal = {
-      ...example,
-      groups: example.groups.map(({
-        compilation: _compilation, coverage: _coverage,
-        execution_decisions: _executionDecisions, assessments: _assessments, checks: _checks, ...group
-      }) => group),
-    }
-    // The IR stage names events by the alias its request offered; the example
-    // has to use the same vocabulary or it teaches the model a copyable value
-    // that no request contained.
-    return sourceAlias === undefined ? proposal : expressExampleAlias(proposal, sourceAlias)
+  // The example keeps its fixture ids in every stage.  A live alias here would
+  // be copyable and would resolve to a real event — the one silent
+  // mis-attribution this whole change exists to prevent — so an answer that
+  // copies the example is left to fail loudly on the source gate instead.
+  if (stage === "ir") return {
+    ...example,
+    groups: example.groups.map(({
+      compilation: _compilation, coverage: _coverage,
+      execution_decisions: _executionDecisions, assessments: _assessments, checks: _checks, ...group
+    }) => group),
   }
   const { source_coverage: _sourceCoverage, ...rest } = example
   return {
@@ -102,7 +99,7 @@ export function generationStageInstruction(stage: GenerationStage, assessment = 
 
 /** Retain field semantics while replacing the joint-response shape and example. */
 export function generationContract<T extends { candidate_shape: string; example_candidate: string }>(
-  contract: T, stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis?: string, assessment = false, sourceAlias?: string,
+  contract: T, stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis?: string, assessment = false,
 ): T {
   return {
     ...contract,
@@ -111,6 +108,6 @@ export function generationContract<T extends { candidate_shape: string; example_
       : assessment
         ? "CI stage (execution assessment) response = {schema_version:2,basis,parent_basis,parent_issues,groups}. Each group uses the existing CandidateGroup fields except ir_changes. source_coverage is forbidden. basis.event_ids must name exactly this batch's trigger events; its refs may cite existing objects you assessed. Copy parent_basis from the request. Keep each group's task_refs and depends_on, and write assessments and execution_decisions from this batch's evidence. Assess the returned work against the Atom's completion criteria and the user's own words; a reservation about the IR's wording, redundancy or evidence phrasing belongs in the assessment explanation, and parent_issues is only for a stored-IR defect that makes the judgement impossible. If parent_issues is nonempty, groups must be empty."
         : "CI stage response = {schema_version:2,basis,parent_basis,parent_issues,groups}. Each group uses the existing CandidateGroup fields except ir_changes. source_coverage is forbidden. Copy basis exactly from generation_repair.ir_proposal.basis, preserving empty refs; it is not recomputed from the temporary IR. Copy parent_basis from the request. If parent_issues is nonempty, groups must be empty; otherwise preserve the parent groups (local_ref, task_refs, depends_on) and any parent questions while supplying compilation and coverage.",
-    example_candidate: JSON.stringify(buildGenerationExample(stage, profile, parentBasis, stage === "ir" ? sourceAlias : undefined), null, 2),
+    example_candidate: JSON.stringify(buildGenerationExample(stage, profile, parentBasis), null, 2),
   }
 }

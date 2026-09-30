@@ -14,7 +14,6 @@ import { buildStrictCandidateExample, buildStrictCandidateSchema } from "./candi
 import { buildStrictCandidateCheckSchema } from "./candidate-check-schema-strict.js"
 import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
 import { buildGenerationSchema, generationContract, generationStageInstruction } from "./generation-schema.js"
-import { isSourceAlias } from "../core/source-aliases.js"
 
 /**
  * The OpenCode surface used by this Adapter is intentionally narrow.  The
@@ -193,13 +192,11 @@ export function createOpenCodeModelTransportV2(
     if (stage !== "ir" && stage !== "ci") return legacy(request)
     const parentBasis = "parent_basis" in request && typeof request.parent_basis === "string" ? request.parent_basis : undefined
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
-    const firstEventId = stage === "ir" ? request.events?.[0]?.event_id : undefined
-    const sourceAlias = typeof firstEventId === "string" && isSourceAlias(firstEventId) ? firstEventId : undefined
     const transport = createOpenCodeV2Transport(
       options,
       `${generationStageInstruction(stage, assessing)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
       buildGenerationSchema(stage, "openai"),
-      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", parentBasis, assessing, sourceAlias) }),
+      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", parentBasis, assessing) }),
     )
     return transport(request)
   }
