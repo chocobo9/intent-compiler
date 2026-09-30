@@ -125,6 +125,22 @@ test("a code default never covers text the batch did adopt", () => {
   assert.equal(sourceText.slice(defaults[0]!.source.span!.start, defaults[0]!.source.span!.end), "Leftover framing.")
 })
 
+test("a citation on a non-content change does not stand in for a disposition", () => {
+  const e = event("e", "First behavior.\n\nSecond behavior.")
+  const sourceText = (e.payload as { text: string }).text
+  const [s1] = sourceSegments([e])
+  const c = candidate()
+  c.groups[0]!.ir_changes = [{ action: "revise", target: "task", id: "t", expected_revision: 0,
+    value: { goal: { text: "One task" }, current_scope: { text: "Proceed", disposition: "proceed" } },
+    sources: [{ source_id: "e", digest: digestText(sourceText), span: { ...s1!.span } }] } as never]
+  const ir = task(item("r1", [ref(e, "Second behavior.")]))
+  ir.content[0]!.text_origin = "source"
+  validateSourceCoverage(c, [e], [e], {}, { t: ir })
+  const defaults = (c.source_coverage ?? []).filter(entry => entry.reason === DEFAULT_SOURCE_REASON)
+  assert.equal(defaults.length, 1)
+  assert.equal(sourceText.slice(defaults[0]!.source.span!.start, defaults[0]!.source.span!.end), "First behavior.")
+})
+
 test("a normative mapping cannot silently adopt the same source into an unlisted requirement", () => {
   const e = event("e", "Current behavior."), c = candidate()
   adopt(c, ref(e), "r1")
@@ -175,14 +191,17 @@ test("a task's own citation accounts for the rest of its paragraph, so a span su
   assert.equal(ir.content[0]!.text, "Create the file")
 })
 
-test("a citation on a task change cannot dispose of a paragraph by itself", () => {
+test("a citation on a task change is not a disposition, so code records the default", () => {
   const text = "Create the file, verify its bytes, then stop."
   const e = event("e", text), c = candidate()
   c.groups[0]!.ir_changes = [{ action: "create", target: "task", local_ref: "t",
     value: { goal: { text: "Create the file" }, current_scope: { text: "Create the file", disposition: "proceed" } },
     sources: [{ source_id: "e", digest: digestText(text), span: { unit: "utf16", start: 0, end: text.length } }] }]
   assert.equal(resolveSourceRefs(c, [e]).unresolved, 0)
-  assert.throws(() => validateSourceCoverage(c, [e], [e], {}, { t: task() }), /no complete disposition/)
+  validateSourceCoverage(c, [e], [e], {}, { t: task() })
+  const defaults = (c.source_coverage ?? []).filter(entry => entry.reason === DEFAULT_SOURCE_REASON)
+  assert.equal(defaults.length, 1, "the cited paragraph is still unclassified, so the default names it")
+  assert.equal(text.slice(defaults[0]!.source.span!.start, defaults[0]!.source.span!.end), text)
 })
 
 test("a span outside its source is unresolvable rather than a silent guess", () => {

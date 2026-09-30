@@ -192,8 +192,13 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   // default itself, so one unmentioned passage cannot invalidate an otherwise
   // complete batch, and the model writes an entry only to override it. The
   // default never covers text the batch adopted, cited or classified itself.
+  // A citation on a task, scope, binding or output change proves where that
+  // change came from; it is not a disposition, so the segment check below still
+  // wants this text named.  The default has to be computed against the same set
+  // that check accepts, or a cited-but-unclassified paragraph gets no default
+  // and the batch dies on the very rule the default exists to relax.
   const entrySources = entries.map(entry => entry.source)
-  const accounted = [...selectedSources, ...citedSources, ...entrySources]
+  const accounted = [...selectedSources, ...entrySources]
   const defaults: SourceDisposition[] = []
   for (const segment of sourceSegments(currentEvents)) {
     const text = texts.get(segment.source_id)!

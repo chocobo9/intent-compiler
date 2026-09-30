@@ -80,7 +80,7 @@ test("CI generation reads the materialized parent before any child can be commit
   assert.equal(store.current().executions.length, 0)
 })
 
-test("an IR selecting only the tail never reaches CI generation", async () => {
+test("an IR selecting only the tail records the head as a code default and reaches CI generation", async () => {
   const stages: string[] = []
   const { store, compiler } = await setup(async input => {
     stages.push(input.generation_stage!)
@@ -94,8 +94,11 @@ test("an IR selecting only the tail never reaches CI generation", async () => {
   })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, false)
-  assert.match(result.message!, /no complete disposition/)
-  assert.deepEqual(stages, ["ir"])
+  assert.doesNotMatch(result.message!, /no complete disposition/)
+  assert.equal(stages[0], "ir")
+  // The IR stage handed over; this fixture writes no CI answer, so the batch
+  // ends there.  Before the default, the accounting itself stopped it here.
+  assert.ok(stages.includes("ci"), "the IR stage hands over instead of rejecting an unclassified head")
   assert.deepEqual(store.current().ir, {})
   assert.deepEqual(store.current().compiled, {})
 })
