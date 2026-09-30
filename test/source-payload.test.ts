@@ -49,7 +49,23 @@ test("a real quote beside a segment id is still one selector too many", () => {
   c.groups[0]!.ir_changes = [{ action: "create", target: "content", local_ref: "r",
     value: { text: "Short label", about: [], scope: [{ target_id: "t" }], support: [] },
     sources: [{ source_id: "e", digest: "sha256:placeholder", segment_id: "s1", quote: "First behavior.", span: null }] } as never]
-  assert.equal(resolveSourceRefs(c, [e]).unresolved, 1)
+  const stats = resolveSourceRefs(c, [e])
+  assert.equal(stats.unresolved, 1)
+  assert.equal(stats.unresolvedRefs[0]?.reason, "selector_conflict")
+})
+
+test("an unresolvable reference records which part failed", () => {
+  const e = event("e", "First behavior.\n\nSecond behavior.")
+  const c = candidate()
+  const value = { text: "Short label", about: [], scope: [{ target_id: "t" }], support: [] }
+  c.groups[0]!.ir_changes = [
+    { action: "create", target: "content", local_ref: "r1", value, sources: [{ source_id: "e:truncated", digest: "x", segment_id: "s1", quote: null, span: null }] } as never,
+    { action: "create", target: "content", local_ref: "r2", value, sources: [{ source_id: "e", digest: "x", segment_id: "s99", quote: null, span: null }] } as never,
+    { action: "create", target: "content", local_ref: "r3", value, sources: [{ source_id: "e", digest: "x", segment_id: null, quote: null, span: { unit: "utf16", start: 0, end: 9999 } }] } as never,
+  ]
+  const stats = resolveSourceRefs(c, [e])
+  assert.equal(stats.unresolved, 3)
+  assert.deepEqual(stats.unresolvedRefs.map(ref => ref.reason), ["source_unknown", "segment_unknown", "span_invalid"])
 })
 
 test("selected original rules, definitions and formula survive an abbreviated interpretation", () => {

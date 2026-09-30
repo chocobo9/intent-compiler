@@ -2014,10 +2014,14 @@ export interface SourceRefStats {
   /**
    * The references that named no source in this batch (or spanned past the end
    * of one).  Bounded, so a candidate that cites garbage everywhere cannot
-   * bloat the record; the counts above stay exact.
+   * bloat the record; the counts above stay exact.  Each one carries why it
+   * failed, so the repair message names the defect instead of the count.
    */
-  unresolvedRefs: Array<{ source_id: string; span?: { unit: string; start: number; end: number } }>
+  unresolvedRefs: Array<{ source_id: string; span?: { unit: string; start: number; end: number }; reason?: SourceRefDefect }>
 }
+
+/** Why one source reference could not be resolved. */
+export type SourceRefDefect = "source_unknown" | "segment_unknown" | "selector_conflict" | "quote_unresolved" | "span_invalid"
 
 /**
  * A finding blocks a batch only when its evidence resolves.  The checker is a
@@ -2090,12 +2094,12 @@ export function resolveSourceRefs(
   const stats: SourceRefStats = { total: 0, resolved: 0, normalized: 0, unresolved: 0, unresolvedRefs: [] }
   const segments = new Map(sourceSegments(events).map(segment => [`${segment.source_id}\0${segment.segment_id}`, segment]))
   /** Keep the audit's list bounded; the counters above stay exact. */
-  const noteUnresolved = (value: Record<string, unknown>, span: Record<string, unknown> | undefined): void => {
+  const noteUnresolved = (value: Record<string, unknown>, span: Record<string, unknown> | undefined, reason: SourceRefDefect): void => {
     if (stats.unresolvedRefs.length >= MAX_UNRESOLVED_REFS) return
     const unit = typeof span?.unit === "string" ? span.unit : "utf16"
     const start = typeof span?.start === "number" ? span.start : 0
     const end = typeof span?.end === "number" ? span.end : 0
-    stats.unresolvedRefs.push({ source_id: String(value.source_id), span: { unit, start, end } })
+    stats.unresolvedRefs.push({ source_id: String(value.source_id), span: { unit, start, end }, reason })
   }
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
@@ -2110,7 +2114,7 @@ export function resolveSourceRefs(
         // A source the batch does not contain: counted, left as the model wrote
         // it, so the record shows the defect instead of hiding it.
         stats.unresolved += 1
-        noteUnresolved(value, isRecord(value.span) ? value.span : undefined)
+        noteUnresolved(value, isRecord(value.span) ? value.span : undefined, "source_unknown")
       } else {
         // The generated response schema carries every selector as a required,
         // nullable property, so a model writes `quote: null` (and `span: null`)
@@ -2122,7 +2126,7 @@ export function resolveSourceRefs(
           const segment = segments.get(`${value.source_id}\0${value.segment_id}`)
           if (!segment || quote !== undefined) {
             stats.unresolved += 1
-            noteUnresolved(value, undefined)
+            noteUnresolved(value, undefined, segment ? "selector_conflict" : "segment_unknown")
             return
           }
           value.span = { ...segment.span }
@@ -2135,7 +2139,7 @@ export function resolveSourceRefs(
             // ambiguous quote. The whole candidate fails the source gate.
             delete value.span
             stats.unresolved += 1
-            noteUnresolved(value, undefined)
+            noteUnresolved(value, undefined, "quote_unresolved")
             return
           }
           value.span = { unit: "utf16", start, end: start + quote.length }
@@ -2147,7 +2151,7 @@ export function resolveSourceRefs(
         const span = isRecord(value.span) ? value.span : undefined
         if (span !== undefined && (span.unit !== "utf16" || !Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end <= span.start || span.end > text.length)) {
           stats.unresolved += 1
-          noteUnresolved(value, span)
+          noteUnresolved(value, span, "span_invalid")
         } else {
           const expected = digestText(text)
           if (value.digest !== expected) stats.normalized += 1
@@ -2198,6 +2202,9 @@ function applicationHint(message: string): string {
   }
   if (/IR sources do not resolve/u.test(message)) {
     return " (every selection needs one selector that exists in the supplied source: a segment_id from source_segments, or an explicit span inside that source's text)"
+  }
+  if (/must cite a resolvable user text span or event/u.test(message)) {
+    return " (copy source_id exactly as supplied, including the trailing part id, and give exactly one selector: a segment_id from source_segments or a span inside that source's text; the reason beside each rejected reference says which part failed)"
   }
   if (/points to unknown Atom/u.test(message)) {
     return " (name an Atom the draft actually declares: add the Atom to compilation.drafts, or point the coverage entry at an existing atom id)"
