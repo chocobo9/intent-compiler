@@ -178,11 +178,15 @@ export class ParentGeneration {
           cited.add(ref.source_id)
         }
       }
+      // An uncompiled delegation is exactly what an IR update may need to
+      // adopt, so every outstanding one keeps its text here, not only the
+      // three this batch carries (their ids travel in gap_event_ids).
+      const gaps = new Set(this.options.input.gap_event_ids ?? [])
       const base: CompilerModelV2Input = stage === "ir"
         ? {
           ...shared,
           source_segments: sourceSegments([
-            ...(priorSources ?? []).filter(event => cited.has(event.event_id)),
+            ...(priorSources ?? []).filter(event => cited.has(event.event_id) || gaps.has(event.event_id)),
             ...this.options.input.events,
           ]),
         }

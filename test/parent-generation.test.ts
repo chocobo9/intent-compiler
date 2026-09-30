@@ -126,6 +126,28 @@ test("stage requests drop the bodies their operation cannot use and keep the who
   assert.deepEqual(irStage.ir, {}, "the first IR stage starts from the stored IR, not from a plan")
 })
 
+test("an uncompiled delegation beyond the carried cap keeps its text and is listed by id", async () => {
+  const requests: CompilerModelV2Input[] = []
+  const { compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
+    return JSON.stringify({})
+  })
+  for (const id of ["gap-2", "gap-3", "gap-4", "gap-5"]) {
+    await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: id, kind: "user_input",
+      source: { channel: "user", producer_id: "user" }, payload: { text: `Delegation ${id} still has no accepted batch.` } })
+  }
+  assert.equal((await compiler.advance({ runId: "parent" })).ok, false)
+  const irStage = requests.find(request => request.generation_stage === "ir")
+  assert.ok(irStage, "the IR stage ran for the batch")
+  assert.deepEqual(irStage.carried_delegations?.map(entry => entry.event_id), ["input-event-id", "gap-2", "gap-3"],
+    "the three oldest uncompiled delegations ride along with their text")
+  assert.deepEqual(irStage.gap_event_ids, ["gap-4"], "the delegation beyond the cap is still visible by id")
+  const offered = new Set((irStage.source_segments ?? []).map(segment => segment.source_id))
+  for (const id of ["input-event-id", "gap-2", "gap-3", "gap-4", "gap-5"]) {
+    assert.ok(offered.has(id), `${id} keeps its text in the IR-stage request`)
+  }
+})
+
 test("a turn answers its own delegation and carries the earlier uncompiled one as an unresolved task", async () => {
   const seen: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {

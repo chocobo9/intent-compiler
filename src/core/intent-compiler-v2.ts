@@ -284,6 +284,12 @@ async function advance(
         ...(gap.last_error === undefined ? {} : { last_error: gap.last_error }),
       })),
     }),
+    ...(() => {
+      const outstanding = store.carriedDelegations()
+        .map((gap) => gap.event_id)
+        .filter((id) => !events.some((event) => event.event_id === id))
+      return outstanding.length === 0 ? {} : { gap_event_ids: outstanding }
+    })(),
     ...(events.some(event => event.kind === "user_input") ? {} : { assessment_batch: true as const }),
     ...(previousRejection === undefined ? {} : { previous_rejection: previousRejection }),
   }

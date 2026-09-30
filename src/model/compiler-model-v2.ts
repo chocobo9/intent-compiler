@@ -112,6 +112,13 @@ export interface CompilerModelV2Input {
     stalled: boolean
     last_error?: string
   }>
+  /**
+   * Every user delegation that still has no accepted batch (read-only, ids
+   * only).  The carried ones above also carry their text in `events`; the rest
+   * are listed so their existence is never invisible, and their text follows
+   * when a later batch carries them.
+   */
+  gap_event_ids?: string[]
 }
 
 export interface ExistingObjectDirectory {
