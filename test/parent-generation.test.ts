@@ -7,12 +7,19 @@ import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
 import type { CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
+import { V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
+import { ParentGeneration } from "../src/core/parent-generation.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 
 function parent() {
   const c = structuredClone(CANDIDATE_EXAMPLE)
-  return { ...c, groups: c.groups.map(({ compilation, coverage, ...group }) => group) }
+  return {
+    ...c, groups: c.groups.map(({
+      compilation: _compilation, coverage: _coverage,
+      execution_decisions: _decisions, assessments: _assessments, checks: _checks, ...group
+    }) => group),
+  }
 }
 function child(basis: string) {
   const c = structuredClone(CANDIDATE_EXAMPLE)
@@ -124,6 +131,51 @@ test("stage requests drop the bodies their operation cannot use and keep the who
   assert.ok(ciStage.compiled, "the plan stays available to the compile stage")
   assert.equal(ciStage.ir.t1!.content.length, 4, "the whole current IR stays in both stages")
   assert.deepEqual(irStage.ir, {}, "the first IR stage starts from the stored IR, not from a plan")
+  const repair = ciStage.generation_repair!.ir_proposal as unknown as { groups: Array<Record<string, unknown>> }
+  assert.deepEqual(Object.keys(repair.groups[0]!).sort(),
+    ["depends_on", "ir_changes", "local_ref", "questions", "task_refs"],
+    "the parent proposal travels in the IR stage shape only")
+})
+
+test("an older IR draft loses its execution-facing fields when it is re-sent", async () => {
+  const events = [{
+    schema_version: 2 as const, run_id: "parent", event_id: "turn-1", kind: "user_input" as const,
+    source: { channel: "user" as const, producer_id: "user" }, payload: { text: "Revise the export rule." },
+  }]
+  const oldProposal = {
+    schema_version: 2, basis: { event_ids: ["turn-1"], refs: [] }, source_coverage: [],
+    groups: [{
+      local_ref: "t1", task_refs: ["t1"], depends_on: [],
+      ir_changes: [{ action: "preserve", reason: "kept", sources: [] }],
+      execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "old draft", basis: [] }],
+      assessments: [{
+        target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [], evidence_refs: [],
+        result: "unknown", explanation: "old", method: "model",
+      }],
+      checks: [{ scenario: "s", expected: "e", observed_in_candidate: "o", sources: [], unresolved: false }],
+      questions: [{ text: "Is the old rule still current?", affects: [] }],
+    }],
+  }
+  const input = {
+    run_id: "parent", events, ir: {}, compiled: {}, atom_refs: {}, executions: [],
+    budget: { requests_used: 0, max_requests: 4 }, contract: V2_COMPILER_CONTRACT,
+  } as unknown as CompilerModelV2Input
+  let seen: CompilerModelV2Input | undefined
+  const generation = new ParentGeneration({
+    input, sourceBasis: "basis-1",
+    restored: { source_basis: "basis-1", phase: "ir", ir_proposal: oldProposal as never, issues: [] },
+    checkRequired: false, remaining: () => 5, currentBasis: () => "basis-1",
+    call: async (request) => { seen = request; return { ok: false, error: { code: "schema", message: "stub" } } },
+    resolve: () => ({ unresolved: 0 }), validateBasis: () => ({ ok: true }), directory: () => ({ tasks: [] }),
+  })
+  const result = await generation.propose(input)
+  assert.equal(result.ok, false)
+  const group = (seen!.generation_repair!.ir_proposal as unknown as { groups: Array<Record<string, unknown>> }).groups[0]!
+  for (const key of ["compilation", "coverage", "execution_decisions", "assessments", "checks"]) {
+    assert.equal(key in group, false, `${key} must not travel in an IR proposal`)
+  }
+  assert.deepEqual(group.questions, [{ text: "Is the old rule still current?", affects: [] }])
+  assert.deepEqual(group.ir_changes, [{ action: "preserve", reason: "kept", sources: [] }])
 })
 
 test("an uncompiled delegation beyond the carried cap keeps its text and is listed by id", async () => {

@@ -11,8 +11,7 @@ import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-sc
 
 const basis = { event_ids: ["user-1"], refs: [] }
 const irGroup = {
-  local_ref: "g1", task_refs: ["t1"], depends_on: [], ir_changes: [],
-  execution_decisions: [], assessments: [], checks: [], questions: [],
+  local_ref: "g1", task_refs: ["t1"], depends_on: [], ir_changes: [], questions: [],
 }
 
 test("IR generation admits only intent changes, never a hidden compiled plan", () => {
@@ -20,10 +19,25 @@ test("IR generation admits only intent changes, never a hidden compiled plan", (
   assert.equal(validateGenerationProposal("ir", proposal).ok, true)
   const mixed = { ...proposal, groups: [{ ...irGroup, compilation: { decision: "replace", drafts: [] } }] }
   assert.equal(validateGenerationProposal("ir", mixed).ok, false)
+  // Execution decisions, assessments and checks belong to the stage that
+  // consumes them; the IR stage must not require or accept them.
+  for (const executionFacing of [
+    { execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "x", basis: [] }] },
+    { assessments: [{ target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [], evidence_refs: [], result: "unknown", explanation: "x", method: "model" }] },
+    { checks: [{ scenario: "s", expected: "e", observed_in_candidate: "o", sources: [], unresolved: false }] },
+  ]) {
+    assert.equal(validateGenerationProposal("ir", { ...proposal, groups: [{ ...irGroup, ...executionFacing }] }).ok, false)
+  }
   for (const profile of [undefined, "openai", "groq"] as const) {
     const validate = new Ajv({ strict: false, allowUnionTypes: true }).compile(buildGenerationSchema("ir", profile))
     assert.equal(validate(proposal), true)
     assert.equal(validate(mixed), false)
+    const schema = buildGenerationSchema("ir", profile) as { definitions: { group: { properties: Record<string, unknown>; required: string[] } } }
+    for (const key of ["compilation", "coverage", "execution_decisions", "assessments", "checks"]) {
+      assert.equal(key in schema.definitions.group.properties, false, `${key} is forbidden in the IR stage (${profile ?? "default"})`)
+      assert.equal(schema.definitions.group.required.includes(key), false)
+    }
+    assert.equal("questions" in schema.definitions.group.properties, true, "questions stay in the IR stage")
   }
 })
 
@@ -31,7 +45,12 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   const { ir_changes: _changes, ...group } = irGroup
   const proposal = {
     schema_version: 2, basis, parent_basis: "parent-1", parent_issues: [],
-    groups: [{ ...group, compilation: { decision: "replace", drafts: [] }, coverage: [] }],
+    groups: [{
+      ...group, compilation: { decision: "replace", drafts: [] }, coverage: [],
+      execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "x", basis: [] }],
+      assessments: [{ target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [], evidence_refs: [], result: "unknown", explanation: "x", method: "model" }],
+      checks: [{ scenario: "s", expected: "e", observed_in_candidate: "o", sources: [], unresolved: false }],
+    }],
   }
   assert.equal(validateGenerationProposal("ci", proposal).ok, true)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], ir_changes: [] }] }).ok, false)

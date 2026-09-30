@@ -79,8 +79,8 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
         assert.equal(input.assessment_batch, true, "a returned execution is assessed by the CI stage, not by an IR stage")
         assert.deepEqual(input.generation_repair!.ir_proposal!.groups.map(group => group.local_ref), ["t1"],
           "an assessment batch receives the stored task groups it owes an answer for")
-        assert.deepEqual(input.generation_repair!.ir_proposal!.groups[0]!.assessments, [],
-          "the stored plan carries no decision this batch must copy")
+        assert.equal("assessments" in input.generation_repair!.ir_proposal!.groups[0]!, false,
+          "the IR stage shape carries no decision this batch must copy")
       }
       const predecessor = input.compiled!.t1!.atoms[0]!
       return JSON.stringify(stageCandidate(input, { schema_version: 2, basis: { event_ids: ["return"], refs: [] }, source_coverage: [], groups: [{

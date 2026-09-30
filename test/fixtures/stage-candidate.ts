@@ -8,7 +8,10 @@ export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate
   assert.ok(input.generation_stage, "strict lifecycle tests must use parent/child generation")
   const copy = structuredClone(candidate)
   if (input.generation_stage === "ir") return {
-    ...copy, groups: copy.groups.map(({ compilation: _compilation, coverage: _coverage, ...group }) => group),
+    ...copy, groups: copy.groups.map(({
+      compilation: _compilation, coverage: _coverage,
+      execution_decisions: _decisions, assessments: _assessments, checks: _checks, ...group
+    }) => group),
   }
   assert.ok(input.parent_basis, "CI must receive its actual parent identity")
   if (input.assessment_batch === true) {
@@ -25,9 +28,9 @@ export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate
     schema_version: 2, basis: copy.basis, parent_basis: input.parent_basis, parent_issues: [],
     groups: copy.groups.map(({ ir_changes: _changes, ...group }) => {
       const parent = input.generation_repair?.ir_proposal?.groups.find(item => item.local_ref === group.local_ref)
-      assert.ok(parent, "CI must receive the parent group decisions it must preserve")
+      assert.ok(parent, "CI must receive the parent groups it must preserve")
       return { ...group, task_refs: structuredClone(parent.task_refs), depends_on: structuredClone(parent.depends_on),
-        execution_decisions: structuredClone(parent.execution_decisions), assessments: structuredClone(parent.assessments), checks: structuredClone(parent.checks) }
+        execution_decisions: [], assessments: [], checks: [] }
     }),
   }
 }

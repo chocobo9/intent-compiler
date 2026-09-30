@@ -119,7 +119,10 @@ export class ParentGeneration {
     const candidate: Candidate = {
       ...structuredClone(proposal),
       groups: proposal.groups.map(group => ({ ...structuredClone(group), coverage: [],
-        compilation: { decision: "reuse", current: [], reason: "Temporary parent; compilation has not run." } })),
+        compilation: { decision: "reuse", current: [], reason: "Temporary parent; compilation has not run." },
+        // The IR stage does not author these; the CI stage does.  Fill the
+        // internal CandidateGroup shape so downstream code sees one type.
+        execution_decisions: [], assessments: [], checks: [] })),
     }
     const basis = this.options.validateBasis(candidate)
     if (!basis.ok) throw Error(basis.message ?? "IR names the wrong input events")
@@ -182,6 +185,13 @@ export class ParentGeneration {
       // adopt, so every outstanding one keeps its text here, not only the
       // three this batch carries (their ids travel in gap_event_ids).
       const gaps = new Set(this.options.input.gap_event_ids ?? [])
+      // An IR proposal keeps one stage shape whether it is freshly generated,
+      // re-sent after a rejection or restored from an older draft: the three
+      // execution-facing fields never travel in it.
+      const irGroups = (groups: Candidate["groups"]): IRProposal["groups"] => groups.map(({
+        compilation: _compilation, coverage: _coverage,
+        execution_decisions: _executionDecisions, assessments: _assessments, checks: _checks, ...group
+      }) => group)
       const base: CompilerModelV2Input = stage === "ir"
         ? {
           ...shared,
@@ -210,11 +220,14 @@ export class ParentGeneration {
           // An assessment batch's parent is the stored IR as it stands now: give
           // the child current task identities, not the revisions the repair
           // proposal was written against.
-          groups: (this.state.derived === true
+          groups: irGroups((this.state.derived === true
             ? this.skeletonGroups(this.state.parent!.ir)
             : this.state.parent!.candidate.groups
-          ).map(({ compilation, coverage, ...group }) => group),
-        } : this.state.ir_proposal, ci_proposal: this.state.ci_proposal,
+          )),
+        } : (this.state.ir_proposal === undefined ? undefined : {
+          ...this.state.ir_proposal,
+          groups: irGroups(this.state.ir_proposal.groups as Candidate["groups"]),
+        }), ci_proposal: this.state.ci_proposal,
           issues: [...this.state.issues] },
         ...(this.state.rejected_response?.stage === stage ? { schema_rejected_draft: {
           text: this.state.rejected_response.text, errors: this.state.rejected_response.errors,
