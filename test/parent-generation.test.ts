@@ -161,6 +161,69 @@ test("stage requests drop the bodies their operation cannot use and keep the who
     "the parent proposal travels in the IR stage shape only")
 })
 
+test("a rejected IR answer is told which source references failed and why", async () => {
+  const requests: CompilerModelV2Input[] = []
+  const { store, compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
+    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    const proposal = parent()
+    if (requests.filter(request => request.generation_stage === "ir").length === 1) {
+      let replaced = false
+      for (const change of proposal.groups[0]!.ir_changes) {
+        if (replaced || change.action !== "create" || change.target !== "content") continue
+        replaced = true
+        change.sources = [
+          { source_id: "spliced-input-event-id", digest: "sha256:x", segment_id: "s1" },
+          { source_id: "input-event-id", digest: "sha256:x", segment_id: "s99" },
+          { source_id: "input-event-id", digest: "sha256:x", segment_id: "s1", quote: "bundle accepts a config file path" },
+          { source_id: "input-event-id", digest: "sha256:x", quote: "a paraphrase the user never wrote" },
+          { source_id: "input-event-id", digest: "sha256:x", span: { unit: "utf16", start: 0, end: 9_999 } },
+        ]
+      }
+    }
+    return JSON.stringify(proposal)
+  })
+  store.applyDeltas({ max_management_requests: 6 })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  const retry = requests.filter(request => request.generation_stage === "ir")[1]!
+  const feedback = retry.validation_errors!.join("\n")
+  assert.match(feedback, /IR sources do not resolve; 5 reference\(s\) failed the source gate/)
+  assert.match(feedback, /spliced-input-event-id \(segment_id=s1\): source_unknown/)
+  assert.match(feedback, /input-event-id \(segment_id=s99\): segment_unknown/)
+  assert.match(feedback, /input-event-id \(segment_id=s1\): selector_conflict/)
+  assert.match(feedback, /input-event-id \(quote="a paraphrase the user never wrote"\): quote_unresolved/)
+  assert.match(feedback, /input-event-id \(span=utf16:0-9999\): span_invalid/)
+  assert.match(feedback, /Showing all 5/)
+  assert.match(retry.generation_repair!.issues!.join("\n"), /IR sources do not resolve/)
+})
+
+test("a failure list longer than the cap keeps the exact count and says it is capped", async () => {
+  const requests: CompilerModelV2Input[] = []
+  const { store, compiler } = await setup(async input => {
+    requests.push(structuredClone(input))
+    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    const proposal = parent()
+    if (requests.filter(request => request.generation_stage === "ir").length === 1) {
+      let replaced = false
+      for (const change of proposal.groups[0]!.ir_changes) {
+        if (replaced || change.action !== "create" || change.target !== "content") continue
+        replaced = true
+        change.sources = Array.from({ length: 22 }, (_, index) =>
+          ({ source_id: `invented-event-${index + 1}`, digest: "sha256:x", segment_id: "s1" }))
+      }
+    }
+    return JSON.stringify(proposal)
+  })
+  store.applyDeltas({ max_management_requests: 6 })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  const feedback = requests.filter(request => request.generation_stage === "ir")[1]!.validation_errors!.join("\n")
+  assert.match(feedback, /22 reference\(s\) failed the source gate/)
+  assert.match(feedback, /Showing the first 20 of 22 \(2 more are not listed\)/)
+  assert.equal((feedback.match(/invented-event-\d+ \(/g) ?? []).length, 20)
+})
+
 test("an older IR draft loses its execution-facing fields when it is re-sent", async () => {
   const events = [{
     schema_version: 2 as const, run_id: "parent", event_id: "turn-1", kind: "user_input" as const,

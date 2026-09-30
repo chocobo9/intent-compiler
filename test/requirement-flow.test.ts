@@ -238,7 +238,8 @@ test("a quote that does not occur in the user event cannot become a requirement 
   change.sources = [{ source_id: "e1", digest: digestText(raw), quote: "ERROR: invented" } as SourceRef]
   const { result, store } = await run(proposal)
   assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /IR sources do not resolve; correct selections before compiling work/)
+  assert.match(result.message ?? "", /IR sources do not resolve; 1 reference\(s\) failed the source gate/)
+  assert.match(result.message ?? "", /\(quote="ERROR: invented"\): quote_unresolved/)
   assert.deepEqual(store.current().ir, {})
 })
 
@@ -249,7 +250,8 @@ test("a repeated quote cannot silently choose the first occurrence", async () =>
   change.sources = [{ source_id: "e1", digest: digestText(raw), quote: "file" } as SourceRef]
   const { result } = await run(proposal)
   assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /IR sources do not resolve; correct selections before compiling work/)
+  assert.match(result.message ?? "", /IR sources do not resolve; 1 reference\(s\) failed the source gate/)
+  assert.match(result.message ?? "", /\(quote="file"\): quote_unresolved/)
 })
 
 test("a compiled task cannot omit the IR requirement ledger", async () => {
@@ -278,7 +280,8 @@ test("requirement text must cite a resolvable user span", async () => {
   change.sources = [{ source_id: "unknown", digest: digestText(raw), span: { unit: "utf16", start: 0, end: 5 } }]
   const { result } = await run(proposal)
   assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /IR sources do not resolve; correct selections before compiling work/)
+  assert.match(result.message ?? "", /IR sources do not resolve; 1 reference\(s\) failed the source gate/)
+  assert.match(result.message ?? "", /unknown \(span=utf16:0-5\): source_unknown/)
 })
 
 test("a requirement cannot lose its task or output scope", async () => {

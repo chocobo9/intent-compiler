@@ -45,6 +45,19 @@ function candidateWith(ref: Record<string, unknown>): Candidate {
   } as unknown as Candidate
 }
 
+test("a rejected reference records the selector the answer wrote, not a placeholder span", () => {
+  const e = event("e", "First behavior.\n\nSecond behavior.")
+  const unknownSegment = candidateWith({ source_id: "e", digest: "sha256:x", quote: null, segment_id: "s99", span: null })
+  assert.deepEqual(resolveSourceRefs(unknownSegment, [e]).unresolvedRefs,
+    [{ source_id: "e", segment_id: "s99", reason: "segment_unknown" }])
+  const unknownSource = candidateWith({ source_id: "invented", digest: "sha256:x", quote: null, segment_id: null, span: null })
+  assert.deepEqual(resolveSourceRefs(unknownSource, [e]).unresolvedRefs,
+    [{ source_id: "invented", reason: "source_unknown" }])
+  const badQuote = candidateWith({ source_id: "e", digest: "sha256:x", quote: "not in this text", segment_id: null, span: null })
+  assert.deepEqual(resolveSourceRefs(badQuote, [e]).unresolvedRefs,
+    [{ source_id: "e", quote: "not in this text", reason: "quote_unresolved" }])
+})
+
 test("the generated schema still forces a nullable placeholder for every selector", () => {
   const definition = sourceRef()
   assert.deepEqual(definition.required, ["source_id", "digest", "quote", "segment_id", "span"])

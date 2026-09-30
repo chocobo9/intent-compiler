@@ -2089,7 +2089,14 @@ export interface SourceRefStats {
    * bloat the record; the counts above stay exact.  Each one carries why it
    * failed, so the repair message names the defect instead of the count.
    */
-  unresolvedRefs: Array<{ source_id: string; span?: { unit: string; start: number; end: number }; reason?: SourceRefDefect }>
+  unresolvedRefs: Array<{
+    source_id: string
+    /** The selector the answer actually wrote, so a repair can name it. */
+    segment_id?: string
+    quote?: string
+    span?: { unit: string; start: number; end: number }
+    reason?: SourceRefDefect
+  }>
 }
 
 /** Why one source reference could not be resolved. */
@@ -2171,7 +2178,17 @@ export function resolveSourceRefs(
     const unit = typeof span?.unit === "string" ? span.unit : "utf16"
     const start = typeof span?.start === "number" ? span.start : 0
     const end = typeof span?.end === "number" ? span.end : 0
-    stats.unresolvedRefs.push({ source_id: String(value.source_id), span: { unit, start, end }, reason })
+    const quote = typeof value.quote === "string" && value.quote.length > 0 ? value.quote : undefined
+    // Record the selector the answer actually used.  A segment- or quote-based
+    // reference carries no span until it resolves, so writing a 0-0 placeholder
+    // span here would misdescribe the defect the repair has to fix.
+    stats.unresolvedRefs.push({
+      source_id: String(value.source_id),
+      ...(typeof value.segment_id === "string" ? { segment_id: value.segment_id } : {}),
+      ...(quote === undefined ? {} : { quote }),
+      ...(span === undefined ? {} : { span: { unit, start, end } }),
+      reason,
+    })
   }
   const visit = (value: unknown): void => {
     if (Array.isArray(value)) {
@@ -2279,7 +2296,7 @@ function applicationHint(message: string): string {
     return " (basis.event_ids must name exactly this batch's trigger events; an execution return is evidence for assessments, not a basis event)"
   }
   if (/IR sources do not resolve/u.test(message)) {
-    return " (every selection needs one selector that exists in the supplied source: a segment_id from source_segments, or an explicit span inside that source's text)"
+    return " (the message lists each rejected reference with the selector the answer used; correct every one of them to a segment_id or span that exists in the supplied source_segments, or drop that selection)"
   }
   if (/must cite a resolvable user text span or event/u.test(message)) {
     return " (copy source_id exactly as supplied, including the trailing part id, and give exactly one selector: a segment_id from source_segments or a span inside that source's text; the reason beside each rejected reference says which part failed)"

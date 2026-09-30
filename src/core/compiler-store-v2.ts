@@ -111,7 +111,13 @@ export interface ManagementRequestRecord {
     normalized: number
     unresolved: number
     /** The unresolved ones themselves, so the audit can point at them (bounded). */
-    unresolvedRefs?: Array<{ source_id: string; span?: { unit: string; start: number; end: number }; reason?: string }>
+    unresolvedRefs?: Array<{
+      source_id: string
+      segment_id?: string
+      quote?: string
+      span?: { unit: string; start: number; end: number }
+      reason?: string
+    }>
   }
   /**
    * Passages of this batch's user text that no content selection and no model

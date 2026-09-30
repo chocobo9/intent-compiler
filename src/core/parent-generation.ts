@@ -29,9 +29,45 @@ interface Options {
   remaining(): number
   currentBasis(): string
   call(input: CompilerModelV2Input): Promise<CompilerModelV2Result>
-  resolve(candidate: Candidate): { unresolved: number }
+  resolve(candidate: Candidate): SourceRefReport
   validateBasis(candidate: Candidate): { ok: boolean; message?: string }
   directory(ir: Record<string, TaskIntent>): CompilerModelV2Input["existing_objects"]
+}
+
+/** What the mechanical source gate found, bounded by the resolver. */
+interface SourceRefReport {
+  unresolved: number
+  unresolvedRefs?: Array<{
+    source_id: string
+    segment_id?: string
+    quote?: string
+    span?: { unit: string; start: number; end: number }
+    reason?: string
+  }>
+}
+
+/**
+ * Name every rejected reference and why.  The count is exact and the list says
+ * when it is capped: 39 failed IR attempts across six recorded runs were told
+ * only "IR sources do not resolve" while the reasons sat unused in the
+ * statistics, so the batch spent its budget re-sending the same defect.  A
+ * passage a repair cannot locate is not a reason it can fix.
+ */
+function unresolvedSources(report: SourceRefReport): string {
+  const refs = report.unresolvedRefs ?? []
+  const shown = refs.map((ref) => {
+    const selector = ref.segment_id !== undefined ? `segment_id=${ref.segment_id}`
+      : ref.quote !== undefined ? `quote=${JSON.stringify(ref.quote.length > 60 ? `${ref.quote.slice(0, 60)}…` : ref.quote)}`
+      : ref.span === undefined ? "no selector"
+      : `span=${ref.span.unit}:${ref.span.start}-${ref.span.end}`
+    return `${ref.source_id} (${selector}): ${ref.reason ?? "unresolved"}`
+  })
+  const hidden = Math.max(0, report.unresolved - refs.length)
+  const list = shown.length === 0 ? ""
+    : hidden > 0
+      ? ` Showing the first ${refs.length} of ${report.unresolved} (${hidden} more are not listed): ${shown.join("; ")}.`
+      : ` Showing all ${refs.length}: ${shown.join("; ")}.`
+  return `IR sources do not resolve; ${report.unresolved} reference(s) failed the source gate for this batch.${list} Each selection needs one source_id from the supplied source_segments and exactly one selector that exists in that source: a segment_id from its list, or a span inside its text.`
 }
 
 /** Owns parent preparation, child admission and restoration at one generation seam. */
@@ -129,7 +165,8 @@ export class ParentGeneration {
     if (this.options.input.events.some(event => event.kind === "user_input") && candidate.groups.length === 0) {
       throw Error("User input needs an IR task and explicit handling of its requirements or uncertainty")
     }
-    if (this.options.resolve(candidate).unresolved > 0) throw Error("IR sources do not resolve; correct selections before compiling work")
+    const sourceReport = this.options.resolve(candidate)
+    if (sourceReport.unresolved > 0) throw Error(unresolvedSources(sourceReport))
     const sources = [...(this.options.input.source_events ?? []), ...this.options.input.events]
     const state = new IntentStateManager(this.options.input.ir)
     let ir = state.snapshot()
