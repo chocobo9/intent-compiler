@@ -141,6 +141,13 @@ export const CANDIDATE_JSON_SCHEMA = {
         },
       },
     },
+    /**
+     * The one source selector shape a stage may narrow.  Canonical validation
+     * accepts the full source_ref; strict profiles replace this definition with
+     * the segment-id-or-span form, so a branch written against this name keeps
+     * one literal for both.
+     */
+    source_ref_with_quote: { $ref: "#/definitions/source_ref" },
     ref_or_source: { oneOf: [{ $ref: "#/definitions/ref" }, { $ref: "#/definitions/source_ref" }] },
     source_disposition: {
       type: "object", additionalProperties: false,
@@ -461,9 +468,9 @@ export const LOCAL_SOURCE_EDIT_IR_CHANGE = {
     target: { const: "content" },
     id: { type: "string", minLength: 1 },
     expected_revision: { type: "integer", minimum: 0 },
-    remove: { type: "array", minItems: 1, items: { $ref: "#/definitions/source_ref" } },
-    add: { type: "array", items: { $ref: "#/definitions/source_ref" } },
-    basis: { type: "array", minItems: 1, items: { $ref: "#/definitions/source_ref" } },
+    remove: { type: "array", minItems: 1, items: { $ref: "#/definitions/source_ref_with_quote" } },
+    add: { type: "array", items: { $ref: "#/definitions/source_ref_with_quote" } },
+    basis: { type: "array", minItems: 1, items: { $ref: "#/definitions/source_ref_with_quote" } },
     reason: { type: "string", minLength: 1 },
   },
 } as const

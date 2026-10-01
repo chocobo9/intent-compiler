@@ -1,4 +1,4 @@
-import { CANDIDATE_JSON_SCHEMA } from "./candidate-schema.js"
+import { CANDIDATE_JSON_SCHEMA, LOCAL_SOURCE_EDIT_IR_CHANGE } from "./candidate-schema.js"
 import { CANDIDATE_EXAMPLE } from "./candidate-example.js"
 
 /**
@@ -293,29 +293,14 @@ function transformUnionVariant(variant: unknown, profile: StrictSchemaProfile): 
 /**
  * The local source edit belongs to the strict IR stage alone: the stage
  * projection asks for it explicitly, while the legacy response schema built
- * here keeps its old shape.  The branch carries the same segment-id-or-span
- * selectors as every other source selection, so the constrained decode can
- * express it without a hand-written quote.
+ * here keeps its old shape.  The one branch literal lives in the canonical
+ * schema and names `source_ref_with_quote`, which this builder replaces with
+ * the segment-id-or-span form, so the constrained decode can express the edit
+ * without a hand-written quote and without a second copy of the field list.
  */
 export interface StrictSchemaOptions {
   localSourceEdit?: boolean
 }
-
-const localSourceEditBranch = {
-  type: "object",
-  additionalProperties: false,
-  required: ["action", "target", "id", "expected_revision", "remove", "add", "basis", "reason"],
-  properties: {
-    action: { const: "edit" },
-    target: { const: "content" },
-    id: text,
-    expected_revision: { type: "integer", minimum: 0 },
-    remove: { type: "array", minItems: 1, items: sourceWithQuote },
-    add: { type: "array", items: sourceWithQuote },
-    basis: { type: "array", minItems: 1, items: sourceWithQuote },
-    reason: text,
-  },
-} as const
 
 export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq", options: StrictSchemaOptions = {}): Record<string, unknown> {
   const canonical = CANDIDATE_JSON_SCHEMA as unknown as SchemaNode
@@ -326,7 +311,7 @@ export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq"
     definitions[name] = transform(name === "ir_change" ? strictIrChange(profile) : definition, profile) as Record<string, unknown>
   }
   if (options.localSourceEdit === true) {
-    ((definitions.ir_change as SchemaNode).anyOf as unknown[]).push(transform(localSourceEditBranch, profile))
+    ((definitions.ir_change as SchemaNode).anyOf as unknown[]).push(transform(LOCAL_SOURCE_EDIT_IR_CHANGE, profile))
   }
   definitions.source_ref_with_quote = transform(sourceRefWithQuote, profile)
   const output: Record<string, unknown> = { ...(transform(source, profile) as Record<string, unknown>), definitions }
