@@ -397,8 +397,19 @@ export class ParentGeneration {
       if (boundTask === undefined || parent.ir[boundTask] === undefined) {
         return this.reject(`group ${group.local_ref} is not bound to a stored task`, result)
       }
+      const task = parent.ir[boundTask]!
+      const coverage: Candidate["groups"][number]["coverage"] = []
+      for (const entry of group.coverage) {
+        if (!("local_ref" in entry.requirement)) return this.reject("Ordinary CI coverage.requirement must select the fixed parent by local_ref, without revision or digest", result)
+        const id = entry.requirement.local_ref
+        const matches = [
+          ...(id === task.task_id ? [{ id, revision: task.revision, digest: digestOf(task) }] : []),
+          ...task.content.filter(item => item.item_id === id).map(item => ({ id, revision: item.revision, digest: digestOf(item) })),
+        ]
+        if (matches.length !== 1) return this.reject(`CI coverage requirement ${id} is unknown or ambiguous in parent task ${boundTask}`, result)
+        coverage.push({ ...entry, requirement: matches[0]! })
+      }
       if (group.compilation.decision === "replace") for (const draft of group.compilation.drafts) {
-        const task = parent.ir[boundTask]!
         for (const atom of draft.atoms) {
           for (const output of atom.outputs) {
             const existing = task.outputs.find(o => o.output_id === output.output_id)
@@ -417,6 +428,7 @@ export class ParentGeneration {
         : group.compilation
       groups.push({
         ...group,
+        coverage,
         compilation,
         task_refs: [...original.task_refs],
         depends_on: [...original.depends_on],

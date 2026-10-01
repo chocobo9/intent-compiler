@@ -12,6 +12,8 @@ import { ParentGeneration } from "../src/core/parent-generation.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 import { digestOf, digestText } from "../src/core/intent-contract.js"
+import { bindCurrentRequirements } from "../src/core/requirement-flow.js"
+import type { CIProposal } from "../src/model/generation-schema.js"
 
 function parent() {
   const c = structuredClone(CANDIDATE_EXAMPLE)
@@ -27,6 +29,9 @@ function child(basis: string) {
   return { schema_version: 2, parent_basis: basis, parent_issues: [],
     groups: c.groups.map(({ ir_changes: _irChanges, task_refs: _taskRefs, depends_on: _dependsOn, ...group }) => ({
       ...group,
+      coverage: group.coverage.map(entry => ({ ...entry, requirement: {
+        local_ref: "local_ref" in entry.requirement ? entry.requirement.local_ref : entry.requirement.id,
+      } })),
       compilation: group.compilation.decision === "replace"
         ? { ...group.compilation, drafts: group.compilation.drafts.map(({ task_id: _taskId, ...draft }) => draft) }
         : group.compilation,
@@ -69,6 +74,46 @@ test("a CI group that names no parent group is still rejected", async () => {
   assert.match(result.message!, /does not belong to this parent/)
   assert.equal(checks, 0, "an unbound child never spends the check")
   assert.deepEqual(store.current().compiled, {})
+})
+
+test("ordinary CI binds current parent coverage and refuses unknown, foreign or ambiguous requirements", async () => {
+  const { store, compiler } = await setup(async input =>
+    JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!)))
+  assert.equal((await compiler.advance({ runId: "parent" })).ok, true)
+  const ir = structuredClone(store.current().ir)
+  const item = ir.t1!.content.find(item => item.item_id === "r-common")!
+  item.revision = 2
+  ir.t2 = { ...structuredClone(ir.t1!), task_id: "t2", content: [{ ...structuredClone(item), item_id: "r-foreign", scope: [{ target_id: "t2" }] }] }
+  const input = { ...CANDIDATE_EXAMPLE, run_id: "parent", events: store.readEvents().map(row => row.event), ir,
+    compiled: {}, atom_refs: {}, executions: [], budget: { requests_used: 0, max_requests: 4 }, contract: V2_COMPILER_CONTRACT } as CompilerModelV2Input
+  const propose = async (selector: string, duplicate = false, wrongBasis = false) => {
+    const current = structuredClone(ir)
+    if (duplicate) current.t1!.content.push(structuredClone(item))
+    const parentBasis = digestOf(current)
+    const answer = child(wrongBasis ? "another-parent" : parentBasis)
+    answer.groups[0]!.coverage[1]!.requirement.local_ref = selector
+    const generation = new ParentGeneration({ input, sourceBasis: "fixture", checkRequired: false,
+      remaining: () => 4, currentBasis: () => "fixture", call: async () => ({ ok: true, ci_proposal: answer as CIProposal }),
+      aliases: { lookup: () => undefined, records: () => false }, resolve: () => ({ unresolved: 0 }),
+      validateBasis: () => ({ ok: true }), directory: () => ({ tasks: [] }) })
+    generation.state.phase = "ci"
+    generation.state.parent = { ir: current, digest: parentBasis, candidate: structuredClone(CANDIDATE_EXAMPLE) }
+    return generation.propose(input)
+  }
+  const valid = await propose("r-common")
+  assert.equal(valid.ok, true)
+  const group = valid.candidate!.groups[0]!
+  assert.deepEqual(group.coverage[1]!.requirement, { id: "r-common", revision: 2, digest: digestOf(item) })
+  const drafts = bindCurrentRequirements(group, ir.t1!, store.current().ir.t1, input.events)
+  assert.ok(drafts[0]!.atoms[0]!.goal_refs.some(ref => ref.id === "r-common" && ref.revision === 2 && ref.digest === digestOf(item)))
+  group.coverage[1]!.refs = [{ local_ref: "missing-atom" }]
+  assert.throws(() => bindCurrentRequirements(group, ir.t1!, store.current().ir.t1, input.events), /unknown Atom/)
+  for (const [selector, duplicate] of [["missing", false], ["r-foreign", false], ["r-common", true]] as const) {
+    const rejected = await propose(selector, duplicate)
+    assert.equal(rejected.ok, false)
+    assert.match(rejected.error!.message, /unknown or ambiguous in parent task t1/)
+  }
+  assert.match((await propose("r-common", false, true)).error!.message, /different parent basis/)
 })
 
 async function setup(transport: Parameters<typeof createCompilerModelV2>[0], checker = consistent) {

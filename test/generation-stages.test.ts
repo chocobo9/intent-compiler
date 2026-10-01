@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { Ajv } from "ajv"
 import { resolve } from "node:path"
-import { buildGenerationSchema, generationContract, validateGenerationProposal } from "../src/model/generation-schema.js"
+import { buildGenerationExample, buildGenerationSchema, generationContract, validateGenerationProposal, type CIProposal } from "../src/model/generation-schema.js"
 import { createOpenCodeModelTransportV2 } from "../src/model/opencode-transport.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
 import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
@@ -96,6 +96,36 @@ test("the CI projection drops only the parent copies the compiler fills", () => 
     assert.equal("task_refs" in assessment.definitions.group.properties, true)
     assert.equal("task_id" in assessment.definitions.draft.properties, true)
   }
+})
+
+test("ordinary CI coverage selects parent identities while assessment and other references keep versions", () => {
+  const canonical = structuredClone(CANDIDATE_JSON_SCHEMA)
+  for (const profile of [undefined, "openai", "groq"] as const) {
+    const schema = buildGenerationSchema("ci", profile) as { definitions: { ref_or_local: unknown; coverage: { properties: { refs: unknown } } } }
+    const baseline = (profile === undefined ? canonical : buildStrictCandidateSchema(profile)) as typeof schema
+    assert.deepEqual(schema.definitions.ref_or_local, baseline.definitions.ref_or_local)
+    assert.deepEqual(schema.definitions.coverage.properties.refs, baseline.definitions.coverage.properties.refs)
+    const assessmentSchema = buildGenerationSchema("ci", profile, { assessment: true }) as typeof schema
+    assert.deepEqual(assessmentSchema.definitions.coverage, baseline.definitions.coverage)
+    const example = buildGenerationExample("ci", profile) as CIProposal
+    const validate = new Ajv({ strict: false, allowUnionTypes: true }).compile({ $ref: "#/definitions/coverage", definitions: schema.definitions })
+    const entry = example.groups[0]!.coverage[1]!
+    assert.equal(validate(entry), true)
+    assert.deepEqual(entry.requirement, { local_ref: "r-common" })
+    entry.requirement = { id: "r-common", revision: 0, digest: "sha256:old" }
+    assert.equal(validate(entry), false, "a versioned requirement is refused, not overwritten")
+    entry.requirement = { local_ref: "r-common", revision: 0 } as never
+    assert.equal(validate(entry), false, "the identity selector accepts no extra version field")
+  }
+  const entry = (buildGenerationExample("ci") as CIProposal).groups[0]!.coverage[1]!
+  entry.refs[0] = { id: "a-bundle", revision: 1, digest: "sha256:destination" }
+  const validate = new Ajv({ strict: false }).compile({ $ref: "#/definitions/coverage", definitions: buildGenerationSchema("ci").definitions })
+  assert.equal(validate(entry), true, "destination references retain their versioned expression")
+  const assessment = (buildGenerationExample("ci", undefined, "parent", true) as CIProposal).groups[0]!.coverage[1]!
+  assessment.requirement = { id: "r-common", revision: 3, digest: "sha256:assessment" }
+  const validateAssessment = new Ajv({ strict: false }).compile({ $ref: "#/definitions/coverage", definitions: buildGenerationSchema("ci", undefined, { assessment: true }).definitions })
+  assert.equal(validateAssessment(assessment), true, "assessment requirements retain their versioned expression")
+  assert.deepEqual(CANDIDATE_JSON_SCHEMA, canonical, "the shared legacy schema is unchanged")
 })
 
 function request(stage: "ir" | "ci"): CompilerModelV2Input & { generation_stage: "ir" | "ci"; parent_basis?: string } {
