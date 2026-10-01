@@ -13,7 +13,7 @@ import type {
 import { buildStrictCandidateExample, buildStrictCandidateSchema } from "./candidate-schema-strict.js"
 import { buildStrictCandidateCheckSchema } from "./candidate-check-schema-strict.js"
 import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
-import { buildGenerationSchema, generationContract, generationStageInstruction } from "./generation-schema.js"
+import { buildGenerationSchema, generationContract, generationStageInstruction, type GenerationSchemaOptions } from "./generation-schema.js"
 
 /**
  * The OpenCode surface used by this Adapter is intentionally narrow.  The
@@ -65,7 +65,7 @@ export interface OpenCodeModelTransportOptions {
 }
 
 export type OpenCodeModelTransportV2Options = OpenCodeModelTransportOptions
-export type OpenCodeModelTransportV2 = (request: CompilerModelV2Input) => Promise<CompilerModelV2Call>
+export type OpenCodeModelTransportV2 = (request: CompilerModelV2Input, generation?: Pick<GenerationSchemaOptions, "checkRequired">) => Promise<CompilerModelV2Call>
 export type OpenCodeModelCheckTransportV2 = (request: CompilerModelV2CheckInput) => Promise<CompilerModelV2Call>
 
 export type OpenCodeModelTransportErrorCode =
@@ -187,16 +187,16 @@ export function createOpenCodeModelTransportV2(
       }
     },
   )
-  return async (request) => {
+  return async (request, generation = {}) => {
     const stage = "generation_stage" in request ? request.generation_stage : undefined
     if (stage !== "ir" && stage !== "ci") return legacy(request)
     const parentBasis = "parent_basis" in request && typeof request.parent_basis === "string" ? request.parent_basis : undefined
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
     const transport = createOpenCodeV2Transport(
       options,
-      `${generationStageInstruction(stage, assessing)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
-      buildGenerationSchema(stage, "openai", { assessment: assessing }),
-      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", parentBasis, assessing) }),
+      `${generationStageInstruction(stage, assessing, generation.checkRequired)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
+      buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing }),
+      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", parentBasis, assessing, generation.checkRequired) }),
     )
     return transport(request)
   }

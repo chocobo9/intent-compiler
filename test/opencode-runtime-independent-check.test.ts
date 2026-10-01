@@ -41,7 +41,7 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
         const schema = request.body.format?.schema
         const input = JSON.parse(request.body.parts[0].text)
         const stage = input.generation_stage as "ir" | "ci" | undefined
-        const proposal = stage !== undefined && JSON.stringify(schema) === JSON.stringify(buildGenerationSchema(stage, "openai"))
+        const proposal = stage !== undefined && JSON.stringify(schema) === JSON.stringify(buildGenerationSchema(stage, "openai", { checkRequired: true }))
         const check = JSON.stringify(schema) === JSON.stringify(buildStrictCandidateCheckSchema("openai"))
         assert.equal(proposal || check, true, "runtime must send the IR, CI or independent-check OpenAI strict schema")
         const responseText = proposal
@@ -87,7 +87,8 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
     assert.equal(prompt.body.format?.retryCount, 0)
   }
   assert.deepEqual(prompts[0]!.body.format?.schema, buildGenerationSchema("ir", "openai"))
-  assert.deepEqual(prompts[1]!.body.format?.schema, buildGenerationSchema("ci", "openai"))
+  assert.deepEqual(prompts[1]!.body.format?.schema, buildGenerationSchema("ci", "openai", { checkRequired: true }))
+  assert.doesNotMatch(prompts[1]!.body.system, /parent_issues/)
   assert.deepEqual(prompts[2]!.body.format?.schema, buildStrictCandidateCheckSchema("openai"))
   assert.notEqual(prompts[0]!.body.system, prompts[1]!.body.system)
   assert.equal(prompts[2]!.body.system, CHECK_SYSTEM_PROMPT)

@@ -32,7 +32,7 @@ export type CIProposal = {
   schema_version: 2
   basis?: Candidate["basis"]
   parent_basis: string
-  parent_issues: string[]
+  parent_issues?: string[]
   groups: CIProposalGroup[]
 }
 
@@ -92,6 +92,8 @@ function instructionOnlyTask(task: string): string {
 export interface GenerationSchemaOptions {
   /** True for a CI batch that carries no user delegation: an execution assessment. */
   assessment?: boolean
+  /** Existing checker configuration, passed within code rather than model input. */
+  checkRequired?: boolean
 }
 
 export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSchemaProfile, options: GenerationSchemaOptions = {}): Record<string, unknown> {
@@ -129,8 +131,11 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
       schema.properties.basis.description = "Copy generation_repair.ir_proposal.basis exactly, including event_ids and refs. This is the fixed input basis of the parent proposal, not references to the temporary IR. Keep refs empty when the parent basis has refs: []. Use parent_basis and compilation.intent_basis for the temporary IR relationship."
     }
     schema.properties.parent_basis = { type: "string", minLength: 1, description: "Copy the supplied parent_basis exactly; this identifies the fixed IR being compiled." }
-    schema.properties.parent_issues = { type: "array", items: { type: "string", minLength: 1 }, description: "Concrete defects in the supplied parent IR. If nonempty, return groups: [] instead of changing or compiling the parent." }
-    schema.required.push("parent_basis", "parent_issues")
+    schema.required.push("parent_basis")
+    if (options.assessment === true || options.checkRequired !== true) {
+      schema.properties.parent_issues = { type: "array", items: { type: "string", minLength: 1 }, description: "Concrete defects in the supplied parent IR. If nonempty, return groups: [] instead of changing or compiling the parent." }
+      schema.required.push("parent_issues")
+    }
   }
   // The strict flow's Atom task is the work instruction; code attaches the
   // assigned requirement texts.  The legacy schema keeps the base wording.
@@ -161,13 +166,13 @@ export function validateGenerationProposal(stage: GenerationStage, value: unknow
   const errors = (validate.errors ?? []).map(error => `${error.instancePath || "/"}: ${error.message ?? "invalid"}`)
   if (ok && stage === "ci") {
     const proposal = value as CIProposal
-    if (proposal.parent_issues.length > 0 && proposal.groups.length > 0) errors.push("/groups: must be empty when parent_issues is nonempty")
+    if (proposal.parent_issues?.length && proposal.groups.length > 0) errors.push("/groups: must be empty when parent_issues is nonempty")
   }
   return { ok: ok && errors.length === 0, errors }
 }
 
 /** Project the existing encoding example, without inventing another task. */
-export function buildGenerationExample(stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis = "example-parent-basis", assessment = false): IRProposal | CIProposal {
+export function buildGenerationExample(stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis = "example-parent-basis", assessment = false, checkRequired = false): IRProposal | CIProposal {
   const example = structuredClone(profile === undefined ? CANDIDATE_EXAMPLE : buildStrictCandidateExample(profile)) as Candidate
   // The example keeps its fixture ids in every stage.  A live alias here would
   // be copyable and would resolve to a real event — the one silent
@@ -183,7 +188,8 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
   const { source_coverage: _sourceCoverage, basis, ...rest } = example
   const ordinary = assessment !== true
   return {
-    ...rest, ...(ordinary ? {} : { basis }), parent_basis: parentBasis, parent_issues: [],
+    ...rest, ...(ordinary ? {} : { basis }), parent_basis: parentBasis,
+    ...(ordinary && checkRequired ? {} : { parent_issues: [] }),
     groups: example.groups.map(({ ir_changes: _irChanges, task_refs, depends_on, ...group }) => ({
       ...group,
       coverage: ordinary ? group.coverage.map(entry => ({ ...entry, requirement: {
@@ -223,29 +229,44 @@ function assessmentStageInstruction(): string {
   ].join(" ")
 }
 
-export function generationStageInstruction(stage: GenerationStage, assessment = false): string {
+const CHECKED_PARENT_ROLE = "Compile the fixed parent IR into a plan and requirement assignments. The independent check compares original requirements and applicable updates with the parent IR and the final prepared candidate; deciding whether the original requirements were correctly represented belongs to that check. Do not add requirements absent from the parent IR or return the parent for semantic correction."
+
+export function generationStageInstruction(stage: GenerationStage, assessment = false, checkRequired = false): string {
   if (assessment && stage === "ci") return assessmentStageInstruction()
   const shared = "You are the read-only management model for Intent Compiler v2. One Intent IR maintains the whole user task; its Compiled Intent is the complete plan containing Atoms and Relations. Do not execute business work, use business tools, inspect or modify files, invent execution facts, or answer the business task. Return only the current generation stage's schema-constrained projection. The field contracts describe the final Candidate; fields excluded by this stage belong to the other stage and must not be returned. Original sources remain evidence for understanding, never permission to bypass the supplied stage boundary. Preserve user requirements, their real role and scope, and distinguish success from a blocker."
   return `${shared}\n${stage === "ir"
     ? "IR stage: interpret current delegation and updates against prior state, select every effective requirement and its source, role and scope, and return the IR changes and remaining-source classifications. Return no compilation, coverage, execution decisions, assessments or checks. Do not write Atoms. Preserve existing identities and unchanged requirements. Declare required input/output identities when field scopes depend on them. The compiler will materialize this IR before asking for the execution plan."
-    : "CI stage: request.ir is the actual temporary parent IR to compile, identified by parent_basis; copy parent_basis exactly. It is fixed for this response. The compiler already holds the parent proposal's basis and each parent group's task identity and dependencies, and fills them at assembly, so this response carries no basis, task_refs, depends_on or compilation.drafts[].task_id: bind to a parent group by its local_ref only. In coverage.requirement use only {local_ref: <content item_id or task_id in this group's parent task>}; code binds the current parent revision and digest. Coverage refs still express the actual destinations. parent_basis identifies the temporary IR, and compilation.intent_basis identifies the task/content used by the plan. generation_repair.ir_proposal identifies the parent groups and their open questions, not a substitute for the actual IR text. Compile each group's compilation and coverage, author the execution_decisions, assessments and checks the executions require, and add questions only for concrete compilation uncertainty; the compiler keeps the parent's questions. If the parent IR itself needs correction, report parent_issues instead of changing it. Return no ir_changes or source_coverage. Write each Atom's work instruction — action, boundaries, ordering and handoff — from the complete applicable IR requirements, including definitions, public interfaces, shared rules, conditions and exceptions; management code attaches the assigned requirement texts verbatim to the delivered task after preparation, so do not copy or paraphrase rule blocks into the candidate task. Coverage selects what the attached text will contain; references and coverage cannot replace executable behavior. Preserve retained work and real dependencies. Original input may reveal an IR omission or wrong role/scope: report concrete parent_issues and groups: [] so management returns to the IR stage; never silently repair the parent or add an unsupported requirement in the plan. Otherwise parent_issues is []."}`
+    : `CI stage: request.ir is the actual temporary parent IR to compile, identified by parent_basis; copy parent_basis exactly. It is fixed for this response. The compiler already holds the parent proposal's basis and each parent group's task identity and dependencies, and fills them at assembly, so this response carries no basis, task_refs, depends_on or compilation.drafts[].task_id: bind to a parent group by its local_ref only. In coverage.requirement use only {local_ref: <content item_id or task_id in this group's parent task>}; code binds the current parent revision and digest. Coverage refs still express the actual destinations. parent_basis identifies the temporary IR, and compilation.intent_basis identifies the task/content used by the plan. generation_repair.ir_proposal identifies the parent groups and their open questions, not a substitute for the actual IR text. Compile each group's compilation and coverage, author the execution_decisions, assessments and checks the executions require, and add questions only for concrete compilation uncertainty; the compiler keeps the parent's questions. ${checkRequired ? CHECKED_PARENT_ROLE : "If the parent IR itself needs correction, report parent_issues instead of changing it."} Return no ir_changes or source_coverage. Write each Atom's work instruction — action, boundaries, ordering and handoff — from the complete applicable IR requirements, including definitions, public interfaces, shared rules, conditions and exceptions; management code attaches the assigned requirement texts verbatim to the delivered task after preparation, so do not copy or paraphrase rule blocks into the candidate task. Coverage selects what the attached text will contain; references and coverage cannot replace executable behavior. Preserve retained work and real dependencies. ${checkRequired ? "" : "Original input may reveal an IR omission or wrong role/scope: report concrete parent_issues and groups: [] so management returns to the IR stage; never silently repair the parent or add an unsupported requirement in the plan. Otherwise parent_issues is []."}`}`
 }
 
 /** Retain field semantics while replacing the joint-response shape and example. */
 export function generationContract<T extends { ir_change_contract: string; atom_contract: string; candidate_shape: string; example_candidate: string }>(
-  contract: T, stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis?: string, assessment = false,
+  contract: T & { rules?: readonly string[] }, stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis?: string, assessment = false, checkRequired = false,
 ): T {
+  const checkedCI = stage === "ci" && !assessment && checkRequired
   return {
     ...contract,
     ir_change_contract: stage === "ir"
       ? strictLocalSourceEdit(strictSupersededBasis(contract.ir_change_contract))
       : strictSupersededBasis(contract.ir_change_contract),
-    atom_contract: assembledAtomContract(contract.atom_contract),
+    atom_contract: assembledAtomContract(contract.atom_contract).replace(
+      "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
+      checkedCI ? "Compile the affected task, input/output, completion condition, Relation and assignment from the fixed parent IR; the independent check judges whether the original update was correctly represented."
+        : "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
+    ),
+    ...(checkedCI && contract.rules !== undefined ? { rules: contract.rules.map(rule => {
+      if (rule.startsWith("When configured, an independent checker")) return CHECKED_PARENT_ROLE
+      if (rule.startsWith("When validation_errors, previous_rejection")) return "On CI repairs, use the fixed parent IR and the reported plan defects to repair the complete plan. Preserve unrelated correct work, restore requirements present in that IR but missing from the plan, and correct assignments and Relations without changing IR or adding requirements absent from it. An independent IR finding returns to the IR stage through repair_target: ir."
+      if (rule.startsWith("Before returning, compare the original delegation")) return "Before returning, compare every applicable fixed parent IR requirement with the whole plan's concrete tasks and completion. Fill missing plan behavior and remove unsupported plan restrictions while keeping the parent IR fixed."
+      if (rule.startsWith("A first batch for a new delegation")) return "For initial compilation, compile the actual temporary parent IR supplied in request.ir and preserve the parent groups identified by generation_repair.ir_proposal."
+      if (rule.startsWith("carried_delegations names earlier user delegations")) return "Compile this batch's delegations, including carried work, as represented in the fixed parent IR. The independent check judges whether that representation retains the original delegations."
+      return rule
+    }) } : {}),
     candidate_shape: stage === "ir"
       ? "IR stage response = {schema_version:2,basis,source_coverage,groups}. Each group uses the existing CandidateGroup fields except compilation, coverage, execution_decisions, assessments and checks, which are forbidden in this response. The final Candidate is assembled only after CI generation."
       : assessment
         ? "CI stage (execution assessment) response = {schema_version:2,basis,parent_basis,parent_issues,groups}. Each group uses the existing CandidateGroup fields except ir_changes. source_coverage is forbidden. basis.event_ids must name exactly this batch's trigger events; its refs may cite existing objects you assessed. Copy parent_basis from the request. Keep each group's task_refs and depends_on, and write assessments and execution_decisions from this batch's evidence. Assess the returned work against the Atom's completion criteria and the user's own words; a reservation about the IR's wording, redundancy or evidence phrasing belongs in the assessment explanation, and parent_issues is only for a stored-IR defect that makes the judgement impossible. If parent_issues is nonempty, groups must be empty."
-        : "CI stage response = {schema_version:2,parent_basis,parent_issues,groups}. Each group uses the existing CandidateGroup fields except ir_changes, task_refs, depends_on and compilation.drafts[].task_id, which the compiler fills from the parent; source_coverage and basis are forbidden. coverage.requirement is {local_ref: <content item_id or task_id in this group's parent task>}, with no revision or digest; coverage refs keep their destination expression. Copy parent_basis from the request, and bind to a parent group by its local_ref. If parent_issues is nonempty, groups must be empty; otherwise supply each parent group's compilation and coverage, and add questions only for concrete compilation uncertainty (the compiler keeps the parent's questions).",
-    example_candidate: JSON.stringify(buildGenerationExample(stage, profile, parentBasis, assessment), null, 2),
+        : `CI stage response = {schema_version:2,parent_basis,${checkedCI ? "" : "parent_issues,"}groups}. Each group uses the existing CandidateGroup fields except ir_changes, task_refs, depends_on and compilation.drafts[].task_id, which the compiler fills from the parent; source_coverage and basis are forbidden. coverage.requirement is {local_ref: <content item_id or task_id in this group's parent task>}, with no revision or digest; coverage refs keep their destination expression. Copy parent_basis from the request, and bind to a parent group by its local_ref. ${checkedCI ? CHECKED_PARENT_ROLE : "If parent_issues is nonempty, groups must be empty; otherwise"} Supply each parent group's compilation and coverage, and add questions only for concrete compilation uncertainty (the compiler keeps the parent's questions).`,
+    example_candidate: JSON.stringify(buildGenerationExample(stage, profile, parentBasis, assessment, checkRequired), null, 2),
   }
 }

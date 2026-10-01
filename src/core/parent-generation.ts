@@ -342,7 +342,11 @@ export class ParentGeneration {
     const parent = this.state.parent!
     const derived = this.state.derived === true
     if (child.parent_basis !== parent.digest) return this.reject("CI names a different parent basis", result)
-    if (child.parent_issues.length) {
+    const reviewsParent = derived || !this.options.checkRequired
+    if (!reviewsParent && child.parent_issues !== undefined) {
+      return this.reject("Ordinary CI with an independent check must not return parent_issues", result)
+    }
+    if (reviewsParent && child.parent_issues?.length) {
       if (derived) {
         // The stored IR is the whole task's blueprint: a returned execution
         // cannot revise it. Record the defect for the next user delegation
@@ -413,12 +417,12 @@ export class ParentGeneration {
         for (const atom of draft.atoms) {
           for (const output of atom.outputs) {
             const existing = task.outputs.find(o => o.output_id === output.output_id)
-            if (existing && existing.format !== output.format) return this.reject(`CI changes parent output ${output.output_id}; report parent_issues`, result)
+            if (existing && existing.format !== output.format) return this.reject(`CI changes parent output ${output.output_id}; ${reviewsParent ? "report parent_issues" : "keep the fixed parent declaration"}`, result)
           }
           for (const input of atom.inputs) {
             const existing = task.bindings.find(b => b.binding_id === input.binding_id)
             if (existing && (digestOf(existing.ref ?? null) !== digestOf(input.ref) || existing.role !== input.role)) {
-              return this.reject(`CI changes parent material ${input.binding_id}; report parent_issues`, result)
+              return this.reject(`CI changes parent material ${input.binding_id}; ${reviewsParent ? "report parent_issues" : "keep the fixed parent declaration"}`, result)
             }
           }
         }

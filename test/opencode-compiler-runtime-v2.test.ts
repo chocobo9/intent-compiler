@@ -34,7 +34,7 @@ test("v2 runtime routes each run through its own compiler", async () => {
           assert.equal(input.capabilities.operations.includes("edit"), false)
         }
         const stage = input.generation_stage as "ir" | "ci" | undefined
-        const isCandidate = stage !== undefined && JSON.stringify(schema) === JSON.stringify(buildGenerationSchema(stage, "openai"))
+        const isCandidate = stage !== undefined && JSON.stringify(schema) === JSON.stringify(buildGenerationSchema(stage, "openai", { checkRequired: true }))
         const isCheck = JSON.stringify(schema) === JSON.stringify(buildStrictCandidateCheckSchema("openai"))
         assert.equal(isCandidate || isCheck, true, "runtime must send the IR, CI or check OpenAI strict schema")
         const schemaKind = isCandidate ? stage! : "check"

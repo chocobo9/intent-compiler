@@ -1,10 +1,10 @@
 import assert from "node:assert/strict"
 import type { Candidate } from "../../src/core/intent-contract.js"
 import type { CompilerModelV2Input } from "../../src/model/compiler-model-v2.js"
-import type { IRProposal, CIProposal } from "../../src/model/generation-schema.js"
+import type { IRProposal, CIProposal, GenerationSchemaOptions } from "../../src/model/generation-schema.js"
 
 /** Encoding adapter for fixed lifecycle fixtures; it does not generate or repair meaning. */
-export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate): IRProposal | CIProposal {
+export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate, generation?: Pick<GenerationSchemaOptions, "checkRequired">): IRProposal | CIProposal {
   assert.ok(input.generation_stage, "strict lifecycle tests must use parent/child generation")
   const copy = structuredClone(candidate)
   if (input.generation_stage === "ir") return {
@@ -24,8 +24,12 @@ export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate
       groups: copy.groups.map(({ ir_changes: _changes, ...group }) => group),
     }
   }
+  // Provider mocks follow the example actually sent; direct transport stubs
+  // receive the same internal checker configuration as the real adapters.
+  const example = JSON.parse(input.contract.example_candidate) as Record<string, unknown>
+  const checkRequired = generation?.checkRequired ?? ("parent_basis" in example && !("parent_issues" in example))
   return {
-    schema_version: 2, parent_basis: input.parent_basis, parent_issues: [],
+    schema_version: 2, parent_basis: input.parent_basis, ...(checkRequired ? {} : { parent_issues: [] }),
     groups: copy.groups.map(({ ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, ...group }) => {
       const parent = input.generation_repair?.ir_proposal?.groups.find(item => item.local_ref === group.local_ref)
       assert.ok(parent, "CI must receive the parent groups it must preserve")

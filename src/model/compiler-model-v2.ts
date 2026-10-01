@@ -16,7 +16,7 @@ import { validateCandidateCheckSchema } from "./candidate-check-schema.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "./candidate-example.js"
 import type { CandidateRepairContext } from "../core/candidate-repair.js"
 import type { AssessmentRecord, ExecutionOutcomeRecord } from "../core/compiler-store-v2.js"
-import { validateGenerationProposal, type IRProposal, type CIProposal } from "./generation-schema.js"
+import { validateGenerationProposal, type IRProposal, type CIProposal, type GenerationSchemaOptions } from "./generation-schema.js"
 
 export interface CompilerModelV2Input {
   generation_stage?: "ir" | "ci"
@@ -398,6 +398,8 @@ export const V2_COMPILER_CONTRACT = Object.freeze({
 
 export type CompilerModelV2Transport = (
   request: CompilerModelV2Input,
+  /** Internal configuration; transports must not serialize it into model input. */
+  generation?: Pick<GenerationSchemaOptions, "checkRequired">,
 ) => Promise<string | CompilerModelV2Call> | string | CompilerModelV2Call
 
 export type CompilerModelV2CheckTransport = (
@@ -467,7 +469,7 @@ export function createCompilerModelV2(
     async propose(input) {
       let raw: string | CompilerModelV2Call
       try {
-        raw = await transport(input)
+        raw = await transport(input, { checkRequired: checkTransport !== undefined })
       } catch (error) {
         return { ok: false, error: { code: "transport", message: errorMessage(error), diagnostic: diagnosticOf(error, "transport") } }
       }
@@ -487,7 +489,9 @@ export function createCompilerModelV2(
       }
       try {
         if (input.generation_stage !== undefined) {
-          const schema = validateGenerationProposal(input.generation_stage, decoded, { assessment: input.assessment_batch === true })
+          const schema = validateGenerationProposal(input.generation_stage, decoded, {
+            assessment: input.assessment_batch === true, checkRequired: checkTransport !== undefined,
+          })
           if (!schema.ok) return { ok: false, call, error: { code: "schema", message: schema.errors.join("; ") },
             schema_errors: schema.errors, schema_rejected_draft: { text: call.text, errors: schema.errors } }
           return input.generation_stage === "ir"

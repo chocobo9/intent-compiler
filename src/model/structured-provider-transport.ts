@@ -8,7 +8,7 @@ import { CANDIDATE_JSON_SCHEMA } from "./candidate-schema.js"
 import { canonicalJson } from "../core/intent-contract.js"
 import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
 import type { StrictSchemaProfile } from "./candidate-schema-strict.js"
-import { buildGenerationSchema, generationContract, generationStageInstruction } from "./generation-schema.js"
+import { buildGenerationSchema, generationContract, generationStageInstruction, type GenerationSchemaOptions } from "./generation-schema.js"
 
 export interface StructuredProviderTransportOptions {
   endpoint?: string
@@ -66,7 +66,7 @@ const SYSTEM_PROMPT = [
 
 export function createStructuredProviderTransport<Request extends CompilerModelV2Input | CompilerModelV2CheckInput = CompilerModelV2Input>(
   options: StructuredProviderTransportOptions,
-): (request: Request) => Promise<CompilerModelV2Call> {
+): (request: Request, generation?: Pick<GenerationSchemaOptions, "checkRequired">) => Promise<CompilerModelV2Call> {
   const endpoint = options.endpoint ?? "https://api.deepseek.com/chat/completions"
   const providerId = options.providerId ?? "deepseek"
   const modelId = options.modelId
@@ -76,7 +76,7 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
   const stream = options.stream ?? false
   const timeoutMs = options.timeoutMs ?? 240_000
 
-  return async (request: Request): Promise<CompilerModelV2Call> => {
+  return async (request: Request, generation = {}): Promise<CompilerModelV2Call> => {
     if (!apiKey || apiKey.trim().length === 0) {
       throw new StructuredProviderTransportError("API_KEY_REQUIRED", "DEEPSEEK_API_KEY is required for the structured management transport", undefined, undefined, { phase: "configuration", response_received: false })
     }
@@ -87,7 +87,7 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
     const parentBasis = "parent_basis" in request && typeof request.parent_basis === "string" ? request.parent_basis : undefined
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
     const stageRequest = stage !== undefined && "example_candidate" in request.contract
-      ? { ...request, contract: generationContract(request.contract, stage, profile, parentBasis, assessing) }
+      ? { ...request, contract: generationContract(request.contract, stage, profile, parentBasis, assessing, generation.checkRequired) }
       : request
     let response: Response
     try {
@@ -101,7 +101,7 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
         body: JSON.stringify({
           model: modelId,
           messages: [
-            { role: "system", content: stage === undefined ? options.systemPrompt ?? SYSTEM_PROMPT : `${generationStageInstruction(stage, assessing)} Return one JSON text response matching the supplied stage Schema.` },
+            { role: "system", content: stage === undefined ? options.systemPrompt ?? SYSTEM_PROMPT : `${generationStageInstruction(stage, assessing, generation.checkRequired)} Return one JSON text response matching the supplied stage Schema.` },
             { role: "user", content: canonicalJson(stageRequest) },
           ],
           response_format: {
@@ -109,7 +109,7 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
             json_schema: {
               name: stage === undefined ? "candidate_v2" : `${stage}_proposal_v2`,
               strict,
-              schema: stage === undefined ? options.schema ?? CANDIDATE_JSON_SCHEMA : buildGenerationSchema(stage, profile, { assessment: assessing }),
+              schema: stage === undefined ? options.schema ?? CANDIDATE_JSON_SCHEMA : buildGenerationSchema(stage, profile, { ...generation, assessment: assessing }),
             },
           },
           ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),

@@ -86,12 +86,12 @@ export function createIntentCompilerRuntime(options: IntentCompilerRuntimeOption
       : undefined
   const transport = structuredTransport === undefined
     ? openCodeTransport
-    : async (request: Parameters<typeof openCodeTransport>[0]) => {
+    : async (request: Parameters<typeof openCodeTransport>[0], generation?: Parameters<typeof openCodeTransport>[1]) => {
         try {
-          return await structuredTransport(request)
+          return await structuredTransport(request, generation)
         } catch (error) {
           if (config.transport === "deepseek-structured" && error instanceof StructuredProviderTransportError && error.code === "STRUCTURED_UNSUPPORTED") {
-            return openCodeTransport(request)
+            return openCodeTransport(request, generation)
           }
           throw error
         }

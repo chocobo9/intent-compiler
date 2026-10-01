@@ -122,7 +122,7 @@ test("check, commit and dispatch read the same assembled task", async () => {
   const compiler = createIntentCompilerV2({
     store,
     model: createCompilerModelV2(
-      async input => JSON.stringify(stageCandidate(input, proposal)),
+      async (input, generation) => JSON.stringify(stageCandidate(input, proposal, generation)),
       async input => {
         checks.push(structuredClone(input))
         return JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] })
@@ -422,7 +422,7 @@ test("a later revision keeps prior exact requirements and replaces only the chan
   const compiler = createIntentCompilerV2({
     store,
     model: createCompilerModelV2(
-      async input => {
+      async (input, generation) => {
         if (input.generation_stage === "ir") {
           // Retained prior text must still be offered: it now travels as the
           // addressed segments the current IR cites, not as a raw event list.
@@ -430,7 +430,7 @@ test("a later revision keeps prior exact requirements and replaces only the chan
           seenSources.push([...new Set((input.source_segments ?? []).map(segment => segment.source_id))]
             .filter(id => !batchIds.has(id)))
         }
-        return JSON.stringify(stageCandidate(input, proposal))
+        return JSON.stringify(stageCandidate(input, proposal, generation))
       },
       async input => {
         checked.push({

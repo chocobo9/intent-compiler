@@ -6,7 +6,7 @@ import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
-import type { CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
+import type { CompilerModelV2Input, CompilerModelV2CheckInput } from "../src/model/compiler-model-v2.js"
 import { V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
 import { ParentGeneration } from "../src/core/parent-generation.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
@@ -24,9 +24,9 @@ function parent() {
     }) => group),
   }
 }
-function child(basis: string) {
+function child(basis: string, checkRequired = true) {
   const c = structuredClone(CANDIDATE_EXAMPLE)
-  return { schema_version: 2, parent_basis: basis, parent_issues: [],
+  return { schema_version: 2, parent_basis: basis, ...(checkRequired ? {} : { parent_issues: [] }),
     groups: c.groups.map(({ ir_changes: _irChanges, task_refs: _taskRefs, depends_on: _dependsOn, ...group }) => ({
       ...group,
       coverage: group.coverage.map(entry => ({ ...entry, requirement: {
@@ -90,7 +90,7 @@ test("ordinary CI binds current parent coverage and refuses unknown, foreign or 
     const current = structuredClone(ir)
     if (duplicate) current.t1!.content.push(structuredClone(item))
     const parentBasis = digestOf(current)
-    const answer = child(wrongBasis ? "another-parent" : parentBasis)
+    const answer = child(wrongBasis ? "another-parent" : parentBasis, false)
     answer.groups[0]!.coverage[1]!.requirement.local_ref = selector
     const generation = new ParentGeneration({ input, sourceBasis: "fixture", checkRequired: false,
       remaining: () => 4, currentBasis: () => "fixture", call: async () => ({ ok: true, ci_proposal: answer as CIProposal }),
@@ -116,18 +116,21 @@ test("ordinary CI binds current parent coverage and refuses unknown, foreign or 
   assert.match((await propose("r-common", false, true)).error!.message, /different parent basis/)
 })
 
-async function setup(transport: Parameters<typeof createCompilerModelV2>[0], checker = consistent) {
+async function setup(transport: Parameters<typeof createCompilerModelV2>[0], checker: Parameters<typeof createCompilerModelV2>[1] | null = consistent) {
   const storeDir = mkdtempSync(join(tmpdir(), "parent-generation-"))
   const store = new IntentStoreV2({ storeDir, runId: "parent" })
-  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(transport, checker) })
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(transport, checker ?? undefined) })
   await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "input-event-id", kind: "user_input",
     source: { channel: "user", producer_id: "user" }, payload: { text: CANDIDATE_EXAMPLE_INPUT } })
   return { store, compiler, storeDir }
 }
 
 test("a check attempt records the input it sent and the prepared view behind its digest", async () => {
-  const { store, compiler, storeDir } = await setup(async input =>
-    JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!)))
+  const { store, compiler, storeDir } = await setup(async (input, generation) => {
+    assert.equal(generation?.checkRequired, true)
+    assert.equal("checkRequired" in input, false, "checker configuration is internal")
+    return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+  })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
   const record = store.current().management_log.at(-1)!
@@ -140,6 +143,10 @@ test("a check attempt records the input it sent and the prepared view behind its
   const sent = check.check_input as { prepared?: { ir?: unknown }; candidate?: unknown }
   assert.deepEqual(sent.prepared?.ir, view.ir, "the check input carries the prepared projection")
   assert.ok(sent.candidate, "the check input carries the candidate it judged")
+  const checkInput = check.check_input as CompilerModelV2CheckInput
+  assert.equal((checkInput.events[0]!.payload as { text: string }).text, CANDIDATE_EXAMPLE_INPUT)
+  assert.ok(checkInput.prepared!.compiled.t1!.atoms[0]!.task.includes("bundle accepts a config file path"))
+  assert.equal(store.current().budget.total_management_requests, 3, "IR, CI and independent check remain three calls")
   const evidence = join(storeDir, "v2-runs", "parent", "check-inputs.jsonl")
   assert.ok(existsSync(evidence), "the check input is persisted before the call")
   const first = JSON.parse(readFileSync(evidence, "utf8").split(/\r?\n/).filter(Boolean)[0]!) as { input?: unknown; prepared_view?: unknown }
@@ -324,7 +331,7 @@ test("one event keeps the same alias in later batches, including inside the IR b
       if (irCalls === 1) return JSON.stringify(child(input.parent_basis!))
       // The stored plan stands: reuse it, keeping the group the IR stage named.
       return JSON.stringify({ schema_version: 2,
-        parent_basis: input.parent_basis!, parent_issues: [],
+        parent_basis: input.parent_basis!,
         groups: [{ local_ref: "g2",
           compilation: { decision: "reuse", current: [compiledIntentRef(store.current().compiled.t1!)], reason: "the stored plan is unchanged" },
           execution_decisions: [], assessments: [], coverage: [], checks: [], questions: [] }] })
@@ -666,7 +673,7 @@ test("generation reserves the complete chain before spending the first request",
   assert.equal(store.current().budget.total_management_requests, 0)
 })
 
-test("a reported parent defect returns to IR and invalidates the previous child basis", async () => {
+test("without verify a reported parent defect still returns to IR and invalidates the previous child basis", async () => {
   const stages: string[] = [], bases: string[] = []
   let parents = 0
   const { store, compiler } = await setup(async input => {
@@ -680,15 +687,15 @@ test("a reported parent defect returns to IR and invalidates the previous child 
       return JSON.stringify(next)
     }
     bases.push(input.parent_basis!)
-    if (parents === 1) return JSON.stringify({ ...child(input.parent_basis!), groups: [], parent_issues: ["Clarify the authorized scope in the parent before planning."] })
-    return JSON.stringify(child(input.parent_basis!))
-  })
+    if (parents === 1) return JSON.stringify({ ...child(input.parent_basis!, false), groups: [], parent_issues: ["Clarify the authorized scope in the parent before planning."] })
+    return JSON.stringify(child(input.parent_basis!, false))
+  }, null)
   store.applyDeltas({ max_management_requests: 5 })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
   assert.deepEqual(stages, ["ir", "ci", "ir", "ci"])
   assert.notEqual(bases[0], bases[1])
-  assert.equal(store.current().budget.total_management_requests, 5)
+  assert.equal(store.current().budget.total_management_requests, 4)
 })
 
 test("a checker identifying an IR defect repairs the parent before recompiling and counts every call", async () => {
@@ -702,8 +709,11 @@ test("a checker identifying an IR defect repairs the parent before recompiling a
       if (change.action === "create") (change.value as any).current_scope.text += " Retain all required behavior."
     }
     return { text: JSON.stringify(input.generation_stage === "ir" ? proposal : child(input.parent_basis!)), usage: { input_tokens: 2, output_tokens: 1 } }
-  }, async () => {
+  }, async input => {
     checks++
+    assert.equal((input.events[0]!.payload as { text: string }).text, CANDIDATE_EXAMPLE_INPUT)
+    assert.ok(input.prepared!.ir.t1)
+    assert.ok(input.prepared!.compiled.t1)
     if (checks > 1) return consistent()
     return JSON.stringify({ schema_version: 2, verdict: "inconsistent", repair_target: "ir", findings: [{
       dimension: "D2", claim: "Parent scope needs correction", expected: "Retain all required behavior", observed: "Parent scope omits required scope detail",

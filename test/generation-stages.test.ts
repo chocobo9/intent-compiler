@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { Ajv } from "ajv"
 import { resolve } from "node:path"
-import { buildGenerationExample, buildGenerationSchema, generationContract, validateGenerationProposal, type CIProposal } from "../src/model/generation-schema.js"
+import { buildGenerationExample, buildGenerationSchema, generationContract, generationStageInstruction, validateGenerationProposal, type CIProposal } from "../src/model/generation-schema.js"
 import { createOpenCodeModelTransportV2 } from "../src/model/opencode-transport.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
 import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
@@ -72,6 +72,30 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   const assessment = { ...proposal, basis, groups: [{ ...proposal.groups[0], task_refs: ["t1"], depends_on: [] }] }
   assert.equal(validateGenerationProposal("ci", assessment, { assessment: true }).ok, true)
   assert.equal(validateGenerationProposal("ci", assessment).ok, false, "the ordinary CI shape does not admit an assessment's copies")
+  const { parent_issues: _issues, ...checked } = proposal
+  assert.equal(validateGenerationProposal("ci", checked, { checkRequired: true }).ok, true)
+  for (const parent_issues of [[], ["The parent omitted a user's requirement."]]) {
+    assert.equal(validateGenerationProposal("ci", { ...checked, parent_issues }, { checkRequired: true }).ok, false,
+      "checked CI cannot return a parent verdict, including an empty one")
+  }
+  assert.equal(validateGenerationProposal("ci", checked).ok, false, "without verify the field remains required")
+  assert.equal(validateGenerationProposal("ci", assessment, { assessment: true, checkRequired: true }).ok, true)
+  const instruction = generationStageInstruction("ci", false, true)
+  const contract = generationContract(V2_COMPILER_CONTRACT, "ci", undefined, "parent-1", false, true)
+  assert.doesNotMatch(instruction + contract.candidate_shape, /parent_issues/)
+  assert.match(instruction, /independent check compares original requirements/)
+  assert.match(instruction, /Do not add requirements absent from the parent IR/)
+  assert.doesNotMatch(contract.rules.join("\n"), /compare the original delegation with the selected current rules/)
+  assert.doesNotMatch(contract.atom_contract, /Revise the affected IR items/)
+  assert.match(generationStageInstruction("ci"), /report parent_issues/)
+  assert.match(generationStageInstruction("ci", true, true), /Report parent_issues/)
+  for (const profile of [undefined, "openai", "groq"] as const) {
+    const schema = buildGenerationSchema("ci", profile, { checkRequired: true }) as { properties: Record<string, unknown>; required: string[] }
+    assert.equal("parent_issues" in schema.properties, false)
+    assert.equal(schema.required.includes("parent_issues"), false)
+    assert.equal("parent_issues" in buildGenerationExample("ci", profile, "parent-1", false, true), false)
+    assert.equal("parent_issues" in buildGenerationExample("ci", profile, "parent-1", true, true), true)
+  }
 })
 
 test("the CI projection drops only the parent copies the compiler fills", () => {
@@ -137,7 +161,7 @@ function request(stage: "ir" | "ci"): CompilerModelV2Input & { generation_stage:
 }
 
 test("OpenCode receives the stage boundary and a stage-valid example, and rejects cross-stage output", async () => {
-  for (const stage of ["ir", "ci"] as const) {
+  for (const checkRequired of [false, true]) for (const stage of ["ir", "ci"] as const) {
     const transport = createOpenCodeModelTransportV2({
       directory: resolve("management-only"), providerId: "openai", modelId: "test",
       client: { session: {
@@ -149,6 +173,11 @@ test("OpenCode receives the stage boundary and a stage-valid example, and reject
           assert.equal(validate(example), true)
           assert.equal("ir_changes" in example.groups[0], stage === "ir")
           assert.equal("compilation" in example.groups[0], stage === "ci")
+          if (stage === "ci") {
+            assert.equal("parent_issues" in example, !checkRequired)
+            assert.equal("checkRequired" in sent, false)
+            if (checkRequired) assert.doesNotMatch(body.system, /parent_issues/)
+          }
           assert.match(body.system, new RegExp(`${stage.toUpperCase()} stage`))
           assert.doesNotMatch(body.system, /Generate these directly in the existing Candidate fields/)
           assert.deepEqual(body.tools, { "*": false, StructuredOutput: true })
@@ -157,13 +186,13 @@ test("OpenCode receives the stage boundary and a stage-valid example, and reject
         },
       } },
     })
-    const result = await transport(request(stage))
+    const result = await transport(request(stage), { checkRequired })
     assert.ok(result.structured_schema_errors?.length)
   }
 })
 
 test("structured provider sends the same stage boundary instead of a configured full Candidate schema", async () => {
-  for (const stage of ["ir", "ci"] as const) {
+  for (const checkRequired of [false, true]) for (const stage of ["ir", "ci"] as const) {
     const transport = createStructuredProviderTransport({
       modelId: "test", providerId: "openai", apiKey: "test-only", schema: { type: "object" },
       fetch: async (_url, init) => {
@@ -174,11 +203,16 @@ test("structured provider sends the same stage boundary instead of a configured 
         assert.equal(validate(example), true)
         assert.equal("ir_changes" in example.groups[0], stage === "ir")
         assert.equal("compilation" in example.groups[0], stage === "ci")
+        if (stage === "ci") {
+          assert.equal("parent_issues" in example, !checkRequired)
+          assert.equal("checkRequired" in sent, false)
+          if (checkRequired) assert.doesNotMatch(body.messages[0].content, /parent_issues/)
+        }
         assert.match(body.messages[0].content, new RegExp(`${stage.toUpperCase()} stage`))
         return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(example) } }] }))
       },
     })
-    const result = await transport(request(stage))
+    const result = await transport(request(stage), { checkRequired })
     assert.ok(result.text.length > 0)
   }
 })

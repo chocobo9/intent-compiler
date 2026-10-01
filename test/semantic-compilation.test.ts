@@ -66,9 +66,9 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
   store.applyDeltas({ max_management_requests: 5 })
   const proposals: CompilerModelV2Input[] = []
   const checks: CompilerModelV2CheckInput[] = []
-  const validateResponse = new Ajv({ strict: false }).compile(buildGenerationSchema("ci"))
+  const validateResponse = new Ajv({ strict: false }).compile(buildGenerationSchema("ci", undefined, { checkRequired: true }))
   let returned = false
-  const model = createCompilerModelV2(async input => {
+  const model = createCompilerModelV2(async (input, generation) => {
     proposals.push(structuredClone(input))
     if (returned) {
       assert.deepEqual(input.execution_outcomes, store.current().execution_outcomes)
@@ -95,7 +95,7 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
       assert.ok(input.validation_errors?.some(error => error.includes("waiting verify Atom")))
       const repaired = repairCandidate(input)
       assert.equal(input.parent_basis, digestOf(input.ir))
-      assert.equal(validateResponse(stageCandidate(input, repaired)), true,
+      assert.equal(validateResponse(stageCandidate(input, repaired, generation)), true,
         "a CI repair must use its own response format without re-emitting parent source selections: " + JSON.stringify(validateResponse.errors))
       const compilation = repaired.groups[0]!.compilation
       assert.equal(compilation.decision, "replace")
@@ -104,11 +104,11 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
       if (correct.decision !== "replace") throw Error("fixture")
       compilation.drafts[0]!.atoms[1]!.task = correct.drafts[0]!.atoms[1]!.task
       compilation.drafts[0]!.atoms[1]!.completion = correct.drafts[0]!.atoms[1]!.completion
-      return JSON.stringify(stageCandidate(input, repaired))
+      return JSON.stringify(stageCandidate(input, repaired, generation))
     }
     const first = plan(false)
     ;(first.groups[0]!.ir_changes[1] as { sources: any[] }).sources = [{ ...source, segment_id: "s1" }]
-    return JSON.stringify(stageCandidate(input, first))
+    return JSON.stringify(stageCandidate(input, first, generation))
   }, async input => {
     checks.push(structuredClone(input))
     if (checks.length === 2) assert.deepEqual(input.candidate.groups[0]!.ir_changes, checks[0]!.candidate.groups[0]!.ir_changes,
@@ -130,7 +130,7 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
   const compiler = createIntentCompilerV2({ store, model })
   await compiler.acceptEvent(event)
   const first = await compiler.advance({ runId: event.run_id })
-  assert.equal(validateResponse(stageCandidate(proposals[2]!, repairCandidate(proposals[2]!))), true,
+  assert.equal(validateResponse(stageCandidate(proposals[2]!, repairCandidate(proposals[2]!), { checkRequired: true })), true,
     "CI repair must remain response-compatible while its parent is fixed: " + JSON.stringify(validateResponse.errors))
   assert.equal(first.ok, true, first.message)
   assert.equal(checks.length, 2)
