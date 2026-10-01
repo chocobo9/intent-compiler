@@ -107,7 +107,7 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
       return JSON.stringify(stageCandidate(input, repaired))
     }
     const first = plan(false)
-    first.groups[0]!.ir_changes[1]!.sources = [{ ...source, segment_id: "s1" }]
+    ;(first.groups[0]!.ir_changes[1] as { sources: any[] }).sources = [{ ...source, segment_id: "s1" }]
     return JSON.stringify(stageCandidate(input, first))
   }, async input => {
     checks.push(structuredClone(input))
@@ -140,7 +140,7 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
   assert.deepEqual(proposals[1]!.ir, proposals[2]!.ir, "CI repair must receive the same actual parent text and scopes")
   assert.equal(store.current().semantic_checks[0]!.findings[0]!.evidence_resolved, true, "newly prepared IR refs must be usable check evidence")
   assert.deepEqual(store.current().compiled, checks[1]!.prepared!.compiled)
-  assert.ok(checks[0]!.candidate.groups[0]!.ir_changes[1]!.sources[0]!.span,
+  assert.ok((checks[0]!.candidate.groups[0]!.ir_changes[1] as { sources: any[] }).sources[0]!.span,
     "preparing a response draft must not mutate the recorded rejected candidate")
   assert.deepEqual(first.deliveries!.map(delivery => delivery.atom_id), ["a1"])
   assert.equal("execution_task" in first.deliveries![0]!, false)

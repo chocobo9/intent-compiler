@@ -290,13 +290,43 @@ function transformUnionVariant(variant: unknown, profile: StrictSchemaProfile): 
   return transformed
 }
 
-export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq"): Record<string, unknown> {
+/**
+ * The local source edit belongs to the strict IR stage alone: the stage
+ * projection asks for it explicitly, while the legacy response schema built
+ * here keeps its old shape.  The branch carries the same segment-id-or-span
+ * selectors as every other source selection, so the constrained decode can
+ * express it without a hand-written quote.
+ */
+export interface StrictSchemaOptions {
+  localSourceEdit?: boolean
+}
+
+const localSourceEditBranch = {
+  type: "object",
+  additionalProperties: false,
+  required: ["action", "target", "id", "expected_revision", "remove", "add", "basis", "reason"],
+  properties: {
+    action: { const: "edit" },
+    target: { const: "content" },
+    id: text,
+    expected_revision: { type: "integer", minimum: 0 },
+    remove: { type: "array", minItems: 1, items: sourceWithQuote },
+    add: { type: "array", items: sourceWithQuote },
+    basis: { type: "array", minItems: 1, items: sourceWithQuote },
+    reason: text,
+  },
+} as const
+
+export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq", options: StrictSchemaOptions = {}): Record<string, unknown> {
   const canonical = CANDIDATE_JSON_SCHEMA as unknown as SchemaNode
   // Legacy canonical callers may omit this field; generated candidates may not.
   const source: SchemaNode = { ...canonical, required: [...canonical.required, "source_coverage"] }
   const definitions: Record<string, unknown> = {}
   for (const [name, definition] of Object.entries(source.definitions as Record<string, unknown>)) {
     definitions[name] = transform(name === "ir_change" ? strictIrChange(profile) : definition, profile) as Record<string, unknown>
+  }
+  if (options.localSourceEdit === true) {
+    ((definitions.ir_change as SchemaNode).anyOf as unknown[]).push(transform(localSourceEditBranch, profile))
   }
   definitions.source_ref_with_quote = transform(sourceRefWithQuote, profile)
   const output: Record<string, unknown> = { ...(transform(source, profile) as Record<string, unknown>), definitions }

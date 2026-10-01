@@ -1,7 +1,7 @@
-import { digestOf, type Candidate, type TaskIntent } from "./intent-contract.js"
+import { digestOf, type Candidate, type LocalSourceEditRecord, type TaskIntent } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
 import { aliasDisplay, decodeIRProposal, expressIRRequest, type SourceAliasEntry, type SourceAliasIndex } from "./source-aliases.js"
-import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
+import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "./source-payload.js"
 import type { CompilerModelV2Input, CompilerModelV2Result } from "../model/compiler-model-v2.js"
 import type { IRProposal, CIProposal } from "../model/generation-schema.js"
 
@@ -192,6 +192,9 @@ export class ParentGeneration {
     const state = new IntentStateManager(this.options.input.ir)
     let ir = state.snapshot()
     const groups = new Set<string>(), tasks = new Set<string>()
+    // Recorded once the whole proposal is applied, so a fragment a later group
+    // re-selects in the same proposal is not called withdrawn.
+    const editedRemovals: LocalSourceEditRecord[] = []
     for (const group of candidate.groups) {
       if (groups.has(group.local_ref) || group.task_refs.length !== 1 || tasks.has(group.task_refs[0]!)) {
         throw Error("Each IR group must have one distinct task and a distinct group identity")
@@ -200,6 +203,7 @@ export class ParentGeneration {
       const result = new IntentStateManager(ir).apply(group.ir_changes, group.task_refs)
       if (!result.ok) throw Error(result.errors.map(e => e.message).join("; "))
       ir = result.tasks
+      editedRemovals.push(...result.edits)
       const task = ir[group.task_refs[0]!]
       if (!task) throw Error("IR group names an unknown task")
       materializeSourceContent(task, group.ir_changes, sources, (eventId) => this.display(eventId))
@@ -210,6 +214,7 @@ export class ParentGeneration {
         }
       }
     }
+    recordEditedRemovals(candidate, ir, editedRemovals)
     const carriedEventIds = new Set((this.options.input.carried_delegations ?? []).map((delegation) => delegation.event_id))
     validateSourceCoverage(candidate, this.options.input.events, sources, this.options.input.ir, ir,
       { carriedEventIds, display: (eventId) => this.display(eventId) })

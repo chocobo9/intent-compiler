@@ -1,4 +1,4 @@
-import { digestOf, digestText, type Candidate, type CompilerEvent, type ContentItem, type IrChange, type SourceDisposition, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
+import { digestOf, digestText, type Candidate, type CompilerEvent, type ContentItem, type IrChange, type LocalSourceEditRecord, type SourceDisposition, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
 
 export function userText(event: CompilerEvent): string | undefined {
   const value = event.payload as { text?: unknown } | undefined
@@ -40,7 +40,13 @@ function sourceTexts(events: readonly CompilerEvent[]): Map<string, string> {
 
 /** Interpretation never overwrites selected source bytes. Adjacent selections merge. */
 export function materializeSourceContent(task: TaskIntent, changes: readonly IrChange[], events: readonly CompilerEvent[], display: EventIdDisplay = identityDisplay): void {
-  const ids = new Set(changes.flatMap(change => change.action === "create" && change.target === "content" ? [change.local_ref] : change.action === "revise" && change.target === "content" ? [change.id] : []))
+  const ids = new Set(changes.flatMap(change => change.action === "create" && change.target === "content" ? [change.local_ref]
+    : change.action === "revise" && change.target === "content" ? [change.id]
+      : change.action === "edit" && change.target === "content" ? [change.id] : []))
+  // Only create/revise state a new label (value.text).  An edit changes sources
+  // in place, so the item's existing interpretation stays what it was.
+  const labeled = new Set(changes.flatMap(change => change.action === "create" && change.target === "content" ? [change.local_ref]
+    : change.action === "revise" && change.target === "content" ? [change.id] : []))
   const texts = sourceTexts(events)
   for (const item of task.content) {
     if (!ids.has(item.item_id)) continue
@@ -54,11 +60,69 @@ export function materializeSourceContent(task: TaskIntent, changes: readonly IrC
         else sources.push({ source_id: sourceId, digest: digestText(texts.get(sourceId)!), span: { ...span } })
       }
     }
-    item.interpretation = item.text
+    if (labeled.has(item.item_id)) item.interpretation = item.text
     item.text = sources.map(source => texts.get(source.source_id)!.slice(source.span!.start, source.span!.end)).join("\n\n")
     item.text_origin = "source"
     item.sources = sources
   }
+}
+
+/**
+ * A local `edit` keeps the item's other sources and hands the batch only the
+ * fragments it removed.  The disposal record for those fragments is written
+ * here, from the edit's own basis and reason, so the model does not send a
+ * second copy of the same removal.  What a current selection still covers -
+ * possibly several intervals together, or a partially retained fragment - is
+ * not a withdrawal: only the uncovered remainders are recorded, one entry per
+ * remainder.
+ */
+export function recordEditedRemovals(
+  candidate: Candidate,
+  current: Record<string, TaskIntent>,
+  edits: readonly LocalSourceEditRecord[],
+): void {
+  if (!Array.isArray(candidate.source_coverage) || edits.length === 0) return
+  const active = Object.values(current).flatMap(task => task.content).flatMap(item => item.sources)
+  for (const edit of edits) {
+    for (const removed of edit.removed) {
+      const span = removed.span!
+      const covered = active
+        .filter(source => source.source_id === removed.source_id && source.span !== undefined)
+        .map(source => source.span!)
+      for (const residual of uncoveredRanges(span.start, span.end, covered)) {
+        const source: SourceRef = { ...removed, span: { unit: "utf16", start: residual.start, end: residual.end } }
+        // Preparing the same candidate again must not add the record twice: an
+        // existing superseded entry that already covers this remainder is the
+        // record this operation would have written.
+        const alreadyRecorded = candidate.source_coverage.some(entry => entry.disposition === "superseded"
+          && entry.source.source_id === source.source_id
+          && entry.source.span !== undefined
+          && entry.source.span.start <= source.span!.start && entry.source.span.end >= source.span!.end)
+        if (alreadyRecorded) continue
+        candidate.source_coverage.push({
+          source,
+          disposition: "superseded",
+          requirements: [],
+          reason: edit.reason,
+          basis: edit.basis.map(ref => ({ ...ref })),
+        })
+      }
+    }
+  }
+}
+
+/** The parts of one removed range that no current selection of that event covers. */
+function uncoveredRanges(start: number, end: number, covered: readonly { start: number; end: number }[]): Array<{ start: number; end: number }> {
+  const found: Array<{ start: number; end: number }> = []
+  let cursor = start
+  for (const span of [...covered].sort((a, b) => a.start - b.start)) {
+    if (span.end <= cursor || span.start >= end) continue
+    if (span.start > cursor) found.push({ start: cursor, end: Math.min(span.start, end) })
+    cursor = Math.max(cursor, span.end)
+    if (cursor >= end) return found
+  }
+  if (cursor < end) found.push({ start: cursor, end })
+  return found
 }
 
 function covered(text: string, start: number, end: number, spans: readonly { start: number; end: number }[]): boolean {
@@ -172,7 +236,7 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   // dispose of a paragraph on its own (see the segment loop below).
   const citedSources = candidate.groups
     .filter(group => group.task_refs.some(taskId => taskIds.has(taskId)))
-    .flatMap(group => group.ir_changes.flatMap(change => change.sources))
+    .flatMap(group => group.ir_changes.flatMap(change => change.action === "edit" ? change.add : change.sources))
     .filter(source => source.span !== undefined)
   for (const item of items) if (item.text_origin === "source") adoptedByItem.set(item, item.sources)
 
@@ -201,7 +265,14 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
       const overlapping = spansFor(activeSources, entry.source.source_id).some(active => text.slice(Math.max(active.start, span.start), Math.min(active.end, span.end)).trim() && active.start < span.end && span.start < active.end)
       if (overlapping) throw new Error(`source_coverage[${index}] classifies actively adopted text as ${entry.disposition}`)
       if (entry.disposition === "superseded") {
-        if (!entry.basis.some(ref => currentIds.has(ref.source_id) && validSpan(ref, texts, display))) throw new Error(`superseded source_coverage[${index}] needs the current user's change as basis`)
+        const basisOk = entry.basis.some(ref => {
+          if (!texts.has(ref.source_id)) return false
+          try { validSpan(ref, texts, display); return true } catch { return false }
+        })
+        // "Available" is exactly what this check can prove: the reference
+        // resolves inside the source set this batch's validation was given.  It
+        // is not a claim about which sources the model request displayed.
+        if (!basisOk) throw new Error(`superseded source_coverage[${index}] needs a resolvable source available to this batch as its change basis`)
         if (!covered(text, span.start, span.end, spansFor(oldSources, entry.source.source_id))) throw new Error(`superseded source_coverage[${index}] was not previously normative text`)
         superseded.push(entry.source)
       }

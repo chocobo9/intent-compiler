@@ -2,11 +2,13 @@ import {
   canonicalJson,
   isRefOrSource,
   isRecord,
+  isSourceRef,
   requireNonEmptyString,
   requireNonNegativeInteger,
   type Binding,
   type ContentItem,
   type IrChange,
+  type LocalSourceEditRecord,
   type OutputSpec,
   type Ref,
   type Scope,
@@ -24,6 +26,8 @@ export interface IntentStateResult {
   ok: boolean
   tasks: Record<string, TaskIntent>
   errors: IntentStateError[]
+  /** Source removals an `edit` change performed, in model order. */
+  edits: LocalSourceEditRecord[]
 }
 
 const EMPTY_STATE: Record<string, TaskIntent> = {}
@@ -46,12 +50,14 @@ export class IntentStateManager {
 
   apply(changes: readonly IrChange[], taskRefs: readonly string[]): IntentStateResult {
     const errors: IntentStateError[] = []
+    const edits: LocalSourceEditRecord[] = []
     const working = new Map([...this.tasks.entries()].map(([id, task]) => [id, cloneTask(task)]))
 
     for (const { change, index } of orderChanges(changes)) {
       const path = `ir_changes[${index}]`
       try {
-        applyChange(working, change, taskRefs, path)
+        const edit = applyChange(working, change, taskRefs, path)
+        if (edit !== undefined) edits.push(edit)
       } catch (error) {
         errors.push({
           code: errorCode(error),
@@ -61,9 +67,9 @@ export class IntentStateManager {
       }
     }
 
-    if (errors.length > 0) return { ok: false, tasks: this.snapshot(), errors }
+    if (errors.length > 0) return { ok: false, tasks: this.snapshot(), errors, edits: [] }
     this.tasks = working
-    return { ok: true, tasks: this.snapshot(), errors: [] }
+    return { ok: true, tasks: this.snapshot(), errors: [], edits }
   }
 }
 
@@ -123,11 +129,11 @@ function applyChange(
   change: IrChange,
   taskRefs: readonly string[],
   path: string,
-): void {
+): LocalSourceEditRecord | undefined {
   if (!isRecord(change)) throw new TypeError("each IR change must be an object")
   if (change.action === "preserve") return
 
-  const sources = normalizeSources(change.sources)
+  const sources = change.action === "edit" ? [] : normalizeSources(change.sources)
   const taskId = taskRefs[0]
   if (!taskId) throw new TypeError("IR change requires a resolved task_ref")
 
@@ -240,7 +246,120 @@ function applyChange(
     return
   }
 
+  if (change.action === "edit") {
+    if (change.target !== "content") throw new TypeError("edit supports content sources only")
+    const task = tasks.get(taskId)
+    if (!task) throw new TypeError(`unknown task ${taskId}`)
+    const updated = cloneTask(task)
+    const item = updated.content.find((entry) => entry.item_id === change.id)
+    if (!item) throw new TypeError(`unknown content ${change.id}`)
+    if (item.revision !== change.expected_revision) {
+      throw new TypeError(`expected_revision ${change.expected_revision} does not match current ${item.revision}`)
+    }
+    const removals = editSourceRefs(change.remove, "remove")
+    const additions = editSourceRefs(change.add, "add")
+    const basis = editSourceRefs(change.basis, "basis")
+    if (removals.length === 0) throw new TypeError("edit requires at least one remove selector")
+    if (basis.length === 0) throw new TypeError("edit requires at least one source as the removal's basis")
+    if (typeof change.reason !== "string" || !change.reason.trim()) throw new TypeError("edit requires a reason stating why the removed fragments no longer apply")
+    const plan = subtractRemovals(item, removals)
+    item.revision += 1
+    item.sources = [...plan.retained, ...additions]
+    tasks.set(taskId, updated)
+    return { task_id: taskId, item_id: item.item_id, removed: plan.removed, basis, reason: change.reason }
+  }
+
   throw new TypeError(`unsupported IR change action ${String((change as unknown as { action: unknown }).action)}`)
+}
+
+/**
+ * Execute a local edit's removals against one item's stored sources.  The edit
+ * names fragments inside what this item already selected: a cut has to lie
+ * inside the union of the item's intervals of that event, and every interval it
+ * touches loses exactly its intersection.  Overlapping intervals therefore
+ * cannot hide a fragment - the cut is subtracted from each of them - and a cut
+ * that would include text the item never selected is refused.  Everything not
+ * named is kept, and the new text is materialized from the resulting sources.
+ */
+function subtractRemovals(item: ContentItem, removals: readonly SourceRef[]): { retained: SourceRef[]; removed: SourceRef[] } {
+  const cuts = removals.map((cut) => ({ cut, span: requireCutSpan(cut) }))
+  rejectOverlappingCuts(cuts)
+  // The declared cut is the removal: the model states it once, and code writes
+  // one disposal record for it, whatever number of stored intervals it touches.
+  const removed = cuts.map(({ cut, span }) => ({ source_id: cut.source_id, digest: cut.digest, span: { unit: "utf16" as const, start: span.start, end: span.end } }))
+  for (const { cut, span } of cuts) {
+    const touched = item.sources
+      .filter(source => source.source_id === cut.source_id && source.span !== undefined)
+      .filter(source => source.span!.start < span.end && span.start < source.span!.end)
+    for (const host of touched) {
+      if (host.digest !== cut.digest) throw new TypeError(`edit remove selector ${cut.source_id} digest does not match the current source`)
+    }
+    if (touched.length === 0 || !coveredByUnion(span, touched.map(source => source.span!))) {
+      throw new TypeError(`edit remove selector ${cut.source_id} ${span.start}-${span.end} is outside the item's current sources`)
+    }
+  }
+  const retained: SourceRef[] = []
+  for (const source of item.sources) {
+    const host = source.span
+    if (host === undefined) {
+      retained.push({ ...source })
+      continue
+    }
+    const parts = subtractCuts(host, cuts.filter(entry => entry.cut.source_id === source.source_id).map(entry => entry.span))
+    for (const part of parts) retained.push({ source_id: source.source_id, digest: source.digest, span: { unit: "utf16", start: part.start, end: part.end } })
+  }
+  return { retained, removed }
+}
+
+/** Two cuts of one event may not overlap: each removal is declared once. */
+function rejectOverlappingCuts(cuts: ReadonlyArray<{ cut: SourceRef; span: { start: number; end: number } }>): void {
+  const bySource = new Map<string, Array<{ start: number; end: number }>>()
+  for (const { cut, span } of cuts) {
+    const spans = bySource.get(cut.source_id)
+    if (spans === undefined) bySource.set(cut.source_id, [span])
+    else spans.push(span)
+  }
+  for (const [sourceId, spans] of bySource) {
+    spans.sort((a, b) => a.start - b.start)
+    for (let index = 1; index < spans.length; index += 1) {
+      if (spans[index]!.start < spans[index - 1]!.end) throw new TypeError(`edit remove selectors overlap inside ${sourceId}`)
+    }
+  }
+}
+
+/** Is the whole target inside the union of these intervals? */
+function coveredByUnion(target: { start: number; end: number }, spans: readonly { start: number; end: number }[]): boolean {
+  let cursor = target.start
+  for (const span of [...spans].sort((a, b) => a.start - b.start)) {
+    if (span.end <= cursor) continue
+    if (span.start > cursor) return false
+    cursor = Math.max(cursor, span.end)
+    if (cursor >= target.end) return true
+  }
+  return false
+}
+
+/** The parts of one host interval that remain after every cut is subtracted. */
+function subtractCuts(host: { start: number; end: number }, cuts: readonly { start: number; end: number }[]): Array<{ start: number; end: number }> {
+  const parts: Array<{ start: number; end: number }> = []
+  let cursor = host.start
+  for (const cut of [...cuts].sort((a, b) => a.start - b.start)) {
+    const start = Math.max(cut.start, host.start)
+    const end = Math.min(cut.end, host.end)
+    if (start >= end) continue
+    if (start > cursor) parts.push({ start: cursor, end: start })
+    cursor = Math.max(cursor, end)
+  }
+  if (cursor < host.end) parts.push({ start: cursor, end: host.end })
+  return parts
+}
+
+function requireCutSpan(cut: SourceRef): { start: number; end: number } {
+  const span = cut.span
+  if (!span || span.unit !== "utf16" || !Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start >= span.end) {
+    throw new TypeError(`edit remove selector for ${cut.source_id} needs one resolved utf16 span`)
+  }
+  return { start: span.start, end: span.end }
 }
 
 function findInTask(
@@ -291,6 +410,22 @@ function normalizeContent(value: Record<string, any>): ContentItem {
 function normalizeSources(value: unknown): SourceRef[] {
   if (!Array.isArray(value)) return []
   return value.filter((item) => isRefOrSource(item) && !("id" in item)).map((item) => item as SourceRef)
+}
+
+/**
+ * The edit's remove/add/basis lists are SourceRef[] by contract.  A plain Ref
+ * in a mixed list is a different shape, not a member to drop, so one illegal
+ * member rejects the whole edit before any filtering.  The other actions keep
+ * their existing normalization.
+ */
+function editSourceRefs(value: unknown, field: "remove" | "add" | "basis"): SourceRef[] {
+  if (!Array.isArray(value)) return []
+  value.forEach((entry, index) => {
+    if (!isSourceRef(entry)) {
+      throw new TypeError(`edit ${field}[${index}] must be a SourceRef with source_id and digest; a plain Ref is not a valid ${field} entry`)
+    }
+  })
+  return value as SourceRef[]
 }
 
 function cloneTask(task: TaskIntent): TaskIntent {

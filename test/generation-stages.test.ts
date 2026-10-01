@@ -9,6 +9,7 @@ import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/co
 import { validateCandidateCheckSchema } from "../src/model/candidate-check-schema.js"
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
 import { CANDIDATE_JSON_SCHEMA } from "../src/model/candidate-schema.js"
+import { buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
 import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
 
 const basis = { event_ids: ["user-1"], refs: [] }
@@ -164,4 +165,47 @@ test("strict stage projections replace the task division while the base contract
   assert.equal(V2_COMPILER_CONTRACT.atom_contract.includes(baseSentence), true)
   assert.equal(schemaTaskDescription(CANDIDATE_JSON_SCHEMA).includes("copy its applicable current rule blocks verbatim here"), true)
   assert.equal(CANDIDATE_EXAMPLE.groups[0]!.compilation.decision === "replace" ? CANDIDATE_EXAMPLE.groups[0]!.compilation.drafts[0]!.atoms[0]!.task : "", baseExampleTask)
+})
+
+test("the local source edit is projected into the strict IR stage only, and the legacy shape never sees it", () => {
+  const baseContract = structuredClone(V2_COMPILER_CONTRACT)
+  const baseSchema = structuredClone(CANDIDATE_JSON_SCHEMA)
+  const editClause = "For a local content source edit that keeps the item's other sources, use edit"
+  const legacyBasis = "basis selecting the current user's change"
+  const relaxedBasis = "basis selecting the text available to this batch that mandates the change"
+
+  for (const stage of ["ir", "ci"] as const) {
+    const strict = generationContract(V2_COMPILER_CONTRACT, stage, "openai", "parent-x")
+    assert.equal(strict.ir_change_contract.includes(editClause), stage === "ir", `${stage}: only the IR stage authors IR changes`)
+    assert.equal(strict.ir_change_contract.includes(relaxedBasis), true, `${stage}: both strict stages read the same basis rule`)
+    assert.equal(strict.ir_change_contract.includes(legacyBasis), false)
+  }
+  assert.equal(V2_COMPILER_CONTRACT.ir_change_contract.includes(editClause), false, "the legacy contract does not promise an action it cannot deliver")
+  assert.equal(V2_COMPILER_CONTRACT.ir_change_contract.includes(legacyBasis), true, "the legacy basis wording is untouched")
+
+  const change = {
+    action: "edit", target: "content", id: "c1", expected_revision: 0,
+    remove: [{ source_id: "user-1", digest: "sha256:d", span: { unit: "utf16", start: 0, end: 4 } }],
+    add: [],
+    basis: [{ source_id: "user-1", digest: "sha256:d", span: { unit: "utf16", start: 5, end: 9 } }],
+    reason: "recorded correction",
+  }
+  const proposal = { schema_version: 2, basis, source_coverage: [], groups: [{ ...irGroup, ir_changes: [change] }] }
+  assert.equal(validateGenerationProposal("ir", proposal).ok, true, "the IR-stage projection admits the edit")
+  const changeOnly = (schema: Record<string, unknown>) => ({ $ref: "#/definitions/ir_change", definitions: schema.definitions })
+  const legacyCanonical = new Ajv({ strict: false, allowUnionTypes: true }).compile(changeOnly(CANDIDATE_JSON_SCHEMA as unknown as Record<string, unknown>))
+  assert.equal(legacyCanonical(change), false, "the shared canonical shape (legacy answer validation) rejects an edit")
+  const legacyStrict = new Ajv({ strict: false, allowUnionTypes: true }).compile(changeOnly(buildStrictCandidateSchema("openai") as unknown as Record<string, unknown>))
+  assert.equal(legacyStrict(change), false, "the legacy generation schema keeps its old shape")
+  for (const profile of [undefined, "openai", "groq"] as const) {
+    const validate = new Ajv({ strict: false, allowUnionTypes: true }).compile(buildGenerationSchema("ir", profile))
+    const label = profile ?? "default"
+    assert.equal(validate(proposal), true, `${label} schema admits the edit`)
+    assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, basis: [] }] }] }), false, `${label}: a basis is required`)
+    assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, remove: [] }] }] }), false, `${label}: a removal is required`)
+    assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, target: "task" }] }] }), false, `${label}: an edit only edits content`)
+    assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, sources: [] }] }] }), false, `${label}: an edit does not silently mean a revise`)
+  }
+  assert.deepEqual(V2_COMPILER_CONTRACT, baseContract, "projections must not mutate the base contract")
+  assert.deepEqual(CANDIDATE_JSON_SCHEMA, baseSchema, "projections must not mutate the base schema")
 })

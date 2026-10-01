@@ -644,7 +644,7 @@ test("a checker identifying an IR defect repairs the parent before recompiling a
     if (checks > 1) return consistent()
     return JSON.stringify({ schema_version: 2, verdict: "inconsistent", repair_target: "ir", findings: [{
       dimension: "D2", claim: "Parent scope needs correction", expected: "Retain all required behavior", observed: "Parent scope omits required scope detail",
-      refs: [{ source_id: "input-event-id", digest: CANDIDATE_EXAMPLE.groups[0]!.ir_changes[0]!.sources[0]!.digest, span: { unit: "utf16", start: 0, end: CANDIDATE_EXAMPLE_INPUT.indexOf("\n\n") } }],
+      refs: [{ source_id: "input-event-id", digest: (CANDIDATE_EXAMPLE.groups[0]!.ir_changes[0] as { sources: any[] }).sources[0]!.digest, span: { unit: "utf16", start: 0, end: CANDIDATE_EXAMPLE_INPUT.indexOf("\n\n") } }],
     }] })
   })
   store.applyDeltas({ max_management_requests: 6 })

@@ -106,6 +106,16 @@ export type IrChange =
       sources: SourceRef[]
     }
   | {
+      action: "edit"
+      target: "content"
+      id: string
+      expected_revision: number
+      remove: SourceRef[]
+      add: SourceRef[]
+      basis: SourceRef[]
+      reason: string
+    }
+  | {
       action: "retire"
       target: "binding" | "output" | "content"
       id: string
@@ -118,6 +128,15 @@ export type IrChange =
       reason: string
       sources: SourceRef[]
     }
+
+/** A local source edit's removals, kept for the batch's disposal record. */
+export interface LocalSourceEditRecord {
+  task_id: string
+  item_id: string
+  removed: SourceRef[]
+  basis: SourceRef[]
+  reason: string
+}
 
 export interface PermissionRule {
   operation_id: string

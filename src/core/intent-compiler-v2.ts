@@ -21,6 +21,7 @@ import {
   type ExecutionOutcome,
   type ExecutionReturnPayload,
   type IrChange,
+  type LocalSourceEditRecord,
   type MaterialFact,
   type OperationRequest,
   type Ref,
@@ -49,7 +50,7 @@ import type {
 import { V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
 import { bindCurrentRequirements, selectSourceEvents } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
-import { DEFAULT_SOURCE_REASON, materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
+import { DEFAULT_SOURCE_REASON, materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "./source-payload.js"
 import { ParentGeneration, type ParentGenerationState } from "./parent-generation.js"
 
 export interface IntentCompilerV2Options {
@@ -753,6 +754,9 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
   // Shape changes the derived IR entries took from this batch's atoms; recorded
   // on the batch instead of rejecting it (the check judges them under D2).
   const declarationChanges: DeclarationChangeRecord[] = []
+  // A local source edit is recorded once the whole batch's IR is final, so a
+  // fragment another group re-selects in this same batch is not called withdrawn.
+  const editedRemovals: LocalSourceEditRecord[] = []
   const changedTasks = new Set<string>()
   let irChanged = false
   let lifecycleChanged = false
@@ -762,11 +766,15 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     if (taskRefs.length === 0) continue
 
     if (group.ir_changes.some((change) => change.action !== "preserve")) {
+      if (!strictRequirements && group.ir_changes.some((change) => change.action === "edit")) {
+        throw new Error("edit is only available in the strict requirement flow, which materializes IR content from its sources; revise the item's complete sources instead")
+      }
       const stateResult = new IntentStateManager(ir).apply(group.ir_changes, taskRefs)
       if (!stateResult.ok) {
         throw new Error(stateResult.errors.map((error) => error.message).join("; "))
       }
       for (const [taskId, task] of Object.entries(stateResult.tasks)) ir[taskId] = task
+      if (strictRequirements) editedRemovals.push(...stateResult.edits)
       if (strictRequirements) materializeSourceContent(ir[taskRefs[0]!]!, group.ir_changes, availableSources)
       irChanged = true
     }
@@ -856,6 +864,8 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
 
     for (const question of group.questions) questions.push(question.text)
   }
+
+  if (strictRequirements) recordEditedRemovals(candidate, ir, editedRemovals)
 
   // Management acceptance: a satisfied assessment targeting a completed atom
   if (strictRequirements) validateSourceCoverage(candidate, events, availableSources, snapshot.ir, ir)

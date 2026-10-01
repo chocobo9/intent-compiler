@@ -76,7 +76,7 @@ test("selected original rules, definitions and formula survive an abbreviated in
   adopt(c, ref(e), "r")
   assert.equal(resolveSourceRefs(c, [e]).unresolved, 0)
   const change = c.groups[0]!.ir_changes[0]!
-  const ir = task(item("r", change.sources, "Do it as specified, with invented lowercase output"))
+  const ir = task(item("r", (change as { sources: any[] }).sources, "Do it as specified, with invented lowercase output"))
   materializeSourceContent(ir, c.groups[0]!.ir_changes, [e])
   validateSourceCoverage(c, [e], [e], {}, { t: ir })
   assert.equal(ir.content[0]!.text, text)
@@ -192,7 +192,12 @@ test("partial revision retains the untouched old rule and explicitly withdraws o
   c.source_coverage!.push({ source: ref(old, "Use decimal output."), disposition: "superseded", requirements: [], reason: "Current user replaces only output base", basis: [ref(next)] })
   validateSourceCoverage(c, [next], [old, next], { t: before }, { t: after })
   c.source_coverage![1]!.basis = [ref(old)]
-  assert.throws(() => validateSourceCoverage(c, [next], [old, next], { t: before }, { t: after }), /current user's change/)
+  // The mechanical layer only requires a source this batch's validation can
+  // resolve: which available text supports the removal is a semantic judgement
+  // (the checker's), so a still-resolvable historical source is accepted here.
+  validateSourceCoverage(c, [next], [old, next], { t: before }, { t: after })
+  c.source_coverage![1]!.basis = [{ ...ref(old), digest: "sha256:not-the-supplied-text" }]
+  assert.throws(() => validateSourceCoverage(c, [next], [old, next], { t: before }, { t: after }), /resolvable source available to this batch/)
 })
 
 test("unknown segment selectors fail resolution and cannot fall back to a plausible span", () => {
@@ -214,7 +219,7 @@ test("a task's own citation accounts for the rest of its paragraph, so a span su
       sources: [span(0, "Create the file".length)] },
   ]
   assert.equal(resolveSourceRefs(c, [e]).unresolved, 0)
-  const ir = task(item("r", c.groups[0]!.ir_changes[1]!.sources))
+  const ir = task(item("r", (c.groups[0]!.ir_changes[1] as { sources: any[] }).sources))
   materializeSourceContent(ir, c.groups[0]!.ir_changes, [e])
   assert.doesNotThrow(() => validateSourceCoverage(c, [e], [e], {}, { t: ir }))
   assert.equal(ir.content[0]!.text, "Create the file")
@@ -248,7 +253,7 @@ test("the host's own argument quoting need not be adopted as requirement text", 
     value: { text: "One rule", about: [], scope: [{ target_id: "t" }], support: [] },
     sources: [{ source_id: "e", digest: digestText(`"${inner}"`), span: { unit: "utf16", start: 1, end: 1 + inner.length } }] }]
   assert.equal(resolveSourceRefs(c, [e]).unresolved, 0)
-  const ir = task(item("r", c.groups[0]!.ir_changes[0]!.sources))
+  const ir = task(item("r", (c.groups[0]!.ir_changes[0] as { sources: any[] }).sources))
   materializeSourceContent(ir, c.groups[0]!.ir_changes, [e])
   assert.doesNotThrow(() => validateSourceCoverage(c, [e], [e], {}, { t: ir }))
   assert.equal(ir.content[0]!.text, inner, "the transport's wrapper is not part of the user's requirement")

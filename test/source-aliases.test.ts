@@ -75,7 +75,7 @@ test("every known source field of an IR request is expressed under its alias", (
   assert.deepEqual(wire.carried_delegations?.map(item => item.event_id), ["e7"])
   assert.deepEqual(wire.gap_event_ids, ["e7"])
   assert.deepEqual(wire.generation_repair!.ir_proposal!.basis.event_ids, ["e7"])
-  assert.deepEqual(wire.generation_repair!.ir_proposal!.groups[0]!.ir_changes[0]!.sources.map(source => source.source_id), ["e7"])
+  assert.deepEqual((wire.generation_repair!.ir_proposal!.groups[0]!.ir_changes[0] as { sources: any[] }).sources.map((source: { source_id: string }) => source.source_id), ["e7"])
   assert.deepEqual(wire.generation_repair!.ir_proposal!.source_coverage![0]!.source!.source_id, "e7")
   // Text that happens to look like an alias is never rewritten.
   assert.equal(wire.generation_repair!.ir_proposal!.groups[0]!.questions[0]!.text, "e7 is only text here, not an id")
@@ -103,11 +103,40 @@ test("the same journal event keeps its alias when the offered set changes", () =
   assert.equal(foreign.request.events[0]!.event_id, "unknown-event")
 })
 
+test("an IR-stage edit is expressed and decoded through the same alias table as every other source field", () => {
+  const edit = (sourceId: string) => ({
+    action: "edit", target: "content", id: "c1", expected_revision: 0,
+    remove: [ref(sourceId)], add: [ref(sourceId)], basis: [ref(sourceId)], reason: "recorded correction",
+  })
+  const request = input("long-event-id")
+  request.generation_repair!.ir_proposal!.groups[0]!.ir_changes = [edit("long-event-id")] as never
+  const { request: wire, aliases } = expressIRRequest(request, index([{ alias: "e7", event_id: "long-event-id" }]))
+  const wireChange = wire.generation_repair!.ir_proposal!.groups[0]!.ir_changes[0] as unknown as {
+    remove: SourceRef[]; add: SourceRef[]; basis: SourceRef[]
+  }
+  assert.deepEqual([...wireChange.remove, ...wireChange.add, ...wireChange.basis].map(source => source.source_id), ["e7", "e7", "e7"])
+
+  const restored = decodeIRProposal(wire.generation_repair!.ir_proposal!, aliases)
+  assert.equal(restored.ok, true)
+  const decoded = restored.ok
+    ? restored.proposal.groups[0]!.ir_changes[0] as unknown as { remove: SourceRef[]; add: SourceRef[]; basis: SourceRef[] }
+    : undefined
+  assert.deepEqual(decoded?.remove.map(source => source.source_id), ["long-event-id"])
+  assert.deepEqual(decoded?.add.map(source => source.source_id), ["long-event-id"])
+  assert.deepEqual(decoded?.basis.map(source => source.source_id), ["long-event-id"])
+
+  const wrong = structuredClone(request.generation_repair!.ir_proposal!)
+  wrong.groups[0]!.ir_changes = [edit("e9")] as never
+  const refused = decodeIRProposal(wrong, [{ alias: "e7", event_id: "long-event-id", digest: "sha256:x" }])
+  assert.equal(refused.ok, false)
+  assert.match((refused as { message: string }).message, /groups\[0\]\.ir_changes\[0\]\.remove\[0\] names e9: alias_not_offered/)
+})
+
 test("decode restores the full identity and refuses an alias the request did not offer", () => {
   const restored = decodeIRProposal(proposal("e7"), [{ alias: "e7", event_id: "long-event-id", digest: "sha256:x" }])
   assert.equal(restored.ok, true)
   assert.deepEqual(restored.ok && restored.proposal.basis.event_ids, ["long-event-id"])
-  assert.deepEqual(restored.ok && restored.proposal.groups[0]!.ir_changes[0]!.sources.map(source => source.source_id), ["long-event-id"])
+  assert.deepEqual(restored.ok && (restored.proposal.groups[0]!.ir_changes[0] as { sources: any[] }).sources.map((source: { source_id: string }) => source.source_id), ["long-event-id"])
   const refused = decodeIRProposal(proposal("e9"), [{ alias: "e7", event_id: "long-event-id", digest: "sha256:x" }])
   assert.equal(refused.ok, false)
   assert.match((refused as { message: string }).message, /basis\.event_ids\[0\] names e9: alias_not_offered/)

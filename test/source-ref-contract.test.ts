@@ -70,7 +70,7 @@ test("a schema-shaped answer resolves, whether it addresses by segment or by spa
   const digest = digestText((e.payload as { text: string }).text)
   const bySegment = candidateWith({ source_id: "e", digest, quote: null, segment_id: "s1", span: null })
   assert.equal(resolveSourceRefs(bySegment, [e]).unresolved, 0)
-  assert.deepEqual(bySegment.groups[0]!.ir_changes[0]!.sources[0]!.span, { unit: "utf16", start: 0, end: 17 })
+  assert.deepEqual((bySegment.groups[0]!.ir_changes[0] as { sources: any[] }).sources[0]!.span, { unit: "utf16", start: 0, end: 17 })
   const bySpan = candidateWith({ source_id: "e", digest, quote: null, segment_id: null, span: { unit: "utf16", start: 0, end: 15 } })
   assert.equal(resolveSourceRefs(bySpan, [e]).unresolved, 0)
   const withQuote = candidateWith({ source_id: "e", digest, quote: "First behavior.", segment_id: null, span: null })

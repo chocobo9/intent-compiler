@@ -444,6 +444,30 @@ export const CANDIDATE_JSON_SCHEMA = {
   },
 } as unknown as Schema
 
+/**
+ * The local source edit is a strict IR-stage action, not part of the shared
+ * candidate shape: the strict IR stage projects it into its own schema (both
+ * for constrained decoding and for validation), while the legacy response
+ * schema and the legacy validator keep the old shape.  Keeping one literal here
+ * means the projected schema and the validator can never describe two different
+ * edit shapes.
+ */
+export const LOCAL_SOURCE_EDIT_IR_CHANGE = {
+  type: "object",
+  additionalProperties: false,
+  required: ["action", "target", "id", "expected_revision", "remove", "add", "basis", "reason"],
+  properties: {
+    action: { const: "edit" },
+    target: { const: "content" },
+    id: { type: "string", minLength: 1 },
+    expected_revision: { type: "integer", minimum: 0 },
+    remove: { type: "array", minItems: 1, items: { $ref: "#/definitions/source_ref" } },
+    add: { type: "array", items: { $ref: "#/definitions/source_ref" } },
+    basis: { type: "array", minItems: 1, items: { $ref: "#/definitions/source_ref" } },
+    reason: { type: "string", minLength: 1 },
+  },
+} as const
+
 export interface CandidateSchemaResult {
   ok: boolean
   errors: string[]

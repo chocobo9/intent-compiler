@@ -142,6 +142,14 @@ function mapIRProposalSourceIds(proposal: unknown, resolve: (id: string, path: s
         if (!isRecord(change)) return
         const path = `groups[${groupIndex}].ir_changes[${changeIndex}]`
         mapRefList(change.sources, `${path}.sources`, resolve)
+        // A local content edit states its addresses as remove/add/basis instead
+        // of `sources`; the same alias handling has to reach all three, or an
+        // edit written with this request's aliases cannot be decoded back.
+        if (change.action === "edit") {
+          mapRefList(change.remove, `${path}.remove`, resolve)
+          mapRefList(change.add, `${path}.add`, resolve)
+          mapRefList(change.basis, `${path}.basis`, resolve)
+        }
         // A binding create/revise names its material in value.ref, which the
         // schema allows to be a SourceRef; it carries an event identity exactly
         // like change.sources does.

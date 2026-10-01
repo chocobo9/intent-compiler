@@ -1,6 +1,6 @@
 import { Ajv } from "ajv"
 import type { Candidate, CandidateGroup } from "../core/intent-contract.js"
-import { CANDIDATE_JSON_SCHEMA, type CandidateSchemaResult } from "./candidate-schema.js"
+import { CANDIDATE_JSON_SCHEMA, LOCAL_SOURCE_EDIT_IR_CHANGE, type CandidateSchemaResult } from "./candidate-schema.js"
 import { CANDIDATE_EXAMPLE } from "./candidate-example.js"
 import { buildStrictCandidateExample, buildStrictCandidateSchema, type StrictSchemaProfile } from "./candidate-schema-strict.js"
 
@@ -35,6 +35,36 @@ function assembledAtomContract(atomContract: string): string {
   return atomContract.replace(BASE_ATOM_TASK_SENTENCE, ASSEMBLED_ATOM_TASK_SENTENCE)
 }
 
+/**
+ * The local source edit is an IR-stage action: the strict IR stage is the only
+ * request that authors ir_changes, and only the strict flow materializes IR
+ * content from its sources.  The wording is projected there instead of living
+ * in the shared contract, so the legacy full-candidate flow (which has no
+ * materialization step) is not told to use an action it cannot use.
+ */
+const BASE_REVISE_CLAUSE = '- revise: { action:"revise", target:"task"|"current_scope"|"binding"|"output"|"content", id, expected_revision, value:<complete new value>, sources }'
+const LOCAL_EDIT_CLAUSE = `${BASE_REVISE_CLAUSE} For a local content source edit that keeps the item's other sources, use edit instead of re-declaring the whole item: { action:"edit", target:"content", id, expected_revision, remove:[SourceRef], add:[SourceRef], basis:[SourceRef], reason }. remove addresses fragments inside this item's current sources; code keeps everything else, merges add, materializes the new text and writes the withdrawal record from this operation itself, so do not also send a superseded entry for the same removal. basis may cite any source still available to this batch, including earlier delegations, not only this batch's events.`
+const BASE_SUPERSEDED_BASIS = "empty requirements, and basis selecting the current user's change."
+const LOCAL_EDIT_SUPERSEDED_BASIS = "empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry."
+
+/**
+ * Both strict stages have to read the same rule for a withdrawal's basis: the
+ * CI stage authors no IR changes, but it judges the parent IR, so it must not be
+ * left with the older "current user's change" wording.  Only the IR stage gets
+ * the local-edit action itself.
+ */
+function strictSupersededBasis(irChangeContract: string): string {
+  const withBasis = irChangeContract.replace(BASE_SUPERSEDED_BASIS, LOCAL_EDIT_SUPERSEDED_BASIS)
+  if (withBasis === irChangeContract) throw new Error("IR change contract no longer carries the superseded-basis clause; the strict basis rule cannot be projected")
+  return withBasis
+}
+
+function strictLocalSourceEdit(irChangeContract: string): string {
+  const withEdit = irChangeContract.replace(BASE_REVISE_CLAUSE, LOCAL_EDIT_CLAUSE)
+  if (withEdit === irChangeContract) throw new Error("IR change contract no longer carries the revise clause; the local source edit wording has nowhere to project")
+  return withEdit
+}
+
 /** The strict CI example shows the division: instruction plus handoff, no rule blocks. */
 function instructionOnlyTask(task: string): string {
   const paragraphs = task.split("\n\n")
@@ -43,7 +73,9 @@ function instructionOnlyTask(task: string): string {
 
 /** Generation projections only; the committed domain object remains Candidate. */
 export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSchemaProfile): Record<string, unknown> {
-  const schema = structuredClone(profile === undefined ? CANDIDATE_JSON_SCHEMA : buildStrictCandidateSchema(profile)) as SchemaNode
+  const schema = structuredClone(profile === undefined
+    ? withLocalSourceEditBranch(stage === "ir")
+    : buildStrictCandidateSchema(profile, { localSourceEdit: stage === "ir" })) as SchemaNode
   const group = schema.definitions.group as SchemaNode
   const remove = (object: SchemaNode, keys: string[]) => {
     for (const key of keys) delete object.properties[key]
@@ -64,6 +96,20 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
   if (atomTask !== undefined) atomTask.description = ASSEMBLED_TASK_DESCRIPTION
   const draftTask = (schema.definitions.atom_draft as SchemaNode | undefined)?.properties?.task
   if (draftTask !== undefined) draftTask.description = ASSEMBLED_TASK_DESCRIPTION
+  return schema
+}
+
+/**
+ * The shared canonical schema stays the legacy shape; the IR-stage projection
+ * adds the local-edit branch for both constrained generation and the canonical
+ * validation of an IR-stage answer.
+ */
+function withLocalSourceEditBranch(include: boolean): Record<string, unknown> {
+  const schema = structuredClone(CANDIDATE_JSON_SCHEMA) as SchemaNode
+  if (include) {
+    const change = (schema.definitions as Record<string, SchemaNode>).ir_change!
+    ;(change.oneOf as unknown[]).push(structuredClone(LOCAL_SOURCE_EDIT_IR_CHANGE))
+  }
   return schema
 }
 
@@ -135,11 +181,14 @@ export function generationStageInstruction(stage: GenerationStage, assessment = 
 }
 
 /** Retain field semantics while replacing the joint-response shape and example. */
-export function generationContract<T extends { atom_contract: string; candidate_shape: string; example_candidate: string }>(
+export function generationContract<T extends { ir_change_contract: string; atom_contract: string; candidate_shape: string; example_candidate: string }>(
   contract: T, stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis?: string, assessment = false,
 ): T {
   return {
     ...contract,
+    ir_change_contract: stage === "ir"
+      ? strictLocalSourceEdit(strictSupersededBasis(contract.ir_change_contract))
+      : strictSupersededBasis(contract.ir_change_contract),
     atom_contract: assembledAtomContract(contract.atom_contract),
     candidate_shape: stage === "ir"
       ? "IR stage response = {schema_version:2,basis,source_coverage,groups}. Each group uses the existing CandidateGroup fields except compilation, coverage, execution_decisions, assessments and checks, which are forbidden in this response. The final Candidate is assembled only after CI generation."
