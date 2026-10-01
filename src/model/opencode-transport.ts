@@ -195,7 +195,7 @@ export function createOpenCodeModelTransportV2(
     const transport = createOpenCodeV2Transport(
       options,
       `${generationStageInstruction(stage, assessing)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
-      buildGenerationSchema(stage, "openai"),
+      buildGenerationSchema(stage, "openai", { assessment: assessing }),
       () => ({ ...request, contract: generationContract(request.contract, stage, "openai", parentBasis, assessing) }),
     )
     return transport(request)

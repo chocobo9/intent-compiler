@@ -109,7 +109,7 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
             json_schema: {
               name: stage === undefined ? "candidate_v2" : `${stage}_proposal_v2`,
               strict,
-              schema: stage === undefined ? options.schema ?? CANDIDATE_JSON_SCHEMA : buildGenerationSchema(stage, profile),
+              schema: stage === undefined ? options.schema ?? CANDIDATE_JSON_SCHEMA : buildGenerationSchema(stage, profile, { assessment: assessing }),
             },
           },
           ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),

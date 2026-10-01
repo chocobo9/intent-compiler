@@ -487,7 +487,7 @@ export function createCompilerModelV2(
       }
       try {
         if (input.generation_stage !== undefined) {
-          const schema = validateGenerationProposal(input.generation_stage, decoded)
+          const schema = validateGenerationProposal(input.generation_stage, decoded, { assessment: input.assessment_batch === true })
           if (!schema.ok) return { ok: false, call, error: { code: "schema", message: schema.errors.join("; ") },
             schema_errors: schema.errors, schema_rejected_draft: { text: call.text, errors: schema.errors } }
           return input.generation_stage === "ir"

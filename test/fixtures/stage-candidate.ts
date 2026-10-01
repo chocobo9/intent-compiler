@@ -25,12 +25,16 @@ export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate
     }
   }
   return {
-    schema_version: 2, basis: copy.basis, parent_basis: input.parent_basis, parent_issues: [],
-    groups: copy.groups.map(({ ir_changes: _changes, ...group }) => {
+    schema_version: 2, parent_basis: input.parent_basis, parent_issues: [],
+    groups: copy.groups.map(({ ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, ...group }) => {
       const parent = input.generation_repair?.ir_proposal?.groups.find(item => item.local_ref === group.local_ref)
       assert.ok(parent, "CI must receive the parent groups it must preserve")
-      return { ...group, task_refs: structuredClone(parent.task_refs), depends_on: structuredClone(parent.depends_on),
-        execution_decisions: [], assessments: [], checks: [] }
+      // The compiler fills the parent basis and each group's task identity and
+      // dependencies at assembly; an ordinary CI answer states neither.
+      const compilation = group.compilation.decision === "replace"
+        ? { ...group.compilation, drafts: group.compilation.drafts.map(({ task_id: _taskId, ...draft }) => draft) }
+        : group.compilation
+      return { ...group, compilation, execution_decisions: [], assessments: [], checks: [] }
     }),
   }
 }
@@ -49,7 +53,16 @@ export function repairCandidate(input: CompilerModelV2Input): Candidate {
     groups: child.groups.map(group => {
       const original = parent.groups.find(item => item.local_ref === group.local_ref)
       assert.ok(original)
-      return { ...structuredClone(group), ir_changes: structuredClone(original.ir_changes) }
+      const taskId = original.task_refs[0]
+      assert.ok(taskId)
+      const compilation = group.compilation.decision === "replace"
+        ? { ...group.compilation, drafts: group.compilation.drafts.map(draft => ({ ...draft, task_id: taskId })) }
+        : group.compilation
+      return {
+        ...structuredClone(group), compilation,
+        task_refs: [...original.task_refs], depends_on: [...original.depends_on],
+        ir_changes: structuredClone(original.ir_changes),
+      }
     }),
   }
 }

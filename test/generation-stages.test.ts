@@ -45,9 +45,9 @@ test("IR generation admits only intent changes, never a hidden compiled plan", (
 })
 
 test("CI generation binds a parent and cannot carry intent edits or compile a disputed parent", () => {
-  const { ir_changes: _changes, ...group } = irGroup
+  const { ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, ...group } = irGroup
   const proposal = {
-    schema_version: 2, basis, parent_basis: "parent-1", parent_issues: [],
+    schema_version: 2, parent_basis: "parent-1", parent_issues: [],
     groups: [{
       ...group, compilation: { decision: "replace", drafts: [] }, coverage: [],
       execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "x", basis: [] }],
@@ -58,9 +58,44 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", proposal).ok, true)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], ir_changes: [] }] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, source_coverage: [] }).ok, false)
+  // The parent proposal already fixes these; an ordinary CI answer that copies
+  // them is refused instead of checked and replaced.
+  assert.equal(validateGenerationProposal("ci", { ...proposal, basis }).ok, false)
+  assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], task_refs: ["t1"] }] }).ok, false)
+  assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], depends_on: [] }] }).ok, false)
+  assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], compilation: {
+    decision: "replace", drafts: [{ local_ref: "d1", task_id: "t1", intent_basis: [], atoms: [], relations: [], attachments: [] }] } }] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_basis: "" }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."], groups: [] }).ok, true)
+  // An assessment batch still names its own basis events and task.
+  const assessment = { ...proposal, basis, groups: [{ ...proposal.groups[0], task_refs: ["t1"], depends_on: [] }] }
+  assert.equal(validateGenerationProposal("ci", assessment, { assessment: true }).ok, true)
+  assert.equal(validateGenerationProposal("ci", assessment).ok, false, "the ordinary CI shape does not admit an assessment's copies")
+})
+
+test("the CI projection drops only the parent copies the compiler fills", () => {
+  for (const profile of [undefined, "openai", "groq"] as const) {
+    const label = profile ?? "default"
+    const schema = buildGenerationSchema("ci", profile) as {
+      required: string[]
+      properties: Record<string, unknown>
+      definitions: { group: { properties: Record<string, unknown>; required: string[] }; draft: { properties: Record<string, unknown>; required: string[] } }
+    }
+    assert.equal("basis" in schema.properties, false, `ordinary CI carries no basis (${label})`)
+    assert.equal(schema.required.includes("basis"), false)
+    for (const key of ["task_refs", "depends_on"]) {
+      assert.equal(key in schema.definitions.group.properties, false, `${key} is filled from the parent (${label})`)
+      assert.equal(schema.definitions.group.required.includes(key), false)
+    }
+    assert.equal("task_id" in schema.definitions.draft.properties, false, `draft task_id is filled from the parent (${label})`)
+    assert.equal(schema.definitions.draft.required.includes("task_id"), false)
+
+    const assessment = buildGenerationSchema("ci", profile, { assessment: true }) as typeof schema
+    assert.equal("basis" in assessment.properties, true, `an assessment still names its basis (${label})`)
+    assert.equal("task_refs" in assessment.definitions.group.properties, true)
+    assert.equal("task_id" in assessment.definitions.draft.properties, true)
+  }
 })
 
 function request(stage: "ir" | "ci"): CompilerModelV2Input & { generation_stage: "ir" | "ci"; parent_basis?: string } {

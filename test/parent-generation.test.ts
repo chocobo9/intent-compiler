@@ -24,35 +24,53 @@ function parent() {
 }
 function child(basis: string) {
   const c = structuredClone(CANDIDATE_EXAMPLE)
-  return { schema_version: 2, basis: c.basis, parent_basis: basis, parent_issues: [],
-    groups: c.groups.map(({ ir_changes, ...group }) => group) }
+  return { schema_version: 2, parent_basis: basis, parent_issues: [],
+    groups: c.groups.map(({ ir_changes: _irChanges, task_refs: _taskRefs, depends_on: _dependsOn, ...group }) => ({
+      ...group,
+      compilation: group.compilation.decision === "replace"
+        ? { ...group.compilation, drafts: group.compilation.drafts.map(({ task_id: _taskId, ...draft }) => draft) }
+        : group.compilation,
+    })) }
 }
 const consistent = async () => JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] })
 
-test("CI basis repair names the changed field and supplies the unchanged parent value", async () => {
-  let children = 0
+test("the ordinary CI answer states no parent basis, and assembly restores it from the parent", async () => {
+  let ciAnswers = 0
+  const { store, compiler } = await setup(async input => {
+    if (input.generation_stage === "ir") return JSON.stringify(parent())
+    ciAnswers += 1
+    return JSON.stringify(child(input.parent_basis!))
+  })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  assert.equal(ciAnswers, 1, "a CI answer that omits the parent copies needs no repair round")
+  const assembled = store.current().management_log.at(-1)!.candidate!
+  const parentGroup = CANDIDATE_EXAMPLE.groups[0]!
+  const assembledGroup = assembled.groups[0]!
+  assert.deepEqual(assembled.basis, CANDIDATE_EXAMPLE.basis, "the assembled basis is the parent's")
+  assert.deepEqual(assembled.source_coverage, CANDIDATE_EXAMPLE.source_coverage)
+  assert.deepEqual(assembledGroup.task_refs, parentGroup.task_refs, "task identity comes from the parent group")
+  assert.deepEqual(assembledGroup.depends_on, parentGroup.depends_on, "dependencies come from the parent group")
+  if (assembledGroup.compilation.decision !== "replace" || parentGroup.compilation.decision !== "replace") throw Error("fixture")
+  assert.deepEqual(assembledGroup.compilation.drafts.map(draft => draft.task_id),
+    parentGroup.compilation.drafts.map(draft => draft.task_id), "each draft is bound to the parent task by code")
+})
+
+test("a CI group that names no parent group is still rejected", async () => {
+  let checks = 0
   const { store, compiler } = await setup(async input => {
     if (input.generation_stage === "ir") return JSON.stringify(parent())
     const next = child(input.parent_basis!)
-    if (++children === 1) {
-      const task = input.existing_objects!.tasks[0]!
-      next.basis.refs = [{ id: task.task_id, revision: task.task_revision, digest: task.task_digest }]
-    } else {
-      const feedback = input.validation_errors!.join("\n")
-      assert.match(feedback, /basis\.refs/)
-      assert.match(feedback, /expected=\[\]/)
-      assert.match(feedback, /received=\[\{/)
-      assert.deepEqual(store.current().ir, {})
-      assert.deepEqual(input.generation_repair!.ir_proposal!.basis.refs, [])
-    }
+    next.groups[0]!.local_ref = "g-not-in-parent"
     return JSON.stringify(next)
-  })
-  store.applyDeltas({ max_management_requests: 4 })
+  }, async () => { checks += 1; return consistent() })
   const result = await compiler.advance({ runId: "parent" })
-  assert.equal(result.ok, true, result.message)
-  assert.equal(children, 2)
-  assert.equal(store.current().budget.total_management_requests, 4)
+  assert.equal(result.ok, false)
+  assert.match(result.message!, /does not belong to this parent/)
+  assert.equal(checks, 0, "an unbound child never spends the check")
+  assert.deepEqual(store.current().compiled, {})
 })
+
 async function setup(transport: Parameters<typeof createCompilerModelV2>[0], checker = consistent) {
   const storeDir = mkdtempSync(join(tmpdir(), "parent-generation-"))
   const store = new IntentStoreV2({ storeDir, runId: "parent" })
@@ -260,9 +278,9 @@ test("one event keeps the same alias in later batches, including inside the IR b
     if (input.generation_stage === "ci") {
       if (irCalls === 1) return JSON.stringify(child(input.parent_basis!))
       // The stored plan stands: reuse it, keeping the group the IR stage named.
-      return JSON.stringify({ schema_version: 2, basis: { event_ids: ["later-turn"], refs: [] },
+      return JSON.stringify({ schema_version: 2,
         parent_basis: input.parent_basis!, parent_issues: [],
-        groups: [{ local_ref: "g2", task_refs: ["t1"], depends_on: [],
+        groups: [{ local_ref: "g2",
           compilation: { decision: "reuse", current: [compiledIntentRef(store.current().compiled.t1!)], reason: "the stored plan is unchanged" },
           execution_decisions: [], assessments: [], coverage: [], checks: [], questions: [] }] })
     }
@@ -429,7 +447,7 @@ test("a run whose event ids can be read as aliases keeps full ids and says why",
   const basis = { event_ids: ["e2", "input-event-id"], refs: [] }
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
-    if (input.generation_stage !== "ir") return JSON.stringify({ ...child(input.parent_basis!), basis })
+    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
     return JSON.stringify({ ...parent(), basis })
   })
   await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "e2", kind: "user_input",
@@ -456,7 +474,8 @@ test("the IR-stage contract and example are written in the alias form", async ()
   assert.match(ir.example_candidate, /"source_id": "input-event-id"/)
   const ci = generationContract(V2_COMPILER_CONTRACT, "ci", undefined, "parent")
   assert.match(ci.reference_contract, /short event aliases/, "the clause covers both forms")
-  assert.match(ci.example_candidate, /input-event-id/, "the CI example keeps the full identity it copies from the parent")
+  assert.match(ci.example_candidate, /input-event-id/, "the CI example keeps full identities where it names parent objects")
+  assert.equal(JSON.parse(ci.example_candidate).basis, undefined, "the ordinary CI example no longer copies the parent basis")
 })
 
 test("an older IR draft loses its execution-facing fields when it is re-sent", async () => {
@@ -532,9 +551,8 @@ test("a turn answers its own delegation and carries the earlier uncompiled one a
     // delegation then has no destination, and the batch must be sent back.
     proposal.basis = { event_ids: ["next-turn"], refs: [] }
     if (input.generation_stage === "ir") return JSON.stringify(proposal)
-    const next = child(input.parent_basis!)
-    next.basis = { event_ids: ["next-turn"], refs: [] }
-    return JSON.stringify(next)
+    // The basis is the parent's; the ordinary CI answer cannot restate it.
+    return JSON.stringify(child(input.parent_basis!))
   })
   await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "next-turn", kind: "user_input",
     source: { channel: "user", producer_id: "user" }, payload: { text: "Add a status command that prints ok." } })

@@ -360,17 +360,13 @@ export class ParentGeneration {
     if (derived) {
       // An assessment answers this batch's events; its refs may cite what it assessed.
       const expected = this.options.input.events.map(event => event.event_id).sort()
-      const received = [...child.basis.event_ids].sort()
-      if (digestOf(received) !== digestOf(expected)) {
-        return this.reject(`an execution assessment must name this batch's events in basis.event_ids; expected=${JSON.stringify(expected)}; received=${JSON.stringify(child.basis.event_ids)}`, result)
+      const received = [...(child.basis?.event_ids ?? [])].sort()
+      if (child.basis === undefined || digestOf(received) !== digestOf(expected)) {
+        return this.reject(`an execution assessment must name this batch's events in basis.event_ids; expected=${JSON.stringify(expected)}; received=${JSON.stringify(child.basis?.event_ids ?? null)}`, result)
       }
     } else {
-      for (const key of ["event_ids", "refs"] as const) {
-        const expected = parent.candidate.basis[key], received = child.basis[key]
-        if (digestOf(received) !== digestOf(expected)) {
-          return this.reject(`CI basis.${key} must be copied unchanged from generation_repair.ir_proposal.basis.${key}; expected=${JSON.stringify(expected)}; received=${JSON.stringify(received)}. The temporary IR is identified by parent_basis; its object references belong in compilation.intent_basis and Atom fields, not in this input basis.`, result)
-        }
-      }
+      // The ordinary CI answer binds through group local_ref; the basis and each
+      // group's task identity and dependencies come from the parent it named.
       if (child.groups.length !== parent.candidate.groups.length) {
         return this.reject(`CI groups must preserve the parent's task groups; expected local_ref=${JSON.stringify(parent.candidate.groups.map(g => g.local_ref))}; received local_ref=${JSON.stringify(child.groups.map(g => g.local_ref))}`, result)
       }
@@ -381,13 +377,14 @@ export class ParentGeneration {
       if (derived) {
         // An assessment batch binds by task: the parent skeleton's local_refs
         // are the compiler's own labels, so they are not the child's to copy.
-        if (group.task_refs.length !== 1) return this.reject("an execution assessment needs one existing task per group: task_refs must name exactly one task", result)
-        const taskId = group.task_refs[0] as string
+        const taskRefs = group.task_refs ?? []
+        if (taskRefs.length !== 1) return this.reject("an execution assessment needs one existing task per group: task_refs must name exactly one task", result)
+        const taskId = taskRefs[0] as string
         if (parent.ir[taskId] === undefined) return this.reject(`assessment group names unknown task ${taskId}`, result)
         if (seen.has(taskId)) return this.reject(`assessment names task ${taskId} more than once`, result)
         seen.add(taskId)
         const skeleton = parent.candidate.groups.find(candidate => candidate.task_refs[0] === taskId)
-        groups.push({ ...group, depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] })
+        groups.push({ ...group, depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] } as Candidate["groups"][number])
         continue
       }
       // A delegation batch binds by group identity; everything structural (task
@@ -401,8 +398,7 @@ export class ParentGeneration {
         return this.reject(`group ${group.local_ref} is not bound to a stored task`, result)
       }
       if (group.compilation.decision === "replace") for (const draft of group.compilation.drafts) {
-        if (draft.task_id !== (original ?? group).task_refs[0]) return this.reject("Compiled Intent belongs to another IR", result)
-        const task = parent.ir[draft.task_id]!
+        const task = parent.ir[boundTask]!
         for (const atom of draft.atoms) {
           for (const output of atom.outputs) {
             const existing = task.outputs.find(o => o.output_id === output.output_id)
@@ -416,8 +412,12 @@ export class ParentGeneration {
           }
         }
       }
+      const compilation = group.compilation.decision === "replace"
+        ? { ...group.compilation, drafts: group.compilation.drafts.map(draft => ({ ...draft, task_id: boundTask })) }
+        : group.compilation
       groups.push({
         ...group,
+        compilation,
         task_refs: [...original.task_refs],
         depends_on: [...original.depends_on],
         ir_changes: derived ? [] : structuredClone(original.ir_changes),
@@ -428,7 +428,7 @@ export class ParentGeneration {
     }
     this.state.issues = []
     return { ...result, candidate: { schema_version: 2,
-      basis: derived ? structuredClone(child.basis) : parent.candidate.basis,
+      basis: derived ? structuredClone(child.basis!) : parent.candidate.basis,
       source_coverage: derived ? [] : parent.candidate.source_coverage, groups } }
   }
 
