@@ -71,6 +71,12 @@ test("v2 OpenCode transport accepts StructuredOutput info.structured and preserv
           example_candidate: JSON.stringify(buildStrictCandidateExample("openai"), null, 2),
         })
         assert.equal(sentInput.contract.example_candidate, JSON.stringify(buildStrictCandidateExample("openai"), null, 2))
+        // Legacy full-candidate requests keep the base division: the model
+        // writes the whole instruction itself and nothing attaches text later.
+        assert.equal(sentInput.contract.atom_contract.includes("copy its applicable current rule blocks verbatim into task"), true)
+        assert.equal(sentInput.contract.atom_contract.includes("Management code attaches the assigned current requirement texts"), false)
+        assert.match(request.body.system ?? "", /put the applicable current rule blocks verbatim in atom\.task/)
+        assert.equal(JSON.parse(sentInput.contract.example_candidate).groups[0].compilation.drafts[0].atoms[0].task.includes("bundle accepts a config file path"), true)
         assert.equal(request.body.system.includes("normal text part"), false)
         return {
           data: {

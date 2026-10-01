@@ -6,10 +6,11 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
-import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
+import { createCompilerModelV2, V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, type CompilerModelV2CheckInput } from "../src/model/compiler-model-v2.js"
 import { atomRef, compiledIntentRef, AtomStateLedger } from "../src/core/compiled-intent.js"
 import { atomAdmission } from "../src/core/atom-admission.js"
-import { selectSourceEvents } from "../src/core/requirement-flow.js"
+import { bindCurrentRequirements, selectSourceEvents } from "../src/core/requirement-flow.js"
+import { IntentStateManager } from "../src/core/intent-state-v2.js"
 import { digestText, type Candidate, type CompilerEvent, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
 
 const raw = "Implement CSV. Missing file must print ERROR: missing file."
@@ -71,6 +72,109 @@ test("current IR requirements are bound to the Atom and only the Atom is deliver
   assert.equal("interpretation" in delivered!, false)
 })
 
+test("assembly attaches the assigned requirement texts once and leaves the model draft untouched", () => {
+  const proposal = candidate()
+  const group = proposal.groups[0]!
+  if (group.compilation.decision !== "replace") throw new Error("fixture")
+  const applied = new IntentStateManager({}).apply(group.ir_changes, ["t1"])
+  assert.equal(applied.ok, true)
+  const task = applied.tasks.t1!
+  const before = structuredClone(group)
+  const instruction = group.compilation.drafts[0]!.atoms[0]!.task
+  const compilerEvent: CompilerEvent = { schema_version: 2, run_id: "run1", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } }
+  const prepare = () => bindCurrentRequirements(group, task, undefined, [compilerEvent], [])
+  const first = prepare()
+  assert.deepEqual(group, before, "binding must not modify the submitted group")
+  const second = prepare()
+  assert.deepEqual(group, before, "preparing twice must not accumulate on the submitted group")
+  assert.deepEqual(first, second, "the same submitted group prepares to the same drafts")
+  assert.equal((first[0]!.atoms[0]!.task.match(/\[assigned requirement /g) ?? []).length, 2)
+  assert.ok(first[0]!.atoms[0]!.task.startsWith(instruction))
+  assert.ok(first[0]!.atoms[0]!.task.includes("Implement CSV."))
+  assert.ok(first[0]!.atoms[0]!.task.includes("Missing file must print ERROR: missing file."))
+})
+
+test("two independent runs of the same model draft produce the same delivered task and digest", async () => {
+  const first = await run(candidate())
+  const second = await run(candidate())
+  assert.equal(first.result.ok, true, first.result.message)
+  assert.equal(second.result.ok, true, second.result.message)
+  const a = first.result.deliveries![0]!
+  const b = second.result.deliveries![0]!
+  assert.equal(a.atom.task, b.atom.task)
+  assert.equal(a.digest, b.digest)
+  assert.equal((a.atom.task.match(/\[assigned requirement /g) ?? []).length, 2)
+  const record = first.store.current().management_log.at(-1)!
+  const recordedCompilation = record.candidate!.groups[0]!.compilation
+  assert.equal(recordedCompilation.decision, "replace")
+  if (recordedCompilation.decision !== "replace") throw new Error("fixture")
+  const expectedCompilation = candidate().groups[0]!.compilation
+  if (expectedCompilation.decision !== "replace") throw new Error("fixture")
+  assert.equal(recordedCompilation.drafts[0]!.atoms[0]!.task, expectedCompilation.drafts[0]!.atoms[0]!.task)
+})
+
+test("check, commit and dispatch read the same assembled task", async () => {
+  const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "assembly-")), runId: "assembly" })
+  const proposal = candidate()
+  if (proposal.groups[0]!.compilation.decision !== "replace") throw new Error("fixture")
+  const instruction = proposal.groups[0]!.compilation.drafts[0]!.atoms[0]!.task
+  const checks: CompilerModelV2CheckInput[] = []
+  const compiler = createIntentCompilerV2({
+    store,
+    model: createCompilerModelV2(
+      async input => JSON.stringify(stageCandidate(input, proposal)),
+      async input => {
+        checks.push(structuredClone(input))
+        return JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] })
+      },
+    ),
+  })
+  await compiler.acceptEvent({ schema_version: 2, run_id: "assembly", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
+  const result = await compiler.advance({ runId: "assembly" })
+  assert.equal(result.ok, true, result.message)
+  assert.equal(checks.length, 1)
+  const delivered = result.deliveries![0]!.atom
+  const prepared = checks[0]!.prepared!
+  assert.equal(prepared.compiled.t1!.atoms[0]!.task, delivered.task)
+  assert.equal(prepared.dispatchable_atoms[0]!.task, delivered.task)
+  assert.equal(store.current().compiled.t1!.atoms[0]!.task, delivered.task)
+  assert.equal(result.deliveries![0]!.digest, atomRef(delivered).digest)
+  const checkedCompilation = checks[0]!.candidate.groups[0]!.compilation
+  assert.equal(checkedCompilation.decision, "replace")
+  if (checkedCompilation.decision !== "replace") throw new Error("fixture")
+  assert.equal(checkedCompilation.drafts[0]!.atoms[0]!.task, instruction)
+  assert.ok(delivered.task.startsWith(instruction))
+  assert.deepEqual(checks[0]!.contract, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS)
+  assert.equal(checks[0]!.contract.check_contract.includes("prepared task carries the assigned behavior"), true)
+})
+
+test("legacy checks keep the base contract and legacy delivery keeps the model's full instruction", async () => {
+  const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "legacy-")), runId: "legacy" })
+  const proposal = candidate()
+  if (proposal.groups[0]!.compilation.decision !== "replace") throw new Error("fixture")
+  const instruction = proposal.groups[0]!.compilation.drafts[0]!.atoms[0]!.task
+  const checks: CompilerModelV2CheckInput[] = []
+  const compiler = createIntentCompilerV2({
+    store,
+    requirement_integrity: "legacy",
+    model: createCompilerModelV2(
+      async () => JSON.stringify(proposal),
+      async input => {
+        checks.push(structuredClone(input))
+        return JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] })
+      },
+    ),
+  })
+  await compiler.acceptEvent({ schema_version: 2, run_id: "legacy", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
+  const result = await compiler.advance({ runId: "legacy" })
+  assert.equal(result.ok, true, result.message)
+  assert.equal(checks.length, 1)
+  assert.deepEqual(checks[0]!.contract, V2_CHECK_CONTRACT)
+  assert.equal(checks[0]!.contract.check_contract.includes("assigned requirement blocks attached verbatim from prepared.ir"), false)
+  assert.equal(result.deliveries![0]!.atom.task, instruction)
+  assert.equal(result.deliveries![0]!.atom.task.includes("[assigned requirement "), false)
+})
+
 test("a run without a checker can accept its last permitted CI call", async () => {
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "one-proposal-")), runId: "one" })
   store.applyDeltas({ max_management_requests: 2 })
@@ -100,6 +204,7 @@ test("new dependent Atoms use local identities and only the predecessor is dispa
   const intent = store.current().compiled.t1!
   assert.deepEqual(intent.relations[0]!.predecessor, atomRef(intent.atoms[0]!))
   assert.deepEqual(intent.relations[0]!.successor, atomRef(intent.atoms[1]!))
+  assert.match(intent.atoms[0]!.task, /\[assigned requirement r1@0 /)
 })
 
 test("a dependency cannot name a fabricated predecessor digest", async () => {
@@ -193,6 +298,9 @@ test("accepted result releases a dependent Atom on reuse, and revised acceptance
   assert.deepEqual(second.deliveries?.map(delivery => delivery.atom_id), ["a2"])
   assert.equal(second.deliveries![0]!.atom.atom_id, "a2")
   assert.deepEqual(store.current().compiled.t1!.relations[0]!.predecessor, prior)
+  const retained = store.current().compiled.t1!.atoms.find(atom => atom.atom_id === "a1" && atom.revision === 0)!
+  assert.equal(retained.task, first.deliveries![0]!.atom.task)
+  assert.deepEqual(atomRef(retained), prior)
   // A later management finding is authoritative even if the old dispatch exists.
   store.applyDeltas({ assessments: [{ ...proposal.groups[0]!.assessments[0]!, result: "not_satisfied", basis_event_ids: ["return"], sequence: 999 }] })
   const denied = await compiler.authorize({ kind: "start", run_id: "chain", dispatch_id: second.deliveries![0]!.dispatch_id, host_identity: "host" })

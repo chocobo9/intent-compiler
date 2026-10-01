@@ -28,6 +28,19 @@ function textOf(event: CompilerEvent): string | undefined {
   return typeof (payload as { text?: unknown }).text === "string" ? (payload as { text: string }).text : undefined
 }
 
+/**
+ * The model writes the unit's work instruction; the assigned requirement texts
+ * are attached here, verbatim, so the delivered task cannot drift from the IR
+ * they were selected from.  Labels carry identity only: no dedup, no
+ * normalization and no precedence between blocks.
+ */
+function attachAssignedRequirements(instruction: string, assigned: readonly { ref: Ref; item: ContentItem }[]): string {
+  return [
+    instruction,
+    ...assigned.map(({ ref, item }) => `[assigned requirement ${ref.id}@${ref.revision} ${ref.digest}]\n${item.text}`),
+  ].join("\n\n")
+}
+
 /** Relevant old user input is evidence for retained meaning, never a fresh delegation. */
 export function selectSourceEvents(
   records: readonly { event: CompilerEvent }[],
@@ -186,6 +199,9 @@ export function bindCurrentRequirements(
     ],
     atoms: draft.atoms.map(atom => ({
       ...atom,
+      task: attachAssignedRequirements(atom.task, task.content
+        .filter(item => (assigned.get(atom.atom_id) ?? []).some(ref => ref.id === item.item_id))
+        .map(item => ({ ref: contentRef(item), item }))),
       // Coverage owns requirement assignment. Keep only a task-level goal ref
       // supplied by the model; content refs are always code-computed.
       goal_refs: [

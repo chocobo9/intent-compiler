@@ -21,6 +21,26 @@ export type CIProposal = Omit<Candidate, "groups" | "source_coverage"> & {
 
 type SchemaNode = Record<string, any>
 
+/**
+ * Strict two-stage requests only (the flow that assembles the assigned
+ * requirement texts into the delivered Atom task after preparation).  Legacy
+ * full-candidate requests keep the base contract and the full-instruction
+ * example, because nothing attaches text for them.
+ */
+const BASE_ATOM_TASK_SENTENCE = "For a supplied specification, copy its applicable current rule blocks verbatim into task, including interface-defining examples and explanations; do not replace them with a shorter paraphrase. Within this same string, put the unit's action first, its applicable specification next, and handoff instructions last. These are text sections, not extra schema fields."
+const ASSEMBLED_ATOM_TASK_SENTENCE = "Management code attaches the assigned current requirement texts verbatim to the delivered task after preparation, each labeled with its IR identity, revision and digest; write atom.task as the unit's action, boundaries and handoff and keep rule blocks, examples and paraphrases of the specification out of the candidate task, because the attached blocks carry the operative specification."
+const ASSEMBLED_TASK_DESCRIPTION = "This unit's work instruction: its action, boundaries and handoff, written after determining current meaning and scope (omit superseded rules, unrelated material and other units' exclusive work). Management code attaches the assigned current requirement texts verbatim to the delivered task, so this field must not copy or paraphrase rule blocks, examples or the specification; the executor receives the instruction plus those attached blocks. Leave unspecified internal implementation choices open. Keep illustrative values illustrative. This field may be long and multiline."
+
+function assembledAtomContract(atomContract: string): string {
+  return atomContract.replace(BASE_ATOM_TASK_SENTENCE, ASSEMBLED_ATOM_TASK_SENTENCE)
+}
+
+/** The strict CI example shows the division: instruction plus handoff, no rule blocks. */
+function instructionOnlyTask(task: string): string {
+  const paragraphs = task.split("\n\n")
+  return paragraphs.length <= 2 ? task : `${paragraphs[0]!}\n\n${paragraphs[paragraphs.length - 1]!}`
+}
+
 /** Generation projections only; the committed domain object remains Candidate. */
 export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSchemaProfile): Record<string, unknown> {
   const schema = structuredClone(profile === undefined ? CANDIDATE_JSON_SCHEMA : buildStrictCandidateSchema(profile)) as SchemaNode
@@ -38,6 +58,12 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
     schema.properties.parent_issues = { type: "array", items: { type: "string", minLength: 1 }, description: "Concrete defects in the supplied parent IR. If nonempty, return groups: [] instead of changing or compiling the parent." }
     schema.required.push("parent_basis", "parent_issues")
   }
+  // The strict flow's Atom task is the work instruction; code attaches the
+  // assigned requirement texts.  The legacy schema keeps the base wording.
+  const atomTask = (schema.definitions.atom as SchemaNode | undefined)?.properties?.task
+  if (atomTask !== undefined) atomTask.description = ASSEMBLED_TASK_DESCRIPTION
+  const draftTask = (schema.definitions.atom_draft as SchemaNode | undefined)?.properties?.task
+  if (draftTask !== undefined) draftTask.description = ASSEMBLED_TASK_DESCRIPTION
   return schema
 }
 
@@ -69,7 +95,18 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
   const { source_coverage: _sourceCoverage, ...rest } = example
   return {
     ...rest, parent_basis: parentBasis, parent_issues: [],
-    groups: example.groups.map(({ ir_changes: _irChanges, ...group }) => group),
+    groups: example.groups.map(({ ir_changes: _irChanges, ...group }) => ({
+      ...group,
+      compilation: group.compilation.decision === "replace"
+        ? {
+          ...group.compilation,
+          drafts: group.compilation.drafts.map(draft => ({
+            ...draft,
+            atoms: draft.atoms.map(atom => ({ ...atom, task: instructionOnlyTask(atom.task) })),
+          })),
+        }
+        : group.compilation,
+    })),
   }
 }
 
@@ -94,15 +131,16 @@ export function generationStageInstruction(stage: GenerationStage, assessment = 
   const shared = "You are the read-only management model for Intent Compiler v2. One Intent IR maintains the whole user task; its Compiled Intent is the complete plan containing Atoms and Relations. Do not execute business work, use business tools, inspect or modify files, invent execution facts, or answer the business task. Return only the current generation stage's schema-constrained projection. The field contracts describe the final Candidate; fields excluded by this stage belong to the other stage and must not be returned. Original sources remain evidence for understanding, never permission to bypass the supplied stage boundary. Preserve user requirements, their real role and scope, and distinguish success from a blocker."
   return `${shared}\n${stage === "ir"
     ? "IR stage: interpret current delegation and updates against prior state, select every effective requirement and its source, role and scope, and return the IR changes and remaining-source classifications. Return no compilation, coverage, execution decisions, assessments or checks. Do not write Atoms. Preserve existing identities and unchanged requirements. Declare required input/output identities when field scopes depend on them. The compiler will materialize this IR before asking for the execution plan."
-    : "CI stage: request.ir is the actual temporary parent IR to compile, identified by parent_basis; copy parent_basis exactly. It is fixed for this response. Copy generation_repair.ir_proposal.basis exactly, both event_ids and refs, even when refs is empty. basis records the original proposal input; do not add newly materialized IR references there. parent_basis identifies the temporary IR, and compilation.intent_basis identifies the task/content used by the plan. generation_repair.ir_proposal identifies the parent groups and their open questions, not a substitute for the actual IR text. Keep the group local_ref that generation_repair.ir_proposal supplied: it binds the group to its parent, while the compiler fills its task identity, dependencies and retained IR changes. Compile each group compilation and coverage, author the execution_decisions, assessments and checks the executions require, and add questions only for concrete compilation uncertainty. If the parent IR itself needs correction, report parent_issues instead of changing it. Return no ir_changes or source_coverage. Write Atoms from the complete applicable IR requirements, including definitions, public interfaces, shared rules, conditions and exceptions; transfer supplied operative specifications without summarizing away behavior. References and coverage cannot replace executable behavior. Preserve retained work and real dependencies. Original input may reveal an IR omission or wrong role/scope: report concrete parent_issues and groups: [] so management returns to the IR stage; never silently repair the parent or add an unsupported requirement in the plan. Otherwise parent_issues is []."}`
+    : "CI stage: request.ir is the actual temporary parent IR to compile, identified by parent_basis; copy parent_basis exactly. It is fixed for this response. Copy generation_repair.ir_proposal.basis exactly, both event_ids and refs, even when refs is empty. basis records the original proposal input; do not add newly materialized IR references there. parent_basis identifies the temporary IR, and compilation.intent_basis identifies the task/content used by the plan. generation_repair.ir_proposal identifies the parent groups and their open questions, not a substitute for the actual IR text. Keep the group local_ref that generation_repair.ir_proposal supplied: it binds the group to its parent, while the compiler fills its task identity, dependencies and retained IR changes. Compile each group compilation and coverage, author the execution_decisions, assessments and checks the executions require, and add questions only for concrete compilation uncertainty. If the parent IR itself needs correction, report parent_issues instead of changing it. Return no ir_changes or source_coverage. Write each Atom's work instruction — action, boundaries, ordering and handoff — from the complete applicable IR requirements, including definitions, public interfaces, shared rules, conditions and exceptions; management code attaches the assigned requirement texts verbatim to the delivered task after preparation, so do not copy or paraphrase rule blocks into the candidate task. Coverage selects what the attached text will contain; references and coverage cannot replace executable behavior. Preserve retained work and real dependencies. Original input may reveal an IR omission or wrong role/scope: report concrete parent_issues and groups: [] so management returns to the IR stage; never silently repair the parent or add an unsupported requirement in the plan. Otherwise parent_issues is []."}`
 }
 
 /** Retain field semantics while replacing the joint-response shape and example. */
-export function generationContract<T extends { candidate_shape: string; example_candidate: string }>(
+export function generationContract<T extends { atom_contract: string; candidate_shape: string; example_candidate: string }>(
   contract: T, stage: GenerationStage, profile?: StrictSchemaProfile, parentBasis?: string, assessment = false,
 ): T {
   return {
     ...contract,
+    atom_contract: assembledAtomContract(contract.atom_contract),
     candidate_shape: stage === "ir"
       ? "IR stage response = {schema_version:2,basis,source_coverage,groups}. Each group uses the existing CandidateGroup fields except compilation, coverage, execution_decisions, assessments and checks, which are forbidden in this response. The final Candidate is assembled only after CI generation."
       : assessment

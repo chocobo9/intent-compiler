@@ -46,7 +46,7 @@ import type {
   CompilerModelV2FailureDiagnostic,
   ExistingObjectDirectory,
 } from "../model/compiler-model-v2.js"
-import { V2_CHECK_CONTRACT, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
+import { V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
 import { bindCurrentRequirements, selectSourceEvents } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
 import { DEFAULT_SOURCE_REASON, materializeSourceContent, sourceSegments, validateSourceCoverage } from "./source-payload.js"
@@ -454,6 +454,7 @@ async function advance(
         capabilities: modelInput.capabilities ?? { operations: [], material: [] },
         prepared: prepared?.view,
         sequence: mgmtSequence,
+        strictRequirements,
         budget: { requests_used: attempts, max_requests: maxAttempts },
         // Persist the exact check input before the call: a timeout must not
         // erase what the checker was asked to judge, and the full prepared
@@ -1385,6 +1386,8 @@ async function runSemanticCheck(
     capabilities: CapabilityCatalog
     prepared?: import("../model/compiler-model-v2.js").CompilerModelV2CheckInput["prepared"]
     sequence: number
+    /** Strict requests receive the assembled-task check contract; legacy keeps the base one. */
+    strictRequirements: boolean
     budget: { requests_used: number; max_requests: number }
     /** Timing hook so the caller can record this check as its own call. */
     recordCall: (startedAt: string, status: "ok" | "error", errorCode: string | undefined, usage: CompilerModelV2Usage | undefined, text: string | undefined, failureDiagnostic?: CompilerModelV2FailureDiagnostic) => void
@@ -1431,7 +1434,7 @@ async function runSemanticCheck(
     candidate: structuredClone(candidate),
     ...(preparedForCheck === undefined ? {} : { prepared: structuredClone(preparedForCheck) }),
     budget: input.budget,
-    contract: V2_CHECK_CONTRACT,
+    contract: input.strictRequirements ? V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS : V2_CHECK_CONTRACT,
   }
   // Record before the call: the evidence must exist even when the call never
   // returns.  The model still receives a private clone.

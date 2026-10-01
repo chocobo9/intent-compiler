@@ -2,12 +2,14 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { Ajv } from "ajv"
 import { resolve } from "node:path"
-import { buildGenerationSchema, validateGenerationProposal } from "../src/model/generation-schema.js"
+import { buildGenerationSchema, generationContract, validateGenerationProposal } from "../src/model/generation-schema.js"
 import { createOpenCodeModelTransportV2 } from "../src/model/opencode-transport.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
 import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
 import { validateCandidateCheckSchema } from "../src/model/candidate-check-schema.js"
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
+import { CANDIDATE_JSON_SCHEMA } from "../src/model/candidate-schema.js"
+import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
 
 const basis = { event_ids: ["user-1"], refs: [] }
 const irGroup = {
@@ -126,4 +128,40 @@ test("checks may name the repair layer while legacy verdicts remain canonical-co
   assert.equal(validateCandidateCheckSchema({ ...verdict, repair_target: "execute" }).ok, false)
   const strict = new Ajv({ strict: false }).compile(buildStrictCandidateCheckSchema("openai"))
   assert.equal(strict({ schema_version: 2, verdict: "consistent", findings: [], repair_target: null }), true)
+})
+
+test("strict stage projections replace the task division while the base contract, schema and example stay untouched", () => {
+  const baseContract = structuredClone(V2_COMPILER_CONTRACT)
+  const baseSchema = structuredClone(CANDIDATE_JSON_SCHEMA)
+  const baseExample = structuredClone(CANDIDATE_EXAMPLE)
+  const baseSentence = "copy its applicable current rule blocks verbatim into task"
+  const assembledSentence = "Management code attaches the assigned current requirement texts verbatim to the delivered task"
+  const schemaTaskDescription = (schema: unknown): string =>
+    (schema as { definitions: { atom: { properties: { task: { description: string } } } } }).definitions.atom.properties.task.description
+  if (CANDIDATE_EXAMPLE.groups[0]!.compilation.decision !== "replace") throw new Error("fixture")
+  const baseExampleTask = CANDIDATE_EXAMPLE.groups[0]!.compilation.drafts[0]!.atoms[0]!.task
+  assert.equal(baseExampleTask.includes("bundle accepts a config file path"), true, "the base example is the full-instruction variant")
+
+  for (const stage of ["ir", "ci"] as const) {
+    const strict = generationContract(V2_COMPILER_CONTRACT, stage, "openai", "parent-x")
+    assert.equal(strict.atom_contract.includes(assembledSentence), true, `${stage} strict contract carries the assembled-task division`)
+    assert.equal(strict.atom_contract.includes(baseSentence), false, `${stage} strict contract does not keep the copy-verbatim instruction too`)
+    const description = schemaTaskDescription(buildGenerationSchema(stage, "openai"))
+    const draftDescription = (buildGenerationSchema(stage, "openai") as { definitions: { atom_draft: { properties: { task: { description: string } } } } }).definitions.atom_draft.properties.task.description
+    assert.equal(description, draftDescription)
+    assert.equal(description.includes(assembledSentence), true, `${stage} schema description carries the same division`)
+    assert.equal(description.includes("copy its applicable current rule blocks verbatim here"), false)
+  }
+
+  const ciExample = JSON.parse(generationContract(V2_COMPILER_CONTRACT, "ci", "openai", "parent-x").example_candidate)
+  const strictTask = ciExample.groups[0].compilation.drafts[0].atoms[0].task
+  assert.equal(strictTask.includes("bundle accepts a config file path"), false, "the strict example does not copy rule text into task")
+  assert.ok(strictTask.startsWith("Implement and validate bundle"))
+
+  assert.deepEqual(V2_COMPILER_CONTRACT, baseContract, "projections must not mutate the base contract")
+  assert.deepEqual(CANDIDATE_JSON_SCHEMA, baseSchema, "projections must not mutate the base schema")
+  assert.deepEqual(CANDIDATE_EXAMPLE, baseExample, "projections must not mutate the base example")
+  assert.equal(V2_COMPILER_CONTRACT.atom_contract.includes(baseSentence), true)
+  assert.equal(schemaTaskDescription(CANDIDATE_JSON_SCHEMA).includes("copy its applicable current rule blocks verbatim here"), true)
+  assert.equal(CANDIDATE_EXAMPLE.groups[0]!.compilation.decision === "replace" ? CANDIDATE_EXAMPLE.groups[0]!.compilation.drafts[0]!.atoms[0]!.task : "", baseExampleTask)
 })

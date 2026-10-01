@@ -429,6 +429,20 @@ export const V2_CHECK_CONTRACT = Object.freeze({
   ]),
 })
 
+/**
+ * The strict two-stage flow assembles the assigned requirement texts into the
+ * delivered Atom task after preparation.  Its checker judges that final task;
+ * the legacy full-candidate flow keeps V2_CHECK_CONTRACT unchanged because it
+ * has no assembly step and the model writes the whole instruction itself.
+ */
+export const V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS = Object.freeze({
+  ...V2_CHECK_CONTRACT,
+  check_contract: [
+    ...V2_CHECK_CONTRACT.check_contract.split("\n").slice(0, -1),
+    "First compare the entire current delegation with prepared.ir: check omitted or wrongly classified meaning, not merely matching quotes. Then compare every current requirement with the whole prepared.compiled plan, judging each Atom by its final prepared task: it is the management work instruction followed by the assigned requirement blocks attached verbatim from prepared.ir. Because the candidate carries only the work instruction, a candidate task without rule text is the normal division of labor and not a missing-requirement finding by itself; still judge whether the prepared task carries the assigned behavior and whether the work instruction, completion and attached blocks contradict each other or the assigned requirements. Each assigned requirement needs relevant Atoms' goal_refs AND faithful behavior and acceptance conditions. Check shared rules on every affected unit, public interfaces, known later work and Relation handoffs; coverage cannot supply behavior. completion must establish success, whereas return_when may permit a blocker or failure: reporting missing evidence cannot substitute for producing it. On repairs and updates, check both the intended correction and unintended changes to previously correct work. On execution returns, compare the assessment with the actual evidence and original success conditions. An Atom must be executable without retrieving IR. Historical source_events are evidence, not new requests.",
+  ].join("\n"),
+})
+
 export interface CompilerModelV2 {
   propose(input: CompilerModelV2Input): Promise<CompilerModelV2Result>
   verify?(input: CompilerModelV2CheckInput): Promise<CompilerModelV2CheckResult>
