@@ -3,11 +3,13 @@ import assert from "node:assert/strict"
 import { mkdtempSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
+import { Ajv } from "ajv"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2, resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 import { IntentStateManager } from "../src/core/intent-state-v2.js"
 import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "../src/core/source-payload.js"
-import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
+import { createCompilerModelV2, V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
+import { buildGenerationSchema } from "../src/model/generation-schema.js"
 import { stageCandidate } from "./fixtures/stage-candidate.js"
 import {
   digestOf,
@@ -164,6 +166,74 @@ test("a local edit removes exactly the named fragment and keeps the rest of the 
   assert.ok(item.text.includes("### Fill linear: boundary extrapolation"), "the R3 correction is part of the same item")
   assert.ok(item.text.includes("5. Non-empty"), "the later steps of the corrected list are retained")
   assert.ok(editedText.length > 0 && editedText.length !== storedText.length)
+})
+
+test("manual offline R3 quote selection locates the old zscore rule and preserves parsing/minmax", async () => {
+  // Artificial edit and baseline, not the original candidate or a repaired run.
+  // Quote and offsets come from the sealed 2026-10-02-source-selection archive:
+  // call-13-sent-request.txt, e57/s51 and e114/s7-s11. This existing fixture has
+  // the same complete event texts (digests below), with different run/event ids.
+  const oldDigest = "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922"
+  const newDigest = "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474"
+  const oldEvent = rawEvents.find(event => digestText(textOf.get(event.event_id)!) === oldDigest)!
+  const newEvent = rawEvents.find(event => digestText(textOf.get(event.event_id)!) === newDigest)!
+  assert.ok(oldEvent && newEvent, "reuse only texts identical to the archived full user events")
+  const oldText = textOf.get(oldEvent.event_id)!, newText = textOf.get(newEvent.event_id)!
+  const quote = "- For `zscore`: compute `mean` and population `stddev` (`sqrt(sum((xi - mean)^2) / n)`)."
+  const oldSource: SourceRef = { source_id: oldEvent.event_id, digest: oldDigest, span: { unit: "utf16", start: 10080, end: 10366 } }
+  const update: SourceRef = { source_id: newEvent.event_id, digest: newDigest, quote: newText.slice(895, 1475) }
+  const item: ContentItem = {
+    item_id: "r-normalize-offline", revision: 0, interpretation: "Manual addressing fixture",
+    text: oldText.slice(10080, 10366), text_origin: "source", sources: [oldSource],
+    about: [], scope: [{ target_id: "t-dpipe" }], support: [],
+  }
+  const previous = { "t-dpipe": { ...storedTask(), content: [item] } }
+  const batch = candidateWith({
+    action: "edit", target: "content", id: item.item_id, expected_revision: 0,
+    remove: [{ source_id: oldEvent.event_id, digest: oldDigest, quote }],
+    add: [update], basis: [update], reason: "Manual offline selection of the recorded sample-deviation update.",
+  })
+  batch.basis.event_ids = [newEvent.event_id]
+  const validate = new Ajv({ strict: false, allowUnionTypes: true }).compile(buildGenerationSchema("ir", "openai"))
+  // Fixed in-memory answer: exercise strict shape and the production parser,
+  // without contacting a provider or claiming that a model chose this text.
+  const model = createCompilerModelV2(async input => {
+    const reply = stageCandidate(input, batch)
+    assert.equal(validate(reply), true, JSON.stringify(validate.errors))
+    return JSON.stringify(reply)
+  })
+  const parsed = await model.propose({
+    run_id: fixture.run_id, generation_stage: "ir", events: [newEvent], source_events: [oldEvent],
+    ir: previous, compiled: {}, atom_refs: {}, executions: [],
+    budget: { requests_used: 0, max_requests: 1 }, contract: V2_COMPILER_CONTRACT,
+  })
+  assert.equal(parsed.ok, true, parsed.error?.message)
+  batch.groups[0]!.ir_changes = parsed.ir_proposal!.groups[0]!.ir_changes
+  const change = batch.groups[0]!.ir_changes[0]!
+  if (change.action !== "edit") throw new Error("fixture")
+  assert.equal(resolveSourceRefs(batch, [oldEvent, newEvent]).unresolved, 0)
+  assert.deepEqual(change.remove[0], { source_id: oldEvent.event_id, digest: oldDigest, span: { unit: "utf16", start: 10235, end: 10323 } })
+  const resolvedUpdate = { source_id: newEvent.event_id, digest: newDigest, span: { unit: "utf16", start: 895, end: 1475 } }
+  assert.deepEqual(change.add, [resolvedUpdate])
+  assert.deepEqual(change.basis, [resolvedUpdate])
+
+  const applied = new IntentStateManager(previous).apply([change], ["t-dpipe"])
+  assert.equal(applied.ok, true, applied.errors.map(error => error.message).join("; "))
+  materializeSourceContent(applied.tasks["t-dpipe"]!, [change], [oldEvent, newEvent])
+  const actual = applied.tasks["t-dpipe"]!.content[0]!
+  assert.equal(actual.text, [oldText.slice(10080, 10235), oldText.slice(10323, 10366), newText.slice(895, 1475)].join("\n\n"))
+  assert.ok(actual.text.includes("`strconv.ParseFloat` with bit size 64"))
+  assert.ok(actual.text.includes("- For `minmax`: compute `min` and `max`."))
+  assert.equal(actual.text.includes(quote), false)
+  assert.ok(actual.text.includes("sqrt(sum((xi - mean)^2) / (n - 1))"))
+  assert.deepEqual(batch.source_coverage, [], "the artificial response did not duplicate the edit's removal")
+  recordEditedRemovals(batch, applied.tasks, applied.edits)
+  recordEditedRemovals(batch, applied.tasks, applied.edits)
+  assert.deepEqual(batch.source_coverage, [{
+    source: change.remove[0], disposition: "superseded", requirements: [],
+    reason: change.reason, basis: [resolvedUpdate],
+  }], "preparation records the removal once, using the edit's resolved basis")
+  assert.doesNotThrow(() => validateSourceCoverage(batch, [newEvent], [oldEvent, newEvent], previous, applied.tasks))
 })
 
 test("a pure addition preserves old behavior and adds source text without a withdrawal (synthetic fixture)", () => {

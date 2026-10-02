@@ -31,17 +31,19 @@ const refOrSource = { $ref: "#/definitions/ref_or_source" } as const
 const ref = { $ref: "#/definitions/ref" } as const
 const sourceWithQuote = { $ref: "#/definitions/source_ref_with_quote" } as const
 
-// A content selection is addressed by the supplied segment id or by a numeric
-// range the code can verify.  A hand-written quote is deliberately absent: it is
-// the selector a model is most likely to reproduce wrongly, and its failure
-// mode (an unresolvable citation) costs a whole management batch.
+// Select a whole supplied segment, an exact unique quote, or an explicit span.
+// The existing resolver computes the quote's UTF-16 span; these branches keep
+// the three selectors mutually exclusive.
 const sourceRefWithQuote = { oneOf: [{
   type: "object", additionalProperties: false,
   required: ["source_id", "digest", "segment_id"],
   properties: { source_id: text, digest: text, segment_id: text },
 }, {
-  // A sub-range addressed by numbers: the code verifies the range lies inside
-  // the source, so a model never has to reproduce a passage exactly.
+  type: "object", additionalProperties: false,
+  required: ["source_id", "digest", "quote"],
+  properties: { source_id: text, digest: text, quote: text },
+}, {
+  // Explicit ranges remain available and must lie inside the source.
   type: "object", additionalProperties: false,
   required: ["source_id", "digest", "span"],
   properties: {
@@ -291,12 +293,11 @@ function transformUnionVariant(variant: unknown, profile: StrictSchemaProfile): 
 }
 
 /**
- * The local source edit belongs to the strict IR stage alone: the stage
- * projection asks for it explicitly, while the legacy response schema built
- * here keeps its old shape.  The one branch literal lives in the canonical
- * schema and names `source_ref_with_quote`, which this builder replaces with
- * the segment-id-or-span form, so the constrained decode can express the edit
- * without a hand-written quote and without a second copy of the field list.
+ * The local source edit belongs to the strict IR stage alone; legacy generation
+ * admits no edit action. Its branch literal lives in the canonical schema and
+ * names `source_ref_with_quote`. This builder's exclusive segment/quote/span
+ * definition also serves content create/revise in both IR and legacy strict
+ * generation, without a second copy of the field list.
  */
 export interface StrictSchemaOptions {
   localSourceEdit?: boolean

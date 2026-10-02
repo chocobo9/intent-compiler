@@ -73,7 +73,7 @@ const LOCAL_EDIT_SUPERSEDED_BASIS = "empty requirements, and basis selecting the
 function strictSupersededBasis(irChangeContract: string): string {
   const withBasis = irChangeContract.replace(BASE_SUPERSEDED_BASIS, LOCAL_EDIT_SUPERSEDED_BASIS)
   if (withBasis === irChangeContract) throw new Error("IR change contract no longer carries the superseded-basis clause; the strict basis rule cannot be projected")
-  return withBasis.replace("Retained parts of a mixed paragraph can use exact quotes.", "Retained parts of a mixed paragraph can use explicit spans.")
+  return withBasis
 }
 
 function strictLocalSourceEdit(irChangeContract: string): string {

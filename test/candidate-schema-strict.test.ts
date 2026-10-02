@@ -121,23 +121,30 @@ test("strict ir_change keeps one value shape per target instead of one merged bl
   assert.equal("format" in (taskCreate?.properties?.value?.properties ?? {}), false)
 })
 
-test("strict content changes address their text by segment or a code-checked span, never a hand-written quote", () => {
+test("strict content create/revise accepts segment, quote or span and rejects combined selectors", () => {
   const schema = buildStrictCandidateSchema("openai") as Record<string, any>
   const branches = schema.definitions.ir_change.anyOf as Array<Record<string, any>>
   for (const action of ["create", "revise"]) {
     const content = branches.find((item) => item.properties?.action?.enum?.[0] === action && item.properties?.target?.enum?.[0] === "content")
     assert.equal(content?.properties?.sources?.items?.$ref, "#/definitions/source_ref_with_quote")
   }
-  const source = schema.definitions.source_ref_with_quote
-  assert.equal(source.anyOf.some((branch: any) => "quote" in branch.properties), false,
-    "a model must not hand-write a passage; the schema only offers segment_id or span")
-  assert.equal(source.anyOf.some((branch: any) => branch.required.includes("segment_id")), true)
-  // A numeric range is code-verified, so a model never has to reproduce a
-  // passage exactly.
-  const spanBranch = source.anyOf.find((branch: any) => "span" in branch.properties)
-  assert.equal(spanBranch?.required.includes("span"), true)
-  assert.equal(spanBranch?.properties.span.required.includes("start"), true)
-  assert.equal(spanBranch?.properties.span.required.includes("end"), true)
+  const validate = new Ajv({ strict: false, allowUnionTypes: true }).compile({
+    $ref: "#/definitions/ir_change", definitions: schema.definitions,
+  })
+  const selectors = [{ segment_id: "s1" }, { quote: "Exact source text." }, { span: { unit: "utf16", start: 0, end: 18 } }]
+  for (const action of ["create", "revise"]) {
+    const change = {
+      action, target: "content",
+      ...(action === "create" ? { local_ref: "r" } : { id: "r", expected_revision: 0 }),
+      value: { text: "label", about: [], scope: [{ target_id: "t", path: null }], support: [] },
+    }
+    const withSource = (selector: object) => ({ ...change, sources: [{ source_id: "e", digest: "sha256:x", ...selector }] })
+    for (const selector of selectors) assert.equal(validate(withSource(selector)), true, JSON.stringify(validate.errors))
+    for (let i = 0; i < selectors.length; i += 1) for (let j = i + 1; j < selectors.length; j += 1) {
+      assert.equal(validate(withSource({ ...selectors[i], ...selectors[j] })), false, "selectors stay mutually exclusive")
+    }
+    assert.equal(validate(withSource({ quote: "" })), false, "an empty quote cannot select text")
+  }
 })
 
 test("null-valued optional fields from strict providers are stripped before canonical validation", async () => {

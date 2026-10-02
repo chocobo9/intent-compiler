@@ -282,8 +282,7 @@ test("the local source edit is projected into the strict IR stage only, and the 
     assert.equal(strict.ir_change_contract.includes(editClause), stage === "ir", `${stage}: only the IR stage authors IR changes`)
     assert.equal(strict.ir_change_contract.includes(relaxedBasis), true, `${stage}: both strict stages read the same basis rule`)
     assert.equal(strict.ir_change_contract.includes(legacyBasis), false)
-    assert.equal(strict.ir_change_contract.includes("can use exact quotes"), false, `${stage}: strict selectors are segment/span only`)
-    assert.equal(strict.ir_change_contract.includes("can use explicit spans"), true)
+    assert.equal(strict.ir_change_contract.includes("can use exact quotes"), true, `${stage}: existing quote support remains visible`)
     assert.equal(strict.ir_change_contract.includes("For pure addition use remove: [] and nonempty add"), stage === "ir")
   }
   assert.equal(V2_COMPILER_CONTRACT.ir_change_contract.includes(editClause), false, "the legacy contract does not promise an action it cannot deliver")
@@ -292,9 +291,9 @@ test("the local source edit is projected into the strict IR stage only, and the 
 
   const change = {
     action: "edit", target: "content", id: "c1", expected_revision: 0,
-    remove: [{ source_id: "user-1", digest: "sha256:d", span: { unit: "utf16", start: 0, end: 4 } }],
-    add: [],
-    basis: [{ source_id: "user-1", digest: "sha256:d", span: { unit: "utf16", start: 5, end: 9 } }],
+    remove: [{ source_id: "user-1", digest: "sha256:d", quote: "Old rule." }],
+    add: [{ source_id: "user-1", digest: "sha256:d", quote: "New rule." }],
+    basis: [{ source_id: "user-1", digest: "sha256:d", quote: "New rule." }],
     reason: "recorded correction",
   }
   const proposal = { schema_version: 2, basis, source_coverage: [], groups: [{ ...irGroup, ir_changes: [change] }] }
@@ -312,6 +311,10 @@ test("the local source edit is projected into the strict IR stage only, and the 
     assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, remove: [], add: change.basis }] }] }), true, `${label}: pure addition needs no removal`)
     assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, target: "task" }] }] }), false, `${label}: an edit only edits content`)
     assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, sources: [] }] }] }), false, `${label}: an edit does not silently mean a revise`)
+    if (profile !== undefined) for (const field of ["remove", "add", "basis"] as const) {
+      const conflicting = { ...change, [field]: [{ ...change[field][0], segment_id: "s1" }] }
+      assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [conflicting] }] }), false, `${label}: ${field} keeps selectors exclusive`)
+    }
   }
   assert.deepEqual(V2_COMPILER_CONTRACT, baseContract, "projections must not mutate the base contract")
   assert.deepEqual(CANDIDATE_JSON_SCHEMA, baseSchema, "projections must not mutate the base schema")

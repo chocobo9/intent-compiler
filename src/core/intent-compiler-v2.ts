@@ -2343,10 +2343,10 @@ function applicationHint(message: string): string {
     return " (basis.event_ids must name exactly this batch's trigger events; an execution return is evidence for assessments, not a basis event)"
   }
   if (/IR sources do not resolve/u.test(message)) {
-    return " (the message lists each rejected reference with the selector the answer used; correct every one of them to a segment_id or span that exists in the supplied source_segments, or drop that selection)"
+    return " (the message lists each rejected reference with the selector the answer used; correct every one of them to a supplied segment_id, an exact unique quote, or a span inside the source text, or drop that selection)"
   }
   if (/must cite a resolvable user text span or event/u.test(message)) {
-    return " (copy source_id exactly as supplied, including the trailing part id, and give exactly one selector: a segment_id from source_segments or a span inside that source's text; the reason beside each rejected reference says which part failed)"
+    return " (copy source_id exactly as supplied, including the trailing part id, and give exactly one selector: a segment_id from source_segments, an exact unique quote, or a span inside that source's text; the reason beside each rejected reference says which part failed)"
   }
   if (/points to unknown Atom/u.test(message)) {
     return " (name an Atom the draft actually declares: add the Atom to compilation.drafts, or point the coverage entry at an existing atom id)"

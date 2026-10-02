@@ -89,8 +89,7 @@ function responseDraft(candidate: Candidate, input: unknown): Candidate {
       const segment = segments.find(item => item.source_id === source.source_id && typeof item.segment_id === "string"
         && isRecord(item.span) && item.span.unit === "utf16" && item.span.start === span.start && item.span.end === span.end && item.text === selected)
       // A whole segment keeps its concise id; anything smaller keeps the exact
-      // code-computed span. Never rewrite a span into a hand-copied quote: that
-      // is the addressing form a model is most likely to reproduce wrongly.
+      // code-computed span. Already resolved selections need no re-addressing.
       if (segment) {
         source.segment_id = segment.segment_id as string
         delete source.span

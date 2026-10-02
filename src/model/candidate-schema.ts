@@ -144,7 +144,7 @@ export const CANDIDATE_JSON_SCHEMA = {
     /**
      * The one source selector shape a stage may narrow.  Canonical validation
      * accepts the full source_ref; strict profiles replace this definition with
-     * the segment-id-or-span form, so a branch written against this name keeps
+     * the exclusive segment/quote/span form, so a branch against this name keeps
      * one literal for both.
      */
     source_ref_with_quote: { $ref: "#/definitions/source_ref" },

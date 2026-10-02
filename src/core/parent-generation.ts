@@ -78,7 +78,7 @@ function unresolvedSources(report: SourceRefReport, display: (eventId: string) =
     : hidden > 0
       ? ` Showing the first ${refs.length} of ${report.unresolved} (${hidden} more are not listed): ${shown.join("; ")}.`
       : ` Showing all ${refs.length}: ${shown.join("; ")}.`
-  return `IR sources do not resolve; ${report.unresolved} reference(s) failed the source gate for this batch.${list} Each selection needs one source_id from the supplied source_segments and exactly one selector that exists in that source: a segment_id from its list, or a span inside its text.`
+  return `IR sources do not resolve; ${report.unresolved} reference(s) failed the source gate for this batch.${list} Each selection needs one source_id from the supplied source_segments and exactly one selector that exists in that source: a segment_id from its list, an exact unique quote, or a span inside its text.`
 }
 
 /** Owns parent preparation, child admission and restoration at one generation seam. */
