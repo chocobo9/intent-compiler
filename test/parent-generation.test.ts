@@ -182,10 +182,11 @@ test("CI generation reads the materialized parent before any child can be commit
   assert.equal(store.current().executions.length, 0)
 })
 
-test("an IR selecting only the tail records the head as a code default and reaches CI generation", async () => {
+test("an IR selecting only the tail leaves the head unclassified and reaches CI generation", async () => {
   const stages: string[] = []
   const { store, compiler } = await setup(async input => {
     stages.push(input.generation_stage!)
+    if (input.generation_stage === "ci") assert.deepEqual(input.generation_repair?.ir_proposal?.source_coverage, [])
     const proposal = parent()
     for (const change of proposal.groups[0]!.ir_changes) {
       if (change.action === "create" && change.target === "content") change.sources = [{
@@ -199,7 +200,7 @@ test("an IR selecting only the tail records the head as a code default and reach
   assert.doesNotMatch(result.message!, /no complete disposition/)
   assert.equal(stages[0], "ir")
   // The IR stage handed over; this fixture writes no CI answer, so the batch
-  // ends there.  Before the default, the accounting itself stopped it here.
+  // ends there. Unselected text is neither classified nor a prepare blocker.
   assert.ok(stages.includes("ci"), "the IR stage hands over instead of rejecting an unclassified head")
   assert.deepEqual(store.current().ir, {})
   assert.deepEqual(store.current().compiled, {})

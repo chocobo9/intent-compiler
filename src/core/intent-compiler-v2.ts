@@ -50,7 +50,7 @@ import type {
 import { V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
 import { bindCurrentRequirements, selectSourceEvents } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
-import { DEFAULT_SOURCE_REASON, materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "./source-payload.js"
+import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "./source-payload.js"
 import { ParentGeneration, type ParentGenerationState } from "./parent-generation.js"
 
 export interface IntentCompilerV2Options {
@@ -651,7 +651,6 @@ async function advance(
         call: proposal.call,
         candidate: proposal.candidate,
         sourceRefs,
-        sourceDefaults: defaultedSourceCount(proposal.candidate),
         attempts: attemptsLog,
         generation: generation?.state,
         status,
@@ -712,7 +711,6 @@ async function advance(
       call: proposal.call,
       candidate,
       sourceRefs,
-      sourceDefaults: defaultedSourceCount(candidate),
       attempts: attemptsLog,
         generation: generation?.state,
       declarationChanges,
@@ -1571,11 +1569,6 @@ function revisionMap(compiled: V2RunSnapshot["compiled"]): Record<string, number
   return Object.fromEntries(Object.entries(compiled).map(([id, intent]) => [id, intent.compiled_revision]))
 }
 
-/** Passages this batch never classified; validateSourceCoverage recorded them as context. */
-function defaultedSourceCount(candidate: Candidate | undefined): number {
-  return candidate === undefined ? 0 : (candidate.source_coverage ?? []).filter(entry => entry.reason === DEFAULT_SOURCE_REASON).length
-}
-
 /** Source events the IR now cites as requirement text. */
 function adoptedEventIds(ir: Record<string, TaskIntent>): Set<string> {
   const ids = new Set<string>()
@@ -1614,8 +1607,6 @@ interface ManagementRecordInput {
   call?: CompilerModelV2Result["call"]
   candidate?: Candidate
   sourceRefs?: SourceRefStats
-  /** Passages this batch left unclassified; code recorded them as context. */
-  sourceDefaults?: number
   /** Every call this batch made, in order, with the issues each attempt raised. */
   attempts?: ManagementAttemptRecord[]
   /** Shape changes this batch made to derived IR declarations (recorded, not rejected). */
@@ -1652,7 +1643,6 @@ function managementRecord(input: ManagementRecordInput): ManagementRequestRecord
     ...(input.call?.text_source === undefined ? {} : { response_text_source: input.call.text_source }),
     ...(input.candidate === undefined ? {} : { candidate: input.candidate, candidate_digest: digestOf(input.candidate) }),
     ...(input.sourceRefs === undefined ? {} : { source_refs: input.sourceRefs }),
-    ...(input.sourceDefaults === undefined || input.sourceDefaults === 0 ? {} : { source_defaults: { count: input.sourceDefaults } }),
     ...(input.call?.provider === undefined ? {} : { provider: input.call.provider }),
     ...(input.call?.model === undefined ? {} : { model: input.call.model }),
     ...(input.call?.agent === undefined ? {} : { agent: input.call.agent }),
@@ -2329,10 +2319,7 @@ function applicationHint(message: string): string {
   // cannot close these by moving a span by a few bytes; it has to change the
   // requirement or drop the entry.
   if (/classifies actively adopted text as/u.test(message)) {
-    return " (this passage is still a source of an IR content item in this batch: revise that item's sources so it no longer adopts the text, or remove this entry and let the default cover the passage)"
-  }
-  if (/has no complete disposition/u.test(message)) {
-    return " (select the operative text into IR content, or write one source_coverage entry naming exactly this passage; unselected text is otherwise recorded as context by code)"
+    return " (this passage is still a source of an IR content item in this batch: revise that item's sources so it no longer adopts the text, or remove this entry)"
   }
   if (/omits source text from its IR destinations/u.test(message)) {
     return " (a normative entry must select text its named IR items also select: widen the item's sources to the full passage, or narrow this entry to the part the item adopts)"
@@ -2347,7 +2334,7 @@ function applicationHint(message: string): string {
     return " (IR content that cites source text must have a coverage entry, or be selected in this batch's content create/revise)"
   }
   if (/carried delegation .* has no disposition/u.test(message)) {
-    return " (this batch carries that earlier delegation: select its operative text into IR content, or write one source_coverage entry naming its passage and a questions[] entry saying what is still missing; the accounting default does not acknowledge it)"
+    return " (this batch carries that earlier delegation: select its operative text into IR content, or write one source_coverage entry naming its passage and a questions[] entry saying what is still missing)"
   }
   if (/carried delegation .* is missing from basis\.event_ids/u.test(message)) {
     return " (name every carried delegation from carried_delegations in basis.event_ids together with this turn's own event; they are unresolved tasks this batch must account for)"

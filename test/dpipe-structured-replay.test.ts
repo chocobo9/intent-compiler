@@ -9,7 +9,7 @@ import { createCompilerModelV2, V2_COMPILER_CONTRACT, type CompilerModelV2Input 
 import { buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
 import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
-import { DEFAULT_SOURCE_REASON, sourceSegments } from "../src/core/source-payload.js"
+import { sourceSegments } from "../src/core/source-payload.js"
 import { stageCandidate } from "./fixtures/stage-candidate.js"
 import { buildGenerationSchema } from "../src/model/generation-schema.js"
 import { digestText, type Candidate, type CompilerEvent } from "../src/core/intent-contract.js"
@@ -78,7 +78,7 @@ test("real -004 output fails the actual generation contract and preserves all si
   assert.match(missing.error!.message, /source_coverage/)
 })
 
-test("a shape-valid -004 expectation commits with its eight unselected source headings recorded as code defaults", async () => {
+test("a shape-valid -004 expectation commits with its eight unselected source headings unclassified", async () => {
   const { model, prompts } = replay(expectationFixture(false)), event = userEvent()
   const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "dpipe-gap-")), runId: event.run_id })
   store.applyDeltas({ max_management_requests: 2 })
@@ -89,16 +89,13 @@ test("a shape-valid -004 expectation commits with its eight unselected source he
   // The IR stage passes, so the same batch goes on to compile the plan.
   assert.equal(prompts(), 2)
   const state = store.current(), record = state.management_log.at(-1)!
-  assert.equal(record.source_defaults?.count, 8)
+  assert.equal(record.source_defaults, undefined)
+  assert.deepEqual(record.candidate?.source_coverage, [])
   const text = (event.payload as { text: string }).text
-  const defaulted = (record.candidate?.source_coverage ?? [])
-    .filter(entry => entry.reason === DEFAULT_SOURCE_REASON)
-    .map(entry => text.slice(entry.source.span!.start, entry.source.span!.end).trim())
-    .sort()
-  assert.deepEqual(defaulted, ["## Core behaviors", "### Determinism contract", "### Error handling", "### Ingestion", "### Manifest", "### Pipeline", "### Transformation", "### Verification"])
-  // The default is accounting, not adoption: no IR content gained that text.
+  const unselected = ["## Core behaviors", "### Determinism contract", "### Error handling", "### Ingestion", "### Manifest", "### Pipeline", "### Transformation", "### Verification"]
+  // Mechanical acceptance does not prove semantic completeness: no IR content gained that text.
   const task = state.ir["t-dpipe"]!
-  assert.equal(task.content.some(content => content.sources.some(source => defaulted.includes(text.slice(source.span!.start, source.span!.end).trim()))), false)
+  assert.equal(task.content.some(content => content.sources.some(source => unselected.includes(text.slice(source.span!.start, source.span!.end).trim()))), false)
 })
 
 test("complete offline dpipe expectation preserves original rules through strict output, IR, relations and gated dispatch", async () => {

@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { digestText, type Candidate, type CompilerEvent, type ContentItem, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
-import { DEFAULT_SOURCE_REASON, materializeSourceContent, sourceSegments, validateSourceCoverage } from "../src/core/source-payload.js"
+import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "../src/core/source-payload.js"
 import { resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 
 const event = (id: string, text: string): CompilerEvent => ({ schema_version: 2, run_id: "run", event_id: id, kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text } })
@@ -93,36 +93,26 @@ test("a located heading cannot stand in for the full normative passage", () => {
   assert.throws(() => validateSourceCoverage(c, [e], [e], {}, { t: task(item("r", [ref(e, "## Filter")])) }), /omits source text/)
 })
 
-test("text the batch never names is recorded as a code default, and a mis-mapped source is still rejected", () => {
+test("unselected text stays unclassified, and a mis-mapped explicit source is still rejected", () => {
   const e = event("e", "First behavior.\n\nSecond behavior.")
   const c = candidate()
   adopt(c, ref(e, "First behavior."), "r1")
   const ir = task(item("r1", [ref(e, "First behavior.")]))
   ir.content[0]!.text_origin = "source"
   validateSourceCoverage(c, [e], [e], {}, { t: ir })
-  assert.deepEqual(c.source_coverage!.map(entry => entry.disposition), ["normative", "context"])
-  const [defaulted] = c.source_coverage!.slice(1)
-  assert.equal(defaulted!.reason, DEFAULT_SOURCE_REASON)
-  assert.deepEqual(defaulted!.requirements, [])
-  assert.equal((e.payload as { text: string }).text.slice(defaulted!.source.span!.start, defaulted!.source.span!.end), "Second behavior.")
-  assert.equal(defaulted!.source.digest, digestText((e.payload as { text: string }).text))
-  // Assuming a default for text that is named elsewhere stays a contradiction.
+  assert.deepEqual(c.source_coverage!.map(entry => entry.disposition), ["normative"])
   const misMapped = candidate()
   adopt(misMapped, ref(e, "Second behavior."), "r1")
   assert.throws(() => validateSourceCoverage(misMapped, [e], [e], {}, { t: ir }), /omits source text/)
 })
 
-test("a code default never covers text the batch did adopt", () => {
-  const e = event("e", "Adopted rule.\n\nLeftover framing.")
-  const sourceText = (e.payload as { text: string }).text
+test("unselected ranges and paragraphs need no automatic classification or complete disposition", () => {
+  const e = event("e", "Adopted rule. Leftover framing.\n\nAnother paragraph.")
   const c = candidate()
-  adopt(c, ref(e, "Adopted rule."), "r1")
   const ir = task(item("r1", [ref(e, "Adopted rule.")]))
   ir.content[0]!.text_origin = "source"
   validateSourceCoverage(c, [e], [e], {}, { t: ir })
-  const defaults = c.source_coverage!.slice(1)
-  assert.equal(defaults.length, 1, "only the unselected paragraph is defaulted")
-  assert.equal(sourceText.slice(defaults[0]!.source.span!.start, defaults[0]!.source.span!.end), "Leftover framing.")
+  assert.deepEqual(c.source_coverage, [])
 })
 
 test("a citation on a non-content change does not stand in for a disposition", () => {
@@ -136,9 +126,7 @@ test("a citation on a non-content change does not stand in for a disposition", (
   const ir = task(item("r1", [ref(e, "Second behavior.")]))
   ir.content[0]!.text_origin = "source"
   validateSourceCoverage(c, [e], [e], {}, { t: ir })
-  const defaults = (c.source_coverage ?? []).filter(entry => entry.reason === DEFAULT_SOURCE_REASON)
-  assert.equal(defaults.length, 1)
-  assert.equal(sourceText.slice(defaults[0]!.source.span!.start, defaults[0]!.source.span!.end), "First behavior.")
+  assert.deepEqual(c.source_coverage, [])
 })
 
 test("a carried delegation is an unresolved task, not background: silence rejects and an explicit disposition passes", () => {
@@ -149,8 +137,7 @@ test("a carried delegation is an unresolved task, not background: silence reject
   const ir = task(item("r-next", [ref(next)], "Status command"))
   ir.content[0]!.text_origin = "source"
   const options = { carriedEventIds: new Set(["carried"]) }
-  // The code default covers unnamed passages, but it never acknowledges an
-  // earlier uncompiled delegation on the model's behalf.
+  // An earlier uncompiled delegation still requires explicit acknowledgment.
   assert.throws(() => validateSourceCoverage(c, [next, carried], [next, carried], {}, { t: ir }, options),
     /carried delegation carried has no disposition/)
   // Parking it explicitly satisfies this batch's accounting; the delegation
@@ -167,7 +154,7 @@ test("selecting a carried delegation's text into IR registers it instead of ackn
   const ir = task(item("r-next", [ref(next)], "Status command"), item("r-carried", [ref(carried)], "Profile command"))
   for (const content of ir.content) content.text_origin = "source"
   validateSourceCoverage(c, [next, carried], [next, carried], {}, { t: ir }, { carriedEventIds: new Set(["carried"]) })
-  assert.equal(c.source_coverage!.length, 0, "selected text needs no duplicate bookkeeping and no default for the carried delegation")
+  assert.equal(c.source_coverage!.length, 0, "selected text needs no duplicate bookkeeping")
 })
 
 test("a normative mapping cannot silently adopt the same source into an unlisted requirement", () => {
@@ -206,7 +193,7 @@ test("unknown segment selectors fail resolution and cannot fall back to a plausi
   assert.equal(resolveSourceRefs(c, [e]).unresolved, 1)
 })
 
-test("a task's own citation accounts for the rest of its paragraph, so a span sub-selection is accepted", () => {
+test("a content sub-selection is accepted without classifying the rest of its paragraph", () => {
   const text = "Create the file, verify its bytes, then stop."
   const e = event("e", text), c = candidate()
   const span = (start: number, end: number) => ({ source_id: "e", digest: digestText(text), span: { unit: "utf16" as const, start, end } })
@@ -225,7 +212,7 @@ test("a task's own citation accounts for the rest of its paragraph, so a span su
   assert.equal(ir.content[0]!.text, "Create the file")
 })
 
-test("a citation on a task change is not a disposition, so code records the default", () => {
+test("a citation on a task change does not assign a disposition", () => {
   const text = "Create the file, verify its bytes, then stop."
   const e = event("e", text), c = candidate()
   c.groups[0]!.ir_changes = [{ action: "create", target: "task", local_ref: "t",
@@ -233,9 +220,7 @@ test("a citation on a task change is not a disposition, so code records the defa
     sources: [{ source_id: "e", digest: digestText(text), span: { unit: "utf16", start: 0, end: text.length } }] }]
   assert.equal(resolveSourceRefs(c, [e]).unresolved, 0)
   validateSourceCoverage(c, [e], [e], {}, { t: task() })
-  const defaults = (c.source_coverage ?? []).filter(entry => entry.reason === DEFAULT_SOURCE_REASON)
-  assert.equal(defaults.length, 1, "the cited paragraph is still unclassified, so the default names it")
-  assert.equal(text.slice(defaults[0]!.source.span!.start, defaults[0]!.source.span!.end), text)
+  assert.deepEqual(c.source_coverage, [])
 })
 
 test("a span outside its source is unresolvable rather than a silent guess", () => {
@@ -265,5 +250,5 @@ test("a revision still cannot drop operative user text inside its own paragraph"
   const before = task(item("r", [ref(e)]))
   const after = task(item("r", [ref(e, "First rule stays.")]))
   adopt(c, ref(e, "First rule stays."), "r")
-  assert.throws(() => validateSourceCoverage(c, [e], [e], { t: before }, { t: after }), /no complete disposition|dropped without/)
+  assert.throws(() => validateSourceCoverage(c, [e], [e], { t: before }, { t: after }), /dropped without/)
 })

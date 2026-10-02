@@ -18,6 +18,10 @@ const irGroup = {
 }
 
 test("IR generation admits only intent changes, never a hidden compiled plan", () => {
+  const contract = generationContract(V2_COMPILER_CONTRACT, "ir")
+  const instructions = [contract.ir_change_contract, ...contract.rules, generationStageInstruction("ir")].join("\n")
+  assert.doesNotMatch(instructions, /ALL current user text must have a destination|recorded by code as context|unselected by this batch|Classify every remaining passage|remaining-source classifications/)
+  assert.match(instructions, /source_coverage is REQUIRED/)
   const proposal = { schema_version: 2, basis, source_coverage: [], groups: [irGroup] }
   assert.equal(validateGenerationProposal("ir", proposal).ok, true)
   const mixed = { ...proposal, groups: [{ ...irGroup, compilation: { decision: "replace", drafts: [] } }] }

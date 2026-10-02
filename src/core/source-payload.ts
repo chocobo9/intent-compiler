@@ -1,4 +1,4 @@
-import { digestOf, digestText, type Candidate, type CompilerEvent, type ContentItem, type IrChange, type LocalSourceEditRecord, type SourceDisposition, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
+import { digestOf, digestText, type Candidate, type CompilerEvent, type ContentItem, type IrChange, type LocalSourceEditRecord, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
 
 export function userText(event: CompilerEvent): string | undefined {
   const value = event.payload as { text?: unknown } | undefined
@@ -189,18 +189,10 @@ function disposed(text: string, start: number, end: number, spans: readonly { st
   return residualRanges(text, start, end, spans).length === 0
 }
 
-/**
- * The disposition code writes for text a batch never names.  It says what the
- * accounting says and nothing about meaning: the passage stays available, and a
- * later delegation may still select it into IR.
- */
-export const DEFAULT_SOURCE_REASON = "unselected by this batch (code default; not adopted as a requirement)"
-
 export interface SourceCoverageOptions {
   /**
    * Delegations carried from earlier turns because no batch has compiled them
-   * yet.  Their text stays addressable and the code default still covers the
-   * passages the model leaves unnamed, but the candidate has to name each
+   * yet. Their text stays addressable, and the candidate has to name each
    * carried delegation at least once: either by selecting its operative text
    * into IR content, or by writing an explicit source_coverage entry for it
    * (with a question when it still cannot be compiled).  Silence about a
@@ -211,9 +203,9 @@ export interface SourceCoverageOptions {
   display?: EventIdDisplay
 }
 
-/** Closed source accounting, without guessing whether the model chose the right role. */
+/** Validate explicit dispositions and preserve previously adopted source text. */
 export function validateSourceCoverage(candidate: Candidate, currentEvents: readonly CompilerEvent[], sources: readonly CompilerEvent[], previous: Record<string, TaskIntent>, current: Record<string, TaskIntent>, options: SourceCoverageOptions = {}): void {
-  if (!Array.isArray(candidate.source_coverage)) throw new Error("source_coverage must explicitly list remaining source dispositions (or [] when all text is selected into IR)")
+  if (!Array.isArray(candidate.source_coverage)) throw new Error("source_coverage must explicitly list source dispositions (or [])")
   const display = options.display ?? identityDisplay
   const entries = candidate.source_coverage
   const texts = sourceTexts(sources)
@@ -228,16 +220,8 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   const adoptedByItem = new Map<ContentItem, SourceRef[]>()
   // Selecting source text into an IR item is already the model's normative
   // adoption decision. Derive its exact destination rather than asking for a
-  // second copy. Other text still needs an explicit model-authored disposition.
+  // second copy.
   const selectedSources = items.filter(item => item.text_origin === "source").flatMap(item => item.sources)
-  // The contract requires sources on every ir_change, so citing the text a
-  // task, scope, binding or output change is based on is required behavior.
-  // Such a citation declares where that text goes as well; it just cannot
-  // dispose of a paragraph on its own (see the segment loop below).
-  const citedSources = candidate.groups
-    .filter(group => group.task_refs.some(taskId => taskIds.has(taskId)))
-    .flatMap(group => group.ir_changes.flatMap(change => change.action === "edit" ? change.add : change.sources))
-    .filter(source => source.span !== undefined)
   for (const item of items) if (item.text_origin === "source") adoptedByItem.set(item, item.sources)
 
   for (const [index, entry] of entries.entries()) {
@@ -278,55 +262,14 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
       }
     }
   }
-  // A paragraph this batch never names is not a contradiction to resolve: it is
-  // background for the delegations the batch did make. The code writes that
-  // default itself, so one unmentioned passage cannot invalidate an otherwise
-  // complete batch, and the model writes an entry only to override it. The
-  // default never covers text the batch adopted, cited or classified itself.
-  // A citation on a task, scope, binding or output change proves where that
-  // change came from; it is not a disposition, so the segment check below still
-  // wants this text named.  The default has to be computed against the same set
-  // that check accepts, or a cited-but-unclassified paragraph gets no default
-  // and the batch dies on the very rule the default exists to relax.
-  const entrySources = entries.map(entry => entry.source)
-  const accounted = [...selectedSources, ...entrySources]
-  const defaults: SourceDisposition[] = []
-  for (const segment of sourceSegments(currentEvents)) {
-    const text = texts.get(segment.source_id)!
-    for (const range of residualRanges(text, segment.span.start, segment.span.end, spansFor(accounted, segment.source_id))) {
-      defaults.push({
-        source: { source_id: segment.source_id, digest: digestText(text), span: { unit: "utf16", start: range.start, end: range.end } },
-        disposition: "context",
-        requirements: [],
-        reason: DEFAULT_SOURCE_REASON,
-        basis: [],
-      })
-    }
-  }
-  if (defaults.length > 0) candidate.source_coverage = [...entries, ...defaults]
   // A carried delegation is an unresolved task from an earlier turn, not
   // background for this one.  It may be adopted, or explicitly deferred with a
   // reason, but it cannot be passed over in silence.
   for (const eventId of options.carriedEventIds ?? []) {
     const named = selectedSources.some(source => source.source_id === eventId)
-      // Defaults do not count: falling through to "unselected by this batch"
-      // is not an acknowledgment of the earlier delegation.
       || entries.some(entry => entry.source.source_id === eventId)
     if (!named) {
       throw new Error(`carried delegation ${display(eventId)} has no disposition: select its operative text into IR content, or write a source_coverage entry naming its passage (and a question when it still cannot be compiled)`)
-    }
-  }
-  const allEntrySources = candidate.source_coverage.map(entry => entry.source)
-  for (const segment of sourceSegments(currentEvents)) {
-    const text = texts.get(segment.source_id)!
-    const stored = spansFor([...selectedSources, ...allEntrySources], segment.source_id)
-    // A change's citation can only account for the remainder of a paragraph
-    // that the batch actually stores as a requirement or classifies.
-    if (!stored.some(span => span.start < segment.span.end && segment.span.start < span.end)) {
-      throw new Error(`source segment ${display(segment.source_id)}/${segment.segment_id} has no complete disposition: no content selection or source_coverage entry names it; select its operative text into IR or explicitly classify its remaining text`)
-    }
-    if (!disposed(text, segment.span.start, segment.span.end, spansFor([...selectedSources, ...citedSources, ...allEntrySources], segment.source_id))) {
-      throw new Error(`source segment ${display(segment.source_id)}/${segment.segment_id} has no complete disposition; select its operative text into IR or explicitly classify its remaining text`)
     }
   }
   for (const item of items) for (const source of item.sources) {

@@ -15,7 +15,8 @@ compiler preparation and dispatch projection without any network/model calls:
 
 1. The unchanged real response must fail the sent strict schema with all six
    errors, retaining raw output and usage.
-2. A fixture with corrected root shape must still fail source completeness.
+2. A fixture with corrected root shape passes mechanical preparation while its
+   eight unselected headings remain unclassified. This does not prove semantic completeness.
 3. A deliberately authored expectation adds each missing heading to its named
    IR destinations. That expectation must preserve all source segments, canonical
    requirement bytes, the task hierarchy, relations and dependency-gated dispatch.
