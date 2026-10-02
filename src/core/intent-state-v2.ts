@@ -259,9 +259,9 @@ function applyChange(
     const removals = editSourceRefs(change.remove, "remove")
     const additions = editSourceRefs(change.add, "add")
     const basis = editSourceRefs(change.basis, "basis")
-    if (removals.length === 0) throw new TypeError("edit requires at least one remove selector")
-    if (basis.length === 0) throw new TypeError("edit requires at least one source as the removal's basis")
-    if (typeof change.reason !== "string" || !change.reason.trim()) throw new TypeError("edit requires a reason stating why the removed fragments no longer apply")
+    if (removals.length === 0 && additions.length === 0) throw new TypeError("edit requires at least one remove or add selector")
+    if (basis.length === 0) throw new TypeError("edit requires at least one source as the change's basis")
+    if (typeof change.reason !== "string" || !change.reason.trim()) throw new TypeError("edit requires a reason explaining the source change")
     const plan = subtractRemovals(item, removals)
     item.revision += 1
     item.sources = [...plan.retained, ...additions]

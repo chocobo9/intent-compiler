@@ -468,7 +468,7 @@ export const LOCAL_SOURCE_EDIT_IR_CHANGE = {
     target: { const: "content" },
     id: { type: "string", minLength: 1 },
     expected_revision: { type: "integer", minimum: 0 },
-    remove: { type: "array", minItems: 1, items: { $ref: "#/definitions/source_ref_with_quote" } },
+    remove: { type: "array", items: { $ref: "#/definitions/source_ref_with_quote" } },
     add: { type: "array", items: { $ref: "#/definitions/source_ref_with_quote" } },
     basis: { type: "array", minItems: 1, items: { $ref: "#/definitions/source_ref_with_quote" } },
     reason: { type: "string", minLength: 1 },

@@ -60,7 +60,7 @@ function assembledAtomContract(atomContract: string): string {
  * materialization step) is not told to use an action it cannot use.
  */
 const BASE_REVISE_CLAUSE = '- revise: { action:"revise", target:"task"|"current_scope"|"binding"|"output"|"content", id, expected_revision, value:<complete new value>, sources }'
-const LOCAL_EDIT_CLAUSE = `${BASE_REVISE_CLAUSE} For a local content source edit that keeps the item's other sources, use edit instead of re-declaring the whole item: { action:"edit", target:"content", id, expected_revision, remove:[SourceRef], add:[SourceRef], basis:[SourceRef], reason }. remove addresses fragments inside this item's current sources; code keeps everything else, merges add, materializes the new text and writes the withdrawal record from this operation itself, so do not also send a superseded entry for the same removal. basis may cite any source still available to this batch, including earlier delegations, not only this batch's events.`
+const LOCAL_EDIT_CLAUSE = `${BASE_REVISE_CLAUSE} For a local content source edit that keeps the item's other sources, use edit instead of re-declaring the whole item: { action:"edit", target:"content", id, expected_revision, remove:[SourceRef], add:[SourceRef], basis:[SourceRef], reason }. For pure addition use remove: [] and nonempty add; basis and reason remain required. At least one of remove or add must be nonempty. remove addresses fragments inside this item's current sources; code keeps everything else, merges add and materializes the new text. Code writes withdrawal records only for removed fragments, so do not also send a superseded entry for the same removal. basis may cite any source still available to this batch, including earlier delegations, not only this batch's events.`
 const BASE_SUPERSEDED_BASIS = "empty requirements, and basis selecting the current user's change."
 const LOCAL_EDIT_SUPERSEDED_BASIS = "empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry."
 
@@ -73,7 +73,7 @@ const LOCAL_EDIT_SUPERSEDED_BASIS = "empty requirements, and basis selecting the
 function strictSupersededBasis(irChangeContract: string): string {
   const withBasis = irChangeContract.replace(BASE_SUPERSEDED_BASIS, LOCAL_EDIT_SUPERSEDED_BASIS)
   if (withBasis === irChangeContract) throw new Error("IR change contract no longer carries the superseded-basis clause; the strict basis rule cannot be projected")
-  return withBasis
+  return withBasis.replace("Retained parts of a mixed paragraph can use exact quotes.", "Retained parts of a mixed paragraph can use explicit spans.")
 }
 
 function strictLocalSourceEdit(irChangeContract: string): string {

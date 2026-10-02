@@ -278,9 +278,13 @@ test("the local source edit is projected into the strict IR stage only, and the 
     assert.equal(strict.ir_change_contract.includes(editClause), stage === "ir", `${stage}: only the IR stage authors IR changes`)
     assert.equal(strict.ir_change_contract.includes(relaxedBasis), true, `${stage}: both strict stages read the same basis rule`)
     assert.equal(strict.ir_change_contract.includes(legacyBasis), false)
+    assert.equal(strict.ir_change_contract.includes("can use exact quotes"), false, `${stage}: strict selectors are segment/span only`)
+    assert.equal(strict.ir_change_contract.includes("can use explicit spans"), true)
+    assert.equal(strict.ir_change_contract.includes("For pure addition use remove: [] and nonempty add"), stage === "ir")
   }
   assert.equal(V2_COMPILER_CONTRACT.ir_change_contract.includes(editClause), false, "the legacy contract does not promise an action it cannot deliver")
   assert.equal(V2_COMPILER_CONTRACT.ir_change_contract.includes(legacyBasis), true, "the legacy basis wording is untouched")
+  assert.equal(V2_COMPILER_CONTRACT.ir_change_contract.includes("can use exact quotes"), true, "legacy quote wording is untouched")
 
   const change = {
     action: "edit", target: "content", id: "c1", expected_revision: 0,
@@ -301,7 +305,7 @@ test("the local source edit is projected into the strict IR stage only, and the 
     const label = profile ?? "default"
     assert.equal(validate(proposal), true, `${label} schema admits the edit`)
     assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, basis: [] }] }] }), false, `${label}: a basis is required`)
-    assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, remove: [] }] }] }), false, `${label}: a removal is required`)
+    assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, remove: [], add: change.basis }] }] }), true, `${label}: pure addition needs no removal`)
     assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, target: "task" }] }] }), false, `${label}: an edit only edits content`)
     assert.equal(validate({ ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, sources: [] }] }] }), false, `${label}: an edit does not silently mean a revise`)
   }

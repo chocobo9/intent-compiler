@@ -166,6 +166,45 @@ test("a local edit removes exactly the named fragment and keeps the rest of the 
   assert.ok(editedText.length > 0 && editedText.length !== storedText.length)
 })
 
+test("a pure addition preserves old behavior and adds source text without a withdrawal (synthetic fixture)", () => {
+  // Interface verification, not a replay or repair of the real pipeline candidate.
+  const oldText = "Execute pipeline steps sequentially. Stop on failure and retain the success and failure messages."
+  const newText = "Support a lineage pipeline step."
+  const events: CompilerEvent[] = [oldText, newText].map((text, index) => ({
+    schema_version: 2, run_id: fixture.run_id, event_id: `append-${index}`, kind: "user_input",
+    source: { channel: "user", producer_id: "user" }, payload: { text },
+  }))
+  const oldSource: SourceRef = {
+    source_id: events[0]!.event_id, digest: digestText(oldText),
+    span: { unit: "utf16", start: 0, end: oldText.length },
+  }
+  const before: TaskIntent = { ...storedTask(), content: [{
+    ...storedItem(), item_id: "r-pipeline", revision: 0, text: oldText, sources: [oldSource],
+  }] }
+  const addition: SourceRef = { source_id: events[1]!.event_id, digest: digestText(newText), segment_id: "s1" }
+  const change: Extract<IrChange, { action: "edit" }> = {
+    action: "edit", target: "content", id: "r-pipeline", expected_revision: 0,
+    remove: [], add: [addition], basis: [addition], reason: "Add lineage while retaining the existing pipeline behavior.",
+  }
+  const candidate = candidateWith(change)
+  candidate.basis.event_ids = [events[1]!.event_id]
+  assert.equal(resolveSourceRefs(candidate, events).unresolved, 0)
+  const applied = new IntentStateManager({ "t-dpipe": before }).apply(candidate.groups[0]!.ir_changes, ["t-dpipe"])
+  assert.equal(applied.ok, true, applied.errors.map(error => error.message).join("; "))
+  materializeSourceContent(applied.tasks["t-dpipe"]!, candidate.groups[0]!.ir_changes, events)
+  const item = applied.tasks["t-dpipe"]!.content[0]!
+  assert.equal(item.revision, 1)
+  assert.deepEqual(item.sources, [oldSource, {
+    source_id: events[1]!.event_id, digest: digestText(newText),
+    span: { unit: "utf16", start: 0, end: newText.length },
+  }])
+  assert.equal(item.text, `${oldText}\n\n${newText}`)
+  recordEditedRemovals(candidate, applied.tasks, applied.edits)
+  assert.deepEqual(candidate.source_coverage, [])
+  assert.doesNotThrow(() => validateSourceCoverage(candidate, [events[1]!], events, { "t-dpipe": before }, applied.tasks))
+  assert.deepEqual(candidate.source_coverage, [], "source validation also leaves no withdrawal or default record")
+})
+
 test("the edit's removal produces one disposal record, and the same batch stays valid without a second copy", () => {
   const candidate = candidateWith(editChange())
   const applied = new IntentStateManager({ "t-dpipe": storedTask() }).apply(candidate.groups[0]!.ir_changes, ["t-dpipe"])
@@ -200,8 +239,8 @@ test("edit refusals name the failing part of the operation", () => {
     new IntentStateManager({ "t-dpipe": storedTask() }).apply([{ ...editChange(), ...patch } as IrChange], ["t-dpipe"])
   assert.match(run({ id: "r-unknown" }).errors[0]!.message, /unknown content r-unknown/u)
   assert.match(run({ expected_revision: 0 }).errors[0]!.message, /expected_revision 0 does not match current 1/u)
-  assert.match(run({ remove: [] }).errors[0]!.message, /at least one remove selector/u)
-  assert.match(run({ basis: [] }).errors[0]!.message, /at least one source as the removal's basis/u)
+  assert.match(run({ remove: [], add: [] }).errors[0]!.message, /at least one remove or add selector/u)
+  assert.match(run({ basis: [] }).errors[0]!.message, /at least one source as the change's basis/u)
   const plainRef = { id: "a1", revision: 0, digest: "sha256:x" }
   assert.match(run({ basis: [plainRef] }).errors[0]!.message,
     /edit basis\[0\] must be a SourceRef/u, "a plain Ref is not a removal basis")
@@ -212,7 +251,7 @@ test("edit refusals name the failing part of the operation", () => {
   assert.match(mixed.errors[0]!.message, /edit basis\[1\] must be a SourceRef/u)
   assert.match(run({ add: [fixture.edit.basis, plainRef] }).errors[0]!.message, /edit add\[1\] must be a SourceRef/u)
   assert.match(run({ remove: [fixture.edit.remove, plainRef] }).errors[0]!.message, /edit remove\[1\] must be a SourceRef/u)
-  assert.match(run({ reason: "  " }).errors[0]!.message, /reason stating why/u)
+  assert.match(run({ reason: "  " }).errors[0]!.message, /reason explaining the source change/u)
   assert.match(run({ remove: [{ ...fixture.edit.remove, span: { unit: "utf16", start: 100, end: 200 } }] }).errors[0]!.message,
     /outside the item's current sources/u)
   assert.match(run({ remove: [{ ...fixture.edit.remove, digest: digestText("some other text") }] }).errors[0]!.message,

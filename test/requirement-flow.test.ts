@@ -145,7 +145,18 @@ test("check, commit and dispatch read the same assembled task", async () => {
   assert.equal(checkedCompilation.drafts[0]!.atoms[0]!.task, instruction)
   assert.ok(delivered.task.startsWith(instruction))
   assert.deepEqual(checks[0]!.contract, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS)
-  assert.equal(checks[0]!.contract.check_contract.includes("prepared task carries the assigned behavior"), true)
+  const contract = checks[0]!.contract.check_contract
+  assert.equal(contract.includes("assignments are semantically appropriate"), true)
+  assert.equal(contract.includes("Each assigned requirement needs relevant Atoms' goal_refs AND"), false)
+  assert.equal(contract.includes("for Atoms bound and assembled in this preparation, it owns coverage-to-content-goal_refs binding"), true)
+  assert.equal(contract.includes("Retained Atoms are not reassembled and historical summary Atoms are not automatically repaired"), true)
+  assert.equal(contract.includes("judge retained Atoms against currently applicable requirements using their actual final task text"), true)
+  assert.equal(contract.includes("each Atom's corresponding prepared.atom_states record"), true)
+  assert.equal(contract.includes("applicable scope and explicit correction relationships"), true)
+  assert.equal(contract.includes("Their coexistence is not itself an inconsistency"), true)
+  assert.deepEqual(contract.split("\n").slice(0, -1), V2_CHECK_CONTRACT.check_contract.split("\n").slice(0, -1),
+    "only the assembled-task comparison clause changes; the other check duties remain")
+  assert.deepEqual(checks[0]!.contract.rules, V2_CHECK_CONTRACT.rules)
 })
 
 test("legacy checks keep the base contract and legacy delivery keeps the model's full instruction", async () => {
