@@ -1,0 +1,939 @@
+Intent Compiler：本次全新运行的有限只读取证
+
+run: intent-luna-dpipe-full-r1r5-20261002-053740-e6308341
+frozen SHA: c6e1f6444a3f9518a8dc11e07134bb6469b72e62
+
+没有改实现、合同、候选、官方 verifier；没有测试或模型调用。所有新文件是原记录的只读摘录和区间计算，另存于 provenance/source-selection-evidence；原封存不变。
+
+原成绩 R1 218/219、R2 481/481、R3 484/535、R4 608/639、R5 604/680；管理 26 次。R3/R5 未派发，评分对应继承的 R2/R4 工件。
+
+材料区分：call-N-raw / call-N.json 保存管理原响应；call-N-sent-request.txt 是 host-part 中实际发送的用户 JSON 文本，包含 transport 已投影的合同。后者的 source_segments 与管理日志逐项一致，映射和 SHA 见 sent-request-provenance.json。不能把投影前 attempt.request 当作最终合同。
+
+1. R3：call-13 → call-15 → call-16
+
+实际提供的旧 normalize 计算段，来自 e57/s51：
+
+```json
+{
+  "segment_id": "s51",
+  "source_id": "e57",
+  "span": {
+    "end": 10366,
+    "start": 10080,
+    "unit": "utf16"
+  },
+  "text": "First, collect all non-empty values from `column` that parse as floats (Go's `strconv.ParseFloat` with bit size 64). Compute statistics from these values:\n- For `zscore`: compute `mean` and population `stddev` (`sqrt(sum((xi - mean)^2) / n)`).\n- For `minmax`: compute `min` and `max`.\n\n"
+}
+```
+
+实际提供的新修正 e114/s7–s11：
+
+```json
+[
+  {
+    "segment_id": "s7",
+    "source_id": "e114",
+    "span": {
+      "end": 944,
+      "start": 895,
+      "unit": "utf16"
+    },
+    "text": "### Normalize zscore: sample standard deviation\n\n"
+  },
+  {
+    "segment_id": "s8",
+    "source_id": "e114",
+    "span": {
+      "end": 1104,
+      "start": 944,
+      "unit": "utf16"
+    },
+    "text": "The `normalize` transform with `\\\"method\\\": \\\"zscore\\\"` now uses **sample standard deviation** (Bessel's correction) instead of population standard deviation:\n\n"
+  },
+  {
+    "segment_id": "s9",
+    "source_id": "e114",
+    "span": {
+      "end": 1151,
+      "start": 1104,
+      "unit": "utf16"
+    },
+    "text": "`stddev = sqrt(sum((xi - mean)^2) / (n - 1))`\n\n"
+  },
+  {
+    "segment_id": "s10",
+    "source_id": "e114",
+    "span": {
+      "end": 1298,
+      "start": 1151,
+      "unit": "utf16"
+    },
+    "text": "where `n` is the number of valid numeric values. If `n < 2`, all output values are `\\\"0\\\"`. If sample stddev is 0, all output values are `\\\"0\\\"`.\n\n"
+  },
+  {
+    "segment_id": "s11",
+    "source_id": "e114",
+    "span": {
+      "end": 1475,
+      "start": 1298,
+      "unit": "utf16"
+    },
+    "text": "Previously, population standard deviation (`n` denominator) was used. The `profile` command's `stddev` field is unaffected — it continues to use population standard deviation.\n\n"
+  }
+]
+```
+
+call-13 原始相关动作（全部字段及 sources；未人工修正）：
+
+```json
+{
+  "action": "revise",
+  "expected_revision": 0,
+  "id": "r-transform-basic-additions",
+  "sources": [
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "source_id": "e57",
+      "span": {
+        "end": 9595,
+        "start": 7157,
+        "unit": "utf16"
+      }
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "segment_id": "s46",
+      "source_id": "e57"
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "segment_id": "s47",
+      "source_id": "e57"
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "segment_id": "s48",
+      "source_id": "e57"
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "segment_id": "s49",
+      "source_id": "e57"
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "segment_id": "s50",
+      "source_id": "e57"
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "source_id": "e57",
+      "span": {
+        "end": 10169,
+        "start": 10080,
+        "unit": "utf16"
+      }
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "source_id": "e57",
+      "span": {
+        "end": 10366,
+        "start": 10258,
+        "unit": "utf16"
+      }
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "segment_id": "s52",
+      "source_id": "e57"
+    },
+    {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "segment_id": "s53",
+      "source_id": "e57"
+    },
+    {
+      "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+      "segment_id": "s7",
+      "source_id": "e114"
+    },
+    {
+      "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+      "segment_id": "s8",
+      "source_id": "e114"
+    },
+    {
+      "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+      "segment_id": "s9",
+      "source_id": "e114"
+    },
+    {
+      "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+      "segment_id": "s10",
+      "source_id": "e114"
+    },
+    {
+      "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+      "segment_id": "s11",
+      "source_id": "e114"
+    }
+  ],
+  "target": "content",
+  "value": {
+    "about": [],
+    "scope": [
+      {
+        "path": null,
+        "target_id": "t-dpipe"
+      }
+    ],
+    "support": [],
+    "text": "Deduplication, splitting, row assertions, and numeric normalization, including corrected z-score standard deviation behavior."
+  }
+}
+```
+
+call-13 原始 source_coverage：
+
+```json
+[
+  {
+    "basis": [
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "quote": null,
+        "segment_id": "s8",
+        "source_id": "e114",
+        "span": null
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "quote": null,
+        "segment_id": "s9",
+        "source_id": "e114",
+        "span": null
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "quote": null,
+        "segment_id": "s10",
+        "source_id": "e114",
+        "span": null
+      }
+    ],
+    "disposition": "superseded",
+    "reason": "The previously specified population-standard-deviation formula for normalize z-score is replaced by the current sample-standard-deviation rule; the remaining normalization and min-max rules are retained.",
+    "requirements": [],
+    "source": {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "quote": null,
+      "segment_id": null,
+      "source_id": "e57",
+      "span": {
+        "end": 10258,
+        "start": 10169,
+        "unit": "utf16"
+      }
+    }
+  }
+]
+```
+
+造成截断的两项 sources 是 e57/[10080,10169) 与 e57/[10258,10366)，对应声明撤回 [10169,10258)。它们位于 supplied s51=[10080,10366) 内，但不是模型收到的子句边界，是模型填写的 UTF-16 数字。
+
+实际移除的 89 UTF-16 单元原文：
+```text
+seFloat` with bit size 64). Compute statistics from these values:
+- For `zscore`: compute
+```
+
+实际 prepared 的 r-transform-basic-additions（revision 1）sources：
+```json
+[
+  {
+    "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+    "source_id": "intent-luna-dpipe-full-r1r5-20261002-053740-e6308341:user:ses_f03f6b9aeffewi4mS9B1SYkLb8:prt_0fc09470f001ojlOX2ysNXFYC0",
+    "span": {
+      "end": 10169,
+      "start": 7157,
+      "unit": "utf16"
+    }
+  },
+  {
+    "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+    "source_id": "intent-luna-dpipe-full-r1r5-20261002-053740-e6308341:user:ses_f03f6b9aeffewi4mS9B1SYkLb8:prt_0fc09470f001ojlOX2ysNXFYC0",
+    "span": {
+      "end": 10894,
+      "start": 10258,
+      "unit": "utf16"
+    }
+  },
+  {
+    "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+    "source_id": "intent-luna-dpipe-full-r1r5-20261002-053740-e6308341:user:ses_f03ea9ce2ffeBS0pO0LVRIoV8g:prt_0fc1563b5001C908azDlAxSj72",
+    "span": {
+      "end": 1475,
+      "start": 895,
+      "unit": "utf16"
+    }
+  }
+]
+```
+
+实际物化正文的 normalize 部分（直接截取存储字段，不是重放生成）：
+```text
+First, collect all non-empty values from `column` that parse as floats (Go's `strconv.Par
+
+ `mean` and population `stddev` (`sqrt(sum((xi - mean)^2) / n)`).
+- For `minmax`: compute `min` and `max`.
+
+Then, for each row:
+- If the cell in `column` is empty: new column value is empty string.
+- If the cell does not parse as a float: new column value is empty string.
+- For `zscore`: if `stddev == 0`, result is `0`. Otherwise, result is `(x - mean) / stddev`.
+- For `minmax`: if `max == min`, result is `0`. Otherwise, result is `(x - min) / (max - min)`.
+
+**Output format:** numeric results are formatted using Go's `strconv.FormatFloat(val, 'f', -1, 64)`. The special value `0` is output as the string `\"0\"` (not `\"0.0\"`).
+
+
+
+### Normalize zscore: sample standard deviation
+
+The `normalize` transform with `\"method\": \"zscore\"` now uses **sample standard deviation** (Bessel's correction) instead of population standard deviation:
+
+`stddev = sqrt(sum((xi - mean)^2) / (n - 1))`
+
+where `n` is the number of valid numeric values. If `n < 2`, all output values are `\"0\"`. If sample stddev is 0, all output values are `\"0\"`.
+
+Previously, population standard deviation (`n` denominator) was used. The `profile` command's `stddev` field is unaffected — it continues to use population standard deviation.
+
+
+```
+
+该 content 全文在 prepared.compiled 对应 Atom.task 中逐字存在；截断是最终核对载荷的真实缺陷，不是候选旧字段或历史版本混淆。
+
+call-15 finding 原文与完整 refs：
+```json
+{
+  "findings": [
+    {
+      "claim": "The normalize requirement remains complete and executable in the revised task.",
+      "dimension": "D7",
+      "expected": "The normalize specification must preserve the numeric parsing and statistics behavior for the sample z-score correction, along with the unchanged min-max behavior.",
+      "observed": "The current IR requirement r-transform-basic-additions and its attached block in the current Atom contain a truncated fragment, “strconv.Par … mean and population stddev,” leaving the original numeric parsing instruction malformed; the revised task adds the sample-deviation correction but does not restore that omitted requirement detail.",
+      "refs": [
+        {
+          "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+          "source_id": "intent-luna-dpipe-full-r1r5-20261002-053740-e6308341:user:ses_f03f6b9aeffewi4mS9B1SYkLb8:prt_0fc09470f001ojlOX2ysNXFYC0",
+          "span": {
+            "end": 10894,
+            "start": 10169,
+            "unit": "utf16"
+          }
+        },
+        {
+          "digest": "sha256:306b438352e814876d67cab4e39b964e9016b5f934a2eeafb03846fd00b0bfe5",
+          "id": "r-transform-basic-additions",
+          "revision": 1
+        }
+      ]
+    }
+  ],
+  "repair_target": "ir",
+  "schema_version": 2,
+  "verdict": "inconsistent"
+}
+```
+
+call-16 实际修复请求收到的 validation_errors（也写入 generation_repair.issues）：
+```json
+[
+  "independent check D7: The normalize requirement remains complete and executable in the revised task. — expected The normalize specification must preserve the numeric parsing and statistics behavior for the sample z-score correction, along with the unchanged min-max behavior., observed The current IR requirement r-transform-basic-additions and its attached block in the current Atom contain a truncated fragment, “strconv.Par … mean and population stddev,” leaving the original numeric parsing instruction malformed; the revised task adds the sample-deviation correction but does not restore that omitted requirement detail."
+]
+```
+
+call-16 原始返修动作与仍保留的处置：
+```json
+[
+  {
+    "action": "revise",
+    "expected_revision": 0,
+    "id": "r-transform-basic-additions",
+    "sources": [
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s34",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s35",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s36",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s37",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s38",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s39",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s40",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s41",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s42",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s43",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s44",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s45",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s46",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s47",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s48",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s49",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s50",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s51",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s52",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+        "segment_id": "s53",
+        "source_id": "e57"
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "segment_id": "s7",
+        "source_id": "e114"
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "segment_id": "s8",
+        "source_id": "e114"
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "segment_id": "s9",
+        "source_id": "e114"
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "segment_id": "s10",
+        "source_id": "e114"
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "segment_id": "s11",
+        "source_id": "e114"
+      }
+    ],
+    "target": "content",
+    "value": {
+      "about": [],
+      "scope": [
+        {
+          "path": null,
+          "target_id": "t-dpipe"
+        }
+      ],
+      "support": [],
+      "text": "Deduplication, splitting, row assertions, and numeric normalization, including corrected z-score standard deviation behavior."
+    }
+  }
+]
+```
+```json
+[
+  {
+    "basis": [
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "quote": null,
+        "segment_id": "s8",
+        "source_id": "e114",
+        "span": null
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "quote": null,
+        "segment_id": "s9",
+        "source_id": "e114",
+        "span": null
+      },
+      {
+        "digest": "sha256:675912d5cbc3a79ec20527236147fa2727c43d290b46b5b8272503c0164ed474",
+        "quote": null,
+        "segment_id": "s10",
+        "source_id": "e114",
+        "span": null
+      }
+    ],
+    "disposition": "superseded",
+    "reason": "This original population-standard-deviation clause for normalize z-score is replaced by the current sample-standard-deviation correction. The adjacent numeric parsing behavior and min-max normalization rule remain selected as current requirements.",
+    "requirements": [],
+    "source": {
+      "digest": "sha256:bd34172186843b4cdfcda32263fc92c614fabf2ca32e463a5d844de890e8c922",
+      "quote": null,
+      "segment_id": null,
+      "source_id": "e57",
+      "span": {
+        "end": 10258,
+        "start": 10169,
+        "unit": "utf16"
+      }
+    }
+  }
+]
+```
+
+返修改为选择完整 e57/s51，恢复了解析句，但没有删除或调整 source_coverage 中的 [10169,10258) superseded；因此仍采用同一文字又声明撤回，被确定性冲突检查拒绝。
+
+call-16 拒绝原文：
+```text
+source_coverage[0] classifies actively adopted text as superseded (this passage is still a source of an IR content item in this batch: revise that item's sources so it no longer adopts the text, or remove this entry)
+```
+
+本批 call-11/12/13/14/15/16 共 6 次后结束：IR 阶段下一次完整路径需 IR+CI+check=3 次，6+3>每批上限8；最后 status=validation_failed,error_code=invalid_candidate。不是总48次额度耗尽，也不是连续两次 IR 形状拒绝的规则。没有提交或派发。
+
+前两次只作定位背景：call-11 edit 移出整个 normalize [9595,10894)，在新 r-normalize-corrected 中继续选择截断后的段，superseded 与其他有效选择冲突；call-12 缺少对旧来源的完整处置。call-13 改成 revise，将同一错误切口复制回 r-transform-basic-additions，才通过机械检查并进入核对。call-11/12 完整原响应已另存。
+
+2. R5：同一 checksum/sidecar 更新与 lineage 新增的六次 IR 重试
+
+下表所有数字为 UTF-16 半开区间。每项完整拒绝、响应、处置和原文均见 call-21.json 至 call-26.json；源门未通过的22/23没有实际 prepared，不把推算范围说成已发生的 prepare 判断。
+
+| call | 修改目标 | 选择器 | 拒绝原文 | 实际冲突或缺口 | 下一次修改 |
+|---|---|---|---|---|---|
+
+| 21 | 更新 ingest/transform/verify/manifest/pipeline，新增 lineage；revise | r-ingest:e1/[335,2680)；r-transform:e1/[2680,16814)；处置用两个 exact quote | source_coverage[0] classifies actively adopted text as superseded (this passage is still a source of an IR content item in this batch: revise that item's sources so it no longer adopts the text, or remove this entry) | 撤回与采用重叠：[2533,2678) 属 r-ingest；[16714,16812) 属 r-transform。 | 22 清空 source_coverage，并把 r-ingest 原来源换成不存在的 :none。 |
+
+| 22 | 同一更新包；revise | r-ingest.sources[0] = e1, segment_id=":none" | IR sources do not resolve; 1 reference(s) failed the source gate for this batch. Showing all 1: e1 (segment_id=:none): segment_unknown. Each selection needs one source_id from the supplied source_segments and exactly one selector that exists in that source: a segment_id from its list, or a span inside its text. (the message lists each rejected reference with the selector the answer used; correct every one of them to a segment_id or span that exists in the supplied source_segments, or drop that selection) | 不存在此 segment，源门停止；没有实际物化或处置缺口裁决。 | 23 恢复 ingest 的 [335,2680)；lineage 引用改成 e155:s18，transform 的旧来源缩到 [2680,16714)。 |
+
+| 23 | 同一更新包；revise | r-lineage.sources[12] = e155, segment_id="e155:s18" | IR sources do not resolve; 1 reference(s) failed the source gate for this batch. Showing all 1: e155 (segment_id=e155:s18): segment_unknown. Each selection needs one source_id from the supplied source_segments and exactly one selector that exists in that source: a segment_id from its list, or a span inside its text. (the message lists each rejected reference with the selector the answer used; correct every one of them to a segment_id or span that exists in the supplied source_segments, or drop that selection) | request 中提供的是独立 source_id=e155 与 segment_id=s18，范围[3271,3470)；没有 e155:s18，源门停止。 | 24 改回 s18，旧条目改用多个 segment 重新列举，仍 source_coverage:[]。 |
+
+| 24 | 同一更新包；revise | r-ingest 选择 e1/s4–s9，不含 s3；其余旧段重新列举 | previously normative source e1 was dropped without an explicit superseded disposition and current change basis | 实际首次历史缺口是 e1/[335,350)，去空白为[335,348) = "### Ingestion"；不是整条 e1，也不是 checksum 算法正文缺失。 | 25 仍漏 s3；删除 ingest/s9、transform/s34、verify/s37、manifest/s40，并分别声明 superseded。 |
+
+| 25 | 同一更新包；revise，并扩大旧段撤回 | r-ingest 选 s4–s8；source_coverage 为 e1/s9,s34,s37,s40，basis 均 e155/s4 | previously normative source e1 was dropped without an explicit superseded disposition and current change basis | 首次未处置缺口仍是[335,348)标题。另有真实语义过度撤回：s9含 rejected 输出与排序，s37含退出码/输出字符串，s40含 manifest JSON/排序/时间要求。 | 26 不再提交 revise/create，改为 preserve；四项 superseded 原样保留。 |
+
+| 26 | 撤回这些修改动作，仅 preserve | preserve.sources=e155/s4；source_coverage 仍 e1/s9,s34,s37,s40 | source_coverage[0] classifies actively adopted text as superseded (this passage is still a source of an IR content item in this batch: revise that item's sources so it no longer adopts the text, or remove this entry) | preserve 保留已提交 R4 的 IR，不继承尚未提交的上一版提案；s9/[2068,2680)全段仍被 r-ingest 采用，与首项 superseded 冲突。其他三段也重叠。 | 无下一次：本批已6次，继续完整IR→CI→check需要3次，6+3>8。未进入CI/check/dispatch。 |
+
+
+call-21 原始撤回字段（quote 在显式 source_coverage 中实际可用；不要误说整份 strict 输出都禁止 quote）：
+```json
+[
+  {
+    "basis": [
+      {
+        "digest": "sha256:a615a8d6b5cb2d2ffcb6adb371392ece2bfb867a64f2da9c9b9728b1c6df539f",
+        "quote": null,
+        "segment_id": "s4",
+        "source_id": "e155",
+        "span": null
+      }
+    ],
+    "disposition": "superseded",
+    "reason": "The current delegation removes ingest sidecar generation and requires removal of a stale `<output>.sha256` sidecar.",
+    "requirements": [],
+    "source": {
+      "digest": "sha256:50b91439a283cfbf262f069a4201c7851ed828a30741c65cbb8eb3d1419eaab3",
+      "quote": "- A SHA-256 checksum of the output file (computed on the raw bytes) is written to `<output>.sha256` as a single hex string followed by a newline.",
+      "segment_id": null,
+      "source_id": "e1",
+      "span": null
+    }
+  },
+  {
+    "basis": [
+      {
+        "digest": "sha256:a615a8d6b5cb2d2ffcb6adb371392ece2bfb867a64f2da9c9b9728b1c6df539f",
+        "quote": null,
+        "segment_id": "s4",
+        "source_id": "e155",
+        "span": null
+      }
+    ],
+    "disposition": "superseded",
+    "reason": "The current delegation removes transform sidecar generation and requires removal of a stale `<output>.sha256` sidecar.",
+    "requirements": [],
+    "source": {
+      "digest": "sha256:50b91439a283cfbf262f069a4201c7851ed828a30741c65cbb8eb3d1419eaab3",
+      "quote": "- After all transformations, write the result CSV to `<output>`, its SHA-256 to `<output>.sha256`.",
+      "segment_id": null,
+      "source_id": "e1",
+      "span": null
+    }
+  }
+]
+```
+
+call-24/25 区间审计，按旧 source 减去所有当前 content source 与显式 superseded 的并集，只去掉边缘空白：
+
+```json
+{
+  "24": [
+    {
+      "item": "r-ingest",
+      "source_id": "e1",
+      "start": 335,
+      "end": 348,
+      "text": "### Ingestion"
+    }
+  ],
+  "25": [
+    {
+      "item": "r-ingest",
+      "source_id": "e1",
+      "start": 335,
+      "end": 348,
+      "text": "### Ingestion"
+    }
+  ]
+}
+```
+
+call-25 原始四项 source_coverage：
+```json
+[
+  {
+    "basis": [
+      {
+        "digest": "sha256:a615a8d6b5cb2d2ffcb6adb371392ece2bfb867a64f2da9c9b9728b1c6df539f",
+        "quote": null,
+        "segment_id": "s4",
+        "source_id": "e155",
+        "span": null
+      }
+    ],
+    "disposition": "superseded",
+    "reason": "The old ingestion sidecar-checksum instruction is superseded by the current direction to stop producing sidecars and remove any stale sidecar.",
+    "requirements": [],
+    "source": {
+      "digest": "sha256:50b91439a283cfbf262f069a4201c7851ed828a30741c65cbb8eb3d1419eaab3",
+      "quote": null,
+      "segment_id": "s9",
+      "source_id": "e1",
+      "span": null
+    }
+  },
+  {
+    "basis": [
+      {
+        "digest": "sha256:a615a8d6b5cb2d2ffcb6adb371392ece2bfb867a64f2da9c9b9728b1c6df539f",
+        "quote": null,
+        "segment_id": "s4",
+        "source_id": "e155",
+        "span": null
+      }
+    ],
+    "disposition": "superseded",
+    "reason": "The old transform sidecar-checksum instruction is superseded by the current direction to stop producing sidecars and remove any stale sidecar.",
+    "requirements": [],
+    "source": {
+      "digest": "sha256:50b91439a283cfbf262f069a4201c7851ed828a30741c65cbb8eb3d1419eaab3",
+      "quote": null,
+      "segment_id": "s34",
+      "source_id": "e1",
+      "span": null
+    }
+  },
+  {
+    "basis": [
+      {
+        "digest": "sha256:a615a8d6b5cb2d2ffcb6adb371392ece2bfb867a64f2da9c9b9728b1c6df539f",
+        "quote": null,
+        "segment_id": "s4",
+        "source_id": "e155",
+        "span": null
+      }
+    ],
+    "disposition": "superseded",
+    "reason": "The old verification SHA-256 algorithm instruction is superseded by the current BLAKE2b-256 algorithm instruction.",
+    "requirements": [],
+    "source": {
+      "digest": "sha256:50b91439a283cfbf262f069a4201c7851ed828a30741c65cbb8eb3d1419eaab3",
+      "quote": null,
+      "segment_id": "s37",
+      "source_id": "e1",
+      "span": null
+    }
+  },
+  {
+    "basis": [
+      {
+        "digest": "sha256:a615a8d6b5cb2d2ffcb6adb371392ece2bfb867a64f2da9c9b9728b1c6df539f",
+        "quote": null,
+        "segment_id": "s4",
+        "source_id": "e155",
+        "span": null
+      }
+    ],
+    "disposition": "superseded",
+    "reason": "The old manifest SHA-256 algorithm instruction is superseded by the current BLAKE2b-256 algorithm instruction.",
+    "requirements": [],
+    "source": {
+      "digest": "sha256:50b91439a283cfbf262f069a4201c7851ed828a30741c65cbb8eb3d1419eaab3",
+      "quote": null,
+      "segment_id": "s40",
+      "source_id": "e1",
+      "span": null
+    }
+  }
+]
+```
+
+实际提供的混合段全文与范围：
+```json
+[
+  {
+    "segment_id": "s3",
+    "source_id": "e1",
+    "span": {
+      "end": 350,
+      "start": 335,
+      "unit": "utf16"
+    },
+    "text": "### Ingestion\n\n"
+  },
+  {
+    "segment_id": "s9",
+    "source_id": "e1",
+    "span": {
+      "end": 2680,
+      "start": 2068,
+      "unit": "utf16"
+    },
+    "text": "- Rows that fail validation are written to `<output>.rejected` (same CSV format, with an appended `rejection_reason` column). Valid rows are written to `<output>` in CSV format.\n- Output rows are sorted by the primary key columns in declaration order: first by the first primary key column, then by the second, etc. Each column is sorted in ascending order using its declared type (numeric sort for int/float, lexicographic for string, chronological for datetime).\n- A SHA-256 checksum of the output file (computed on the raw bytes) is written to `<output>.sha256` as a single hex string followed by a newline.\n\n"
+  },
+  {
+    "segment_id": "s34",
+    "source_id": "e1",
+    "span": {
+      "end": 16814,
+      "start": 16714,
+      "unit": "utf16"
+    },
+    "text": "- After all transformations, write the result CSV to `<output>`, its SHA-256 to `<output>.sha256`.\n\n"
+  },
+  {
+    "segment_id": "s37",
+    "source_id": "e1",
+    "span": {
+      "end": 17113,
+      "start": 16880,
+      "unit": "utf16"
+    },
+    "text": "- Reads `<path>`, computes SHA-256, compares against the hex string in `<checksum>`.\n- Exit code 0 and prints `VERIFIED` to stdout if they match; exit code 1 and prints `MISMATCH expected=<expected> actual=<actual>` if they differ.\n\n"
+  },
+  {
+    "segment_id": "s40",
+    "source_id": "e1",
+    "span": {
+      "end": 17647,
+      "start": 17174,
+      "unit": "utf16"
+    },
+    "text": "- Recursively scans `<dir>` for all `.csv` files.\n- For each file, computes its SHA-256.\n- Writes a JSON manifest to `<output>`:\n  ```json\n  {\n    \\\"generated_at\\\": \\\"<RFC 3339 UTC timestamp>\\\",\n    \\\"files\\\": [\n      {\\\"path\\\": \\\"relative/to/dir/file.csv\\\", \\\"sha256\\\": \\\"abcdef...\\\", \\\"rows\\\": 42, \\\"size_bytes\\\": 1234}\n    ]\n  }\n  ```\n- The `files` array is sorted by `path` lexicographically.\n- The `generated_at` timestamp must reflect the actual time of generation.\n\n"
+  }
+]
+```
+
+call-26 原始 preserve：
+```json
+[
+  {
+    "action": "preserve",
+    "reason": "Retain the proposed task and requirement revisions for the checksum behavior change and lineage capability; record the omitted prior transform-sidecar rule as superseded by the current change.",
+    "sources": [
+      {
+        "digest": "sha256:a615a8d6b5cb2d2ffcb6adb371392ece2bfb867a64f2da9c9b9728b1c6df539f",
+        "quote": null,
+        "segment_id": "s4",
+        "source_id": "e155",
+        "span": null
+      }
+    ]
+  }
+]
+```
+
+不能把六次概括为六种业务意图，也不能把六次都判成无害账目阻塞：相同更新包在反复重写；22/23是选择器拼写失败，24是标题未保留，25添加了错误的整段撤回，21/26采用与撤回冲突。
+
+revise 让模型重复列举全部未变旧来源，再另填删掉的范围、basis、reason；26的 preserve 还错误地以为可以保留未提交提案。代码在 edit 中已承担旧区间相减、保留其余来源、合并新增、物化、为未被任何当前条目采用的删除余段生成 superseded。模型仍要判断哪些旧含义真正不再适用，以及修改依据；不能把来源差分直接当作撤回。
+
+3. 严格投影排除 quote 的现行位置与实际发送说明
+
+src/model/candidate-schema-strict.ts:34–53 定义 source_ref_with_quote 两分支，名字沿用但实际仅 segment_id / span；:205,209 的 content create/revise 选择该定义；:316 覆盖共享定义。src/model/candidate-schema.ts:471–473 的 edit remove/add/basis 同样指向此定义。共有 source_ref 没有全局删 quote，source_coverage 仍用共有源引用，这解释了 call-21 的成功 quote 定位。
+
+schema 现行理由（原注释）：
+```text
+A hand-written quote is deliberately absent: it is
+the selector a model is most likely to reproduce wrongly, and its failure
+mode (an unresolvable citation) costs a whole management batch.
+```
+
+模型实际收到的 reference_contract：
+```text
+Ref = { id: string, revision: integer>=0, digest: string }.
+SourceRef = { source_id: string, digest: string, segment_id?: string, span?: { unit:"utf16", start: integer, end: integer } }. For content create/revise address the selected text with exactly one selector: the supplied segment_id for a whole segment, or an explicit span { unit:"utf16", start, end } for a sub-range (code-verified: it must lie inside that source's text). A hand-written quote is not available in this response: a copied passage cannot be verified, while the code checks the range you give. Never supply more than one selector. When the host passes a whole instruction as one command-line argument it may wrap that text in quotes; those wrapper bytes are transport syntax, not the user's requirement, so select the text inside them. Segment IDs are local to their source event, never semantic task IDs.
+A valid SourceRef.source_id is an event id in events or source_events; the IR stage shows short event aliases instead (e1, e2 … derived from the run's event journal), so an IR-stage reference must name one of the aliases that request showed or a full event id this run records — the code restores the full identity, and an alias the request did not show is rejected with the reason alias_not_offered. Copy the alias exactly; never retype or invent one, and never copy a source id out of the example answer, whose ids are placeholders. events are the current triggers; source_events are prior user text for checking retained meaning, not new instructions. A contract field name, file path, or role name is not a source.
+An execution return event is evidence for assessments, execution_decisions and checks only. Never select it into IR content and never list it in source_coverage: those carry the user's own text.
+event_source_refs contains code-computed digests for events and source_events. Copy those values for source citations; do not calculate or invent a digest.
+Choose local_ref and new atom_id/binding_id/output_id values for new objects. For existing objects copy their supplied identities and expected revisions; raise an Atom revision when changing its content. Management assigns compiled identities and computes digests. Never fabricate a Ref to an object that is not supplied.
+```
+
+模型实际收到的 edit / 源保留 / source_coverage 说明（从投影后合同逐行提取）：
+
+```text
+- revise: { action:"revise", target:"task"|"current_scope"|"binding"|"output"|"content", id, expected_revision, value:<complete new value>, sources } For a local content source edit that keeps the item's other sources, use edit instead of re-declaring the whole item: { action:"edit", target:"content", id, expected_revision, remove:[SourceRef], add:[SourceRef], basis:[SourceRef], reason }. For pure addition use remove: [] and nonempty add; basis and reason remain required. At least one of remove or add must be nonempty. remove addresses fragments inside this item's current sources; code keeps everything else, merges add and materializes the new text. Code writes withdrawal records only for removed fragments, so do not also send a superseded entry for the same removal. basis may cite any source still available to this batch, including earlier delegations, not only this batch's events.
+
+For content create/revise, sources selects the actual requirement text stored in canonical IR.content.text; value.text only names or explains that item and is stored separately. Select complete operative passages and needed definitions, including interfaces, literal strings, formulas, alternatives, defaults and exceptions, not representative quotations or just a title. Use the same selected rules and still-current assigned requirements to write the applicable Atoms, not the content labels. If user-specified behavior in an Atom is absent from that requirement set, correct the IR selection and assignment; if a selected rule applies to an Atom, put its actual behavior in task. Prefer supplied source_segments; use an explicit span for a necessary sub-segment. Copy supplied span/segment_id selectors for unchanged content. repair_context expresses valid content selections in this returnable form; do not replace them with invented quotations. Other retained source references may use spans as allowed by their schema. Unavailable or stale sources must be reconciled with current input, not blindly retained.
+
+Selecting sources in content create/revise already declares their normative role and exact IR destination; management derives that mapping, so do not repeat selected normative passages in source_coverage. source_coverage is REQUIRED (use [] when no explicit dispositions are needed) and records explicitly classified unselected current text or withdrawn old text: source, disposition (context/material/management/unresolved/superseded), requirements:[], reason, basis. Unselected text remains available without code assigning it a role. To withdraw old text, use superseded with the current change as basis. A heading required to understand a rule belongs with its IR sources. Non-normative entries must not overlap active normative text. Selecting the text is what puts a rule into the plan. Neither absent nor null source_coverage is valid. Group fields such as assessments, checks, coverage, execution_decisions and questions belong inside their group, never at the root.
+
+On updates retain unchanged content, revise changed items, create new requirements, retire withdrawn ones, and replace compilation before dispatch. Do not reactivate historical instructions. If an old normative passage is withdrawn or replaced, add a superseded source_coverage entry selecting exactly the dropped old text, empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry. Retained parts of a mixed paragraph can use explicit spans. A directive describing how to revise a rule is management text; the active rule text it supplies is normative. Explicitly preserve unchanged subrules instead of treating a whole old paragraph as withdrawn without cause. Coverage accounting proves preservation and declared roles, not semantic correctness.
+```
+
+内部已有定位代码 src/core/intent-compiler-v2.ts:2273–2286：对 quote 做 text.indexOf，缺失或二次出现报 quote_unresolved；唯一匹配后以 JS 字符串长度算 UTF-16 span。不用模型手算该位置。s51 计算段内待更新子句唯一，已有算法可定位它；但这里没有开放 quote 或改候选，无法据此宣称真实模型会成功。
+
+范围检查只能证明数字落在文本内，不能证明端点落在目标子句边界；本次 s51 的错误 span 完全合法。合同“a copied passage cannot be verified”表述超出代码事实：代码能验证存在与唯一性，无法验证选择含义是否正确；数值 span 同样不保证语义选择正确。quote 也有复制错误和重复歧义风险。现行注释是当时采用的理由，本次材料没有证明它比模型手算 span 更可靠。
+
+4. R1 唯一失败 c148：执行实现不符合明确 ntile 分组公式
+
+原始要求相关完整条目、示例及输出规则：
+```text
+    - `ntile`: Divide the partition into `n` roughly equal groups numbered 1 through `n`. Additional field: `"n"` (positive integer). If the partition has `k` rows, the first `k mod n` groups have `ceil(k/n)` rows each, and the remaining groups have `floor(k/n)` rows each. Example:
+      ```json
+      {"op": "window", "function": "ntile", "n": 4, "partition_by": [], "order_by": [{"column": "id", "order": "asc"}], "as": "quartile"}
+      ```
+
+    Output: all original columns in their original order, plus the new column appended. Output rows preserve the original input row order (not the partition order).
+
+    Formatting: `rank`, `dense_rank`, `row_number`, and `ntile` results are formatted as integers (no decimal point). `running_sum`, `running_avg`, `lag`, and `lead` results are formatted without unnecessary trailing zeros.
+
+```
+
+prepared.ir 的 r-transform revision0 选择 e1/[2680,16814)；该 item 全文逐字附入最终 a-dpipe revision0 task，goal_refs 包含对应身份版本和摘要。原文分组公式未丢失；核对 consistent。相关最终字段已保存 r1-final-ntile.json。
+
+官方用例输入、recipe、期望及取行代码：
+```text
+# 64. Window ntile
+# =============================================================================
+echo ""
+echo "=== 64. Window ntile ==="
+if [ "$BUILD_OK" = "1" ]; then
+  DIR=/tmp/test_window_ntile
+  mkdir -p "$DIR"
+
+  cat > "$DIR/input.csv" << 'EOF'
+id,value
+1,10
+2,20
+3,30
+4,40
+5,50
+6,60
+7,70
+EOF
+
+  cat > "$DIR/recipe.json" << 'EOF'
+[{"op": "window", "function": "ntile", "n": 3, "partition_by": [], "order_by": [{"column": "id", "order": "asc"}], "as": "tile"}]
+EOF
+
+  $DPIPE transform --input "$DIR/input.csv" --recipe "$DIR/recipe.json" --output "$DIR/output.csv" --seed 42 2>/dev/null
+
+  # Row 3 (line 4): id=3,value=30,tile=1
+  ROW_3=$(sed -n '4p' "$DIR/output.csv")
+  check "window ntile: id=3 tile=1" "3,30,1" "$ROW_3"
+
+  # Row 4 (line 5): id=4,value=40,tile=2
+  ROW_4=$(sed -n '5p' "$DIR/output.csv")
+  check "window ntile: id=4 tile=2" "4,40,2" "$ROW_4"
+
+  # Row 6 (line 7): id=6,value=60,tile=3
+  ROW_6=$(sed -n '7p' "$DIR/output.csv")
+  check "window ntile: id=6 tile=3" "6,60,3" "$ROW_6"
+```
+
+R1 实际实现 main.go:936：
+```text
+			case "ntile":
+				if o.N <= 0 {
+					return t, invalid("ntile n must be positive")
+				}
+				gsize := (len(is) + o.N - 1) / o.N
+				g := (pos / gsize) + 1
+				if g > o.N {
+					g = o.N
+				}
+				v = strconv.Itoa(g)
+```
+
+官方实际失败记录（未重跑）：
+```text
+CASE_RESULT case_id=c148 origin_step=round-1 requirement_ref=transform.window case_type=core status=fail intent="Window ntile" scenario="window ntile: id=6 tile=3" input="n/a" expected="window ntile: id=6 tile=3" actual="expected=6,60,3 actual=6,60,2" failure_reason="expected=6,60,3 actual=6,60,2"
+```
+
+k=7,n=3：原文要求先 k mod n=1 组有3行，余下两组各2行，即3/2/2；代码固定 gsize=ceil(7/3)=3，分成3/3/1。id6的 pos=5，(5/3)+1=2，因此输出6,60,2，官方要求6,60,3。原文与测试一致，最终载荷完整，归因执行器算法实现错误；无需据此修改管理接口或要求。
+
+5. 证据与代码核验
+
+以上8个引用源码文件与运行冻结源码 SHA256 完全一致；见 code-hashes.json。没有新测试；只读核实实际 prepared、原文与字节范围，不按 finding 的对象名或措辞单独定责。

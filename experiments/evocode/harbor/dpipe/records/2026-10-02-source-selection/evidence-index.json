@@ -1,0 +1,191 @@
+{
+  "record_date": "2026-10-02",
+  "purpose": "Completed-run read-only source-selection evidence; no interface changes or additional execution.",
+  "run_id": "intent-luna-dpipe-full-r1r5-20261002-053740-e6308341",
+  "implementation_commit": "c6e1f6444a3f9518a8dc11e07134bb6469b72e62",
+  "run_dir": "D:\\huawei\\EvoCodeBench\\harbor_runs\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341",
+  "data_dir": "D:\\huawei\\EvoCodeBench\\harbor_intent_data\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341",
+  "results_dir": "D:\\huawei\\EvoCodeBench\\harbor_results\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341",
+  "original_evidence_dir": "D:\\huawei\\EvoCodeBench\\harbor_runs\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\\provenance\\source-selection-evidence",
+  "matching_checkpoints_dir": "D:\\huawei\\EvoCodeBench\\harbor_checkpoints\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341",
+  "matching_checkpoints_manifest_sha256": "b973318a41aee5ec02fb2153e10df6a95ac9d84fa14d9cfac05b9fa858dde933",
+  "official_round_results": [
+    {
+      "round": 1,
+      "official_cases": {
+        "total": 219,
+        "passed": 218,
+        "failed": 1
+      },
+      "official_reward": "0.0",
+      "new_dispatches": 1,
+      "call_ids": [
+        "call-1",
+        "call-2",
+        "call-3",
+        "call-4",
+        "call-5",
+        "call-6"
+      ]
+    },
+    {
+      "round": 2,
+      "official_cases": {
+        "total": 481,
+        "passed": 481,
+        "failed": 0
+      },
+      "official_reward": "1.0",
+      "new_dispatches": 1,
+      "call_ids": [
+        "call-7",
+        "call-8",
+        "call-9",
+        "call-10"
+      ]
+    },
+    {
+      "round": 3,
+      "official_cases": {
+        "total": 535,
+        "passed": 484,
+        "failed": 51
+      },
+      "official_reward": "0.0",
+      "new_dispatches": 0,
+      "call_ids": [
+        "call-11",
+        "call-12",
+        "call-13",
+        "call-14",
+        "call-15",
+        "call-16"
+      ]
+    },
+    {
+      "round": 4,
+      "official_cases": {
+        "total": 639,
+        "passed": 608,
+        "failed": 31
+      },
+      "official_reward": "0.0",
+      "new_dispatches": 1,
+      "call_ids": [
+        "call-17",
+        "call-18",
+        "call-19",
+        "call-20"
+      ]
+    },
+    {
+      "round": 5,
+      "official_cases": {
+        "total": 680,
+        "passed": 604,
+        "failed": 76
+      },
+      "official_reward": "0.0",
+      "new_dispatches": 0,
+      "call_ids": [
+        "call-21",
+        "call-22",
+        "call-23",
+        "call-24",
+        "call-25",
+        "call-26"
+      ]
+    }
+  ],
+  "management_calls_total": 26,
+  "management_usage_total": {
+    "input_tokens": {
+      "sum_reported": 1744703,
+      "missing_records": 0
+    },
+    "output_tokens": {
+      "sum_reported": 85021,
+      "missing_records": 0
+    },
+    "reasoning_tokens": {
+      "sum_reported": 34324,
+      "missing_records": 0
+    },
+    "cache_read_tokens": {
+      "sum_reported": 96768,
+      "missing_records": 0
+    },
+    "cache_write_tokens": {
+      "sum_reported": 0,
+      "missing_records": 0
+    },
+    "cost": {
+      "sum_reported": 0,
+      "missing_records": 0
+    }
+  },
+  "cost_note": "Amounts are sums of management_calls[].usage.cost (SDK reported zero in this environment). A reported zero is not an independently verified billing amount. Missing usage is recorded explicitly. Executor usage is separate.",
+  "findings": {
+    "r3": "call-13 revise uses numeric source selectors cutting ParseFloat; actual prepared IR and Atom contain the cut. call-15 D7 is supported. call-16 restores s51 while retaining an overlapping superseded declaration. Six calls leave fewer than the three calls required for IR/CI/check.",
+    "r5": "Six retries of the same checksum/sidecar/lineage update: source selector failures, an unaccounted Ingestion heading, overlapping adoption/withdrawal, and over-broad withdrawal of mixed old passages. No CI/check/dispatch.",
+    "r1": "c148 ntile: explicit rule and final Atom specify uneven group sizes 3/2/2 for seven rows and three tiles; implementation fixes group size at three, producing 3/3/1. Executor implementation failure.",
+    "quote_scope": "Strict content create/revise sources and edit remove/add/basis offer segment/span only. Shared SourceRef and explicit source_coverage still accept quote; call-21 quotes resolved. Existing resolver checks unique exact matches and computes UTF-16 spans."
+  },
+  "record_files": {
+    "REPORT.txt": {
+      "sha256": "0435ec2c104c7f579868012fc9406194e02835896882a67cd1d9f1f19b08cf04",
+      "bytes": 44358
+    },
+    "source-selection-evidence.zip": {
+      "sha256": "f14d2484bc8edc91e8631a3586ce80034f262ab48cf17436c19638f7fba51661",
+      "bytes": 1216869,
+      "format": "zip/deflate",
+      "entries": 41,
+      "contents": "Exact copies of the 40 existing evidence files plus their SHA256.json manifest."
+    }
+  },
+  "original_evidence_sha256": {
+    "call-11-raw.json": "e404cc0f228b9ec572164dd34061a9567e4126344109b2d513141916cae8657c",
+    "call-11-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-11-sent-request.txt": "2af8e6112dc0084e5297291ace72a098ec55160015c8267613499f8e4de39ef8",
+    "call-12-raw.json": "1c453d73c5b2b968c66d17e23d137edcb294474d615921e77de8621cf500ff39",
+    "call-12-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-12-sent-request.txt": "cfdf8c851bb4bae7a07d09176d45305a65bcd57e3c31e7ed50ef95acf2855db0",
+    "call-13-raw.json": "6046524b4a078517983c46c7cd32ae381c5af35855ae949002f690978d9c6fbc",
+    "call-13-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-13-sent-request.txt": "de2575dbe5baba152f7a6ef1f9be8079776f8084f87d7f8b22a1281b8648aa54",
+    "call-15-materialized-content.json": "47e4f0f14a858ee076d9473b67637da47d6fc5a474a19b4f00b87d6ffc313b49",
+    "call-15-prepared-and-finding.json": "9565667c3c93aada1ce2df686002c1166fb05cfb545f6008bbab82444213f6b2",
+    "call-16-raw.json": "c3ca3c5dc484a75e1c0fc7bfa00b834d5f8ade11f2407297cc778f76a0237368",
+    "call-16-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-16-sent-request.txt": "4d91350b9bf5bcfe3ca973bb986fc095e35fcb93edb40a200ce2ead15ebf7788",
+    "call-21-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-21-sent-request.txt": "9828a10e21bfbe273b77f4bc587001d1fd4ff3d6c90a175039f138ffb5472831",
+    "call-21.json": "81298ffe24a8db01150c5069b08fc02de09cec606fbe6ce2c55e709b19f290e5",
+    "call-22-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-22-sent-request.txt": "efbceefa43c088b7dbbf8d110ac67523591c3488edf11cbfd3eab75002bd758a",
+    "call-22.json": "814ce189d44b8241f42bee0b59c7fb48b4cf84d40566b02e622dcd03ee1e476a",
+    "call-23-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-23-sent-request.txt": "b7a5f5b2baf68b061a8e4b51790ab958ada94645ac89b0c340b4555e2d0734a4",
+    "call-23.json": "e2466cdd9403a97a6a758630cf90ad128b69278f7b614427ab743012bcebb9e1",
+    "call-24-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-24-sent-request.txt": "9c96bfbe700de57aadb29f118071e2b9e5c5a1bb61cb5e2f499b18657b1e632a",
+    "call-24.json": "38155e3ef578273b4438c81bad6a8a3cd067ffecb5b7b12364d1bbf0ddbc9706",
+    "call-25-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-25-sent-request.txt": "38a2adb39d479f6209999a8f5770e5fcbc3d200c67ea6626fffd08157cce6fd5",
+    "call-25.json": "48c2884c77e65478ba6ba46ed59ae655284965d6a7f66cc07fe1ef5a90497517",
+    "call-26-sent-contract.json": "a4ca3ecdd4a66db3c7ddc7dd68ee8a1cfaa36a5a9bd308479e1c40d521e54f81",
+    "call-26-sent-request.txt": "a3fb2e680952705c2caeb64920c3eb56aba411ecd323fa6bafc9ee7d51654315",
+    "call-26.json": "233d113a4b04d44d0a0e8945b49b234a15ab9afeb8b51fd2af59480fc77ec514",
+    "code-hashes.json": "9fb529ee2baa0bcfcb2a5574ed0d3a8ba2c63a056b298045ceff713383837ebf",
+    "input-hashes.json": "552dc6a85ce8f254ab56bbec573546111e556f875778ebb0f92b3dff8df26170",
+    "original-user-events.json": "b0d07fa1a2e7d6998d94d3d9aa2b0aff595e1839797b89d7d246164dccc9eb7a",
+    "r1-final-ntile.json": "a933ade877993df65e276ca020cfa63f7ecdaa0a21789b68ee7235956cdec5a1",
+    "r3-related-fields.json": "00f1799804c24519e268078f18e6724d57d8b4086323bec30c51c5399460dd34",
+    "r5-range-audit.json": "b17a595bbcce0ada868ffc7f272d1d0003319f7bda134cfd88c5554bda13c8b0",
+    "REPORT.txt": "0435ec2c104c7f579868012fc9406194e02835896882a67cd1d9f1f19b08cf04",
+    "sent-request-provenance.json": "800816cc293c7f2b4632606214f07c9f26f11dc894cbe1541847930e940a04dd"
+  },
+  "validation": "Verified original report and source-file hashes, archive CRC and each archived evidence hash. No compiler tests, model calls or benchmark reruns.",
+  "documentation_policy": "CURRENT-DESIGN.md, spec.md and root navigation remain local ignored documents; the report, evidence archive, index and HANDOFF update are committed without changing ignore rules."
+}
