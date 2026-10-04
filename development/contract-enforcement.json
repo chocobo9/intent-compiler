@@ -1,0 +1,2095 @@
+{
+  "generated_by": "hand-written; validated by experiments/evocode/contract-check.mjs",
+  "note": "2026-09-28 按当前合同正文重建被撤回版本留下的编号映射；机械检查、模型语义职责分开记录。阶段协议由 generation-schema / parent-generation 实现，旧合同枚举仍含兼容接口说明，不把离线映射当语义验证。",
+  "states": {
+    "code": "机械环节会判，能指到具体函数/消息；违反会拒绝或改写",
+    "both": "机械环节与独立核对都会判",
+    "checker": "只有独立核对会判（D1–D7）；机械层看不出来",
+    "partial": "判了一部分，note 写明哪一部分没人判",
+    "advice": "只写进给模型的话（合同/提示词），没有任何环节检查模型是否照做",
+    "none": "设计里写了，但既没写进给模型的话，也没有任何判定",
+    "contradicted": "代码做的事与这句话相反",
+    "superseded": "被设计文档后文的决定取代，这一句已经过时",
+    "deferred": "设计明确写“首版不做/尚未支持”，不是缺口"
+  },
+  "groups": [
+    {
+      "prefix": "K.",
+      "state": "advice",
+      "where": [
+        {
+          "file": "src/model/candidate-check-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "note": "核对员被要求怎么判，绝大多数没有任何验证：核对本身是一次模型调用，只有它的引用能被机械解析（见逐条标注）。"
+    },
+    {
+      "prefix": "C.candidate_shape",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "additionalProperties: false"
+        },
+        {
+          "file": "src/core/intent-contract.ts",
+          "match": "validateCandidate"
+        }
+      ],
+      "note": "候选 JSON 的形状由 AJV schema 判，无法解析或多余字段在 propose 阶段就失败。"
+    },
+    {
+      "prefix": "C.reference_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "ref_or_source"
+        }
+      ],
+      "note": "Ref/SourceRef 的形状由 schema 判。"
+    },
+    {
+      "prefix": "C.compilation_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "compilation"
+        },
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "compiled_intent_id"
+        }
+      ],
+      "note": "reuse/replace 两个分支与 draft 的身份分配由 schema 加 buildCompiledIntents 判。"
+    },
+    {
+      "prefix": "C.ir_change_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-state-v2.ts",
+          "match": "unsupported create target"
+        },
+        {
+          "file": "src/core/intent-state-v2.ts",
+          "match": "unknown task"
+        }
+      ],
+      "note": "IR 变更先干跑（candidateIssues），失败按可修订拒绝并把原因回给模型。"
+    },
+    {
+      "prefix": "C.atom_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "atom_id"
+        },
+        {
+          "file": "src/core/intent-contract.ts",
+          "match": "atom authority must be this_execution"
+        }
+      ],
+      "note": "原子字段、字段形状、authority.lifetime/delegation 由 schema 判。"
+    },
+    {
+      "prefix": "C.atom_input_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "binding_id"
+        }
+      ],
+      "note": "inputs 条目形状由 schema 判；{ kind, ref, path } 这类形状过不了 required。"
+    },
+    {
+      "prefix": "C.atom_output_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "output_id"
+        }
+      ],
+      "note": "outputs 条目形状由 schema 判。"
+    },
+    {
+      "prefix": "C.judgment_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "judgment"
+        }
+      ],
+      "note": "intent_judgments 的形状与 status 枚举由 schema 判。"
+    },
+    {
+      "prefix": "C.checks_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "observed_in_candidate"
+        }
+      ],
+      "note": "checks 条目形状由 schema 判；内容对不对没人判（见 facts_to_recheck 的 unresolved-checks 一条）。"
+    },
+    {
+      "prefix": "C.coverage_contract",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "must record where the compiled work for task"
+        }
+      ],
+      "note": "coverage 条目的形状由 schema 判；replace 出原子必须有指向该任务/该原子的条目由 candidateIssues 判。"
+    },
+    {
+      "prefix": "S.",
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/generation-schema.ts",
+          "match": "strictSupersededBasis"
+        },
+        {
+          "file": "src/model/generation-schema.ts",
+          "match": "strictLocalSourceEdit"
+        }
+      ],
+      "note": "严格阶段投影：IR 阶段把本地来源编辑写进合同，IR 与 CI 共同采用放宽后的 superseded 依据措辞；投影函数在基础句失配时直接抛错，所以每条 S 条款都指向这两处替换。"
+    }
+  ],
+  "clauses": {
+    "S.ir.ir_change_contract.6": {
+      "state": "code",
+      "note": "严格 IR 阶段在 revise 行后追加本地来源编辑（edit：保留其余来源、依据与删除分离、处置记录由操作本身生成）。适用阶段：严格 IR；替代 C.ir_change_contract.6 的完整列举。",
+      "where": [
+        {
+          "file": "src/model/generation-schema.ts",
+          "match": "strictLocalSourceEdit"
+        }
+      ]
+    },
+    "S.ir.ir_change_contract.14": {
+      "state": "code",
+      "note": "严格 IR 阶段的撤回依据放宽为「任何仍适用的已提供来源」，不再限于本批事件。适用阶段：严格 IR；替代 C.ir_change_contract.14 中 «basis selecting the current user's change»。",
+      "where": [
+        {
+          "file": "src/model/generation-schema.ts",
+          "match": "strictSupersededBasis"
+        }
+      ]
+    },
+    "S.ci.ir_change_contract.14": {
+      "state": "code",
+      "note": "严格 CI 阶段不生成 edit，但审视父 IR 时读同一条撤回依据规则，避免继续按过期条款判断。适用阶段：严格 CI；与 S.ir.ir_change_contract.14 同文。",
+      "where": [
+        {
+          "file": "src/model/generation-schema.ts",
+          "match": "strictSupersededBasis"
+        }
+      ]
+    },
+    "K.rules.1": {
+      "state": "both",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "describeCapabilities"
+        },
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "records as missing material"
+        }
+      ],
+      "note": "“宿主说存在且可读的路径就是已提供材料，不是缺失绑定”：capabilities 由 runtime 从文件系统事实生成；机械层只在 IR 明确记为缺失材料时拒。"
+    },
+    "K.rules.3": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "records no destination"
+        }
+      ],
+      "note": "“coverage 写了 paused/unresolved 就按已记录对待”：机械层的 no-destination 关卡确实把 coverage 条目（不论 disposition）算作去向；但“除非原文要求现在就做”这一半没有判定。"
+    },
+    "K.rules.5": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "resolveCheckEvidence"
+        }
+      ],
+      "note": "“不要判惯例（输出个数、字段命名、冗余、task 与 goal 之分）”：依据惯例的反对通常引不到原文，因此解析不了、不阻断——这是间接强制；引得到原文的惯例式反对仍然能阻断。"
+    },
+    "D.146": {
+      "state": "checker",
+      "note": "“形成一个原子必须明确对象/输入/交付/共同要求/操作范围/前提/完成依据”由 D1/D2/D7 覆盖其可判部分；前提与完成依据的语义没有单独维度。"
+    },
+    "D.148": {
+      "state": "advice",
+      "note": "拆合判据（不作为通信机制、不按 prompt 文件/句子/调用次数拆、自查不算独立复核）没有任何判定。"
+    },
+    "D.151": {
+      "state": "checker",
+      "note": "“需要新用户决定/不同授权阶段的后续动作不能合成一次无条件执行”由 D4（paused/unresolved 要留去向）与 authority 求值共同覆盖一部分。"
+    },
+    "D.152": {
+      "state": "advice",
+      "note": "“拆分要有具体消费者和条件”——没有判定；Relation 只查形状。"
+    },
+    "D.153": {
+      "state": "advice",
+      "note": "“每项共同限制必须在适用原子中可解析”“不得用拆分绕过权限组合限制”——没有判定。"
+    },
+    "D.154": {
+      "state": "advice",
+      "note": "“只展开有来源依据、能改变当前行为的差异”——没有判定。"
+    },
+    "D.156": {
+      "state": "advice",
+      "note": "“变化后重新考虑任务形状”——没有判定；reuse/replace 的选择没人核。"
+    },
+    "D.170": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "is not covered by the atom Authority"
+        }
+      ],
+      "note": "“模型方法选择不能扩大 Authority”：每个操作都要落在该原子 Authority 的规则内，否则拒绝并记录 denied_calls。"
+    },
+    "D.172": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "is not covered by the atom Authority"
+        }
+      ],
+      "note": "“执行层不能因困难自增来源”：执行层只能调用被授予的操作，所以读新来源需要新的 read 权限；但“因困难自己换数据源”的语义判断没有判定点。"
+    },
+    "D.174": {
+      "state": "advice",
+      "note": "“有条件后继可以提前写入 Compiled Intent、前提未成立不启用权限”依赖 preconditions 为空才派发这一条（C.atom_contract.6）；“不确定的远期目标只留在 IR”没有判定。"
+    },
+    "D.185": {
+      "state": "advice",
+      "note": "“分歧影响用户结果或 Authority 时必须问区别问题，不要给架构候选让用户挑”——没有判定；questions 只要形状合法就能通过。"
+    },
+    "D.186": {
+      "state": "advice",
+      "note": "“一部分不明确、另一部分独立完整时，明确部分可接纳、争议部分待定，但不能机械逐句切开”——没有判定。"
+    },
+    "D.189": {
+      "state": "advice",
+      "note": "“几种解释都允许”的判断针对完整动作而非权限字段取交集；可逆不能解除隐私/权限约束——没有判定。"
+    },
+    "D.191": {
+      "state": "advice",
+      "note": "指代不明时只问最小区别问题、同时继续已明确的工作——没有判定；这条是示例文字。"
+    },
+    "D.199": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "predecessor"
+        }
+      ],
+      "note": "“后继须绑定实际使用的结果版本及范围”只做到 Relation 的 predecessor/successor 是合法 Ref；requires/conditions 不解析、不查顺序（见 facts_to_recheck 的关系一条）。"
+    },
+    "D.202": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "return \"unsupported\""
+        }
+      ],
+      "note": "“Relation 不能替代用户确认”：user_confirms 这一条件类型尚未实现，求值为 unsupported 并挡住动作，所以确认不会被 Relation 顶替。"
+    },
+    "D.203": {
+      "state": "advice",
+      "note": "“所需结论由合法且适用的旧结果满足时不要求重做前驱”——没有判定（assessments 整体没有判定点）。"
+    },
+    "D.209": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "already exists with different content"
+        }
+      ],
+      "note": "“原子内容被改变时保存新版本、旧内容不可覆盖”：必须升 revision，产物并列保留历史，台账按 (task, atom, revision) 成键。"
+    },
+    "D.225": {
+      "state": "none",
+      "note": "实现原则总述（IR 持续维护、原子是执行单元、权限属于具体执行、完成后收回活动权限、模型可补全但须有依据、反馈不能直接改写意图）——没有对应的判定点，是设计立场。"
+    },
+    "D.232": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/compiler-store-v2.ts",
+          "match": "compiled_revision"
+        }
+      ],
+      "note": "ir_revision 与各任务 compiled_revision 分开维护，IR 不变也能递增编译版本。"
+    },
+    "D.257": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "execution_inactive"
+        }
+      ],
+      "note": "“重启后未闭合执行先禁止继续、未查明效果不能重新发起同一外部动作”：执行身份与状态在 store 里，authorize 会按执行状态拒绝；跨进程恢复的实时核对还没有实现。"
+    },
+    "D.261": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "resolveSourceRefs"
+        }
+      ],
+      "note": "“所有持久 ID、版本和摘要由代码产生”：digest 已由代码改写，compiled_intent_id 由代码生成；但候选自己写的 Ref（goal_refs/intent_basis）不会被核对是否来自输入。"
+    },
+    "D.284": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "resolveSourceRefs"
+        }
+      ],
+      "note": "“模型不能把工具输出改标为用户授权”：source_id 只能指向本批事件，指向别处会被记 unresolved；但 unresolved 目前不阻断。"
+    },
+    "D.286": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/compiler-store-v2.ts",
+          "match": "digest"
+        }
+      ],
+      "note": "“固定版本引用不可因读最新文件而偷换内容”：引用带 digest，产物摘要由宿主计算并比对；取回精确内容由代码完成，属于 adapter 的职责。"
+    },
+    "D.331": {
+      "state": "checker",
+      "where": [
+        {
+          "file": "src/model/compiler-model-v2.ts",
+          "match": "D1"
+        }
+      ],
+      "note": "材料角色（binding.role 表示本次传递用途，不是可信性证明）由 D1 判；材料自称“指令”不自动获得指令地位写在合同里。"
+    },
+    "D.333": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "scope"
+        }
+      ],
+      "note": "“content.scope 不得为空”：schema 只要求 scope 是数组，空数组不会被拒；输出范围与字段路径的语义由 D2 判。“outputs 不存预先生成的答案”没有判定。"
+    },
+    "D.335": {
+      "state": "advice",
+      "note": "字段作用位置的具体例子（30 词上限、线索条数、archetype 等）——没有判定，靠 D2。"
+    },
+    "D.337": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "disposition"
+        }
+      ],
+      "note": "“current_scope 不是运行状态”“开放限制不能全压成 disposition”：disposition 有四种，求值器只认 proceed/paused/withdrawn，conditional 求值为 unsupported（见 facts_to_recheck）。"
+    },
+    "D.345": {
+      "state": "none",
+      "note": "“撤销暂停时修订当前范围而不是恢复整份快照”“任务被拆成原子不会把 Goal 分割丢失”——没有判定点；后者由数据结构保证（Goal 留在 IR）。"
+    },
+    "D.347": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/compiler-store-v2.ts",
+          "match": "event"
+        }
+      ],
+      "note": "“每条输入都保存”：事件账本保存全部输入；只有需要改变含义的部分才形成 IR 修订。"
+    },
+    "D.357": {
+      "state": "partial",
+      "note": "“必含指该任务获准且相关的内容，不是注入全局历史/参考答案/未来消息”：请求由代码组装（events + 该任务 IR + capabilities），方向一致；但“材料角色/约束作用位置/输出范围必须进入语义核对”只有 D1/D2 覆盖。"
+    },
+    "D.361": {
+      "state": "partial",
+      "note": "生成顺序（先明确委托/材料/交付/条件作用位置，再生成 IR 修订与原子，不先生成业务答案）：合同里写了，没有判定；D7 只判“有没有做委托要求的工作”。"
+    },
+    "D.363": {
+      "state": "partial",
+      "note": "影响检查要覆盖全部现存条件、输入绑定、输出定义与共享对象——核对合同里写了 D2/D4；机械层不做范围检查。"
+    },
+    "D.366": {
+      "state": "advice",
+      "note": "方法论自述（不把语义正确性交给引用图、两个模型判断可能共享盲点）——不是可判定条款。"
+    },
+    "D.403": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "records no destination"
+        }
+      ],
+      "note": "“reuse 允许空列表，但必须在 coverage 说明目标去向”由 no-destination 关卡覆盖（仅当本批带用户输入）；“模型不得返回自定义文件写入、凭证、任意可执行校验代码或已激活的 execution_id”由 schema 的字段白名单覆盖。"
+    },
+    "D.405": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "must record where the compiled work for task"
+        }
+      ],
+      "note": "只要某组 replace 出原子，就必须有 coverage 条目指向该任务或其原子，否则按可修订拒绝并把原因回给模型。"
+    },
+    "D.407": {
+      "state": "partial",
+      "note": "2026-09-24 update-batch：整批在私有状态准备，核对后一次提交同一准备结果；不在准备中写 IR/关闭真实权限。不实现部分接纳；共同条件的语义正确性仍依赖模型。"
+    },
+    "D.409": {
+      "state": "partial",
+      "note": "“合法 IR 修订可先保存而编译失败保持禁止开始”：IR 与 Compiled Intent 分开提交，方向一致；具体的“保持禁止开始”由执行状态与 authorize 共同承担。"
+    },
+    "D.411": {
+      "state": "partial",
+      "note": "“一组原子提交不等于 IR 与 Compiled Intent 同生共死”：实现里 IR 变更与编译接纳是两步，失败批次不提交编译；失败原因写入 management_log。"
+    },
+    "D.475": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "atoms.status(taskId, atom)"
+        }
+      ],
+      "note": "“原子只承载内容，生命周期与接替关系记在 AtomState 台账”：原子类型里没有 status/时间戳，状态由管理代码独占写入（键 = task_id + atom_id + revision）。"
+    },
+    "D.477": {
+      "state": "superseded",
+      "note": "“不存在的输入/输出 ID 由引用检查拒绝”与 2026-09-24 的决定相反：新 id 由原子声明自动登记进 IR，不再拒绝。这句话是 2026-09-22 的写法，已被 §8“交付物登记的归属”取代，留在文档里会误导。"
+    },
+    "D.479": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "registrationChanges"
+        }
+      ],
+      "note": "“声明的登记（混合做法）”：新 id 用原子自己的声明创建条目，已存在 id 形状不同时以原子为准 revise 并记 declaration_changes。"
+    },
+    "D.481": {
+      "state": "partial",
+      "note": "“业务输出与执行回传分开、二值结果不能为满足格式猜标签”：ExecutionTask 与 ExecutionOutcome 是两个结构，方向一致；语义上“有没有为了格式猜标签”没有判定。"
+    },
+    "D.483": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "permission_rule"
+        }
+      ],
+      "note": "PermissionRule 的必需字段（operation_id/resource_ref/input_refs/output_refs/conditions）由 schema 的 required 判。"
+    },
+    "D.485": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "is not covered by the atom Authority"
+        }
+      ],
+      "note": "“operation_id 及对象由宿主能力目录解释，模型不能靠编字符串拿权限”：每个操作都要落在授权规则内，宿主不认识的操作在调用时被拒并记录。"
+    },
+    "D.487": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "return \"unsupported\""
+        }
+      ],
+      "note": "Condition 首批支持范围与“未知条件返回 unsupported 不静默忽略”按实现落实：artifact_exists/user_confirms/object_version_matches 仍 blocked。"
+    },
+    "D.505": {
+      "state": "partial",
+      "note": "“来源身份由接入认证并登记、任务提示只作定位线索”“缺可靠定位的用户输入先影响所有可能有关任务”：事件带 source 与 task_ids，task_ids 不决定存在性；但“所有可能有关任务”的语义覆盖由 D4 承担。"
+    },
+    "D.509": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "execution_inactive"
+        }
+      ],
+      "note": "“收到合法 execution_return 先关闭本次权限再语义验收；blocked 也关闭，progress 不关闭”：执行状态机按 state_claim 处理，关闭后 authorize 拒绝继续。"
+    },
+    "D.511": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "artifact_mismatch"
+        }
+      ],
+      "note": "“产物摘要核对”：宿主对声明路径算 sha256，管理层在保存事件前比对；不符记 artifact_mismatch、不可核实记 artifact_unverifiable，两种都拒绝且不保存事件。"
+    },
+    "D.517": {
+      "state": "partial",
+      "note": "“执行层不能直接写入管理判断、判断变更保留原记录”：Assessment 只能由管理层写；assessments 本身的判定点还没有（见 facts_to_recheck）。"
+    },
+    "D.519": {
+      "state": "advice",
+      "note": "“原子本身是判断任务时，管理评价评的是判断是否循标准、有依据，不能因为字段叫 judgments 就导入”——没有判定点。"
+    },
+    "D.521": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "disposition"
+        }
+      ],
+      "note": "2026-09-24 update-batch：未处理用户事件独立持久化，run 范围暂缓 start/operation；当前 scope 与本次清算资格统一检查。身份匹配的已关闭执行回传只留历史证据，不修改当前原子或恢复权限。宿主不能撤销已发生效果，细粒度资源权限和在途动作效果模型未实现。"
+    },
+    "D.529": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "dispatch"
+        }
+      ],
+      "note": "“dispatch 绑定原子内容身份、重新编译复用同一 dispatch、authorize(start) 按内容是否仍在当前产物判定过期、非成功关闭后可再次启动”：派发幂等与过期判定按此实现（测试做过变异验证）。"
+    },
+    "D.531": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/adapters/opencode.ts",
+          "match": "advanceForTurn"
+        }
+      ],
+      "note": "“每次接纳新执行使用新的执行会话”：适配器按 execution 建会话，不复用旧会话上下文。"
+    },
+    "D.542": {
+      "state": "partial",
+      "note": "“路径范围必须通过具体工具 Adapter 解析实际目标（含别名/链接），不能只做字符串前缀匹配”：操作按 host 解析后的 operation_id + resource 判定；别名/链接解析属于 adapter，本轮未核对到具体实现。"
+    },
+    "D.544": {
+      "state": "deferred",
+      "note": "“同一执行读取的资料不都允许流向所有输出时分开原子/上下文；首版不许模型自报已脱敏作为公开输出许可”——首版明确不做这条路，所以不存在判定点。"
+    },
+    "D.546": {
+      "state": "partial",
+      "note": "“区分宿主强制的信息权限与用户对内容的语义要求”：前者由 authorize 落实，后者（题面不要泄漏修复）写在合同与核对规则里，属 D2 语义范围。"
+    },
+    "D.558": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "stale_basis"
+        }
+      ],
+      "note": "2026-09-24 update-batch：提交前比较原始事件序列/摘要、IR、compiled、执行/派发/原子状态、评价及资格；过时返回 stale_basis，保留草稿，不自动重跑。采取整个 run 的保守比较，未实现无关范围精细豁免；不覆盖宿主未报告的外部变化。"
+    },
+    "D.560": {
+      "state": "partial",
+      "note": "“read_refs 包含实际用到的材料绑定、输出定义与条件版本，不只 task_id”：请求里给了当前 IR 与能力目录，但“候选实际读了哪些”没有记录成 read_refs。"
+    },
+    "D.562": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "check_unavailable"
+        }
+      ],
+      "note": "失败码实现情况：identity_conflict / source_invalid / stale_basis / invalid_candidate / semantic_unresolved / capability_unsupported / execution_inactive / budget_exhausted 都在用；delivery_mismatch 与 effect_unknown 只在设计里，代码里没有（交付不符由 adapter 的 DELIVERY_GUARD_* 抛错，未映射为这个码）。"
+    },
+    "D.564": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "requeuePending"
+        }
+      ],
+      "note": "“模型错误不得使用户新输入从记录中消失”：失败整批时事件重新排队，下一批从待处理事件重建请求并带 previous_rejection。"
+    },
+    "D.572": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "max_total_management_requests"
+        }
+      ],
+      "note": "run 级总请求上限已实现；“总费用/可测 token 上限与调用 deadline”以及每批输入/输出 token 上限只存不判（max_management_input_tokens / max_management_output_tokens 没有判定点，见 facts_to_recheck）。"
+    },
+    "D.574": {
+      "state": "partial",
+      "note": "“advance 每次结束必须落入五种结局之一”：实现返回 ok/disposition/failure 明确区分 unchanged、delivered、blocked 等；但“请求一项能解决实际缺口的调查”与 questions 没有判定点。"
+    },
+    "D.581": {
+      "state": "partial",
+      "note": "“内部语义修订只占本次有限尝试、普通重复日志不调用模型”：预算计数与 attempts 记录落实；哪些事件算“语义同义”没有判定。"
+    },
+    "D.583": {
+      "state": "partial",
+      "note": "“记录真实工作进展与管理开销”：audit-report 有成本、引用、声明等视图；没有“连续只有内部产物变化就停止”的自动判定。"
+    },
+    "D.599": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "execution_inactive"
+        }
+      ],
+      "note": "实施完成的可核对条件（在途执行不阻止新输入、独立任务继续、相关动作停止、IR 与编译版本各自独立、旧结果不重启权限、目标保留、确认绑定具体产物、精确原文可取回、身份/来源/版本冲突被拒、失败不无限调用、重启不重置预算）逐项散落在 acceptEvent/authorize/dispatch/预算四处，没有一处把它们当成一张验收清单；这条更像“验收表该有什么”，不是单点判定。"
+    },
+    "D.221": {
+      "state": "advice",
+      "note": "Historical design examples must be read with the current implementation sections; this is documentation guidance, not a new runtime gate."
+    },
+    "C.candidate_shape.1": {
+      "state": "code",
+      "note": "根对象与版本/basis/source_coverage形状由生成Schema和接收校验约束。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "fixture": "test/candidate-schema-strict.test.ts"
+    },
+    "C.candidate_shape.2": {
+      "state": "code",
+      "note": "根对象与版本/basis/source_coverage形状由生成Schema和接收校验约束。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "fixture": "test/candidate-schema-strict.test.ts"
+    },
+    "C.candidate_shape.3": {
+      "state": "code",
+      "note": "根对象与版本/basis/source_coverage形状由生成Schema和接收校验约束。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "fixture": "test/candidate-schema-strict.test.ts"
+    },
+    "C.candidate_shape.4": {
+      "state": "code",
+      "note": "根对象与版本/basis/source_coverage形状由生成Schema和接收校验约束。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "fixture": "test/candidate-schema-strict.test.ts"
+    },
+    "C.candidate_shape.9": {
+      "state": "code",
+      "note": "根对象与版本/basis/source_coverage形状由生成Schema和接收校验约束。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "fixture": "test/candidate-schema-strict.test.ts"
+    },
+    "C.candidate_shape.6": {
+      "state": "code",
+      "note": "Group字段归属和必需字段由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "local_ref"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.candidate_shape.7": {
+      "state": "code",
+      "note": "Group字段归属和必需字段由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "local_ref"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.candidate_shape.8": {
+      "state": "code",
+      "note": "Group字段归属和必需字段由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "local_ref"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.candidate_shape.10": {
+      "state": "partial",
+      "note": "组提交、basis与任务去向有机械门槛；哪些共同条件应放同组仍由模型理解。2026-10-01 C 适用范围：仅 generationContract 的 stage=ci、assessment=false、checkRequired=true 将本条整条投影为编译实际临时父 IR 并保留父组；创建任务仍属 IR 阶段，CI 的 basis 和组关联由固定父提案填入并检查。IR、无核对 CI、assessment 和 legacy 保留基础规则。完整前后文本见 validation/2026-10-01-local-source-edit/CI-COVERAGE-IDENTITY.md 收口审计。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "carries user input but no group names a task"
+        }
+      ],
+      "fixture": "test/fixtures/gates/basis-and-delegation.json"
+    },
+    "C.rules.6": {
+      "state": "partial",
+      "note": "组提交、basis与任务去向有机械门槛；哪些共同条件应放同组仍由模型理解。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "carries user input but no group names a task"
+        }
+      ],
+      "fixture": "test/fixtures/gates/basis-and-delegation.json"
+    },
+    "C.rules.7": {
+      "state": "partial",
+      "note": "组提交、basis与任务去向有机械门槛；哪些共同条件应放同组仍由模型理解。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "carries user input but no group names a task"
+        }
+      ],
+      "fixture": "test/fixtures/gates/basis-and-delegation.json"
+    },
+    "C.rules.8": {
+      "state": "partial",
+      "note": "组提交、basis与任务去向有机械门槛；哪些共同条件应放同组仍由模型理解。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "carries user input but no group names a task"
+        }
+      ],
+      "fixture": "test/fixtures/gates/basis-and-delegation.json"
+    },
+    "C.reference_contract.1": {
+      "state": "partial",
+      "note": "Ref形状与被使用对象的部分身份/版本有检查；不能因此声称每个引用或被选择对象都符合当前语义。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "ref_or_source"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.reference_contract.3": {
+      "state": "code",
+      "note": "来源事件必须可解析；代码归一化真实digest，不要求模型计算摘要。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "resolveSourceRefs"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.reference_contract.4": {
+      "state": "code",
+      "note": "来源事件必须可解析；代码归一化真实digest，不要求模型计算摘要。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "resolveSourceRefs"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.reference_contract.2": {
+      "state": "partial",
+      "note": "代码解析segment/唯一quote并计算span；是否选齐有效要求及角色是否正确仍是语义判断。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "segments.get("
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.reference_contract.5": {
+      "state": "partial",
+      "note": "代码校验任务归属和expected_revision等身份；多个合法对象中应修改哪一个仍由模型判断。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "task_refs names unknown task"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.ir_change_contract.4": {
+      "state": "partial",
+      "note": "代码校验任务归属和expected_revision等身份；多个合法对象中应修改哪一个仍由模型判断。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "task_refs names unknown task"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.rules.9": {
+      "state": "partial",
+      "note": "代码校验任务归属和expected_revision等身份；多个合法对象中应修改哪一个仍由模型判断。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "task_refs names unknown task"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.rules.10": {
+      "state": "partial",
+      "note": "代码校验任务归属和expected_revision等身份；多个合法对象中应修改哪一个仍由模型判断。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "task_refs names unknown task"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.compilation_contract.5": {
+      "state": "partial",
+      "note": "代码按coverage绑定当前要求与编译身份，Schema限制local_ref位置；依据关联不能证明行为忠实。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "goal_refs: ["
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.rules.11": {
+      "state": "partial",
+      "note": "代码按coverage绑定当前要求与编译身份，Schema限制local_ref位置；依据关联不能证明行为忠实。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "goal_refs: ["
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.compilation_contract.1": {
+      "state": "code",
+      "note": "reuse/replace及draft字段形状由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "compilation"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.compilation_contract.2": {
+      "state": "code",
+      "note": "reuse/replace及draft字段形状由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "compilation"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.compilation_contract.3": {
+      "state": "code",
+      "note": "reuse/replace及draft字段形状由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "compilation"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.compilation_contract.4": {
+      "state": "partial",
+      "note": "代码保留旧Atom并替换Relation列表；应该reuse还是replace、哪些依赖仍适用由管理模型判断。",
+      "where": [
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "relations: (Array.isArray(draft.relations)"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.rules.5": {
+      "state": "partial",
+      "note": "代码保留旧Atom并替换Relation列表；应该reuse还是replace、哪些依赖仍适用由管理模型判断。",
+      "where": [
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "relations: (Array.isArray(draft.relations)"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.ir_change_contract.1": {
+      "state": "code",
+      "note": "变更动作/目标/版本按IR变更接口检查；该条是表示规则，不证明变更语义。",
+      "where": [
+        {
+          "file": "src/core/intent-state-v2.ts",
+          "match": "expected_revision"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.ir_change_contract.2": {
+      "state": "code",
+      "note": "变更动作/目标/版本按IR变更接口检查；该条是表示规则，不证明变更语义。",
+      "where": [
+        {
+          "file": "src/core/intent-state-v2.ts",
+          "match": "expected_revision"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.ir_change_contract.6": {
+      "state": "code",
+      "note": "变更动作/目标/版本按IR变更接口检查；该条是表示规则，不证明变更语义。",
+      "where": [
+        {
+          "file": "src/core/intent-state-v2.ts",
+          "match": "expected_revision"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.ir_change_contract.7": {
+      "state": "code",
+      "note": "变更动作/目标/版本按IR变更接口检查；该条是表示规则，不证明变更语义。",
+      "where": [
+        {
+          "file": "src/core/intent-state-v2.ts",
+          "match": "expected_revision"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.ir_change_contract.8": {
+      "state": "code",
+      "note": "变更动作/目标/版本按IR变更接口检查；该条是表示规则，不证明变更语义。",
+      "where": [
+        {
+          "file": "src/core/intent-state-v2.ts",
+          "match": "expected_revision"
+        }
+      ],
+      "fixture": "test/fixtures/gates/ir-changes.json"
+    },
+    "C.ir_change_contract.5": {
+      "state": "partial",
+      "note": "生成strict Schema按目标限制value字段；canonical value仍是宽对象，不能对所有手写旧候选宣称同等严格。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema-strict.ts",
+          "match": "function valueFor"
+        }
+      ],
+      "fixture": "test/candidate-schema-strict.test.ts"
+    },
+    "C.ir_change_contract.3": {
+      "state": "partial",
+      "note": "代码保存选中原文和解释标签并登记Atom声明；分组和实际作用范围的语义仍由模型判断。",
+      "where": [
+        {
+          "file": "src/core/source-payload.ts",
+          "match": "item.interpretation = item.text"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.ir_change_contract.11": {
+      "state": "partial",
+      "note": "代码保存选中原文和解释标签并登记Atom声明；分组和实际作用范围的语义仍由模型判断。",
+      "where": [
+        {
+          "file": "src/core/source-payload.ts",
+          "match": "item.interpretation = item.text"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.candidate_shape.5": {
+      "state": "partial",
+      "note": "代码要求全部当前文本有去向并拒绝规范/非规范重叠；分类是否符合委托由模型判断。",
+      "where": [
+        {
+          "file": "src/core/source-payload.ts",
+          "match": "has no complete disposition"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.ir_change_contract.13": {
+      "state": "partial",
+      "note": "代码要求全部当前文本有去向并拒绝规范/非规范重叠；分类是否符合委托由模型判断。",
+      "where": [
+        {
+          "file": "src/core/source-payload.ts",
+          "match": "has no complete disposition"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.ir_change_contract.14": {
+      "state": "partial",
+      "note": "代码核对旧来源撤回范围和本次变化依据；用户是否确实撤回该含义不能由位置证明。",
+      "where": [
+        {
+          "file": "src/core/source-payload.ts",
+          "match": "was dropped without an explicit superseded disposition"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.atom_contract.4": {
+      "state": "code",
+      "note": "Atom字段和生命周期字段排除由Schema检查，运行状态另记台账。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "fixture": "test/atom-lifecycle-v2.test.ts"
+    },
+    "C.atom_contract.10": {
+      "state": "code",
+      "note": "Atom字段和生命周期字段排除由Schema检查，运行状态另记台账。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "fixture": "test/atom-lifecycle-v2.test.ts"
+    },
+    "C.atom_contract.11": {
+      "state": "code",
+      "note": "内容变化需要新版本，previous_atom_ref检查存在性，重复或关闭身份受生命周期检查。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "already exists with different content"
+        }
+      ],
+      "fixture": "test/atom-lifecycle-v2.test.ts"
+    },
+    "C.atom_contract.12": {
+      "state": "code",
+      "note": "内容变化需要新版本，previous_atom_ref检查存在性，重复或关闭身份受生命周期检查。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "already exists with different content"
+        }
+      ],
+      "fixture": "test/atom-lifecycle-v2.test.ts"
+    },
+    "C.atom_contract.5": {
+      "state": "code",
+      "note": "constraints仅能原样重复已分配IR全文和相同scope；不是行为完整性的证明。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "constraints must repeat an assigned IR requirement verbatim"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_contract.8": {
+      "state": "partial",
+      "note": "端点/版本/环及可求值条件、前驱验收等待由代码判；真实依赖是否必要、前驱证据是否足够、未知工作是否诚实登记仍需语义判断。",
+      "where": [
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "relation dependency cycle has no valid execution order"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_contract.9": {
+      "state": "code",
+      "note": "authority.lifetime与delegation固定值由schema及运行时检查；此条不涉及操作选择是否恰当。",
+      "where": [
+        {
+          "file": "src/core/intent-contract.ts",
+          "match": "atom authority must be this_execution with not_supported delegation"
+        }
+      ],
+      "fixture": "test/execution-state-v2.test.ts"
+    },
+    "C.rules.13": {
+      "state": "partial",
+      "note": "authority固定值和实际操作授权受代码约束；操作是否足够且必要仍需按委托判断。",
+      "where": [
+        {
+          "file": "src/core/intent-contract.ts",
+          "match": "atom authority must be this_execution with not_supported delegation"
+        }
+      ],
+      "fixture": "test/execution-state-v2.test.ts"
+    },
+    "C.atom_contract.7": {
+      "state": "partial",
+      "note": "端点/版本/环及可求值条件、前驱验收等待由代码判；真实依赖是否必要、前驱证据是否足够、未知工作是否诚实登记仍需语义判断。",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "return \"unsupported\""
+        }
+      ],
+      "fixture": "test/fixtures/gates/conditions.json"
+    },
+    "C.atom_input_contract.1": {
+      "state": "partial",
+      "note": "输入表示和角色枚举由Schema检查；材料实际角色和用途是否获准由模型判断。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "atom_input"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.atom_input_contract.2": {
+      "state": "partial",
+      "note": "输入表示和角色枚举由Schema检查；材料实际角色和用途是否获准由模型判断。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "atom_input"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.atom_input_contract.3": {
+      "state": "partial",
+      "note": "输入表示和角色枚举由Schema检查；材料实际角色和用途是否获准由模型判断。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "atom_input"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.atom_output_contract.1": {
+      "state": "code",
+      "note": "产物字段和format枚举由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "atom_output"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.atom_output_contract.2": {
+      "state": "code",
+      "note": "产物字段和format枚举由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "atom_output"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.judgment_contract.1": {
+      "state": "code",
+      "note": "判断记录形状和status枚举由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "judgment"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.judgment_contract.2": {
+      "state": "code",
+      "note": "判断记录形状和status枚举由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "judgment"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.judgment_contract.3": {
+      "state": "advice",
+      "note": "supported/inferred/unresolved的真实含义及其工作后果由模型判断；单条判断不自动提供行为或阻塞资格。"
+    },
+    "C.coverage_contract.1": {
+      "state": "code",
+      "note": "coverage结构与枚举由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "coverage"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.coverage_contract.2": {
+      "state": "code",
+      "note": "coverage结构与枚举由Schema检查。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "coverage"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.coverage_contract.3": {
+      "state": "code",
+      "note": "所有当前已入IR条目的去向、目标Atom、暂停条件与启动资格由requirement flow检查；不声称IR已选齐原文。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "has no coverage destination"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.coverage_contract.4": {
+      "state": "code",
+      "note": "所有当前已入IR条目的去向、目标Atom、暂停条件与启动资格由requirement flow检查；不声称IR已选齐原文。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "has no coverage destination"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.coverage_contract.5": {
+      "state": "code",
+      "note": "所有当前已入IR条目的去向、目标Atom、暂停条件与启动资格由requirement flow检查；不声称IR已选齐原文。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "has no coverage destination"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.coverage_contract.6": {
+      "state": "code",
+      "note": "所有当前已入IR条目的去向、目标Atom、暂停条件与启动资格由requirement flow检查；不声称IR已选齐原文。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "has no coverage destination"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_contract.15": {
+      "state": "partial",
+      "note": "代码填充goal_refs；coverage不能替代实际指令，指令完整性仍需语义审查。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "goal_refs: ["
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.checks_contract.1": {
+      "state": "partial",
+      "note": "checks形状由Schema检查；默认空数组及自查内容有效性是生成指导。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "observed_in_candidate"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.checks_contract.2": {
+      "state": "partial",
+      "note": "checks形状由Schema检查；默认空数组及自查内容有效性是生成指导。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "observed_in_candidate"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.checks_contract.3": {
+      "state": "partial",
+      "note": "checks形状由Schema检查；默认空数组及自查内容有效性是生成指导。",
+      "where": [
+        {
+          "file": "src/model/candidate-schema.ts",
+          "match": "observed_in_candidate"
+        }
+      ],
+      "fixture": "test/compiler-model-v2.test.ts"
+    },
+    "C.atom_contract.14": {
+      "state": "partial",
+      "note": "代码向模型提供回传、验收和运行状态并检查提交身份；证据是否支持满足结论是管理模型职责。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "execution_outcomes: snapshot.execution_outcomes"
+        }
+      ],
+      "fixture": "test/semantic-compilation.test.ts"
+    },
+    "C.rules.1": {
+      "state": "advice",
+      "note": "完整委托、材料角色、来源支持与路径权限解释均是管理模型语义职责；可选核对可以查错，代码不能证明理解正确。"
+    },
+    "C.rules.2": {
+      "state": "advice",
+      "note": "完整委托、材料角色、来源支持与路径权限解释均是管理模型语义职责；可选核对可以查错，代码不能证明理解正确。"
+    },
+    "C.ir_change_contract.9": {
+      "state": "partial",
+      "note": "代码保存选中来源并检查表示与来源去向；当前目标、角色、作用范围及有效要求的完整选择仍由模型负责。",
+      "where": [
+        {
+          "file": "src/core/source-payload.ts",
+          "match": "materializeSourceContent"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.ir_change_contract.10": {
+      "state": "partial",
+      "note": "代码保存选中来源并检查表示与来源去向；当前目标、角色、作用范围及有效要求的完整选择仍由模型负责。",
+      "where": [
+        {
+          "file": "src/core/source-payload.ts",
+          "match": "materializeSourceContent"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts"
+    },
+    "C.rules.4": {
+      "state": "partial",
+      "note": "缺失材料等已声明事实有门槛；能调查的方法未知与需要用户澄清的语义歧义由管理模型区分。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "records as missing material"
+        }
+      ],
+      "fixture": "test/fixtures/gates/registration.json"
+    },
+    "C.atom_contract.1": {
+      "state": "partial",
+      "note": "Relation端点、循环和验收等待由代码验证；整体工作边界、共同要求分配和交接是否合理由模型判断。",
+      "where": [
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "relation dependency cycle has no valid execution order"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_contract.2": {
+      "state": "partial",
+      "note": "Relation端点、循环和验收等待由代码验证；整体工作边界、共同要求分配和交接是否合理由模型判断。",
+      "where": [
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "relation dependency cycle has no valid execution order"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_contract.3": {
+      "state": "partial",
+      "note": "Relation端点、循环和验收等待由代码验证；整体工作边界、共同要求分配和交接是否合理由模型判断。",
+      "where": [
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "relation dependency cycle has no valid execution order"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.rules.3": {
+      "state": "partial",
+      "note": "Relation端点、循环和验收等待由代码验证；整体工作边界、共同要求分配和交接是否合理由模型判断。",
+      "where": [
+        {
+          "file": "src/core/compiled-intent.ts",
+          "match": "relation dependency cycle has no valid execution order"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.ir_change_contract.12": {
+      "state": "partial",
+      "note": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "constraints must repeat an assigned IR requirement verbatim"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_contract.6": {
+      "state": "partial",
+      "note": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "constraints must repeat an assigned IR requirement verbatim"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_contract.13": {
+      "state": "partial",
+      "note": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "constraints must repeat an assigned IR requirement verbatim"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_output_contract.3": {
+      "state": "partial",
+      "note": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "constraints must repeat an assigned IR requirement verbatim"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.atom_contract.16": {
+      "state": "partial",
+      "note": "严格生成按父IR和子CI暂存与修订，最终Candidate原子提交；语义更新是否完整、验收证据是否支持结论仍由模型判断。旧非阶段接口保持兼容。",
+      "where": [
+        {
+          "file": "src/core/parent-generation.ts",
+          "match": "ParentGenerationState"
+        }
+      ],
+      "fixture": "test/parent-generation.test.ts"
+    },
+    "C.rules.12": {
+      "state": "partial",
+      "note": "严格生成按父IR和子CI暂存与修订，最终Candidate原子提交；语义更新是否完整、验收证据是否支持结论仍由模型判断。旧非阶段接口保持兼容。",
+      "where": [
+        {
+          "file": "src/core/parent-generation.ts",
+          "match": "ParentGenerationState"
+        }
+      ],
+      "fixture": "test/parent-generation.test.ts"
+    },
+    "K.check_contract.2": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-check-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "note": "核对答案的解析与校验：返回不是 JSON 记 transport/json 失败，形状不对记 schema 失败，两者都记 verdict=unavailable 并按基础设施失败处理，不冒充“核对员说不行”。"
+    },
+    "K.check_contract.3": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-check-schema.ts",
+          "match": "verdict"
+        }
+      ],
+      "note": "verdict/findings 两栏与各字段类型由校验 schema 判；发给 provider 的 strict schema 与校验用的 schema 必须同步（有防漂移测试，r11c 就是这两份不同步导致整轮作废）。"
+    },
+    "K.check_contract.4": {
+      "state": "advice",
+      "note": "“你是独立核对员，不是作者；只判候选的行为符不符合当前委托与条件”——没有判定；核对员的角色靠提示词与证据门槛约束。"
+    },
+    "K.check_contract.5": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/model/candidate-check-schema.ts",
+          "match": "verdict"
+        }
+      ],
+      "note": "verdict 枚举合法性与 findings 形状由 schema 判；“consistent 时 findings 必须为空”没有单独判定（只影响计数）。"
+    },
+    "K.check_contract.6": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-check-schema.ts",
+          "match": "D7"
+        }
+      ],
+      "note": "findings 必须声明维度且取值在 D1–D7 内，由 schema 枚举判（缺 dimension 或写了枚举外的值都判非法）。"
+    },
+    "K.check_contract.7": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/model/compiler-model-v2.ts",
+          "match": "For every concrete omission or change, cite the user requirement"
+        }
+      ],
+      "note": "D7 检查用户规定行为的遗漏或改义，不能要求模型偏好的实现细节；机械层解析引用，不能证明引用支持结论。核对对象包含整个 prepared.compiled。"
+    },
+    "K.check_contract.8": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "resolveCheckEvidence"
+        }
+      ],
+      "note": "只有引用能解析的 finding 才阻断批次；解析不了的记 evidence_resolved:false 并留档。历史：r10 第一批的拒绝引用的是把 digest 填进 source_id，不再阻断。"
+    },
+    "K.check_contract.9": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/model/candidate-check-schema.ts",
+          "match": "additionalProperties: false"
+        }
+      ],
+      "note": "“不得给业务答案、不得放宽/收窄 Authority、不得改写候选、不得编 id”由“核对答案只能是 verdict + findings 两栏”落实：多余字段一律判非法。"
+    },
+    "K.check_contract.1": {
+      "state": "partial",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "check.repair_target === \"ir\""
+        }
+      ],
+      "fixture": "test/parent-generation.test.ts",
+      "note": "schema约束repair_target枚举，core依它选择修父或修子；问题到底属于IR还是CI仍需核对模型正确判断，兼容旧无repair_target答案。"
+    },
+    "C.rules.22": {
+      "state": "advice",
+      "note": "路径约束适用的操作/结果范围、宿主事实与授权的区别由模型判断；不是字符串规则或路径存在性所能保证。"
+    },
+    "C.rules.23": {
+      "state": "code",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "carried delegation ${displayEventId(eventId)} is missing from basis.event_ids"
+        },
+        {
+          "file": "src/core/source-payload.ts",
+          "match": "carried delegation ${display(eventId)} has no disposition"
+        },
+        {
+          "file": "src/core/compiler-store-v2.ts",
+          "match": "carriedDelegations(): CarriedDelegation[]"
+        }
+      ],
+      "fixture": "test/source-payload.test.ts",
+      "note": "代码按事件日志/当前IR/批次日志派生携带缺口（未接受或显式unresolved），批次必须把每个缺口列入basis并显式处置（选入IR或写明source_coverage去因）；是否真把要求理解正确仍是模型语义职责。2026-10-01 C 适用范围：仅普通且 checkRequired=true 的 CI 将本条整条投影为按固定父 IR 编译本批及携带工作，原委托是否保留由独立核对判断；IR 仍执行选入/处置要求，CI 装配保留父 basis 和 source_coverage，上述登记门槛不变。IR、无核对 CI、assessment 和 legacy 保留基础规则；前后全文见 CI-COVERAGE-IDENTITY.md 收口审计。"
+    },
+    "C.rules.21": {
+      "state": "advice",
+      "note": "完整委托、材料角色、来源支持与路径权限解释均是管理模型语义职责；可选核对可以查错，代码不能证明理解正确。2026-10-01 C 适用范围：仅普通且 checkRequired=true 的 CI 将本条整条投影为对照固定父 IR 检查整个计划的任务与完成条件、补行为并去除无依据限制；原始委托到父 IR 的表示判断转交独立核对。IR、无核对 CI、assessment 和 legacy 保留基础规则；不是机械证明。前后全文见 CI-COVERAGE-IDENTITY.md 收口审计。"
+    },
+    "C.rules.20": {
+      "state": "partial",
+      "note": "严格生成按父IR和子CI暂存与修订，最终Candidate原子提交；语义更新是否完整、验收证据是否支持结论仍由模型判断。旧非阶段接口保持兼容。2026-10-01 C 适用范围：仅普通且 checkRequired=true 的 CI 将本条整条投影为修复完整计划、保留正确工作并恢复父 IR 内遗漏的要求；IR 缺陷通过独立核对 repair_target=ir 返回 IR 阶段。原条款中的引用修复、身份、避免整批重写及完成条件细节在投影中未逐句复述：reference_contract、compilation_contract、atom_output_contract 及 finding 的 evidence_resolved 门槛保持。IR、无核对 CI、assessment 和 legacy 保留基础规则；语义保留仍不能由代码证明。前后全文见 CI-COVERAGE-IDENTITY.md 收口审计。",
+      "where": [
+        {
+          "file": "src/core/parent-generation.ts",
+          "match": "ParentGenerationState"
+        }
+      ],
+      "fixture": "test/parent-generation.test.ts"
+    },
+    "C.rules.19": {
+      "state": "code",
+      "note": "执行决定归属、continue身份和用户更新后资格由管理代码执行。2026-10-01 C 适用范围：仅普通且 checkRequired=true 的 CI 将本条整条投影为从固定父 IR 编译计划与分配，原文/更新表示是否正确由独立核对判断；按收口审阅，在新职责说明后逐字保留 execution_decisions 归属、continue/stop/await_result 含义和未核准工作暂停的原三句。模型仍承担执行选择职责，代码检查不能替代这段指引。本条 code 标注针对执行机械检查，不证明新投影的语义判断。IR、无核对 CI、assessment 和 legacy 保留基础规则；前后全文及最终投影见 CI-COVERAGE-IDENTITY.md 收口审计。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "execution_review_required"
+        }
+      ],
+      "fixture": "test/update-batch.test.ts"
+    },
+    "C.rules.18": {
+      "state": "partial",
+      "note": "端点/版本/环及可求值条件、前驱验收等待由代码判；真实依赖是否必要、前驱证据是否足够、未知工作是否诚实登记仍需语义判断。",
+      "where": [
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "return \"unsupported\""
+        }
+      ],
+      "fixture": "test/fixtures/gates/conditions.json"
+    },
+    "C.rules.17": {
+      "state": "partial",
+      "note": "缺失材料等已声明事实有门槛；能调查的方法未知与需要用户澄清的语义歧义由管理模型区分。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "records as missing material"
+        }
+      ],
+      "fixture": "test/fixtures/gates/registration.json"
+    },
+    "C.rules.16": {
+      "state": "partial",
+      "note": "缺失材料等已声明事实有门槛；能调查的方法未知与需要用户澄清的语义歧义由管理模型区分。",
+      "where": [
+        {
+          "file": "src/core/intent-compiler-v2.ts",
+          "match": "records as missing material"
+        }
+      ],
+      "fixture": "test/fixtures/gates/registration.json"
+    },
+    "C.rules.15": {
+      "state": "partial",
+      "note": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。",
+      "where": [
+        {
+          "file": "src/core/requirement-flow.ts",
+          "match": "constraints must repeat an assigned IR requirement verbatim"
+        }
+      ],
+      "fixture": "test/requirement-flow.test.ts"
+    },
+    "C.rules.14": {
+      "state": "partial",
+      "note": "操作标识必须是宿主真实工具名、且授权与实际调用按名精确匹配，由代码固定；Atom授予的操作是否足够且必要仍由模型和核对判断。",
+      "where": [
+        {
+          "file": "src/runtime/opencode-operations.ts",
+          "match": "openCodeOperationsForModel"
+        },
+        {
+          "file": "src/core/execution-state.ts",
+          "match": "is not covered by the atom Authority"
+        }
+      ],
+      "fixture": "test/opencode-compiler-runtime-v2.test.ts"
+    }
+  },
+  "gate_index": [
+    {
+      "id": "basis",
+      "clause": "C.rules.7",
+      "class": "A",
+      "match": "pending event ids for this batch",
+      "where": "src/core/intent-compiler-v2.ts#validateCandidateBasis + candidateIssues"
+    },
+    {
+      "id": "delegation-not-recorded",
+      "clause": "C.rules.6",
+      "class": "A",
+      "match": "carries user input but no group names a task"
+    },
+    {
+      "id": "task-refs-unknown",
+      "clause": "C.rules.9",
+      "class": "B",
+      "match": "task_refs names unknown task"
+    },
+    {
+      "id": "draft-task-unknown",
+      "clause": "C.rules.9",
+      "class": "B",
+      "match": "drafts names unknown task"
+    },
+    {
+      "id": "atom-revision",
+      "clause": "C.atom_contract.11",
+      "class": "B",
+      "match": "already exists with different content"
+    },
+    {
+      "id": "registration-output",
+      "clause": "D.479",
+      "class": "A",
+      "match": "one deliverable has one format"
+    },
+    {
+      "id": "registration-binding",
+      "clause": "D.479",
+      "class": "A",
+      "match": "differently from another atom in the same batch"
+    },
+    {
+      "id": "missing-material-binding",
+      "clause": "C.rules.4",
+      "class": "B",
+      "match": "records as missing material"
+    },
+    {
+      "id": "coverage-missing",
+      "clause": "C.coverage_contract.4",
+      "class": "A",
+      "match": "must record where the compiled work for task"
+    },
+    {
+      "id": "no-destination",
+      "clause": "C.rules.6",
+      "class": "A",
+      "match": "records no destination"
+    },
+    {
+      "id": "carried-delegation-unnamed",
+      "clause": "C.rules.23",
+      "class": "A",
+      "match": "carried delegation ${displayEventId(eventId)} is missing from basis.event_ids",
+      "where": "src/core/intent-compiler-v2.ts#candidateIssues"
+    },
+    {
+      "id": "carried-delegation-unacknowledged",
+      "clause": "C.rules.23",
+      "class": "A",
+      "match": "carried delegation ${display(eventId)} has no disposition",
+      "where": "src/core/source-payload.ts#validateSourceCoverage"
+    },
+    {
+      "id": "source-alias-not-offered",
+      "clause": "C.reference_contract.3",
+      "class": "A",
+      "match": "alias_not_offered",
+      "where": "src/core/source-aliases.ts#decodeIRProposal"
+    },
+    {
+      "id": "build-previous-atom-ref",
+      "clause": "C.atom_contract.12",
+      "class": "B",
+      "match": "previous_atom_ref"
+    },
+    {
+      "id": "build-drafts",
+      "clause": "C.compilation_contract.3",
+      "class": "B",
+      "match": "compilation.drafts:"
+    },
+    {
+      "id": "ir-dry-run",
+      "clause": "C.ir_change_contract.1",
+      "class": "B",
+      "match": "ir_changes["
+    },
+    {
+      "id": "check-budget",
+      "clause": "D.562",
+      "class": "C",
+      "match": "no request budget remains for the independent check"
+    },
+    {
+      "id": "check-unavailable",
+      "clause": "D.562",
+      "class": "C",
+      "match": "check_unavailable"
+    },
+    {
+      "id": "artifact-mismatch",
+      "clause": "D.511",
+      "class": "B",
+      "match": "artifact_mismatch"
+    },
+    {
+      "id": "artifact-unverifiable",
+      "clause": "D.511",
+      "class": "B",
+      "match": "artifact_unverifiable"
+    },
+    {
+      "id": "user-update-pending",
+      "clause": "D.521",
+      "class": "B",
+      "match": "user_update_pending",
+      "why": "接收到用户更新即暂停后续受控动作，与 pending 队列独立"
+    },
+    {
+      "id": "current-scope",
+      "clause": "D.521",
+      "class": "B",
+      "match": "scope_not_proceeding",
+      "why": "paused/withdrawn/conditional 不继承旧动作资格"
+    },
+    {
+      "id": "execution-review",
+      "clause": "C.rules.18",
+      "class": "B",
+      "match": "execution_review_required",
+      "why": "未被本次处理覆盖的任务/执行保持暂停"
+    },
+    {
+      "id": "continue-content",
+      "clause": "D.521",
+      "class": "B",
+      "match": "continue requires an active execution",
+      "why": "不复活旧凭证，不沿用变化内容的资格"
+    },
+    {
+      "id": "execution-decision-owner",
+      "clause": "D.517",
+      "class": "B",
+      "match": "execution decision references an execution outside this group",
+      "why": "停止或继续决定只能处理本组所指执行"
+    },
+    {
+      "id": "management-busy",
+      "clause": "D.558",
+      "class": "B",
+      "match": "management_busy",
+      "why": "同一 store 不并发消费事件和提交旧快照"
+    },
+    {
+      "id": "management-stale-basis",
+      "clause": "D.558",
+      "class": "B",
+      "match": "input or execution state changed while management was running",
+      "why": "读取依据变化只保存候选，不提交/恢复资格"
+    },
+    {
+      "id": "relation-admission",
+      "clause": "C.atom_contract.7",
+      "class": "B",
+      "match": "predecessor ${relation.predecessor.id} has not been accepted for this dependency",
+      "why": "后继启动需要具体前驱版本真实完成且被管理层接受"
+    },
+    {
+      "id": "source-coverage",
+      "clause": "C.ir_change_contract.13",
+      "class": "B",
+      "match": "has no complete disposition",
+      "where": "src/core/source-payload.ts#validateSourceCoverage",
+      "why": "全部当前文本需要登记去向；当前实现报首个来源段缺口，角色语义仍由模型负责。"
+    }
+  ],
+  "note_gate_order": "顺序就是分类顺序：先具体、后笼统。改动顺序可能让一条消息落到别的门槛上，contract-check 会核对每个 match 还在源码里。",
+  "fixture_backlog_max": 79,
+  "rejection_sites": [
+    {
+      "file": "src/core/intent-compiler-v2.ts",
+      "pattern": "issues\\.push\\(",
+      "expected": 16,
+      "why": "候选层面的可修订拒绝；每加一条都要在 gate_index 里有名字，否则就是没人要求过的规则（r11d 的教训）"
+    },
+    {
+      "file": "src/core/intent-compiler-v2.ts",
+      "pattern": "failure\\(",
+      "expected": 8,
+      "why": "整批失败的返回点；第 7、8 处都是 storage_unverified——journal 有不可读行时先在 popPending 之后停止（队列自身不可信），别名门再挡身份冲突/无法解析的映射；两者都停止而不是让模型重试"
+    },
+    {
+      "file": "src/core/intent-compiler-v2.ts",
+      "pattern": "deny\\(",
+      "expected": 10,
+      "why": "authorize 的拒绝（start/operation）"
+    },
+    {
+      "file": "src/core/execution-state.ts",
+      "pattern": "deny\\(",
+      "expected": 10,
+      "why": "执行状态与权限判定的拒绝"
+    },
+    {
+      "file": "src/core/intent-state-v2.ts",
+      "pattern": "throw new TypeError\\(",
+      "expected": 35,
+      "why": "IR 变更干跑的全部拒绝点；每个都要能对到一条条款。其中 12 个是局部来源编辑（edit）的拒绝点，对应严格阶段投影条款 S.ir.ir_change_contract.6；新增的一处是 edit 的 remove/add/basis 在过滤前拒绝非 SourceRef 成员。"
+    }
+  ],
+  "facts_to_recheck": [
+    {
+      "id": "F1",
+      "title": "纯提问会被第一道闸门直接拒",
+      "detail": "candidateIssues 第一道只认“有组命名 task”，注释与第二道 destinationRecorded 却接受 questions[]。模型按合同“可以提问并说明”写候选时会被拒。",
+      "clauses": [
+        "C.candidate_shape.3"
+      ]
+    },
+    {
+      "id": "F2",
+      "title": "current_scope.disposition 的第四种取值没人认",
+      "detail": "类型与合同写四种（proceed/paused/withdrawn/conditional），execution-state 的求值器只认三种，conditional → unsupported → 挡住它保护的动作。",
+      "clauses": [
+        "D.337"
+      ]
+    },
+    {
+      "id": "F3",
+      "title": "每批输入/输出 token 上限只存不判",
+      "detail": "max_management_input_tokens / max_management_output_tokens 在预算结构里，没有任何判定点。r10 一次输出 72k 字符没有被拦。",
+      "clauses": [
+        "D.572"
+      ]
+    },
+    {
+      "id": "F4",
+      "title": "IR 的 unresolved[] 只写不读",
+      "detail": "TaskIntent.unresolved 有类型与归一化，合同不提、门槛不读、核对无维度。",
+      "clauses": [
+        "D.333"
+      ]
+    },
+    {
+      "id": "F5",
+      "title": "checks[].unresolved 只进了成本计数",
+      "detail": "cost-summary 把 unresolved 的 checks 计入 intent.unresolved_checks，但没有判定点（更正上一轮“没人读”的说法：有人读，只是不判）。",
+      "clauses": [
+        "C.checks_contract.1"
+      ]
+    },
+    {
+      "id": "F6",
+      "title": "Relation结构门控不等于交接语义正确",
+      "detail": "代码已有端点/循环检查和具体前驱版本的验收等待；requires是否准确表达用户所需交接，仍须语义审查，不能再称只查形状。",
+      "clauses": [
+        "D.199"
+      ]
+    },
+    {
+      "id": "F7",
+      "title": "previous_rejection 没人核“是不是就地修复”",
+      "detail": "本轮保留模型原始来源选择器供修订，并提供精确来源错误和全部可计算覆盖缺口；这些机制不证明模型保留了正确语义或修复有效。真实产物需要单独核对。",
+      "clauses": [
+        "C.rules.6"
+      ]
+    },
+    {
+      "id": "F8",
+      "title": "引用与coverage不证明执行行为完整",
+      "detail": "严格requirement flow会根据coverage写入intent_basis/goal_refs，Atom直接交付。仍需分别核对其他引用身份及Atom实际行为，不能沿用旧ExecutionTask或只做形状归一的历史结论。",
+      "clauses": [
+        "C.reference_contract.1",
+        "C.reference_contract.5",
+        "C.coverage_contract.3"
+      ]
+    },
+    {
+      "id": "F9",
+      "title": "失败码清单缺两项",
+      "detail": "设计列了 10 个失败码，代码里没有 delivery_mismatch 与 effect_unknown；交付不符由 adapter 抛 DELIVERY_GUARD_*，没有映射成管理层的失败码。",
+      "clauses": [
+        "D.562"
+      ]
+    },
+    {
+      "id": "F10",
+      "title": "回传验收的机械身份与语义结论需分开",
+      "detail": "执行决定和具体Atom验收已接入生命周期；已有回传/验收记录会发给管理模型。代码能检查身份与资格，不证明证据确实满足完成条件。",
+      "clauses": [
+        "C.checks_contract.2",
+        "C.checks_contract.3",
+        "D.517"
+      ]
+    },
+    {
+      "id": "F11",
+      "title": "设计文档里有一句已被后文取代的话",
+      "detail": "D.477“不存在的输入/输出 ID 由引用检查拒绝”与 2026-09-24 的“原子声明即登记”相反。文档内部前后不一致，会让下一个 session 按旧句去实现。",
+      "clauses": [
+        "D.477"
+      ]
+    },
+    {
+      "id": "F12",
+      "title": "示例来源只能用于编码示范",
+      "detail": "示例有配套example_input和占位source_id；真实候选引用必须指向当前或历史来源，strict模式已拒绝不可解析引用。模型不得把示例当成当前委托。",
+      "clauses": [
+        "C.candidate_shape.4",
+        "C.reference_contract.2"
+      ]
+    },
+    {
+      "id": "F13",
+      "title": "空 basis 的合同文字与实现/设计不一致",
+      "detail": "旧条款允许非用户批次空basis，而validateCandidateBasis拒绝空basis。本轮简化条款只明确新委托不能空basis；夹具继续记录无用户输入批次的现状，不改预期。",
+      "clauses": [
+        "C.candidate_shape.3"
+      ]
+    },
+    {
+      "id": "F14",
+      "title": "atom-revision 拿“候选被改写后的摘要”比“存档里的旧摘要”",
+      "detail": "两边的摘要来自不同的规范化时代：候选里的 SourceRef 先被 resolveSourceRefs 改写成真实 sha256，存档里的原子则是写入时的值。2026-09-24 之前的 run（r10、r11x）存的是占位摘要，所以拿这类 store 续跑、且同一原子的 authority/inputs 里带 SourceRef 时，重新提出同一份内容会被判成“内容变了、必须升 revision”。夹具 stored-atom-still-carries-a-placeholder-source-digest 记的就是这个形态；修法可以是读入时把旧摘要补齐，或把占位摘要当作“不可比”跳过这一关。",
+      "clauses": [
+        "C.atom_contract.2"
+      ]
+    }
+  ]
+}

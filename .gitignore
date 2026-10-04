@@ -9,11 +9,6 @@ dist/
 !.env.example
 
 # Local research notes and generated experiment evidence.
-/AGENTS.md
-/CONTEXT.md
-/README.md
-/docs/
-/development/
 /results/
 /experiments/**/README.md
 /experiments/evocode/intent-on-d3w9-r1-qwen-r4.json
@@ -27,3 +22,18 @@ __pycache__/
 *.db
 *.db-wal
 *.db-shm
+
+# Maintained navigation and offline gate inputs; other local evidence stays ignored.
+/development/*
+!/development/README.md
+!/development/CURRENT-DESIGN.md
+!/development/DESIGN-HISTORY.md
+!/development/contract-clauses.json
+!/development/contract-enforcement.json
+!/development/contract-settlement.json
+!/development/cleanup-2026-10-04/
+!/experiments/evocode/harbor/dpipe/README.md
+/docs/*
+!/docs/authority/
+/docs/authority/*
+!/docs/authority/spec.md

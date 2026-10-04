@@ -1,0 +1,538 @@
+{
+  "generated_by": "hand-written; validated by experiments/evocode/contract-check.mjs",
+  "note": "2026-09-28 与当前条款编号同步；未机械证明的语义职责仍明确归给模型或核对，不代表真实模型已验证。",
+  "vocabulary": {
+    "code": "该由代码判。action 写要加什么门槛；加完必须配夹具。",
+    "checker": "只能语义判。dimension 写 D1–D7；none-yet 表示现有维度都不覆盖，需要决定是否新增。",
+    "advice": "保留为给模型的写作指导，不判。reason 说明为什么值得留——留着是因为它能防止更难发现的错误，不是因为它能被检查。",
+    "delete": "从给模型的话里删掉。判不了、也不影响模型的正确做法，留着只会占注意力和制造矛盾（r11b 就是被一句自相矛盾的合同坑掉的）。",
+    "deferred": "首版不做。写清理由和将来恢复的条件。"
+  },
+  "clauses": {
+    "K.rules.2": {
+      "verdict": "advice",
+      "reason": "“只判候选实际改动的字段，不要要求委托没要求的工作”是给核对员的写作指导。它的机械对应物是引用门槛（引不到原文的反对不阻断），但那只是部分覆盖，所以句子必须留。"
+    },
+    "K.rules.3": {
+      "verdict": "checker",
+      "dimension": "D7",
+      "reason": "机械半边已实现（写了 paused/unresolved 就算记下，夹具里有）；剩下“除非原文要求现在就做”那句只有核对能判，而且正好是 D7 的适用条件。"
+    },
+    "K.rules.4": {
+      "verdict": "code",
+      "action": "不加新门槛：靠引用门槛间接成立。要补的只是让记录能看出哪些 finding 是这么被放过的——evidence_resolved=false 已经在做。",
+      "reason": "这条其实是被间接强制的：核对只能引用本批事件或当前 IR，把候选自己的说法当证据就引不出可解析的引用，于是不阻断（已实现，夹具 K.check_contract.7 覆盖）。所以它不需要新判定，只需要在记录里能看出哪些 finding 是这么被放过的——evidence_resolved=false 已经在做这件事。"
+    },
+    "K.rules.5": {
+      "verdict": "code",
+      "reason": "“不要判惯例”同样靠引用门槛间接成立（引不到原文的反对不阻断）。残余风险要讲清：如果核对能引到原文，但引的那句话其实是在讲别的，仍会阻断——机械层分不出“引到了”和“引对了”，这属于核对自身的可靠性，见 T11。"
+    },
+    "K.rules.6": {
+      "verdict": "advice",
+      "reason": "本次仅提醒核对器不要把旧 Compiled Intent 当作用户授权。没有新增引用验证、校验门槛或 finding 维度；模型是否遵守，仍须由后续真实样本观察，不能用离线提示文字证明语义收益。"
+    },
+    "D.148": {
+      "verdict": "advice",
+      "reason": "原子拆分的写作指导。设计里自己写明“不把特定 Atom 数量写进 validator”，所以它不该变成门槛；拆得好不好由 D7（有没有说到做到）和后续的成本观察回答。"
+    },
+    "D.152": {
+      "verdict": "advice",
+      "reason": "“拆出来的结果要有具体消费者”是判断拆分收益的标准，不是可判字段：候选无法为“以后也许有用”举证，代码也无法证伪。保留文字作为拆分指导。"
+    },
+    "D.153": {
+      "verdict": "checker",
+      "dimension": "D2",
+      "reason": "“每项共同限制必须在适用原子中可解析”就是 D2（输出与字段范围）要看的事；“不得用拆分绕过权限组合限制”那半已经有机械保证——每个原子各自要过 authority 求值，拆开不会让权限变宽。"
+    },
+    "D.154": {
+      "verdict": "advice",
+      "reason": "“只展开有来源依据、能改变行为的差异”是模型自身推理的纪律，既判不了也测不出（假阴性极高）。保留在文档里，不进合同。"
+    },
+    "D.156": {
+      "verdict": "advice",
+      "reason": "“变化后重新考虑任务形状”是流程指导；它对应的事实（无谓重编译不判、该重编译会被 no-destination 抓）已经在别处定论，不需要单独判定。"
+    },
+    "D.172": {
+      "verdict": "code",
+      "reason": "“执行层不能因困难自增来源”机械上已经成立：执行层只能调用该原子 Authority 覆盖的操作，读一个新来源需要新的 read 权限，authorize 会拒并记 denied_calls（夹具 D.170 覆盖）。剩下“因困难自己换个数据源”的语义部分在执行层不可达。"
+    },
+    "D.174": {
+      "verdict": "advice",
+      "reason": "“有条件后继可以提前写入、前提不成立不启用权限”靠“preconditions 非空不派发”实现了一半；另一半（远期目标只留在 IR、不造空壳原子）判不了——那是对计划的判断，归 D7。"
+    },
+    "D.185": {
+      "verdict": "advice",
+      "action": "与 F1 一起修：先让“纯提问”这条路走得通（见 F1），再要求“只问最小区别问题”。",
+      "reason": "“分歧影响结果或权限时必须问区别问题”是语义判断。现在更急的是相反的问题：合同允许提问，机械门槛却把不认领任务的提问整批拒掉（F1）。先把路打通，这条才有意义。"
+    },
+    "D.186": {
+      "verdict": "advice",
+      "reason": "“一部分不明确、另一部分独立完整时”如何取舍，是拆分判断，判不了；保留在文档里。"
+    },
+    "D.189": {
+      "verdict": "advice",
+      "reason": "“几种解释都允许的判断针对完整动作、可逆不能解除隐私约束”是原则陈述，无从判定。保留在文档里。"
+    },
+    "D.191": {
+      "verdict": "advice",
+      "reason": "这条是具体交换示例里的叙述（U3 明确 null、指代不明时只问最小区别），本身不是要求。建议保持示例身份，不要被下个 session 当成条款去实现。"
+    },
+    "D.199": {
+      "verdict": "checker",
+      "dimension": "none-yet",
+      "action": "决定：关系语义要不要判。若判，需要新维度（“后继绑的版本/范围是否与它实际读取的一致”）；若不判，把这一条降为写作指导。",
+      "reason": "现状只核对 predecessor/successor 是合法 Ref（F6）。要求/条件不解析、顺序不查，所以“后继绑定了实际使用的结果版本”这句完全没有对应判定。判它的信息核对手里有（前驱产物的 ref、后继输入），但要多一个维度。"
+    },
+    "D.203": {
+      "verdict": "advice",
+      "reason": "“旧结果已满足就不要求重做前驱”依赖 Assessment 记录（F10：assessments 至今没有任何判定点）。在 assessment 没落地之前，这条只能是指导。"
+    },
+    "D.225": {
+      "verdict": "advice",
+      "reason": "这是设计第 3 部分的立场陈述（IR 持续维护、原子是执行单元、权限属于执行、完成后收回活动权限……），不是可判条款。保留在文档里，不进合同。"
+    },
+    "D.257": {
+      "verdict": "deferred",
+      "action": "已实现部分保留：执行身份与状态在 store，authorize 按执行状态拒绝。未实现部分（跨进程重启后核对宿主实际状态再决定接替）首版不做。",
+      "reason": "跨进程的对账需要宿主提供“外部动作实际是否发生”的证据，当前接入没有这个能力；硬做只能做成“假定没发生”，比不做更危险。"
+    },
+    "D.261": {
+      "verdict": "code",
+      "action": "与 C.reference_contract.4 同一处修（Ref 来源校验）。",
+      "reason": "“持久 ID/版本/摘要由代码产生”里，摘要已经由代码改写，compiled_intent_id 由代码生成；只有候选自带的 Ref（goal_refs/intent_basis/target_ref）还允许模型现编。"
+    },
+    "D.284": {
+      "verdict": "code",
+      "action": "与 C.reference_contract.3 同一处修（unresolved source_id 改成拒绝）。",
+      "reason": "“模型不能把工具输出改标为用户授权”靠“source_id 只能指向本批事件”成立，但那条现在只计数不阻断，所以这条也只做到一半。"
+    },
+    "D.286": {
+      "verdict": "code",
+      "reason": "已经实现：引用带 digest，产物摘要由宿主计算后在保存事件前比对（artifact_mismatch / artifact_unverifiable，夹具覆盖）。剩下“附件使用资格也要核对”属于 D1/权限范围。"
+    },
+    "D.333": {
+      "verdict": "code",
+      "action": "把 content.scope 不得为空变成 schema 约束（现在只要求它是数组，空数组能过）；“outputs 不存预先生成的答案”见 C.atom_contract.12。",
+      "reason": "设计写“不得为空”，schema 只校验类型。这类“文档说不得为空、schema 允许空”的差是最容易补也最容易忘的一类。"
+    },
+    "D.335": {
+      "verdict": "advice",
+      "reason": "这条是字段作用位置的例子（30 词上限、线索条数、archetype），用来解释 D2 在什么场景下成立。保留为例子，不作为要求。"
+    },
+    "D.337": {
+      "verdict": "code",
+      "action": "二选一并在文档写清：① 保留 conditional，说明首版语义等同于“条件未成立、禁止开始”（即现在的行为）；② 从类型和文本里去掉这种取值。推荐 ①，因为设计本来就要保留条件与例外。",
+      "reason": "类型、合同写四种取值，求值器只认三种，第四种（conditional）让范围永远判 unsupported、锁死它保护的动作（F2）。这不是实现缺陷，是“取值有语义但没人实现语义”——把语义说清楚比留着模糊好。"
+    },
+    "D.345": {
+      "verdict": "advice",
+      "reason": "立场陈述加数据结构事实（撤销暂停靠修 current_scope 而不是恢复快照；任务被拆成原子不影响 IR 的 Goal）。没有可判点，保留在文档里。"
+    },
+    "D.357": {
+      "verdict": "advice",
+      "reason": "“必含指获准且相关的内容，不是注入全局历史/参考答案”是请求构造的指导原则。请求本身由代码组装（events + 该任务 IR + capabilities），方向已经一致；剩下“材料角色/约束位置/输出范围要进核对”由 D1/D2 承担。"
+    },
+    "D.361": {
+      "verdict": "advice",
+      "reason": "生成顺序（先明确委托/材料/交付/条件位置，再写 IR 修订与原子，不先写答案）是给模型的流程指导；能判的部分是 D7（有没有做到）和 C.atom_contract.12（有没有写成答案）。"
+    },
+    "D.363": {
+      "verdict": "checker",
+      "dimension": "D2",
+      "reason": "“影响检查至少覆盖全部现存条件、输入绑定、输出定义”是核对的范围要求，判的是输出/字段范围与绑定，归 D2 加 D4。机械层不做范围检查，因为它不知道哪些条目本轮相关。"
+    },
+    "D.366": {
+      "verdict": "advice",
+      "reason": "方法论自述（不把语义正确性交给引用图、两个模型判断可能共享盲点）——是解释，不是要求。建议保持“论述”身份，不要被当成条款去实现。"
+    },
+    "D.407": {
+      "verdict": "checker",
+      "dimension": "D2",
+      "reason": "机械半边已实现（一次 group 一次提交、task create 先应用、draft/coverage 必须同名）。剩下“跨组共享条件该不该合并”只有核对能判。"
+    },
+    "D.409": {
+      "verdict": "code",
+      "reason": "已经实现：IR 修订与 Compiled Intent 分开提交，编译失败不接纳产物，同时不丢用户的撤回（撤回在 IR 里）；受影响执行保持禁止开始由执行状态与 authorize 共同保证。"
+    },
+    "D.411": {
+      "verdict": "code",
+      "reason": "与 D.409 同一条的实现：批次失败时 IR 变更与编译结果分开处理，失败原因（含维度与 evidence_resolved）写进 management_log，并提供给下一批。"
+    },
+    "D.481": {
+      "verdict": "advice",
+      "reason": "“业务输出与执行回传分开、二值结果不能为凑格式猜标签”是结构已经在做的（ExecutionTask / ExecutionOutcome 分离），语义部分（有没有猜标签）归 D2。保留文字。"
+    },
+    "D.505": {
+      "verdict": "checker",
+      "dimension": "D1",
+      "reason": "“缺可靠定位的用户输入先影响所有可能有关任务”是核对范围问题（材料归属），归 D1；“来源身份由接入认证”已经由事件登记的 source 字段保证。"
+    },
+    "D.517": {
+      "verdict": "advice",
+      "action": "与 F10 一起：assessments 现在没有任何判定点，要么补上（目标/依据/结果的核对维度），要么明确写“首版只记录不判”。",
+      "reason": "“执行层不能直接写入管理判断”已由结构保证（assessment 只能由管理层写）；“判断变更保留原记录”在市场层也没有判定点。这条的价值取决于要不要真的用 assessment。"
+    },
+    "D.519": {
+      "verdict": "advice",
+      "reason": "“原子本身是判断任务时，管理评价评的是判断是否循标准”属于 assessment 的语义，当前无判定点（F10）。保留文字，等 assessment 落地再定。"
+    },
+    "D.521": {
+      "verdict": "deferred",
+      "action": "已实现部分保留（paused/withdrawn 让条件 unsatisfied 并挡住受控动作）。在途操作对账（pending/cancelled/unknown 记录、恢复前核对实际效果）首版不做。",
+      "reason": "对账同样需要宿主提供外部动作真实效果的证据（与 D.257 同一个前提），当前接入给不出；做了只能自欺。"
+    },
+    "D.542": {
+      "verdict": "code",
+      "action": "在 adapter 落实现有要求：路径范围按解析后的实际目标判定（别名、软链接），并在无法拦截时明确 unsupported 而不是宣称已强制。",
+      "reason": "这是安全边界上唯一一条“文档要求明确、实现没核对到”的项：现在按 operation + resource 判定，但“resource 是不是解析后的真实目标”没有证据。它比多数缺口更值得做，因为错了就是越权。"
+    },
+    "D.546": {
+      "verdict": "checker",
+      "dimension": "D2",
+      "reason": "“题面不要泄漏修复”是在合法可见上下文里约束产物含义，属于 D2；“原始隐藏字段能不能附入”由接入控制。两者都做完才能说这条成立，现在只做到前半。"
+    },
+    "D.558": {
+      "verdict": "code",
+      "reason": "已经实现：authorize 按内容摘要判 stale_basis，重新接纳新执行不恢复旧凭证。剩下“提交前重新核对 pending 事件”没有单独判定，但它的效果由 requeue + 下一批重建请求覆盖。"
+    },
+    "D.560": {
+      "verdict": "deferred",
+      "action": "read_refs 的完整记录（材料绑定、输出定义、条件版本）首版不做；如果要做，先明确它是审计字段还是提交前判定。",
+      "reason": "它是审计精度问题，不影响任何判定结果；当前更缺的是让链路跑通。留待 M2 之后，避免再往管理请求里加字段。"
+    },
+    "D.562": {
+      "verdict": "code",
+      "action": "把失败码清单与实际实现对齐：delivery_mismatch 只发生在 adapter 层（DELIVERY_GUARD_*），从管理层的失败码列表里去掉；effect_unknown 保留为“未实现”（与 D.257/D.521 的对账一起做）。",
+      "reason": "失败码是给宿主看的接口，列表里写着两个永远不会出现的码，会让接的人以为有对账机制（F9）。"
+    },
+    "D.572": {
+      "verdict": "code",
+      "action": "把 max_management_input_tokens / max_management_output_tokens 真正判起来（超限按可修订拒绝），或者在预算结构里删掉这两个字段。现在是“存了不判”（F3）。",
+      "reason": "r10 一次输出 72k 字符没有触发任何反应，而这两个字段就摆在那里——这比完全没有字段更坏，因为它让读代码的人以为有上限。"
+    },
+    "D.574": {
+      "verdict": "code",
+      "reason": "已经实现：advance 的返回区分 unchanged / 已交付 / blocked / failure，事件重排队并带 previous_rejection。剩下“请求一项获准调查”没有单独的结局类型，但它落在 questions 与 failure 两种返回值里。"
+    },
+    "D.581": {
+      "verdict": "advice",
+      "reason": "“内部修订只占有限尝试、普通重复日志不调用模型”的机械部分已经由预算与事件去重实现；剩下“哪些算语义同义”判不了，设计里自己也说不能靠哈希认同义。保留文字。"
+    },
+    "D.583": {
+      "verdict": "advice",
+      "reason": "“记录真实工作进展与管理开销、连续只有内部产物变化就停”依赖对“有没有新依据”的判断，属语义；audit-report 已经把可测的部分（批次、调用、引用、声明变化）记全。保留文字。"
+    },
+    "D.599": {
+      "verdict": "advice",
+      "reason": "这是“实施完成的可核对条件”清单，本身就是验收表的雏形：它的每一项都应该由某个测试或某个夹具回答，而不是在这里被判定。建议保持它作为验收参考，逐项挂到夹具/测试上。"
+    },
+    "D.477": {
+      "verdict": "delete",
+      "action": "改掉这一句，指向 §8“交付物登记的归属”：新 id 由原子声明自动登记，不再由引用检查拒绝。",
+      "reason": "这是文档内部前后矛盾的那一句（F11）。留着它，下个 session 会按“不存在的 ID 要被拒”去实现，然后和现在的自动登记打架——这正是 r11d 那类整批作废的来源。"
+    },
+    "D.221": {
+      "verdict": "advice",
+      "reason": "Directs readers to current schema, prepared effects and Atom dispatch instead of superseded design examples."
+    },
+    "C.candidate_shape.10": {
+      "verdict": "checker",
+      "reason": "组提交、basis与任务去向有机械门槛；哪些共同条件应放同组仍由模型理解。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.6": {
+      "verdict": "checker",
+      "reason": "组提交、basis与任务去向有机械门槛；哪些共同条件应放同组仍由模型理解。仅普通且配置独立核对的 CI 采用固定父 IR/父组投影；创建与原文表示仍在 IR 阶段，原文表示由已有核对判断。其他路径保留基础规则。机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.7": {
+      "verdict": "checker",
+      "reason": "组提交、basis与任务去向有机械门槛；哪些共同条件应放同组仍由模型理解。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.8": {
+      "verdict": "checker",
+      "reason": "组提交、basis与任务去向有机械门槛；哪些共同条件应放同组仍由模型理解。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.reference_contract.1": {
+      "verdict": "checker",
+      "reason": "Ref形状与被使用对象的部分身份/版本有检查；不能因此声称每个引用或被选择对象都符合当前语义。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.reference_contract.2": {
+      "verdict": "checker",
+      "reason": "代码解析segment/唯一quote并计算span；是否选齐有效要求及角色是否正确仍是语义判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.reference_contract.5": {
+      "verdict": "checker",
+      "reason": "代码校验任务归属和expected_revision等身份；多个合法对象中应修改哪一个仍由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.ir_change_contract.4": {
+      "verdict": "checker",
+      "reason": "代码校验任务归属和expected_revision等身份；多个合法对象中应修改哪一个仍由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.9": {
+      "verdict": "checker",
+      "reason": "代码校验任务归属和expected_revision等身份；多个合法对象中应修改哪一个仍由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.10": {
+      "verdict": "checker",
+      "reason": "代码校验任务归属和expected_revision等身份；多个合法对象中应修改哪一个仍由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.compilation_contract.5": {
+      "verdict": "checker",
+      "reason": "代码按coverage绑定当前要求与编译身份，Schema限制local_ref位置；依据关联不能证明行为忠实。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.11": {
+      "verdict": "checker",
+      "reason": "代码按coverage绑定当前要求与编译身份，Schema限制local_ref位置；依据关联不能证明行为忠实。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.compilation_contract.4": {
+      "verdict": "checker",
+      "reason": "代码保留旧Atom并替换Relation列表；应该reuse还是replace、哪些依赖仍适用由管理模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.5": {
+      "verdict": "checker",
+      "reason": "代码保留旧Atom并替换Relation列表；应该reuse还是replace、哪些依赖仍适用由管理模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.ir_change_contract.5": {
+      "verdict": "checker",
+      "reason": "生成strict Schema按目标限制value字段；canonical value仍是宽对象，不能对所有手写旧候选宣称同等严格。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.ir_change_contract.3": {
+      "verdict": "checker",
+      "reason": "代码保存选中原文和解释标签并登记Atom声明；分组和实际作用范围的语义仍由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.ir_change_contract.11": {
+      "verdict": "checker",
+      "reason": "代码保存选中原文和解释标签并登记Atom声明；分组和实际作用范围的语义仍由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.candidate_shape.5": {
+      "verdict": "checker",
+      "reason": "代码要求全部当前文本有去向并拒绝规范/非规范重叠；分类是否符合委托由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.ir_change_contract.13": {
+      "verdict": "checker",
+      "reason": "代码要求全部当前文本有去向并拒绝规范/非规范重叠；分类是否符合委托由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.ir_change_contract.14": {
+      "verdict": "checker",
+      "reason": "代码核对旧来源撤回范围和本次变化依据；用户是否确实撤回该含义不能由位置证明。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.13": {
+      "verdict": "checker",
+      "reason": "authority固定值和实际操作授权受代码约束；操作是否足够且必要仍需按委托判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D3"
+    },
+    "C.atom_input_contract.1": {
+      "verdict": "checker",
+      "reason": "输入表示和角色枚举由Schema检查；材料实际角色和用途是否获准由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D1"
+    },
+    "C.atom_input_contract.2": {
+      "verdict": "checker",
+      "reason": "输入表示和角色枚举由Schema检查；材料实际角色和用途是否获准由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D1"
+    },
+    "C.atom_input_contract.3": {
+      "verdict": "checker",
+      "reason": "输入表示和角色枚举由Schema检查；材料实际角色和用途是否获准由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D1"
+    },
+    "C.judgment_contract.3": {
+      "verdict": "advice",
+      "reason": "supported/inferred/unresolved的真实含义及其工作后果由模型判断；单条判断不自动提供行为或阻塞资格。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。"
+    },
+    "C.atom_contract.15": {
+      "verdict": "checker",
+      "reason": "代码填充goal_refs；coverage不能替代实际指令，指令完整性仍需语义审查。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.checks_contract.1": {
+      "verdict": "checker",
+      "reason": "checks形状由Schema检查；默认空数组及自查内容有效性是生成指导。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.checks_contract.2": {
+      "verdict": "checker",
+      "reason": "checks形状由Schema检查；默认空数组及自查内容有效性是生成指导。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.checks_contract.3": {
+      "verdict": "checker",
+      "reason": "checks形状由Schema检查；默认空数组及自查内容有效性是生成指导。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.atom_contract.14": {
+      "verdict": "checker",
+      "reason": "代码向模型提供回传、验收和运行状态并检查提交身份；证据是否支持满足结论是管理模型职责。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D4"
+    },
+    "C.rules.1": {
+      "verdict": "advice",
+      "reason": "完整委托、材料角色、来源支持与路径权限解释均是管理模型语义职责；可选核对可以查错，代码不能证明理解正确。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。"
+    },
+    "C.rules.2": {
+      "verdict": "advice",
+      "reason": "完整委托、材料角色、来源支持与路径权限解释均是管理模型语义职责；可选核对可以查错，代码不能证明理解正确。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。"
+    },
+    "C.ir_change_contract.9": {
+      "verdict": "checker",
+      "reason": "代码保存选中来源并检查表示与来源去向；当前目标、角色、作用范围及有效要求的完整选择仍由模型负责。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.ir_change_contract.10": {
+      "verdict": "checker",
+      "reason": "代码保存选中来源并检查表示与来源去向；当前目标、角色、作用范围及有效要求的完整选择仍由模型负责。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.4": {
+      "verdict": "checker",
+      "reason": "缺失材料等已声明事实有门槛；能调查的方法未知与需要用户澄清的语义歧义由管理模型区分。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D1"
+    },
+    "C.atom_contract.1": {
+      "verdict": "checker",
+      "reason": "Relation端点、循环和验收等待由代码验证；整体工作边界、共同要求分配和交接是否合理由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.atom_contract.2": {
+      "verdict": "checker",
+      "reason": "Relation端点、循环和验收等待由代码验证；整体工作边界、共同要求分配和交接是否合理由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.atom_contract.3": {
+      "verdict": "checker",
+      "reason": "Relation端点、循环和验收等待由代码验证；整体工作边界、共同要求分配和交接是否合理由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.3": {
+      "verdict": "checker",
+      "reason": "Relation端点、循环和验收等待由代码验证；整体工作边界、共同要求分配和交接是否合理由模型判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.ir_change_contract.12": {
+      "verdict": "checker",
+      "reason": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.atom_contract.6": {
+      "verdict": "checker",
+      "reason": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.atom_contract.13": {
+      "verdict": "checker",
+      "reason": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.atom_output_contract.3": {
+      "verdict": "checker",
+      "reason": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.atom_contract.16": {
+      "verdict": "checker",
+      "reason": "代码保留原始候选供修订，校验版本/台账与依赖；完整更新、修错不丢正确含义、验收判断正确性由模型负责。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D4"
+    },
+    "C.rules.12": {
+      "verdict": "checker",
+      "reason": "代码保留原始候选供修订，校验版本/台账与依赖；完整更新、修错不丢正确含义、验收判断正确性由模型负责。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D4"
+    },
+    "K.check_contract.10": {
+      "verdict": "advice",
+      "reason": "这是给核对模型的引用写作指导，代码另行解析来源及写回 digest。"
+    },
+    "K.check_contract.11": {
+      "verdict": "checker",
+      "dimension": "D2",
+      "reason": "要求独立核对对照原文判断遗漏、范围和派发正文；机械闭合不替代语义判断。"
+    },
+    "K.check_contract.4": {
+      "verdict": "advice",
+      "reason": "核对员的角色设定（“你是独立核对，不是作者”）删不得：删掉之后同一次调用的模型会倾向重写候选而不是挑毛病。它判不了，但它决定了核对能用。"
+    },
+    "K.check_contract.5": {
+      "verdict": "code",
+      "action": "接接纳判定：verdict=consistent 而 findings 非空时按非法处理（一行判断）。",
+      "reason": "现在只有 schema 管形状，没人看这两者是否自相矛盾。补一个一行判断比事后在记录里发现“说了一致却列了问题”便宜。"
+    },
+    "K.check_contract.7": {
+      "verdict": "checker",
+      "dimension": "D7",
+      "reason": "“D7 只能引用委托里要求该工作的原文，不得用于不够详细/委托自己留待决定/paused”是核对员自己的纪律。机械层能查引用能不能解析（已实现），查不了引用是否支持结论——这一层永远是核对的自律，所以写明比藏在提示词里好。"
+    },
+    "K.check_contract.1": {
+      "verdict": "checker",
+      "dimension": "D2",
+      "reason": "层级选择是语义判断；代码仅执行所选层级并保护父基线，不证明选层正确。"
+    },
+    "C.atom_contract.8": {
+      "verdict": "checker",
+      "dimension": "D7",
+      "reason": "代码只检查已表达关系与状态；实际工作拆分及依赖要求是否忠实仍由管理模型和核对模型判断。"
+    },
+    "C.atom_contract.7": {
+      "verdict": "checker",
+      "dimension": "D7",
+      "reason": "代码只检查已表达关系与状态；实际工作拆分及依赖要求是否忠实仍由管理模型和核对模型判断。"
+    },
+    "C.rules.22": {
+      "verdict": "checker",
+      "dimension": "D6",
+      "reason": "核对是否把结果路径扩大成实现范围或启动前提，必须对照实际用户要求及宿主边界。"
+    },
+    "C.rules.21": {
+      "verdict": "advice",
+      "reason": "完整委托、材料角色、来源支持与路径权限解释均是管理模型语义职责；可选核对可以查错，代码不能证明理解正确。仅普通且配置独立核对的 CI 对照固定父 IR 检查整个计划，原文到 IR 的表示转交已有核对；其他路径保留基础规则。机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。"
+    },
+    "C.rules.20": {
+      "verdict": "checker",
+      "reason": "代码保留原始候选供修订，校验版本/台账与依赖；完整更新、修错不丢正确含义、验收判断正确性由模型负责。仅普通且配置独立核对的 CI 按固定父 IR 修复完整计划，IR 缺陷由已有核对的 repair_target=ir 返回；引用、身份、完成条件及证据解析机制不变。其他路径保留基础规则。机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D4"
+    },
+    "C.rules.18": {
+      "verdict": "checker",
+      "dimension": "D7",
+      "reason": "代码只检查已表达关系与状态；实际工作拆分及依赖要求是否忠实仍由管理模型和核对模型判断。"
+    },
+    "C.rules.17": {
+      "verdict": "checker",
+      "reason": "缺失材料等已声明事实有门槛；能调查的方法未知与需要用户澄清的语义歧义由管理模型区分。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D1"
+    },
+    "C.rules.16": {
+      "verdict": "checker",
+      "reason": "缺失材料等已声明事实有门槛；能调查的方法未知与需要用户澄清的语义歧义由管理模型区分。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D1"
+    },
+    "C.rules.15": {
+      "verdict": "checker",
+      "reason": "代码校验Atom形状、依据绑定和可选constraints原样规则；任务行为、接口、完成证据及作用范围是否完整忠实属于模型语义。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。",
+      "dimension": "D2"
+    },
+    "C.rules.14": {
+      "verdict": "checker",
+      "dimension": "D3",
+      "reason": "工具名与调用必须按宿主真实名字精确匹配，由代码固定（openCodeOperationsForModel、授权门精确匹配）；Atom授予的操作是否足够且必要、是否只为图省事缩成只读调查，仍只有核对能按委托判断。 机械与语义职责分别记录；归属不意味着已验证模型正确，也不强制新增核对调用。"
+    }
+  }
+}

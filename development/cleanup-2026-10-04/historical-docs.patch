@@ -1,0 +1,276 @@
+--- a/development/CONTEXT-BUDGET-RESEARCH-20260930.md
++++ b/development/CONTEXT-BUDGET-RESEARCH-20260930.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 长时运行下的上下文预算：一手资料、我们的实测、复合方案（2026-09-30）
+ 
+ > 触发：20260929-203358 那次续跑 15 轮里只有第 1、2 轮真正干活，第 3–15 轮的 13 个管理批次全部失败，失败族集中在"IR 记账"。判断依据不是观感，而是下面第 1 节的实测数字和一手研究。本文只做调查与推论，不落实现。
+--- a/development/handoff-reasoning-brief-2026-09-24.md
++++ b/development/handoff-reasoning-brief-2026-09-24.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 交给外部推理 session 的提示词（2026-09-24）
+ 
+ **这份文件是什么。** 一份**自足的提示词**，用来交给另一个（读不到本仓库的）session 做推理分析。它只描述**现象与代码当前行为**，不含文件路径与行号，也不使用本项目自创的机制名。
+--- a/development/IR-FAULT-TOLERANCE-20260929.md
++++ b/development/IR-FAULT-TOLERANCE-20260929.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # IR 容错边界说明（2026-09-29）
+ 
+ > 实验依据：run `intent-luna-dpipe-full-20260929-203358-8c6aebaa`。第 1–2 轮完整走通链条（派发→执行→回传→评估），第 3 轮起管理批次全部在编译前被拒。成因不是模型逐轮变差，而是：失败事件 requeue → 下一批携带更多事件（实测 1→3→5 个事件、48→285→336 段）→ 全有全无的源账目更难满足 → 再失败。本文定规则与边界；第 1 层已实现（见 §1.3 证据）。
+--- a/development/IR-STAGE-MINIMAL-DRAFT-20260930.md
++++ b/development/IR-STAGE-MINIMAL-DRAFT-20260930.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 严格两级流程 · IR 阶段最小改动草案（2026-09-30）
+ 
+ > 边界：只处理"IR 阶段不再要求模型输出 `execution_decisions / assessments / checks`，保留 `questions`"。
+--- a/development/MANAGEMENT-VIEW-SPEC.md
++++ b/development/MANAGEMENT-VIEW-SPEC.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 管理层视图规范（living，v0.2 · 2026-09-30）
+ 
+ > 取代 v0 / v0.1。范围按用户简化：**单任务；1 IR = 1 大任务；多任务以后就是多个
+--- a/development/MINIMAL-MANAGEMENT-SPEC-20260930.md
++++ b/development/MINIMAL-MANAGEMENT-SPEC-20260930.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 最小管理层规范（v0 草案，2026-09-30）
+ 
+ > 已被 v0.1 取代（2026-09-30，用户反馈）：问题不是"IR 存在"，而是"每次调用全量读、混合读"。
+--- a/development/MINIMAL-MANAGEMENT-SPEC-v0.1-20260930.md
++++ b/development/MINIMAL-MANAGEMENT-SPEC-v0.1-20260930.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 管理层规范 v0.1：保留 IR，收缩"模型视图"（2026-09-30）
+ 
+ > v0 的错：把"账本太贵"错误地推成"不要 IR"。反馈：问题不在 IR 存在，
+--- a/development/PROGRESS-2026-09-25.md
++++ b/development/PROGRESS-2026-09-25.md
+@@ -1,6 +1,8 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 2026-09-25 进展、证据与当前阻塞
+ 
+-> **历史批次索引。** 当前状态已推进到 2026-09-28，见 [CURRENT-DESIGN.md](CURRENT-DESIGN.md) §12.6–12.7：Atom 直接交付已实现，完整 dpipe 首轮仍有语义编译错误，IR 完整性尚未完成语义核对。下文“当前/下一次”均指 9 月 25 日，不是当前 session 的行动指令。
++> **历史批次索引。** 当前状态已推进到 2026-09-28，见 [DESIGN-HISTORY.md](DESIGN-HISTORY.md) §12.6–12.7：Atom 直接交付已实现，完整 dpipe 首轮仍有语义编译错误，IR 完整性尚未完成语义核对。下文“当前/下一次”均指 9 月 25 日，不是当前 session 的行动指令。
+ 
+ 本记录由本次工程修复 session 根据保存的运行证据、实际请求构造和当前源码更新。本次修复 OpenAI strict structured-output 请求路径，完成一条新的真实结构化提案 smoke；未进行核对、接纳、派发或业务执行，也没有覆盖历史产物。
+ 
+--- a/development/proposal-boundaries-2026-09-24.md
++++ b/development/proposal-boundaries-2026-09-24.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 提案的代码边界自查（2026-09-24）
+ 
+ **为什么要这张表。** 用户问"这一轮的提案里代码边界清楚吗"。项目已经有过一次教训（阶段 3 自创规则、r11d 过严规则）：**一条"该由代码判"的提案，如果说不清谁写、谁读、判在哪一层、违反会怎样，落成代码时就会长出一道没人要求过的规则，或者一个改不动的字段。** 所以每个要落代码的提案，先按同一张清单自查。
+--- a/development/REVIEW-20260930.md
++++ b/development/REVIEW-20260930.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 高层审查：无尽修复是为了什么（2026-09-30）
+ 
+ > 触发：carry smoke（新构建，1..6 截短）跑到第 3 轮后，用户提出"复杂度上升、收益不可观，需要从更高视角审查"。
+--- a/development/SHORT-SOURCE-ID-DRAFT-20260930.md
++++ b/development/SHORT-SOURCE-ID-DRAFT-20260930.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 事件短标识（IR 接口）——草案 v2（2026-09-30）
+ 
+ 状态：**已按 v2 收敛实现并提交（`84bee36`，评审修复见 `ebdf389`，2026-09-30）**。三处拍板按用户决定执行：
+--- a/docs/authority/cost-instrumentation-research-2026-09-23.md
++++ b/docs/authority/cost-instrumentation-research-2026-09-23.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 成本归因的最小计量集合（T10 研究结果，2026-09-23）
+ 
+ 本文件是 wayfinder 研究票 **T10**（`project/development/wayfinder-cost-structure/issues/T10-cost-instrumentation-minimum.md`）的产出。目标是把"时间到底花在哪"从推理变成测量，且**字段名沿用行业规范，不自创命名**。
+--- a/docs/authority/dsh-architecture-comparison-2026-09-24.md
++++ b/docs/authority/dsh-architecture-comparison-2026-09-24.md
+@@ -1,10 +1,12 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # DeepSeek Harness 架构横向对比与可借鉴项（2026-09-24）
+ 
+ 本文件回答一个问题：**DeepSeek Harness（DSH）的架构逻辑，对我们 Intent Compiler 有什么可借的**。按用户限定，**Cordis 本身不进入讨论**——凡属于 Cordis 的机制（服务注册、fiber/effect 生命周期、waterfall/serial/emit 分发、HMR、profile + patch 组装）在本文件中一律排除；需要提到时只用"框架无关"的等价说法重述，并标注它依赖 Cordis、因此不进采纳清单。
+ 
+ **阅读来源（只读）：**`deepseek-ai/deepseek-harness`，MIT 许可，HEAD = `477b4f420553e8a52c2fbccc464d7561b239c443`（2026-09-24，`dsh-0.1.7-rc.2`）。以浅克隆 + sparse checkout 方式只读浏览，读了 `docs/architecture.zh.md`、`docs/subsystems/*.zh.md`（core/session/tools/llm-streaming/goal/sandbox/invariants/token-meter/session-projection 等）、以及 `packages/core/{agent,agent-loop,session,tools}`、`packages/llm/{llm,llm-retry,token-meter}`、`packages/session/{session-format,session-projection}`、`packages/sandbox`、`packages/interaction/user-approval`、`packages/guard/*`、`packages/experimental/auto-review`、`packages/runtime-diagnostics/invariants`、`packages/subagent`、`packages/sdk/protocol` 的 README 与源码。**没有运行它的任何命令、测试或安装步骤**；本文件中的所有 DSH 事实都来自静态阅读，并给出文件路径（少数给出行号）。
+ 
+-**对照对象：**本仓库 `project/development/CURRENT-DESIGN.md` 的四项公开调用（acceptEvent / advance / authorize / inspect）、持续 IR、Compiled Intent、Atom 台账、Gate / Check / Acceptance / Evaluation 四词分工、dispatch / execution 生命周期、budget、audit-report，以及 wayfinder 票据 T01–T11。
++**对照对象：**本仓库 `project/development/DESIGN-HISTORY.md` 的四项公开调用（acceptEvent / advance / authorize / inspect）、持续 IR、Compiled Intent、Atom 台账、Gate / Check / Acceptance / Evaluation 四词分工、dispatch / execution 生命周期、budget、audit-report，以及 wayfinder 票据 T01–T11。
+ 
+ **追加（2026-09-24）：**文末新增**附录 A**，单独记录 DSH 的 `dsh-sandbox` 与本项目已有机制之间的对照与可借鉴项。
+ 
+--- a/docs/authority/engineering-precedent-research-2026-09-24.md
++++ b/docs/authority/engineering-precedent-research-2026-09-24.md
+@@ -1,8 +1,10 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 工程实例对照：清算里待决项的现成做法（2026-09-24）
+ 
+ 本文件回答一个问题：`development/contract-settlement.json` 里那些"先别急着修、先看看别人怎么做"的问题，**别的工程实现是怎么处理的，我们能借什么**。
+ 
+-**它不是设计文档，也不改任何设计或代码。** 所有结论都要回到 `development/CURRENT-DESIGN.md` 的既有段落，并由对应票据先定归属（与 `dsh-architecture-comparison-2026-09-24.md` 同一纪律）。
++**它不是设计文档，也不改任何设计或代码。** 所有结论都要回到 `development/DESIGN-HISTORY.md` 的既有段落，并由对应票据先定归属（与 `dsh-architecture-comparison-2026-09-24.md` 同一纪律）。
+ 
+ **用词：**只用三类名字——① `CONTEXT.md` 的四个词（机械门槛 / 独立核对 / 验收 / 评测）；② `CURRENT-DESIGN` 已有的名字（authority、coverage、dispatch、execution、`denied_calls`、`audit-report` 等）；③ 被引用项目自己的名字（只在描述它们时使用）。**本文件不定义新术语。**
+ 
+--- a/docs/authority/judge-reliability-methods-research-2026-09-23.md
++++ b/docs/authority/judge-reliability-methods-research-2026-09-23.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 语义核对的成本与可靠性方法（T11 研究结果，2026-09-23）
+ 
+ 本文件是 wayfinder 研究票 **T11**（`project/development/wayfinder-cost-structure/issues/T11-judge-reliability-methods.md`）的产出：同一个模型既生成候选又做核对的已知代价与缓解方法，以及成熟的**声称级验证**方法。
+--- a/docs/authority/management-semantic-review-2026-09-24.md
++++ b/docs/authority/management-semantic-review-2026-09-24.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 管理层候选的语义复核（2026-09-24，gpt-6-luna 独立复核）
+ 
+ **这份记录回答什么**：机械门槛接受的候选，在语义上是否真的成立？具体量化两件事——
+--- a/docs/authority/management-semantic-review-d3w9-2026-09-24.md
++++ b/docs/authority/management-semantic-review-d3w9-2026-09-24.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # d3_w9 真实运行候选的语义复核（2026-09-24，gpt-6-luna 独立复核）
+ 
+ **这份记录回答什么**：d3_w9 第 1 轮系列真实运行里，管理层提出的候选在语义上是否成立；以及 r10 那条独立核对的拒绝，回头看在委托原文上站不站得住。
+--- a/docs/authority/research.md
++++ b/docs/authority/research.md
+@@ -1,6 +1,8 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # Intent Compiler：从开放主张到可证伪实验
+ 
+-> **资料职责更新（2026-09-21）：** 下一候选的当前设计、实现契约与实施顺序统一见 [CURRENT-DESIGN.md](../../development/CURRENT-DESIGN.md)；既有实现/实验事实和正式分阶段研究仍见 [spec](spec.md)。本文保留研究与可行性证据，不覆盖新方案；下文的“下一步”和进度是原记录的时间背景，不表示已启动或完成下一候选。
++> **资料职责更新（2026-09-21）：** 下一候选的当前设计、实现契约与实施顺序统一见 [DESIGN-HISTORY.md](../../development/DESIGN-HISTORY.md)；既有实现/实验事实和正式分阶段研究仍见 [spec](spec.md)。本文保留研究与可行性证据，不覆盖新方案；下文的“下一步”和进度是原记录的时间背景，不表示已启动或完成下一候选。
+ 
+ > **生成时间**：`2026-09-14T09:06:26-04:00`
+ > **研究问题**：在不预设 Atom、Relation、图或具体实现的情况下，怎样把通用意图管理层的“可用、可迁移和高效”逐级转化为可证伪的实验主张？
+--- a/docs/authority/run-log-d3w9-2026-09-24.md
++++ b/docs/authority/run-log-d3w9-2026-09-24.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # d3_w9 实跑日志：2026-09-24 第 11 轮系列（r11 … r11e）
+ 
+ **一句话**：五次尝试全部 `reward 0`、**无一派发**；其中四次卡在**机械层**（一次是我自己引入的回归），三轮修复已落地并有测试，但都还没在真实运行里走到底（r11e 被用户叫停）。
+--- a/docs/authority/spec.md
++++ b/docs/authority/spec.md
+@@ -1,30 +1,6 @@
+-# Intent Compiler staged validation experiment
+-
+-## 最新实施与验证入口（2026-09-28）
+-
+-当前源码已有 v2 和 Atom 直接交付，语义修复尚未完成。统一设计与关系见 [CURRENT-DESIGN.md](../../development/CURRENT-DESIGN.md) §12.6–12.7，回滚状态和最新完整分析见 §13.10–13.11。最新结论同时覆盖原文到 IR 的要求选取、IR 与 CI/Atom 的一致性以及后续修订退化。本 spec 下文保留各批事实及正式研究安排，较早的“未实施/未运行/待决定”不自动代表当前状态。
+-
+-`dpipe-atom-direct-smoke-20260928-001`：完整首轮输入 19,344 字符，一次提议，零独立核对；1 份持续维护的 IR（本例为 1 个 TaskIntent，内含 9 条 `IR.content` 内容项），对应 1 份 Compiled Intent（5 个 Atom、4 条 Relation），当前仅 1 个 Atom 进入派发预览。原始 Atom 遗漏了 IR 已有的精确错误字符串，足以证明整份 CI 没有忠实表达要求；这不证明该 IR 的全部内容和语义角色都正确。Atom 另写了 checksum 小写：小写可以是合规实现选择，不能单凭此判业务失败，须区分实现安排和无依据的用户/验收限制。没有执行层或 verifier 结果。
+-
+-此次只核对并同步文档、源码位置和已有产物，未修改源码、未重新运行测试或模型。历史 380 项测试结果与单次派发成功不能作为语义修复证明。
+-
+-## 2026-09-25 入口快照（历史，后续记录已更新状态）
+-
+-v2 及用户更新、结构化接收、修订上下文等后续修改已有源码；下文较早的“未实现/未运行”描述按各自日期理解。[进展与证据索引](../../development/PROGRESS-2026-09-25.md) 汇总各批修复、实施反馈与原始报告；设计边界见 CURRENT-DESIGN.md §10–11。此次只同步文档，没有重跑测试、模型或业务。
+-
+-Qwen 的后续真实改口曾接纳并形成新启动资格，但继承无依据文件路径，人工检查不合格。OpenCode/Luna max 真实批次三次提案均未形成有效候选；改为 high 并修复结构化接收后，小输入仍因 StructuredOutputError 失败，未进入核对。已定位的发送权限、样本摘要与失败 usage 保留问题仍待修。不能写成“仅剩模型质量”或“接入已通过”。
+-
+-最新完整测试数字来自实施 agent 反馈：342 项、341 通过、1 环境跳过，typecheck 通过；本次未独立重跑。最新小输入真实记录见 [report.json](../../development/validation/2026-09-25-gpt6-luna-opencode-prepared-001/raw/structured-output-smoke-high-001/report.json)。历史报告、冻结输入和配置不改写，后续审计补充见进展索引。近期实验没有业务工具调用，M2 仍未达成。
+-
+-## 当前设计入口与文档职责（2026-09-21 统一）
+-
+-下一候选的设计、交换契约、源码改动顺序与有界开发验证，已合并为 [CURRENT-DESIGN.md](../../development/CURRENT-DESIGN.md)。它是该范围的当前开发依据，不再要求开发者在 16 份讨论稿之间选择；此前“设计仍未收口”的段落记录当时进度，当前已达到可进入实现的程度。
+-
+-CONTEXT 继续规定术语。本 spec 保留既有实现、运行与失败记录、正式分阶段研究安排；阅读实现状态须结合后面的日期记录。下一候选与首版实现不同的地方按主文档实施，例如模型生成 Atom/Relation、IR 与 Compiled Intent 独立更新；下文首版“不调用模型投影”等限制仅描述首版，不能用来否定新方案。
+-
+-本次未修改源码、运行模型或接入宿主；主文档里的接口/schema 不代表已实现。主文档有界开发验证不替代本文正式研究门槛，也不自动授权启动全部实验。研究资料仅作证据，未批准的旧候选不会因合并入口获得批准。
+-
+-交接补充：下一候选的实现与相关确定性检查不以前置完成本文正式 Experiment 0 校准/对照为条件；正式实验仍遵守相应要求。本文 `Benchmark allocation and thin overlay` 的既有题目分工继续保留，主文档中的 CSV 开发例子不取代它。2026-09-18 等首版验证结果只属于原实现，不是新方案的验证结果。
++# 历史实验协议与实施记录
++
++> 本文保留各日期的研究安排和验证事实；“当前/最新/下一步/授权”按当时语境理解。现行入口为 [当前设计](../../development/CURRENT-DESIGN.md) 与 [产物状态](../../experiments/evocode/harbor/dpipe/README.md)。历史协议未自动成为下一次实验定义；更改须另行决策。
+ 
+ ## 整理前的状态与研究正文（保留记录）
+ 
+@@ -779,7 +755,7 @@
+ 
+ ## 2026-09-24 后续修复批次（实现与离线验证事实）
+ 
+-本批由用户授权源码、文档及离线验证；没有真实模型、宿主业务任务或 benchmark 运行。固定验收及逐项结果见 [SCOPE](../../development/validation/2026-09-24-repair-batch/SCOPE.md)、[RESULTS](../../development/validation/2026-09-24-repair-batch/RESULTS.md)。关联设计集中于 CURRENT-DESIGN.md §9，不将未实施部分当现状。
++本批由用户授权源码、文档及离线验证；没有真实模型、宿主业务任务或 benchmark 运行。固定验收及逐项结果见 [SCOPE](../../development/validation/2026-09-24-repair-batch/SCOPE.md)、[RESULTS](../../development/validation/2026-09-24-repair-batch/RESULTS.md)。关联设计集中于 DESIGN-HISTORY.md §9，不将未实施部分当现状。
+ 
+ - 新写入的管理失败记录与返回使用同一最终 code。核对拒绝、核对不可用、机械失败、提议错误、必要核对额度不足分别归因；旧核对标志不污染后一次候选失败。历史运行记录不回写。
+ - 修订输入新增 repair_context，传递准确旧稿、摘要及输入依据变更状态；逐次记录候选 JSON 变化路径。它不复用语义通过或执行资格，不增加自动重跑、请求上限或超时。
+@@ -813,7 +789,7 @@
+ 
+ ## 2026-09-24 用户更新与派发前职责批次（实现与离线验证事实）
+ 
+-用户已认可具体方案并授权此批源码与离线验证。CURRENT-DESIGN.md §10 为本批当前说明，完整证据见 development/validation/2026-09-24-update-batch/{SCOPE,RESULTS}.md。
++用户已认可具体方案并授权此批源码与离线验证。DESIGN-HISTORY.md §10 为本批当前说明，完整证据见 development/validation/2026-09-24-update-batch/{SCOPE,RESULTS}.md。
+ 
+ 本批使用已有增量/复用表达，合同与范例默认不生成自查报告，明确业务定位/实现调查由执行层在授权范围内完成。核心在私有状态准备一次结果，用户输入（包括 reuse）触发配置的独立核对，核对后提交同一对象；交付携带 constraints / return_when。未处理用户事件独立持久化，run 范围暂停后续授权；当前范围和本次资格共同控制开始/继续。读取依据变化返回 stale_basis 并保存草稿；已关闭执行的匹配迟到回传只存历史证据。没有实现部分接纳或新增核对层。
+ 
+@@ -835,7 +811,7 @@
+ 
+ ## 2026-09-28 完整任务语义链与 Relation 修复（后续实现）
+ 
+-用户要求重审完整任务，而非继续将 ingest 切片成功泛化。实现与当前边界见 CURRENT-DESIGN.md §12.2。新增管理解析的新 Atom Relation 本地引用、精确端点/环校验、真实回传加管理验收的依赖门控、reuse 后继释放、start/operation 再检、后继结果元数据与 completion evidence 投影。模型合同依据最小有效交付和实际消费者选择拆合，不规定 Atom 数量；未新增强制独立核对模型调用。
++用户要求重审完整任务，而非继续将 ingest 切片成功泛化。实现与当前边界见 DESIGN-HISTORY.md §12.2。新增管理解析的新 Atom Relation 本地引用、精确端点/环校验、真实回传加管理验收的依赖门控、reuse 后继释放、start/operation 再检、后继结果元数据与 completion evidence 投影。模型合同依据最小有效交付和实际消费者选择拆合，不规定 Atom 数量；未新增强制独立核对模型调用。
+ 
+ 固定模型测试已复现修改前的新关系无法合法生成及虚假关系未被执行门控，并覆盖更新和验收后释放路径。多任务且宿主未标任务的更新保留管理所需历史原文，执行交付保持 Atom 范围。完整首轮原文 19,344 字符的首次真实 smoke 因 OpenCode 服务连接中断未得到候选，此事实既非语义成功也非语义拒绝。后续完整输入结果、全量测试和成本须从本批结果报告读取；不继承旧切片或旧 benchmark 分数。
+ 
+@@ -929,7 +905,7 @@
+ 
+ 本次证明这一次反馈恢复成功，不能把首稿说成成功，也没有得到有效的多内容拆分结果。实际3次管理调用，输入117351、输出19876、推理1724 tokens。最终/app构建要求及未知路径权限边界保留。完整证据见 [运行记录](D:/huawei/intent_compiler/smoke/dpipe-full-20260928-001/runs/dpipe-sol-medium-20260928-001/README.md)。本次没有继续改语义提示或生产代码来重跑。
+ 
+-后续只读调用链复核确认：模型拿到旧 IR（本次为空），同次提出 IR 更新与完整 CI/Atom；程序之后才形成实际 IR 正文，绑定引用并封装已生成的 Atom。不能以程序先处理 IR 再构建 CI 来证明语义生成依据成立。本次首稿 IR 选源与 Atom 内容脱节，暴露了仅靠提示词约束这项依赖的不足；不据此推断单次响应必错，也不把整体提交改成分次保存。最新分析见 [CURRENT-DESIGN §13.16](../../development/CURRENT-DESIGN.md#1316-生成依赖复核先处理-ir-不等于依据-ir-生成-ci2026-09-28)。没有新增模型调用、执行或生产代码修改。
++后续只读调用链复核确认：模型拿到旧 IR（本次为空），同次提出 IR 更新与完整 CI/Atom；程序之后才形成实际 IR 正文，绑定引用并封装已生成的 Atom。不能以程序先处理 IR 再构建 CI 来证明语义生成依据成立。本次首稿 IR 选源与 Atom 内容脱节，暴露了仅靠提示词约束这项依赖的不足；不据此推断单次响应必错，也不把整体提交改成分次保存。最新分析见 [CURRENT-DESIGN §13.16](../../development/DESIGN-HISTORY.md#1316-生成依赖复核先处理-ir-不等于依据-ir-生成-ci2026-09-28)。没有新增模型调用、执行或生产代码修改。
+ 
+ 
+ ### 2026-09-29 — 父子生成依赖修复及真实dpipe产物验证
+--- a/docs/authority/structural-cost-methods-research-2026-09-23.md
++++ b/docs/authority/structural-cost-methods-research-2026-09-23.md
+@@ -1,3 +1,5 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 结构性成本成因的既有判定方法（T09 研究结果，2026-09-23）
+ 
+ 本文件是 wayfinder 研究票 **T09**（`project/development/wayfinder-cost-structure/issues/T09-structural-cost-methods.md`）的产出，只做「已有方法 + 一手证据 + 特化提案」，**本轮不写实现代码**。
+--- a/docs/authority/structured-output-research-2026-09-22.md
++++ b/docs/authority/structured-output-research-2026-09-22.md
+@@ -1,6 +1,8 @@
++> **历史/专题材料，非现行指令。** 保留当时的观察、方案或取舍；实现与状态须从 [模块地图](../../development/README.md) 核对，不执行本文旧“下一步”。原 CURRENT-DESIGN 节号均指历史设计。
++
+ # 结构化输出：已有方法与成功结果（2026-09-22 定向检索）
+ 
+-本文件是本轮为“按 JSON Schema 生成是否已有成熟解法”做的定向检索证据，只记录事实与来源，不改变 development/CURRENT-DESIGN.md 的实施依据。
++本文件是本轮为“按 JSON Schema 生成是否已有成熟解法”做的定向检索证据，只记录事实与来源，不改变 development/DESIGN-HISTORY.md 的实施依据。
+ 
+ ## 结论
+ 
+--- a/development/DESIGN-HISTORY.md
++++ b/development/DESIGN-HISTORY.md
+@@ -1,6 +1,6 @@
+ # 历史设计与实施记录（截至 2026-10-02）
+ 
+-> 本文是整理前 CURRENT-DESIGN 的正文存档。以下“当前”“下一步”“待实施”和运行授权均属于各自历史时点，不是现行指令。现状从 [当前设计](CURRENT-DESIGN.md) 与 [产物状态](../experiments/evocode/harbor/dpipe/README.md) 阅读；只有追查具体依据时才查本文件。
++> 本文保留原设计、变更理由和运行记录。仍有效的要求已按主题整理到 [当前设计](CURRENT-DESIGN.md)，[迁移记录](cleanup-2026-10-04/README.md#design-refinement) 列出保留、替代与未决项。下方正文保持各时点的表述；追查具体决定时按节查阅。实际产物和运行状态见 [dpipe 状态](../experiments/evocode/harbor/dpipe/README.md)。
+ 
+ # Intent Compiler 当前设计与实现方案
+ 

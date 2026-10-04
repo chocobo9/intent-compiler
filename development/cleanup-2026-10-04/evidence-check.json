@@ -1,0 +1,176 @@
+{
+  "runs": [
+    {
+      "root": "D:\\huawei\\EvoCodeBench\\management_runs\\intent-luna-dpipe-offline-r3-20261002-164739z-5d90df",
+      "ok": true,
+      "code": null,
+      "calls": 6,
+      "executions": 2,
+      "pending": 0,
+      "unresolved": 0,
+      "evidence_sha256": {
+        "run.json": "43eee35514511b2757f8f9644e19c1bc35675c3237d75a00f311235eb2d72261",
+        "advance-result.json": "b6a0a45469756b4cd20f83b5d2088ab80590e249ced75598e1bd7417f43b568d",
+        "progress.json": "42f87d0080e3ea7ecf3cbd88018bcf2ab65484e0f0adbfe04c3cd47b531dcf3d",
+        "compiler-store\\v2-runs\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\\snapshot.json": "5a12c15f53ea00f5c358a18d0853e5d8836a43ade40b04c92b73f8761687fe45"
+      },
+      "status": {
+        "kind": "offline_preparation",
+        "actually_delivered": false,
+        "executor_started": false,
+        "proposed_deliveries": 1
+      },
+      "artifacts_sha256": {
+        "artifacts\\atoms.json": "8f1dad83f41a7459c1e7a010b0f0a8920ba9528df40ed2cb11f852e90e2cc882",
+        "artifacts\\compiled.json": "70120f54de9018ed2bde1e57b25480b511dab09439b9da269702a8d96d6d772a",
+        "artifacts\\ir.json": "495202c3428fb73932039219ddb0d74dab171013a2133bfecf8659a6fe59b764",
+        "artifacts\\status.json": "b7e892e7071ed4c97d2a0e16b2c79a00eb2e37525115fa46db072552c2d2f8d5"
+      },
+      "artifact_maps_equal_store": {
+        "ir": true,
+        "compiled": true
+      }
+    },
+    {
+      "root": "D:\\huawei\\EvoCodeBench\\management_runs\\intent-luna-dpipe-offline-r4-20261002-192524z-bf65e1",
+      "ok": true,
+      "code": null,
+      "calls": 3,
+      "executions": 2,
+      "pending": 0,
+      "unresolved": 0,
+      "evidence_sha256": {
+        "run.json": "479eb399de4086593722c8da3e80512e069e60cbeaa2f00b4521f4a7d8149b2d",
+        "advance-result.json": "6a81c91d22f5cc9c1c13d35d9451a6dc56ce25841a85ceff3f249d385e07f53d",
+        "progress.json": "90f36f631f0d36c6a95b3d9d2c51172b761c9fc1b512120f3de3c79aeb70c4e6",
+        "compiler-store\\v2-runs\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\\snapshot.json": "d522363999a1703f9aea613b1ce292a243707e3a194f6a70dee8643e3b00fd84"
+      },
+      "status": {
+        "kind": "offline_preparation",
+        "actually_delivered": false,
+        "executor_started": false,
+        "proposed_deliveries": 1
+      },
+      "artifacts_sha256": {
+        "artifacts\\atoms.json": "c819e8bf7ecb020abb42585e93501b143475b6e12b50c98dc968f53460500205",
+        "artifacts\\compiled.json": "d7b0c2de30fdd1aea5aa119c2f902aea9b667e565b76a4b50acffb093a6a2790",
+        "artifacts\\ir.json": "025d4808ca12a07a7c18e7363e3fc7cb0a80118e0bc1dc980c6fc11e6bdb46c0",
+        "artifacts\\status.json": "b7e892e7071ed4c97d2a0e16b2c79a00eb2e37525115fa46db072552c2d2f8d5"
+      },
+      "artifact_maps_equal_store": {
+        "ir": true,
+        "compiled": true
+      }
+    },
+    {
+      "root": "D:\\huawei\\EvoCodeBench\\management_runs\\intent-luna-dpipe-offline-r5-20261002-195137z-50cfc4",
+      "ok": false,
+      "code": "invalid_candidate",
+      "calls": 6,
+      "executions": 2,
+      "pending": 1,
+      "unresolved": 1,
+      "evidence_sha256": {
+        "run.json": "587a97a412c9d11bb69e2206640d3ab9827a29217b53737f05e181f1ee5ab10e",
+        "advance-result.json": "44c69d687b373cc76a3bdd34f191ac1b8caaa6f6197ce7b24c614268e517730c",
+        "progress.json": "d6865360a3cc2858bb2a363c67109ca1b22c8e6a3985a3f60e7b126c129203b4",
+        "compiler-store\\v2-runs\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\\snapshot.json": "55413465379710b228a0dc580f5ea370c32a3d7e31630eeafc73ed26b934797d"
+      },
+      "matches_R4": {
+        "ir": true,
+        "compiled": true,
+        "execution_outcomes": true
+      }
+    },
+    {
+      "root": "D:\\huawei\\EvoCodeBench\\management_runs\\intent-luna-dpipe-offline-r5-quote-repair-20261002-202628z-c9f8db",
+      "ok": false,
+      "code": "semantic_unresolved",
+      "calls": 8,
+      "executions": 2,
+      "pending": 1,
+      "unresolved": 1,
+      "evidence_sha256": {
+        "run.json": "7982a462c0d256c085f2dfc19265372316bf4f6c2fb19f2aee7fb6a58679d087",
+        "advance-result.json": "2d51ef7f39821ea58d45ff88de8aed21cb890c5a61f658ab2757e9dfaaf9734d",
+        "progress.json": "a82a25156e9bb86bb130c630d440fe406fb4a59cb1a7b747e1a6b03fd57524d6",
+        "compiler-store\\v2-runs\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\\snapshot.json": "f3f3eede7b718c219b2e0529cb760a1d13b2d0ad2b58b8c120f0c53b0c1b2bf0",
+        "calls/04-stage-input.json": "00c7d3916b43512afd4b4a313625de41cb6f32acda9536280fd9fde475cfe090",
+        "calls/05-stage-input.json": "aa2ac03496b8b4b93c001a3ae916f6d76e26bc053c1287288051a98c8d9364de",
+        "calls/06-stage-input.json": "12d27ffcd3c0bd5e9fa162a5609d31b2428c455ab4a84af64ac11dca8ceaeefd",
+        "review/08-prepared-ir.rejected-draft.json": "13f3c0977e1f79ebfc557bccffffcafa4ae07a52143a145349d1ee46d6d4bd46",
+        "review/08-prepared-atoms.rejected-draft.json": "f6d72e9fa565427e70a9f730dd05ce3cf52df6de87c69f4bc30485bceea6fef9",
+        "COST.json": "8eec68742b1e131bb80404f6f4606be226af462192c982f63eaac31e043fd637"
+      },
+      "matches_R4": {
+        "ir": true,
+        "compiled": true,
+        "execution_outcomes": true
+      },
+      "source_matches_frozen": {
+        "src\\core\\parent-generation.ts": true,
+        "src\\core\\intent-compiler-v2.ts": true
+      },
+      "reviews": {
+        "03": {
+          "original_verdict": {
+            "verdict": "consistent",
+            "findings": []
+          },
+          "session_review_sha256": "66f3c25e3f67a09799bada9504b1ab9c7087548b8ba07d30da270ed2a37c9221"
+        },
+        "08": {
+          "original_verdict": {
+            "verdict": "consistent",
+            "findings": []
+          },
+          "session_review_sha256": "00ebc05b3f99d1b6473b5aeaf304747d0df54752a87f1174cedff0301bf123eb"
+        }
+      }
+    }
+  ],
+  "F2": {
+    "record": "D:\\huawei\\EvoCodeBench\\harbor_checkpoints\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\\round-02\\record.json",
+    "record_sha256": "385e0024d1bf8badb3057cd65dc01bda3c22e2e2ce9197815d7abecdb9010733",
+    "store_matches_record": {
+      "check-inputs.jsonl": true,
+      "events.jsonl": true,
+      "snapshot.json": true
+    },
+    "official_cases_from_original_record": {
+      "total": 481,
+      "passed": 481,
+      "failed": 0
+    },
+    "note": "No image extraction, new verifier, model call, execution or restoration; same-point image provenance read from record only."
+  },
+  "R5_B_stage_issue_observation": [
+    {
+      "call": "04",
+      "issue_count": 2,
+      "issue_prefixes": [
+        "independent check D7: Preserve the manifest per-file JSON entry interface while changing only the re",
+        "independent check D7: Preserve the transform command final CSV write while withdrawing only sidecar "
+      ],
+      "has_session_semantic_finding": true
+    },
+    {
+      "call": "05",
+      "issue_count": 2,
+      "issue_prefixes": [
+        "IR sources do not resolve; 2 reference(s) failed the source gate for this batch. Showing all 2: $.gr",
+        "generation_repair.ir_proposal is a code-derived repair draft, not raw model output: successfully res"
+      ],
+      "has_session_semantic_finding": false
+    },
+    {
+      "call": "06",
+      "issue_count": 2,
+      "issue_prefixes": [
+        "IR sources do not resolve; 1 reference(s) failed the source gate for this batch. Showing all 1: $.gr",
+        "generation_repair.ir_proposal is a code-derived repair draft, not raw model output: successfully res"
+      ],
+      "has_session_semantic_finding": false
+    }
+  ]
+}
