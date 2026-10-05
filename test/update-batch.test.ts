@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 as createCompilerV2 } from "../src/core/intent-compiler-v2.js"
+import { IntentStateManager } from "../src/core/intent-state-v2.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
 import { CANDIDATE_EXAMPLE } from "./fixtures/copy-candidate.js"
@@ -21,6 +22,9 @@ const createIntentCompilerV2 = (options: Parameters<typeof createCompilerV2>[0])
 // No timers, network, business execution, or assertions about model intelligence.
 const RUN = "update-batch"
 const TEXT = "Fix model_to_dict for empty fields. Preserve None. Do not read the linked PR."
+/** A plan without superseded versions, as a check request shows it: the same intents with an empty history. */
+const shownPlan = (compiled: Record<string, object>) => Object.fromEntries(Object.entries(compiled).map(([taskId, intent]) => [taskId, { ...intent, historical_atoms: [] }]))
+
 function event(id = "e1", text = TEXT): CompilerEvent {
   return { schema_version: 2, run_id: RUN, event_id: id, kind: "user_input", source: { producer_id: "host", channel: "user" }, payload: { text } }
 }
@@ -182,8 +186,10 @@ test("an explicit user path limit reaches the proposal and check requests and st
   assert.equal(delivery.authority.rules.find(rule => rule.operation_id === "edit")?.allowed_use, "Edit only django/models/serialization.py.")
   assert.deepEqual(delivery.optional_tools, ["read", "edit", "bash"])
   assert.deepEqual(delivery.authority.rules.map(rule => rule.operation_id), ["read", "edit", "bash"])
-  assert.deepEqual(checkInput.prepared?.dispatchable_atoms[0]?.constraints, delivery.constraints)
-  assert.equal(checkInput.prepared?.dispatchable_atoms[0]?.task, delivery.task)
+  assert.deepEqual(checkInput.prepared?.dispatchable_atoms, [atomRef(delivery)])
+  const checkedAtom = checkInput.prepared?.compiled.t1?.atoms.find(atom => atom.atom_id === delivery.atom_id && atom.revision === delivery.revision)
+  assert.deepEqual(checkedAtom?.constraints, delivery.constraints)
+  assert.equal(checkedAtom?.task, delivery.task)
 })
 
 test("U2 a user update with reuse is checked against the prepared IR and work without rewriting atoms", async () => {
@@ -197,13 +203,17 @@ test("U2 a user update with reuse is checked against the prepared IR and work wi
   assert.ok(checked, "reuse must not bypass user-update checking")
   const prepared = checked.prepared
   assert.ok(prepared)
-  assert.deepEqual(Object.keys(prepared).sort(), ["atom_states", "compiled", "dispatchable_atoms", "eligible_execution_ids", "eligible_task_ids", "ir"])
+  assert.deepEqual(Object.keys(prepared).sort(), ["atom_states", "compiled", "dispatchable_atoms", "eligible_execution_ids", "eligible_task_ids", "ir", "withdrawals"])
+  assert.deepEqual(prepared.withdrawals, [], "a reuse batch withdraws nothing")
   assert.deepEqual(prepared.ir, h.store.current().ir)
-  assert.ok(prepared.dispatchable_atoms.some(atom => atom.task === h.dispatch.atom.task))
+  assert.deepEqual(prepared.dispatchable_atoms, [atomRef(h.dispatch.atom)])
+  assert.equal(prepared.compiled.t1?.atoms.find(atom => atom.atom_id === h.dispatch.atom.atom_id)?.task, h.dispatch.atom.task)
   assert.deepEqual(prepared.eligible_task_ids, ["t1"])
   assert.deepEqual(prepared.eligible_execution_ids, [])
   assert.ok(Array.isArray(checked.candidate.groups[0]?.execution_decisions))
-  assert.deepEqual(prepared.compiled, h.store.current().compiled)
+  assert.deepEqual(prepared.compiled, shownPlan(h.store.current().compiled))
+  assert.deepEqual(checked.ir, {}, "a reuse batch changes nothing, so no pre-candidate IR is repeated")
+  assert.deepEqual(checked.compiled, {}, "a reuse batch changes nothing, so no pre-candidate plan is repeated")
   assert.deepEqual(prepared.atom_states, h.store.current().atom_states)
   assert.deepEqual(h.store.current().compiled.t1, old)
   assert.equal(h.start().ok, true)
@@ -311,6 +321,85 @@ test("U3 accepted pause and resume preserve constraints and never reactivate sto
   assert.equal((await h.compiler.advance({ runId: RUN })).ok, true)
   assert.equal(h.compiler.authorize(operation(started.execution_id)).ok, false)
   assert.deepEqual(h.store.current().compiled.t1!.atoms[0]!.constraints, h.dispatch.atom.constraints)
+})
+
+test("revise task applies the submitted current_scope with the goal in one revision", async () => {
+  const h = await setup()
+  const before = structuredClone(h.store.current().ir.t1!)
+  const sources = [{ source_id: "e2", digest: digestText(TEXT) }]
+  h.setPropose(async i => {
+    const c = reuse(i)
+    c.groups[0]!.ir_changes = [{ action: "revise", target: "task", id: "t1", expected_revision: i.ir.t1!.revision, value: { goal: { text: "Fix model_to_dict for empty fields later." }, current_scope: { text: "Paused until the user resumes.", disposition: "paused" } }, sources }]
+    c.groups[0]!.coverage[0]!.disposition = "paused"
+    return proposed(c)
+  })
+  await h.compiler.acceptEvent(event("e2", "Pause the fix."))
+  const paused = await h.compiler.advance({ runId: RUN })
+  assert.equal(paused.ok, true)
+  assert.equal(paused.disposition, "waiting")
+  const after = h.store.current().ir.t1!
+  assert.equal(after.revision, before.revision + 1)
+  assert.equal(after.goal.text, "Fix model_to_dict for empty fields later.")
+  assert.deepEqual(after.current_scope, { text: "Paused until the user resumes.", disposition: "paused", sources: after.goal.sources })
+  assert.equal(after.goal.sources[0]?.source_id, "e2")
+  assert.equal(h.start().ok, false)
+})
+
+test("revise task with only a goal keeps the current scope", async () => {
+  const h = await setup()
+  const before = structuredClone(h.store.current().ir.t1!)
+  h.setPropose(async i => {
+    const c = reuse(i)
+    c.groups[0]!.ir_changes = [{ action: "revise", target: "task", id: "t1", expected_revision: i.ir.t1!.revision, value: { goal: { text: "Fix model_to_dict for empty fields." } }, sources: [{ source_id: "e2", digest: digestText(TEXT) }] }]
+    return proposed(c)
+  })
+  await h.compiler.acceptEvent(event("e2", "Keep the fix goal."))
+  assert.equal((await h.compiler.advance({ runId: RUN })).ok, true)
+  const after = h.store.current().ir.t1!
+  assert.equal(after.revision, before.revision + 1)
+  assert.deepEqual(after.current_scope, before.current_scope)
+})
+
+async function revisionIssues(changes: (i: CompilerModelV2Input) => Candidate["groups"][number]["ir_changes"]): Promise<string[]> {
+  const h = await setup()
+  h.setPropose(async i => {
+    const c = reuse(i)
+    c.groups[0]!.ir_changes = changes(i)
+    return proposed(c)
+  })
+  await h.compiler.acceptEvent(event("e2", "Pause the fix."))
+  assert.equal((await h.compiler.advance({ runId: RUN })).ok, false)
+  return (h.store.current().management_log.at(-1)!.attempts?.[0]?.issues ?? []).filter(issue => issue.includes("expected_revision"))
+}
+
+test("a second change to the task in one batch names the earlier change instead of pointing back to the supplied revision", async () => {
+  const sources = [{ source_id: "e2", digest: digestText(TEXT) }]
+  const issues = await revisionIssues(i => [
+    { action: "revise", target: "task", id: "t1", expected_revision: i.ir.t1!.revision, value: { goal: { text: "Fix model_to_dict later." }, current_scope: { text: "Paused.", disposition: "paused" } }, sources },
+    { action: "revise", target: "current_scope", id: "t1", expected_revision: i.ir.t1!.revision, value: { text: "Paused.", disposition: "paused" }, sources },
+  ])
+  assert.equal(issues.length, 1)
+  assert.match(issues[0]!, /^groups\[0\]\.ir_changes\[1\]: expected_revision 0 does not match current 1: ir_changes\[0\] \(revise task\) earlier in this group already changed task t1 to revision 1 before this revise current_scope/)
+  assert.match(issues[0]!, /put goal and current_scope in one revise task/)
+  assert.doesNotMatch(issues[0]!, /use the revision currently recorded in the supplied IR\)/)
+})
+
+test("a single stale expected_revision keeps the supplied-IR hint", async () => {
+  const issues = await revisionIssues(i => [
+    { action: "revise", target: "current_scope", id: "t1", expected_revision: i.ir.t1!.revision + 1, value: { text: "Paused.", disposition: "paused" }, sources: [{ source_id: "e2", digest: digestText(TEXT) }] },
+  ])
+  assert.deepEqual(issues, ["groups[0].ir_changes[0]: expected_revision 1 does not match current 0 (use the revision currently recorded in the supplied IR)"])
+})
+
+test("changes to different objects in one batch each use their supplied revision", () => {
+  const h = new IntentStateManager({ t1: { task_id: "t1", revision: 2, goal: { text: "Goal", sources: [] }, bindings: [], outputs: [], content: [{ item_id: "r1", revision: 5, text: "Rule", about: [], scope: [{ target_id: "t1" }], support: [], sources: [] }], current_scope: { text: "Proceed", disposition: "proceed", sources: [] }, unresolved: [] } as never })
+  const applied = h.apply([
+    { action: "revise", target: "task", id: "t1", expected_revision: 2, value: { goal: { text: "New goal" }, current_scope: { text: "Paused", disposition: "paused" } }, sources: [] },
+    { action: "revise", target: "content", id: "r1", expected_revision: 5, value: { text: "New rule", about: [], scope: [{ target_id: "t1" }], support: [] }, sources: [] },
+  ], ["t1"])
+  assert.deepEqual(applied.errors, [])
+  assert.equal(applied.tasks.t1!.revision, 3)
+  assert.equal(applied.tasks.t1!.content[0]!.revision, 6)
 })
 
 test("a rejected update keeps the old draft, then a revision selected from the object directory restores new-work eligibility", async () => {
@@ -428,8 +517,9 @@ test("U2 the checker receives isolated input and cannot rewrite the object to co
   const originalCompiled = structuredClone(h.store.current().compiled)
   const originalStates = structuredClone(h.store.current().atom_states)
   h.setPropose(async i => proposed(reuse(i)))
+  let shownPrior: string[] = []
   h.setVerify(async i => {
-    i.ir.t1!.goal.text = "checker mutation"
+    shownPrior = Object.keys(i.ir)
     const prepared = i.prepared
     if (prepared) {
       prepared.ir.t1!.goal.text = "prepared view mutation"
@@ -440,6 +530,7 @@ test("U2 the checker receives isolated input and cannot rewrite the object to co
   })
   await h.compiler.acceptEvent(event("e2", "Keep the current work."))
   assert.equal((await h.compiler.advance({ runId: RUN })).ok, true)
+  assert.deepEqual(shownPrior, [], "an unchanged task is shown once, in prepared.ir")
   assert.deepEqual(h.store.current().ir, original)
   assert.deepEqual(h.store.current().compiled, originalCompiled)
   assert.deepEqual(h.store.current().atom_states, originalStates)

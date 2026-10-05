@@ -1,3 +1,4 @@
+import { projectCompiled } from "./request-projection.js"
 import { digestOf, type Candidate, type LocalSourceEditRecord, type TaskIntent } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
 import { aliasDisplay, decodeIRProposal, expressIRRequest, type SourceAliasEntry, type SourceAliasIndex } from "./source-aliases.js"
@@ -10,6 +11,8 @@ export interface ParentGenerationState {
   source_basis: string
   phase: "ir" | "ci"
   ir_proposal?: IRProposal
+  /** Code-derived repair draft; ir_proposal and call.text retain the raw decoded answer. */
+  ir_repair_draft?: IRProposal
   ci_proposal?: CIProposal
   parent?: { ir: Record<string, TaskIntent>; candidate: Candidate; digest: string }
   /**
@@ -50,6 +53,8 @@ interface SourceRefReport {
   unresolved: number
   unresolvedRefs?: Array<{
     source_id: string
+    path?: string
+    diagnostic?: string
     segment_id?: string
     quote?: string
     span?: { unit: string; start: number; end: number }
@@ -68,10 +73,12 @@ function unresolvedSources(report: SourceRefReport, display: (eventId: string) =
   const refs = report.unresolvedRefs ?? []
   const shown = refs.map((ref) => {
     const selector = ref.segment_id !== undefined ? `segment_id=${ref.segment_id}`
-      : ref.quote !== undefined ? `quote=${JSON.stringify(ref.quote.length > 60 ? `${ref.quote.slice(0, 60)}…` : ref.quote)}`
+      : ref.quote !== undefined ? `quote=${JSON.stringify(ref.quote)}`
       : ref.span === undefined ? "no selector"
       : `span=${ref.span.unit}:${ref.span.start}-${ref.span.end}`
-    return `${display(ref.source_id)} (${selector}): ${ref.reason ?? "unresolved"}`
+    const edge = (character: string): string => `${JSON.stringify(character)} U+${character.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`
+    const quoteEdges = ref.quote ? `; quote UTF-16 length=${ref.quote.length}, first=${edge(ref.quote[0]!)}, last=${edge(ref.quote.at(-1)!)}` : ""
+    return `${ref.path ?? "unknown field"}: ${display(ref.source_id)} (${selector}): ${ref.reason ?? "unresolved"}${quoteEdges}${ref.diagnostic ? `; ${ref.diagnostic}` : ""}`
   })
   const hidden = Math.max(0, report.unresolved - refs.length)
   const list = shown.length === 0 ? ""
@@ -80,6 +87,16 @@ function unresolvedSources(report: SourceRefReport, display: (eventId: string) =
       : ` Showing all ${refs.length}: ${shown.join("; ")}.`
   return `IR sources do not resolve; ${report.unresolved} reference(s) failed the source gate for this batch.${list} Each selection needs one source_id from the supplied source_segments and exactly one selector that exists in that source: a segment_id from its list, an exact unique quote, or a span inside its text.`
 }
+
+/** Keep raw and derived drafts in the same existing IR-stage shape. */
+function irProposalGroups(groups: Candidate["groups"]): IRProposal["groups"] {
+  return groups.map(({
+    compilation: _compilation, coverage: _coverage,
+    execution_decisions: _executionDecisions, assessments: _assessments, checks: _checks, ...group
+  }) => group)
+}
+
+const SOURCE_REPAIR_DRAFT_NOTICE = "generation_repair.ir_proposal is a code-derived repair draft, not raw model output: successfully resolved selectors reuse their exact UTF-16 spans and code-computed digests; failed references retain their original values. You may still revise the proposal's meaning and selections."
 
 /** Owns parent preparation, child admission and restoration at one generation seam. */
 export class ParentGeneration {
@@ -101,6 +118,7 @@ export class ParentGeneration {
     if (!carriesUserInput) {
       this.state.derived = true
       delete this.state.ir_proposal
+      delete this.state.ir_repair_draft
       this.state.phase = "ci"
       this.state.parent = this.derivedParent()
       return
@@ -187,7 +205,10 @@ export class ParentGeneration {
       throw Error("User input needs an IR task and explicit handling of its requirements or uncertainty")
     }
     const sourceReport = this.options.resolve(candidate)
-    if (sourceReport.unresolved > 0) throw Error(unresolvedSources(sourceReport, (eventId) => this.display(eventId)))
+    if (sourceReport.unresolved > 0) {
+      this.state.ir_repair_draft = { ...candidate, groups: irProposalGroups(candidate.groups) }
+      throw Error(unresolvedSources(sourceReport, (eventId) => this.display(eventId)))
+    }
     const sources = [...(this.options.input.source_events ?? []), ...this.options.input.events]
     const state = new IntentStateManager(this.options.input.ir)
     let ir = state.snapshot()
@@ -252,10 +273,7 @@ export class ParentGeneration {
       // An IR proposal keeps one stage shape whether it is freshly generated,
       // re-sent after a rejection or restored from an older draft: the three
       // execution-facing fields never travel in it.
-      const irGroups = (groups: Candidate["groups"]): IRProposal["groups"] => groups.map(({
-        compilation: _compilation, coverage: _coverage,
-        execution_decisions: _executionDecisions, assessments: _assessments, checks: _checks, ...group
-      }) => group)
+      const irGroups = irProposalGroups
       const base: CompilerModelV2Input = stage === "ir"
         ? {
           ...shared,
@@ -264,7 +282,11 @@ export class ParentGeneration {
             ...this.options.input.events,
           ]),
         }
-        : { ...shared, compiled: plan, atom_refs: atomRefs, executions: executionView, execution_outcomes: outcomes, assessments: assessmentRecords }
+        // The plan shows each current Atom once and each historical version by
+        // identity; a requirement block that repeats a parent IR item verbatim
+        // points at it.
+        : { ...shared, compiled: plan === undefined ? plan : projectCompiled(plan, this.options.input.atom_states ?? [], [this.state.parent!.ir]),
+          atom_refs: atomRefs, executions: executionView, execution_outcomes: outcomes, assessments: assessmentRecords }
       const ir = stage === "ci" ? this.state.parent!.ir : this.options.input.ir
       // An assessment batch repairs the stored IR from the user's own text: do
       // not offer the execution return as a citable source for that stage.
@@ -274,11 +296,13 @@ export class ParentGeneration {
       const offeredRefs = this.state.derived === true && stage === "ir" && base.event_source_refs !== undefined
         ? base.event_source_refs.filter(ref => userTextIds.has(ref.source_id))
         : base.event_source_refs
+      const repairIssues = [...this.state.issues,
+        ...(stage === "ir" && this.state.ir_repair_draft ? [SOURCE_REPAIR_DRAFT_NOTICE] : [])]
       const assembled: CompilerModelV2Input = { ...base, ...(offeredRefs === undefined ? {} : { event_source_refs: offeredRefs }),
         generation_stage: stage, ir: structuredClone(ir),
         existing_objects: this.options.directory(ir),
         ...(stage === "ci" ? { parent_basis: this.state.parent!.digest } : {}),
-        validation_errors: [...this.state.issues],
+        validation_errors: repairIssues,
         generation_repair: { ir_proposal: stage === "ci" ? {
           ...this.state.parent!.candidate,
           // An assessment batch's parent is the stored IR as it stands now: give
@@ -289,10 +313,10 @@ export class ParentGeneration {
             : this.state.parent!.candidate.groups
           )),
         } : (this.state.ir_proposal === undefined ? undefined : {
-          ...this.state.ir_proposal,
-          groups: irGroups(this.state.ir_proposal.groups as Candidate["groups"]),
+          ...(this.state.ir_repair_draft ?? this.state.ir_proposal),
+          groups: irGroups((this.state.ir_repair_draft ?? this.state.ir_proposal).groups as Candidate["groups"]),
         }), ci_proposal: this.state.ci_proposal,
-          issues: [...this.state.issues] },
+          issues: repairIssues },
         ...(this.state.rejected_response?.stage === stage ? { schema_rejected_draft: {
           text: this.state.rejected_response.text, errors: this.state.rejected_response.errors,
         } } : {}),
@@ -328,6 +352,7 @@ export class ParentGeneration {
       }
       delete this.state.rejected_response
       this.state.ir_proposal = structuredClone(decoded.proposal)
+      delete this.state.ir_repair_draft
       try { this.state.parent = this.prepare(decoded.proposal) }
       catch (error) { return this.reject(error instanceof Error ? error.message : String(error), result) }
       this.state.phase = "ci"

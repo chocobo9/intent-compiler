@@ -49,13 +49,16 @@ test("a rejected reference records the selector the answer wrote, not a placehol
   const e = event("e", "First behavior.\n\nSecond behavior.")
   const unknownSegment = candidateWith({ source_id: "e", digest: "sha256:x", quote: null, segment_id: "s99", span: null })
   assert.deepEqual(resolveSourceRefs(unknownSegment, [e]).unresolvedRefs,
-    [{ source_id: "e", segment_id: "s99", reason: "segment_unknown" }])
+    [{ source_id: "e", path: "$.groups[0].ir_changes[0].sources[0]", segment_id: "s99", reason: "segment_unknown" }])
   const unknownSource = candidateWith({ source_id: "invented", digest: "sha256:x", quote: null, segment_id: null, span: null })
   assert.deepEqual(resolveSourceRefs(unknownSource, [e]).unresolvedRefs,
-    [{ source_id: "invented", reason: "source_unknown" }])
+    [{ source_id: "invented", path: "$.groups[0].ir_changes[0].sources[0]", reason: "source_unknown" }])
   const badQuote = candidateWith({ source_id: "e", digest: "sha256:x", quote: "not in this text", segment_id: null, span: null })
+  const raw = structuredClone(badQuote)
   assert.deepEqual(resolveSourceRefs(badQuote, [e]).unresolvedRefs,
-    [{ source_id: "e", quote: "not in this text", reason: "quote_unresolved" }])
+    [{ source_id: "e", path: "$.groups[0].ir_changes[0].sources[0]", quote: "not in this text", reason: "quote_unresolved",
+      diagnostic: "No unique exact 16-unit prefix anchor; compare the supplied source text. Ignoring whitespace runs, backticks, backslashes and the quote's edge punctuation, it still occurs nowhere." }])
+  assert.deepEqual(badQuote, raw, "failed references retain even nullable placeholders")
 })
 
 test("the generated schema still forces a nullable placeholder for every selector", () => {

@@ -6,12 +6,13 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
-import { createCompilerModelV2, V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, type CompilerModelV2CheckInput } from "../src/model/compiler-model-v2.js"
+import { createCompilerModelV2, V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, type CompilerModelV2CheckInput, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
+import { LATER_STATEMENT_SETTLES } from "../src/model/management-instructions.js"
 import { atomRef, compiledIntentRef, AtomStateLedger } from "../src/core/compiled-intent.js"
 import { atomAdmission } from "../src/core/atom-admission.js"
-import { bindCurrentRequirements, selectSourceEvents } from "../src/core/requirement-flow.js"
+import { bindCurrentRequirements, contentKey, LATER_INPUT_GOVERNS, selectedSourceHistory, selectSourceEvents, userInputOrder, type RequirementAssembly } from "../src/core/requirement-flow.js"
 import { IntentStateManager } from "../src/core/intent-state-v2.js"
-import { digestText, type Candidate, type CompilerEvent, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
+import { digestOf, digestText, type Candidate, type CompilerEvent, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
 
 const raw = "Implement CSV. Missing file must print ERROR: missing file."
 const source: SourceRef = { source_id: "e1", digest: digestText(raw), span: { unit: "utf16", start: 0, end: raw.length } }
@@ -94,6 +95,142 @@ test("assembly attaches the assigned requirement texts once and leaves the model
   assert.ok(first[0]!.atoms[0]!.task.includes("Missing file must print ERROR: missing file."))
 })
 
+/**
+ * Three user inputs, of which the batch is shown only the first and the third:
+ * the delivered block still names each passage by its place in the whole run.
+ */
+function orderedFixture() {
+  const later = "Write the result with a header row."
+  const userEvent = (id: string, text: string): CompilerEvent => ({ schema_version: 2, run_id: "run1", event_id: id, kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text } })
+  const e1 = userEvent("e1", raw), e2 = userEvent("e2", "An unrelated note."), e3 = userEvent("e3", later)
+  const records = [
+    { sequence: 1, event: e1 },
+    { sequence: 2, event: { ...e2 } },
+    { sequence: 3, event: { schema_version: 2, run_id: "run1", event_id: "x1", kind: "execution_return", source: { producer_id: "host", channel: "executor" }, payload: { text: "done" } } as CompilerEvent },
+    { sequence: 4, event: e3 },
+  ]
+  const proposal = candidate()
+  const group = proposal.groups[0]!
+  const task = new IntentStateManager({}).apply(group.ir_changes, ["t1"]).tasks.t1!
+  const earlier = raw.slice(0, 14)
+  const r1 = task.content[0]!
+  r1.sources = [
+    { source_id: "e1", digest: digestText(raw), span: { unit: "utf16", start: 0, end: 14 } },
+    { source_id: "e3", digest: digestText(later), span: { unit: "utf16", start: 0, end: later.length } },
+  ]
+  r1.text = `${earlier}\n\n${later}`
+  r1.text_origin = "source"
+  const r2 = task.content[1]!
+  r2.text = raw.slice(15)
+  r2.text_origin = "source"
+  return { group, task, records, sources: [e3, e1], earlier, later }
+}
+
+test("assembled passages name their user input by its place in the run and run in input order", () => {
+  const { group, task, records, sources, earlier, later } = orderedFixture()
+  const order = userInputOrder(records)
+  assert.deepEqual([...order], [["e1", 1], ["e2", 2], ["e3", 3]], "only user inputs are counted, in journal order")
+  const before = structuredClone(task)
+  const delivered = bindCurrentRequirements(group, task, undefined, sources, [], assemblyOf(order))[0]!.atoms[0]!.task
+  assert.deepEqual(task, before, "assembly leaves the IR content and its digest unchanged")
+  const r1 = task.content[0]!, r2 = task.content[1]!
+  const r1Block = `[assigned requirement r1@0 ${digestOf(r1)}]\n${LATER_INPUT_GOVERNS}\n[user input 1]\n${earlier}\n\n[user input 3]\n${later}`
+  const r2Block = `[assigned requirement r2@0 ${digestOf(r2)}]\n[user input 1]\n${r2.text}`
+  assert.ok(delivered.endsWith(`\n\n${r1Block}\n\n${r2Block}`), delivered)
+  const stripped = r1Block.split("\n").slice(1).filter(line => line !== LATER_INPUT_GOVERNS && !/^\[user input \d+\]$/u.test(line)).join("\n")
+  assert.equal(stripped, r1.text, "without the labels the block is the stored requirement text byte for byte")
+
+  // The same item listed newest-first still delivers its passages oldest-first.
+  const reversed = structuredClone(task)
+  reversed.content[0]!.sources.reverse()
+  reversed.content[0]!.text = `${later}\n\n${earlier}`
+  const reorderedTask = bindCurrentRequirements(group, reversed, undefined, sources, [], assemblyOf(order))[0]!.atoms[0]!.task
+  assert.ok(reorderedTask.includes(`${LATER_INPUT_GOVERNS}\n[user input 1]\n${earlier}\n\n[user input 3]\n${later}`))
+
+  // Without the run order the block is attached exactly as before.
+  const unordered = bindCurrentRequirements(group, task, undefined, sources, [])[0]!.atoms[0]!.task
+  assert.ok(unordered.endsWith(`[assigned requirement r1@0 ${digestOf(r1)}]\n${r1.text}\n\n[assigned requirement r2@0 ${digestOf(r2)}]\n${r2.text}`))
+})
+
+test("a run order taken from a longer journal keeps every input's number", () => {
+  const { group, task, records, sources } = orderedFixture()
+  const later = [...records, { sequence: 5, event: { ...records[0]!.event, event_id: "e5" } }]
+  const short = bindCurrentRequirements(group, task, undefined, sources, [], assemblyOf(userInputOrder(records)))[0]!.atoms[0]!.task
+  const long = bindCurrentRequirements(group, task, undefined, [sources[1]!, sources[0]!], [], assemblyOf(userInputOrder(later)))[0]!.atoms[0]!.task
+  assert.equal(long, short, "a later input and a different selection order do not renumber earlier inputs")
+})
+
+const assemblyOf = (inputOrder: ReadonlyMap<string, number>, texts: ReadonlyMap<string, string> = new Map(), selected: ReadonlyMap<string, readonly SourceRef[]> = new Map()): RequirementAssembly =>
+  ({ inputOrder, texts, selected })
+
+/**
+ * Generic withdrawal fixture: input 1 states two duties in one sentence; input
+ * 2 changes one of them (or voids the sentence); the model withdrew the whole
+ * sentence.  The prior IR selected the sentence, the current IR does not.
+ */
+function withdrawalFixture(update: string) {
+  const sentence = "Write the report to report.txt and its checksum to report.sum."
+  const userEvent = (id: string, text: string): CompilerEvent => ({ schema_version: 2, run_id: "run1", event_id: id, kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text } })
+  const e1 = userEvent("e1", `${raw}\n\n${sentence}`), e2 = userEvent("e2", update)
+  const e1Text = (e1.payload as { text: string }).text
+  const span = (text: string, part: string, id: string): SourceRef => ({ source_id: id, digest: digestText(text), span: { unit: "utf16", start: text.indexOf(part), end: text.indexOf(part) + part.length } })
+  const proposal = candidate()
+  const group = proposal.groups[0]!
+  const task = new IntentStateManager({}).apply(group.ir_changes, ["t1"]).tasks.t1!
+  for (const item of task.content) { item.sources = item.sources.map(source => ({ ...source, digest: digestText(e1Text) })); item.text_origin = "source" }
+  const previous = structuredClone(task)
+  previous.content[0]!.sources = [span(e1Text, "Implement CSV.", "e1"), span(e1Text, sentence, "e1")]
+  previous.content[0]!.text = `Implement CSV.\n\n${sentence}`
+  task.content[0]!.sources = [span(e1Text, "Implement CSV.", "e1"), span(update, update, "e2")]
+  task.content[0]!.text = `Implement CSV.\n\n${update}`
+  task.content[0]!.revision = 1
+  group.coverage[1]!.requirement = { local_ref: "r1" }
+  const records = [{ sequence: 1, event: e1 }, { sequence: 2, event: e2 }]
+  const assembly = assemblyOf(userInputOrder(records), new Map([["e1", e1Text], ["e2", update]]), selectedSourceHistory([], { t1: previous }))
+  return { group, task, previous, sentence, update, assembly, sources: [e1, e2] }
+}
+
+for (const [label, update] of [
+  ["only one of its two duties is changed", "Write the checksum to report.b2 instead."],
+  ["the whole sentence is voided", "Do not write the report or its checksum; print the report instead."],
+] as const) {
+  test(`a withdrawn sentence is still delivered before the later input when ${label}`, () => {
+    const { group, task, sentence, assembly, sources } = withdrawalFixture(update)
+    const beforeTask = structuredClone(task), beforeGroup = structuredClone(group)
+    const delivered = bindCurrentRequirements(group, task, undefined, sources, [], assembly)[0]!.atoms[0]!.task
+    assert.deepEqual(task, beforeTask, "IR text, sources and digest are unchanged")
+    assert.deepEqual(group, beforeGroup, "the candidate and its records are unchanged")
+    const r1 = task.content[0]!
+    const block = delivered.slice(delivered.indexOf(`[assigned requirement r1@1 ${digestOf(r1)}]`), delivered.indexOf("[assigned requirement r2@"))
+    assert.equal(block, `[assigned requirement r1@1 ${digestOf(r1)}]\n${LATER_INPUT_GOVERNS}\n[user input 1]\nImplement CSV.\n\n[user input 1]\n${sentence}\n\n[user input 2]\n${update}\n\n`)
+    assert.doesNotMatch(delivered, /withdr|supersed|retract|removed|deleted|撤回|作废/iu, "a withdrawn passage carries no mark")
+    const stripped = block.trimEnd().split("\n").slice(1).filter(line => line !== LATER_INPUT_GOVERNS && !/^\[user input \d+\]$/u.test(line)).join("\n")
+    assert.equal(stripped, ["Implement CSV.", sentence, update].join("\n\n"), "without labels the block is the passages joined in input order")
+    assert.equal(r1.text.includes(sentence), false, "the IR keeps the model's withdrawal")
+  })
+}
+
+test("a passage another current item still selects is not attached again as withdrawn", () => {
+  const { group, task, sentence, assembly, sources } = withdrawalFixture("Write the checksum to report.b2 instead.")
+  const moved = structuredClone(task)
+  moved.content[1]!.sources = [...moved.content[1]!.sources, assembly.selected.get(contentKey("t1", "r1"))![1]!]
+  moved.content[1]!.text = `${moved.content[1]!.text}\n\n${sentence}`
+  const delivered = bindCurrentRequirements(group, moved, undefined, sources, [], assembly)[0]!.atoms[0]!.task
+  assert.equal(delivered.split(sentence).length - 1, 1, "the moved sentence is delivered once, by the item that selects it now")
+})
+
+test("selection history reads accepted content changes and the prior IR, and a retire ends it", () => {
+  const ref = (id: string, start: number, end: number): SourceRef => ({ source_id: id, digest: "d", span: { unit: "utf16", start, end } })
+  const group = (changes: unknown[]) => ({ local_ref: "g", task_refs: ["t1"], ir_changes: changes }) as never
+  const history = selectedSourceHistory([
+    { status: "accepted", candidate: { groups: [group([{ action: "create", target: "content", local_ref: "r1", sources: [ref("e1", 0, 5)] }, { action: "create", target: "content", local_ref: "r2", sources: [ref("e1", 6, 9)] }])] } },
+    { status: "validation_failed", candidate: { groups: [group([{ action: "revise", target: "content", id: "r1", sources: [ref("e9", 0, 1)] }])] } },
+    { status: "accepted", candidate: { groups: [group([{ action: "edit", target: "content", id: "r1", remove: [ref("e1", 0, 2)], add: [ref("e2", 0, 4)] }, { action: "retire", target: "content", id: "r2" }])] } },
+  ], {})
+  assert.deepEqual(history.get(contentKey("t1", "r1")), [ref("e1", 0, 5), ref("e2", 0, 4)])
+  assert.equal(history.has(contentKey("t1", "r2")), false)
+})
+
 test("two independent runs of the same model draft produce the same delivered task and digest", async () => {
   const first = await run(candidate())
   const second = await run(candidate())
@@ -136,7 +273,7 @@ test("check, commit and dispatch read the same assembled task", async () => {
   const delivered = result.deliveries![0]!.atom
   const prepared = checks[0]!.prepared!
   assert.equal(prepared.compiled.t1!.atoms[0]!.task, delivered.task)
-  assert.equal(prepared.dispatchable_atoms[0]!.task, delivered.task)
+  assert.deepEqual(prepared.dispatchable_atoms, [atomRef(delivered)], "the dispatch subset is named by ref; its content is the prepared.compiled Atom")
   assert.equal(store.current().compiled.t1!.atoms[0]!.task, delivered.task)
   assert.equal(result.deliveries![0]!.digest, atomRef(delivered).digest)
   const checkedCompilation = checks[0]!.candidate.groups[0]!.compilation
@@ -154,8 +291,13 @@ test("check, commit and dispatch read the same assembled task", async () => {
   assert.equal(contract.includes("each Atom's corresponding prepared.atom_states record"), true)
   assert.equal(contract.includes("applicable scope and explicit correction relationships"), true)
   assert.equal(contract.includes("Their coexistence is not itself an inconsistency"), true)
-  assert.deepEqual(contract.split("\n").slice(0, -1), V2_CHECK_CONTRACT.check_contract.split("\n").slice(0, -1),
-    "only the assembled-task comparison clause changes; the other check duties remain")
+  assert.equal(contract.includes("each passage is labelled with the number of the run's user input it came from and listed in input order"), true)
+  assert.equal(contract.includes("the attached passages include those an item once adopted and later withdrew"), true)
+  assert.equal(contract.split("\n").at(-1)!.startsWith("prepared.withdrawals lists every passage this candidate withdrew from the IR"), true)
+  assert.deepEqual(contract.split("\n").slice(0, -2), V2_CHECK_CONTRACT.check_contract.split("\n").slice(0, -1),
+    "only the assembled-task comparison clause changes and the withdrawal clause is added; the other check duties remain")
+  assert.equal(V2_CHECK_CONTRACT.check_contract.includes("prepared.withdrawals"), false)
+  assert.deepEqual(prepared.withdrawals, [], "a first delegation withdraws nothing")
   assert.deepEqual(checks[0]!.contract.rules, V2_CHECK_CONTRACT.rules)
 })
 
@@ -446,7 +588,8 @@ test("a later revision keeps prior exact requirements and replaces only the chan
       async input => {
         checked.push({
           sources: (input.source_events ?? []).map(event => event.event_id),
-          requirements: input.prepared?.dispatchable_atoms[0]?.goal_refs.map(ref => ref.id) ?? [],
+          requirements: Object.values(input.prepared?.compiled ?? {}).flatMap(intent => intent.atoms)
+            .find(atom => atom.atom_id === input.prepared?.dispatchable_atoms[0]?.id && atom.revision === input.prepared?.dispatchable_atoms[0]?.revision)?.goal_refs.map(ref => ref.id) ?? [],
         })
         return JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] })
       },
@@ -574,4 +717,68 @@ test("raising an Atom revision retires the earlier ready revision even without a
   assert.equal(store.current().atom_states.find(state => state.atom_id === "a1" && state.atom_revision === 0)?.status, "legacy")
   const stale = await compiler.authorize({ kind: "start", run_id: "revision", dispatch_id: first.deliveries![0]!.dispatch_id, host_identity: "host" })
   assert.equal(stale.ok, false)
+})
+
+test("a second batch's actual CI and check requests show each body once and carry every field their contracts name", async () => {
+  const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "projection-")), runId: "run1" })
+  const update = "Write the result with a header row."
+  const second = (): Candidate => {
+    const c = candidate()
+    const group = c.groups[0]!
+    c.basis = { event_ids: ["e2"], refs: [] }
+    c.source_coverage = []
+    group.ir_changes = [{ action: "revise", target: "content", id: "r1", expected_revision: 0,
+      value: { text: "Implement CSV with a header row.", about: [], scope: [{ target_id: "t1" }], support: [] },
+      sources: [{ ...source, span: { unit: "utf16", start: 0, end: 14 } }, { source_id: "e2", digest: digestText(update), span: { unit: "utf16", start: 0, end: update.length } }] }]
+    if (group.compilation.decision !== "replace") throw new Error("fixture")
+    group.compilation.drafts[0]!.atoms[0]!.revision = 1
+    return c
+  }
+  let batch = 1
+  const ciRequests: CompilerModelV2Input[] = []
+  const checks: CompilerModelV2CheckInput[] = []
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(
+    async (input, generation) => {
+      if (input.generation_stage === "ci") ciRequests.push(structuredClone(input))
+      return JSON.stringify(stageCandidate(input, batch === 1 ? candidate() : second(), generation))
+    },
+    async input => { checks.push(structuredClone(input)); return JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] }) },
+  ) })
+  const user = (id: string, text: string): CompilerEvent => ({ schema_version: 2, run_id: "run1", event_id: id, kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text } })
+  await compiler.acceptEvent(user("e1", raw))
+  assert.equal((await compiler.advance({ runId: "run1" })).ok, true)
+  const firstAtom = structuredClone(store.current().compiled.t1!.atoms[0]!)
+  const firstPlan = structuredClone(store.current().compiled.t1!)
+  const firstIr = structuredClone(store.current().ir)
+  batch = 2
+  await compiler.acceptEvent(user("e2", update))
+  const result = await compiler.advance({ runId: "run1" })
+  assert.equal(result.ok, true, result.message)
+
+  // CI request: the stored plan, each current Atom complete.
+  const ci = ciRequests.at(-1)!
+  assert.deepEqual(ci.compiled, { t1: { ...firstPlan, historical_atoms: [] } }, "the pre-batch plan has one current Atom and no history yet")
+  assert.ok(JSON.stringify(ci.contract).length > 0)
+
+  // Check request: wording, fields and one copy of each body.
+  const check = checks.at(-1)!
+  assert.ok(check.contract.rules.includes(LATER_STATEMENT_SETTLES), "the check contract carries the later-statement rule")
+  const prepared = check.prepared!
+  const current = store.current().compiled.t1!.atoms.find(atom => atom.revision === 1)!
+  assert.deepEqual(prepared.compiled.t1!.atoms, [current], "the current Atom once, complete")
+  assert.deepEqual(prepared.compiled.t1!.historical_atoms.map(entry => [entry.id, entry.revision, entry.digest]), [[firstAtom.atom_id, 0, atomRef(firstAtom).digest]], "the superseded version by identity")
+  assert.deepEqual(prepared.dispatchable_atoms, [atomRef(current)])
+  assert.deepEqual(check.compiled.t1!.atoms, [firstAtom], "the replaced Atom's pre-candidate state, complete")
+  assert.deepEqual(Object.keys(check.ir), ["t1"])
+  assert.deepEqual(check.ir.t1!.content, [firstIr.t1!.content[0]!], "only the changed content item's pre-candidate state")
+  assert.deepEqual(prepared.ir, store.current().ir)
+  assert.deepEqual(prepared.withdrawals, [])
+  // Every field the check contract names exists in this request.
+  for (const field of ["ir", "compiled", "candidate", "events", "source_events", "event_source_refs"] as const) assert.ok(field in check, field)
+  for (const field of ["ir", "compiled", "atom_states", "dispatchable_atoms", "withdrawals", "eligible_task_ids", "eligible_execution_ids"] as const) assert.ok(field in prepared, `prepared.${field}`)
+  assert.ok(Array.isArray(check.candidate.groups[0]!.execution_decisions))
+  const contract = `${check.contract.check_contract}\n${check.contract.rules.join("\n")}`
+  for (const named of ["prepared.ir", "prepared.compiled", "prepared.atom_states", "prepared.dispatchable_atoms", "prepared.eligible_task_ids", "prepared.eligible_execution_ids", "prepared.withdrawals", "historical_atoms", "candidate.groups[].execution_decisions", "event_source_refs"]) {
+    assert.ok(contract.includes(named), `the contract names ${named}`)
+  }
 })

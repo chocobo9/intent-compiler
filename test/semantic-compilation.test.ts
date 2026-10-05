@@ -28,6 +28,9 @@ const event: CompilerEvent = {
   source: { producer_id: "user", channel: "user" }, payload: { text },
 }
 
+/** A plan without superseded versions, as a check request shows it: the same intents with an empty history. */
+const shownPlan = (compiled: Record<string, object>) => Object.fromEntries(Object.entries(compiled).map(([taskId, intent]) => [taskId, { ...intent, historical_atoms: [] }]))
+
 function plan(includeSharedRule: boolean): Candidate {
   const candidate = structuredClone(CANDIDATE_EXAMPLE)
   candidate.basis.event_ids = ["e1"]
@@ -118,7 +121,7 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
     assert.equal(prepared.ir.t1!.content.length, 3)
     assert.equal(prepared.compiled.t1!.atoms.length, 2)
     assert.equal(prepared.compiled.t1!.relations.length, 1)
-    assert.deepEqual(prepared.dispatchable_atoms.map(atom => atom.atom_id), ["a1"])
+    assert.deepEqual(prepared.dispatchable_atoms.map(ref => ref.id), ["a1"])
     assert.deepEqual(prepared.atom_states.map(state => state.status), ["ready", "ready"])
     const waiting = prepared.compiled.t1!.atoms[1]!
     const requirement = waiting.goal_refs.find(ref => ref.id === "r3")!
@@ -139,7 +142,7 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
   assert.equal(proposals[1]!.parent_basis, proposals[2]!.parent_basis, "child repair must preserve the actual parent")
   assert.deepEqual(proposals[1]!.ir, proposals[2]!.ir, "CI repair must receive the same actual parent text and scopes")
   assert.equal(store.current().semantic_checks[0]!.findings[0]!.evidence_resolved, true, "newly prepared IR refs must be usable check evidence")
-  assert.deepEqual(store.current().compiled, checks[1]!.prepared!.compiled)
+  assert.deepEqual(shownPlan(store.current().compiled), checks[1]!.prepared!.compiled)
   assert.ok((checks[0]!.candidate.groups[0]!.ir_changes[1] as { sources: any[] }).sources[0]!.span,
     "preparing a response draft must not mutate the recorded rejected candidate")
   assert.deepEqual(first.deliveries!.map(delivery => delivery.atom_id), ["a1"])
@@ -158,7 +161,7 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
   const second = await compiler.advance({ runId: event.run_id })
   assert.equal(second.ok, true, second.message)
   assert.deepEqual(second.deliveries?.map(delivery => delivery.atom_id), ["a2"])
-  assert.deepEqual(store.current().compiled, checks[1]!.prepared!.compiled, "acceptance reuses the whole plan")
+  assert.deepEqual(shownPlan(store.current().compiled), checks[1]!.prepared!.compiled, "acceptance reuses the whole plan")
   assert.deepEqual(proposals.map(input => input.generation_stage), ["ir", "ci", "ci", "ci"],
     "a returned execution is assessed by the CI stage alone; no IR stage runs for it")
   assert.equal(proposals.at(-1)!.assessment_batch, true)

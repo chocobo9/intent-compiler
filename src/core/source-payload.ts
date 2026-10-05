@@ -282,3 +282,116 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     if (!disposed(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))) throw new Error(`previously normative source ${display(source.source_id)} was dropped without an explicit superseded disposition and current change basis`)
   }
 }
+
+/** One passage this batch withdrew from the IR, with the text that justifies it. */
+export interface WithdrawnPassage {
+  source: SourceRef
+  /** The removed source text, exactly as the user wrote it. */
+  text: string
+  /** Prior IR content items that selected this text. */
+  items: string[]
+  reason: string
+  basis: Array<{ source: SourceRef; text: string }>
+}
+
+/**
+ * Every withdrawal in the prepared candidate - the model's superseded entries
+ * and the records code wrote for edit removals - resolved to the removed text
+ * and its basis text, so a check can judge each removal against what the user
+ * actually wrote rather than against the IR's summary of it.
+ */
+export function withdrawnPassages(candidate: Candidate, previous: Record<string, TaskIntent>, sources: readonly CompilerEvent[]): WithdrawnPassage[] {
+  const texts = sourceTexts(sources)
+  const slice = (ref: SourceRef): string | undefined => {
+    const text = texts.get(ref.source_id)
+    return text === undefined ? undefined : ref.span === undefined ? text : text.slice(ref.span.start, ref.span.end)
+  }
+  const taskIds = new Set(candidate.groups.flatMap(group => group.task_refs))
+  const oldItems = Object.entries(previous).filter(([id]) => taskIds.has(id)).flatMap(([, task]) => task.content)
+  return (candidate.source_coverage ?? []).filter(entry => entry.disposition === "superseded").flatMap(entry => {
+    const text = slice(entry.source)
+    if (text === undefined) return []
+    const span = entry.source.span
+    const items = oldItems.filter(item => item.sources.some(source => source.source_id === entry.source.source_id
+      && (span === undefined || source.span === undefined || (source.span.start < span.end && span.start < source.span.end)))).map(item => item.item_id)
+    return [{
+      source: entry.source,
+      text,
+      items,
+      reason: entry.reason,
+      basis: entry.basis.flatMap(ref => { const basisText = slice(ref); return basisText === undefined ? [] : [{ source: ref, text: basisText }] }),
+    }]
+  })
+}
+
+/**
+ * Where a quote selects source text.  An exact unique occurrence is the rule.
+ * Only when the quote occurs nowhere exactly is it compared again on a
+ * simplified form of both texts - whitespace runs as one space, backticks and
+ * backslashes dropped, the quote's own leading and trailing whitespace and
+ * punctuation set aside - and a unique occurrence there is mapped back to the
+ * source's real interval.  The stored text is always that source slice: the
+ * quote only locates it.  A result's `match` says which rule located it, so the
+ * same function re-run over a recorded answer tells exact from simplified.
+ */
+export type QuoteLocation =
+  | { match: "exact" | "simplified"; start: number; end: number }
+  | { match: "none" | "ambiguous"; simplified: "none" | "ambiguous" | "empty" | "not_tried" }
+
+const SKIPPED = /[`\\]/u
+const EDGE = /[\s\p{P}`\\]/u
+
+function simplify(text: string, from = 0, to = text.length): { text: string; at: number[] } {
+  let out = ""
+  const at: number[] = []
+  for (let index = from; index < to; index += 1) {
+    const character = text[index]!
+    if (SKIPPED.test(character)) continue
+    if (/\s/u.test(character)) {
+      if (out.endsWith(" ")) continue
+      out += " "
+    } else out += character
+    at.push(index)
+  }
+  return { text: out, at }
+}
+
+export function locateQuote(quote: string, text: string): QuoteLocation {
+  const start = text.indexOf(quote)
+  if (start >= 0) {
+    return text.indexOf(quote, start + 1) >= 0 ? { match: "ambiguous", simplified: "not_tried" } : { match: "exact", start, end: start + quote.length }
+  }
+  let first = 0, last = quote.length
+  while (first < last && EDGE.test(quote[first]!)) first += 1
+  while (last > first && EDGE.test(quote[last - 1]!)) last -= 1
+  const needle = simplify(quote, first, last).text
+  if (!needle) return { match: "none", simplified: "empty" }
+  const source = simplify(text)
+  const found = source.text.indexOf(needle)
+  if (found < 0) return { match: "none", simplified: "none" }
+  if (source.text.indexOf(needle, found + 1) >= 0) return { match: "none", simplified: "ambiguous" }
+  let begin = source.at[found]!, end = source.at[found + needle.length - 1]! + 1
+  // Punctuation the quote carried at its edges stays in the selection when the
+  // source has it directly adjacent (backticks and backslashes aside).  A full
+  // stop the quote took from the previous sentence is separated from the match
+  // by whitespace in the source, so it is not pulled in.
+  const edge = (part: string) => [...part].filter(c => !/\s/u.test(c) && !SKIPPED.test(c))
+  for (const character of edge(quote.slice(last))) {
+    let probe = end
+    while (probe < text.length && SKIPPED.test(text[probe]!)) probe += 1
+    if (text[probe] !== character) break
+    end = probe + 1
+  }
+  for (const character of edge(quote.slice(0, first)).reverse()) {
+    let probe = begin - 1
+    while (probe >= 0 && SKIPPED.test(text[probe]!)) probe -= 1
+    if (text[probe] !== character) break
+    begin = probe
+  }
+  // A code span the simplified match cut in half keeps its other backtick.
+  if (([...text.slice(begin, end)].filter(c => c === "`").length % 2) === 1) {
+    if (text[end] === "`") end += 1
+    else if (text[begin - 1] === "`") begin -= 1
+  }
+  return { match: "simplified", start: begin, end }
+}

@@ -4,14 +4,14 @@ import { appendFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } 
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
-import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
+import { createIntentCompilerV2, resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 import { createCompilerModelV2 } from "../src/model/compiler-model-v2.js"
 import type { CompilerModelV2Input, CompilerModelV2CheckInput } from "../src/model/compiler-model-v2.js"
 import { V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
 import { ParentGeneration } from "../src/core/parent-generation.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
-import { digestOf, digestText } from "../src/core/intent-contract.js"
+import { digestOf, digestText, type Candidate } from "../src/core/intent-contract.js"
 import { bindCurrentRequirements } from "../src/core/requirement-flow.js"
 import type { CIProposal } from "../src/model/generation-schema.js"
 
@@ -38,6 +38,65 @@ function child(basis: string, checkRequired = true) {
     })) }
 }
 const consistent = async () => JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] })
+
+test("source repair diagnoses R5 copying defects and reuses only resolved selections", async () => {
+  // Artificial offline case using the actual R5 verify sentence and failure
+  // shapes; this does not replay or change that run's result.
+  const verify = "- Reads `<path>`, computes SHA-256, compares against the hex string in `<checksum>`."
+  const first = "- The `verify` command still reads the checksum file passed with `--checksum`."
+  const last = "- BLAKE2b-256 means the standard 256-bit BLAKE2b digest."
+  const text = `${CANDIDATE_EXAMPLE_INPUT}\n${verify}\n- Exit code 0 and prints VERIFIED.\n${first}\nintervening rule\n${last}\nRepeated. Repeated.`
+  const proposal = parent()
+  const ref = (quote: string) => ({ source_id: "input-event-id", digest: "sha256:x", quote })
+  const changeIndex = proposal.groups[0]!.ir_changes.findIndex(change => change.action === "create" && change.target === "content")
+  const change = proposal.groups[0]!.ir_changes[changeIndex]!
+  if (change.action !== "create" || change.target !== "content") throw Error("fixture")
+  change.sources = [ref(verify), ref(`${verify} `), ref(verify.replace("`.", ".")), ref(`${first}\n${last}`), ref("Repeated.")]
+  const raw = JSON.stringify(proposal)
+  const input = { run_id: "parent", events: [{ schema_version: 2, run_id: "parent", event_id: "input-event-id",
+    kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text } }],
+    ir: {}, compiled: {}, atom_refs: {}, executions: [], budget: { requests_used: 0, max_requests: 6 },
+    contract: V2_COMPILER_CONTRACT } as CompilerModelV2Input
+  const requests: CompilerModelV2Input[] = []
+  const options: ConstructorParameters<typeof ParentGeneration>[0] = { input, sourceBasis: "fixture", checkRequired: false,
+    remaining: () => 6, currentBasis: () => "fixture",
+    call: async request => { requests.push(structuredClone(request)); return { ok: true, ir_proposal: proposal, call: { text: raw } } },
+    aliases: { lookup: () => undefined, records: () => false },
+    resolve: candidate => resolveSourceRefs(candidate, input.events),
+    validateBasis: () => ({ ok: true }), directory: () => ({ tasks: [] }) }
+  const generation = new ParentGeneration(options)
+  const result = await generation.propose(input)
+  assert.equal(result.ok, false, "a joined or repeated quote still fails the source gate")
+  assert.equal(result.call!.text, raw, "raw response is retained verbatim")
+  assert.deepEqual(generation.state.ir_proposal, proposal, "decoded answer stays separate from the derived draft")
+  assert.equal(JSON.stringify(proposal), raw, "resolver did not mutate the model's proposal")
+  const restored = new ParentGeneration({ ...options, restored: structuredClone(generation.state) })
+  await restored.propose(input)
+  const retry = requests[1]!
+  const draft = retry.generation_repair!.ir_proposal!
+  const draftChange = draft.groups[0]!.ir_changes[changeIndex]!
+  if (draftChange.action !== "create" || draftChange.target !== "content") throw Error("fixture")
+  assert.deepEqual(draftChange.sources[0], { source_id: "input-event-id", digest: digestText(text),
+    span: { unit: "utf16", start: text.indexOf(verify), end: text.indexOf(verify) + verify.length } })
+  // A trailing space and a dropped backtick are copying noise: both locate the
+  // verify line itself (its list marker set aside), and the stored span is the
+  // source's own text.
+  const verifyBody = { source_id: "input-event-id", digest: digestText(text),
+    span: { unit: "utf16", start: text.indexOf(verify) + 2, end: text.indexOf(verify) + verify.length } }
+  assert.deepEqual(draftChange.sources[1], verifyBody)
+  assert.deepEqual(draftChange.sources[2], verifyBody)
+  assert.equal(text.slice(verifyBody.span.start, verifyBody.span.end), verify.slice(2))
+  assert.deepEqual(draftChange.sources.slice(3), change.sources.slice(3), "failed selectors keep their actual values")
+  const feedback = retry.validation_errors!.join("\n")
+  assert.equal(feedback.includes(`$.groups[0].ir_changes[${changeIndex}].sources[1]`), false)
+  assert.equal(feedback.includes(`$.groups[0].ir_changes[${changeIndex}].sources[2]`), false)
+  assert.ok(feedback.includes(`$.groups[0].ir_changes[${changeIndex}].sources[3]`))
+  assert.match(feedback, /These lines do not establish a continuous quote/)
+  assert.ok(feedback.includes(`$.groups[0].ir_changes[${changeIndex}].sources[4]`))
+  assert.match(feedback, /Exact quote occurs more than once/)
+  assert.match(feedback, /code-derived repair draft, not raw model output/)
+  assert.equal(resolveSourceRefs(structuredClone(draft) as unknown as Candidate, input.events).unresolved, 2)
+})
 
 test("the ordinary CI answer states no parent basis, and assembly restores it from the parent", async () => {
   let ciAnswers = 0

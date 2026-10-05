@@ -34,6 +34,9 @@ const EMPTY_STATE: Record<string, TaskIntent> = {}
 
 export class IntentStateManager {
   private tasks: Map<string, TaskIntent>
+  /** The change that last advanced each object since this manager was created, so a stale expected_revision can name it. */
+  private changed = new Map<string, EarlierChange>()
+  private applyCount = 0
 
   constructor(initial: Record<string, TaskIntent> = EMPTY_STATE) {
     this.tasks = new Map(Object.entries(initial).map(([id, task]) => [id, cloneTask(task)]))
@@ -52,16 +55,23 @@ export class IntentStateManager {
     const errors: IntentStateError[] = []
     const edits: LocalSourceEditRecord[] = []
     const working = new Map([...this.tasks.entries()].map(([id, task]) => [id, cloneTask(task)]))
+    const changed = new Map(this.changed)
+    const call = ++this.applyCount
 
     for (const { change, index } of orderChanges(changes)) {
       const path = `ir_changes[${index}]`
+      const object = changedObject(change, taskRefs)
       try {
         const edit = applyChange(working, change, taskRefs, path)
         if (edit !== undefined) edits.push(edit)
+        if (object !== undefined) changed.set(object.key, { call, path, change: object.change })
       } catch (error) {
+        const earlier = object === undefined ? undefined : changed.get(object.key)
         errors.push({
           code: errorCode(error),
-          message: errorMessage(error),
+          message: error instanceof RevisionMismatch && earlier !== undefined && object !== undefined
+            ? `${error.message}: ${earlier.path} (${earlier.change}) ${earlier.call === call ? "earlier in this group" : "in an earlier group of this batch"} already changed ${object.label} to revision ${error.current} before this ${object.change}`
+            : errorMessage(error),
           path,
         })
       }
@@ -69,6 +79,7 @@ export class IntentStateManager {
 
     if (errors.length > 0) return { ok: false, tasks: this.snapshot(), errors, edits: [] }
     this.tasks = working
+    this.changed = changed
     return { ok: true, tasks: this.snapshot(), errors: [], edits }
   }
 }
@@ -191,7 +202,7 @@ function applyChange(
     const updated = cloneTask(task)
     if (change.target === "task" || change.target === "current_scope") {
       if (change.expected_revision !== updated.revision) {
-        throw new TypeError(`expected_revision ${change.expected_revision} does not match current ${updated.revision}`)
+        throw new RevisionMismatch(change.expected_revision, updated.revision)
       }
       if (change.target === "task") {
         if (!isRecord(change.value)) throw new TypeError("revise task value must be an object")
@@ -199,13 +210,9 @@ function applyChange(
           text: requireNonEmptyString(change.value.goal?.text, "goal.text"),
           sources: sources,
         }
+        if (change.value.current_scope !== undefined) updated.current_scope = reviseScope(change.value.current_scope, sources)
       } else {
-        if (!isRecord(change.value)) throw new TypeError("revise current_scope value must be an object")
-        updated.current_scope = {
-          text: requireNonEmptyString(change.value.text, "current_scope.text"),
-          disposition: change.value.disposition,
-          sources,
-        }
+        updated.current_scope = reviseScope(change.value, sources)
       }
       updated.revision += 1
       tasks.set(taskId, updated)
@@ -215,7 +222,7 @@ function applyChange(
     const existing = findInTask(updated, change.target, change.id)
     if (!existing) throw new TypeError(`unknown ${change.target} ${change.id}`)
     if (existing.revision !== change.expected_revision) {
-      throw new TypeError(`expected_revision ${change.expected_revision} does not match current ${existing.revision}`)
+      throw new RevisionMismatch(change.expected_revision, existing.revision)
     }
     if (!isRecord(change.value)) throw new TypeError("revise value must be an object")
     const value = change.value as Record<string, any>
@@ -237,7 +244,7 @@ function applyChange(
     const existing = findInTask(updated, change.target, change.id)
     if (!existing) throw new TypeError(`unknown ${change.target} ${change.id}`)
     if (existing.revision !== change.expected_revision) {
-      throw new TypeError(`expected_revision ${change.expected_revision} does not match current ${existing.revision}`)
+      throw new RevisionMismatch(change.expected_revision, existing.revision)
     }
     if (change.target === "binding") updated.bindings = updated.bindings.filter((item) => item.binding_id !== change.id)
     else if (change.target === "output") updated.outputs = updated.outputs.filter((item) => item.output_id !== change.id)
@@ -254,7 +261,7 @@ function applyChange(
     const item = updated.content.find((entry) => entry.item_id === change.id)
     if (!item) throw new TypeError(`unknown content ${change.id}`)
     if (item.revision !== change.expected_revision) {
-      throw new TypeError(`expected_revision ${change.expected_revision} does not match current ${item.revision}`)
+      throw new RevisionMismatch(change.expected_revision, item.revision)
     }
     const removals = editSourceRefs(change.remove, "remove")
     const additions = editSourceRefs(change.add, "add")
@@ -426,6 +433,41 @@ function editSourceRefs(value: unknown, field: "remove" | "add" | "basis"): Sour
     }
   })
   return value as SourceRef[]
+}
+
+interface EarlierChange {
+  call: number
+  path: string
+  change: string
+}
+
+class RevisionMismatch extends TypeError {
+  constructor(expected: number, readonly current: number) {
+    super(`expected_revision ${expected} does not match current ${current}`)
+  }
+}
+
+/** The object whose revision a change checks or advances: task and current_scope share the task revision. */
+function changedObject(change: IrChange, taskRefs: readonly string[]): { key: string; label: string; change: string } | undefined {
+  if (!isRecord(change) || change.action === "preserve") return undefined
+  const record = change as Record<string, unknown>
+  const description = `${change.action} ${String(change.target)}`
+  if (change.target === "task" || change.target === "current_scope") {
+    const taskId = change.action === "create" ? record.local_ref : taskRefs[0]
+    return typeof taskId === "string" ? { key: `task:${taskId}`, label: `task ${taskId}`, change: description } : undefined
+  }
+  const id = change.action === "create" ? record.local_ref : record.id
+  if (typeof id !== "string" || taskRefs[0] === undefined) return undefined
+  return { key: `${taskRefs[0]}:${String(change.target)}:${id}`, label: `${String(change.target)} ${id}`, change: description }
+}
+
+function reviseScope(value: unknown, sources: SourceRef[]): TaskIntent["current_scope"] {
+  if (!isRecord(value)) throw new TypeError("revise current_scope value must be an object")
+  return {
+    text: requireNonEmptyString(value.text, "current_scope.text"),
+    disposition: value.disposition,
+    sources,
+  }
 }
 
 function cloneTask(task: TaskIntent): TaskIntent {

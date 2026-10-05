@@ -8,7 +8,8 @@ import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2, resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 import { IntentStateManager } from "../src/core/intent-state-v2.js"
 import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "../src/core/source-payload.js"
-import { createCompilerModelV2, V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
+import { createCompilerModelV2, V2_COMPILER_CONTRACT, type CompilerModelV2CheckInput } from "../src/model/compiler-model-v2.js"
+import { LATER_INPUT_GOVERNS } from "../src/core/requirement-flow.js"
 import { buildGenerationSchema } from "../src/model/generation-schema.js"
 import { stageCandidate } from "./fixtures/stage-candidate.js"
 import {
@@ -623,7 +624,11 @@ test("a strict batch commits the edited text and the withdrawal record the opera
       checks: [], questions: [],
     }],
   }
-  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, batch))) })
+  const checks: CompilerModelV2CheckInput[] = []
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(
+    async (input, generation) => JSON.stringify(stageCandidate(input, batch, generation)),
+    async input => { checks.push(structuredClone(input)); return JSON.stringify({ schema_version: 2, verdict: "consistent", findings: [] }) },
+  ) })
   await compiler.acceptEvent(trigger)
   const result = await compiler.advance({ runId: fixture.run_id })
   assert.equal(result.ok, true, result.message)
@@ -637,9 +642,38 @@ test("a strict batch commits the edited text and the withdrawal record the opera
   assert.equal(superseded.length, 1, "the committed run records exactly the one generated withdrawal")
   assert.deepEqual(superseded[0]!.source.span, fixture.edit.remove.span)
   assert.deepEqual(superseded[0]!.basis, [fixture.edit.basis])
+  // The check sees the removed sentence and the text the removal relies on.
+  assert.equal(checks.length, 1)
+  assert.deepEqual(checks[0]!.prepared!.withdrawals, [{
+    source: superseded[0]!.source,
+    text: removedText,
+    items: [fixture.stored.item_id],
+    reason: fixture.edit.reason,
+    basis: [{ source: fixture.edit.basis, text: textOf.get(fixture.edit.basis.source_id)!.slice(fixture.edit.basis.span!.start, fixture.edit.basis.span!.end) }],
+  }])
+
+  // The assembled block names each passage's user input by its journal position
+  // and still carries the withdrawn sentence: the edit cut it out of the middle
+  // of one passage, so the delivered passages are exactly the item's sources
+  // before the edit, read input by input.
+  const order = new Map(store.readEvents().filter(row => row.event.kind === "user_input").sort((a, b) => a.sequence - b.sequence).map((row, index) => [row.event.event_id, index + 1]))
+  const assembled = store.current().compiled["t-dpipe"]!.atoms[0]!.task
+  const block = assembled.slice(assembled.indexOf("[assigned requirement "))
+  const merged: Array<{ source_id: string; start: number; end: number }> = []
+  for (const ref of [...fixture.stored.sources].sort((a, b) => a.source_id.localeCompare(b.source_id) || a.span!.start - b.span!.start)) {
+    const last = merged.at(-1)
+    if (last?.source_id === ref.source_id && last.end >= ref.span!.start) last.end = Math.max(last.end, ref.span!.end)
+    else merged.push({ source_id: ref.source_id, start: ref.span!.start, end: ref.span!.end })
+  }
+  const passages = merged.map(range => ({ input: order.get(range.source_id)!, start: range.start, text: textOf.get(range.source_id)!.slice(range.start, range.end) }))
+    .sort((a, b) => a.input - b.input || a.start - b.start)
+  const expected = passages.map(passage => `[user input ${passage.input}]\n${passage.text}`).join("\n\n")
+  assert.equal(block, `[assigned requirement ${fixture.stored.item_id}@${committed.revision} ${digestOf(committed)}]\n${LATER_INPUT_GOVERNS}\n${expected}`)
+  assert.ok(block.includes(removedText), "the withdrawn sentence is still delivered in its original passage")
+  assert.equal(committed.text.includes(removedText), false, "the IR itself no longer carries the withdrawn sentence")
   const delivered = result.deliveries?.[0]?.atom
   if (delivered !== undefined) {
-    assert.equal(delivered.task.includes(removedText), false, "a delivered Atom never carries the superseded sentence")
+    assert.equal(delivered.task, assembled)
     assert.ok(delivered.task.includes("### Fill linear: boundary extrapolation"))
     assert.ok(delivered.task.includes("5. Non-empty"))
   }

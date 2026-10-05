@@ -3,10 +3,10 @@
   "note": "Generated enumeration of contract clauses. Re-run the script; do not hand-edit.",
   "counts": {
     "compiler_contract": 92,
-    "check_contract": 17,
+    "check_contract": 18,
     "stage_contract": 3,
     "design_normative": 67,
-    "total": 179
+    "total": 180
   },
   "clauses": [
     {
@@ -216,7 +216,7 @@
     {
       "id": "C.ir_change_contract.14",
       "source": "src/model/compiler-model-v2.ts#V2_COMPILER_CONTRACT",
-      "text": "On updates retain unchanged content, revise changed items, create new requirements, retire withdrawn ones, and replace compilation before dispatch. Do not reactivate historical instructions. If an old normative passage is withdrawn or replaced, add a superseded source_coverage entry selecting exactly the dropped old text, empty requirements, and basis selecting the current user's change. Retained parts of a mixed paragraph can use exact quotes. A directive describing how to revise a rule is management text; the active rule text it supplies is normative. Explicitly preserve unchanged subrules instead of treating a whole old paragraph as withdrawn without cause. Coverage accounting proves preservation and declared roles, not semantic correctness.",
+      "text": "On updates retain unchanged content, revise changed items, create new requirements, retire withdrawn ones, and replace compilation before dispatch. Do not reactivate historical instructions. If an old normative passage is withdrawn or replaced, add a superseded source_coverage entry selecting exactly the dropped old text, empty requirements, and basis selecting the current user's change. Retained parts of a mixed paragraph can use exact quotes. A directive describing how to revise a rule is management text; the active rule text it supplies is normative. Explicitly preserve unchanged subrules instead of treating a whole old paragraph as withdrawn without cause. Coverage accounting proves preservation and declared roles, not semantic correctness. Withdraw only the text the current input actually voids. Dropping a whole sentence or item is right only when every part of it is voided, or when its remaining parts are restated by newly selected text; otherwise withdraw only the voided fragment, and when unsure keep the old text so that it stands beside the new text in input order. A revise that no longer selects old text withdraws that text, exactly as an edit removal or a retire does.",
       "segment": "ir_change_contract"
     },
     {
@@ -282,7 +282,7 @@
     {
       "id": "C.atom_contract.11",
       "source": "src/model/compiler-model-v2.ts#V2_COMPILER_CONTRACT",
-      "text": "atom_id plus revision identifies one content: changing any content field, including completion, return_when or preconditions, requires a new revision and its own lifecycle record. Use atom_states to distinguish retained current work from completed, failed or superseded history; historical Atoms in compiled are not automatically remaining work.",
+      "text": "atom_id plus revision identifies one content: changing any content field, including completion, return_when or preconditions, requires a new revision and its own lifecycle record. Use atom_states to distinguish retained current work from completed, failed or superseded history. compiled shows each current Atom complete; superseded or legacy versions appear only in compiled[].historical_atoms by identity and lifecycle status, and are not remaining work.",
       "segment": "atom_contract"
     },
     {
@@ -534,7 +534,7 @@
     {
       "id": "C.rules.19",
       "source": "src/model/compiler-model-v2.ts#V2_COMPILER_CONTRACT.rules",
-      "text": "When configured, an independent checker compares the original input with prepared.ir and the whole prepared.compiled plan, including retained and waiting Atoms, using prepared.atom_states to distinguish history. prepared.dispatchable_atoms is only the current dispatch subset; eligibility lists are the code-computed start/continue scope. Execution decisions belong in candidate.groups[].execution_decisions. After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return. Unreviewed work remains suspended. You remain responsible for faithful semantic generation whether or not a checker is configured.",
+      "text": "When configured, an independent checker compares the original input with prepared.ir and the whole prepared.compiled plan, including retained and waiting Atoms, using prepared.atom_states to distinguish history. prepared.dispatchable_atoms lists the refs of the current dispatch subset; eligibility lists are the code-computed start/continue scope. Execution decisions belong in candidate.groups[].execution_decisions. After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return. Unreviewed work remains suspended. You remain responsible for faithful semantic generation whether or not a checker is configured.",
       "segment": "rules"
     },
     {
@@ -582,7 +582,7 @@
     {
       "id": "K.check_contract.4",
       "source": "src/model/compiler-model-v2.ts#V2_CHECK_CONTRACT",
-      "text": "You are the independent check of one management candidate, not its author. Read the original input, prior ir/compiled, candidate changes and exact prepared effects. prepared.ir is the post-candidate task understanding; prepared.compiled is the whole resulting plan, including retained and waiting Atoms and Relations. Use prepared.atom_states to distinguish current work from historical or superseded versions. prepared.dispatchable_atoms is only the current host-facing subset; prepared.eligible_task_ids and prepared.eligible_execution_ids are the code-computed start/continue scope. Decisions are in candidate.groups[].execution_decisions. Judge the whole resulting plan against the current delegation, not only the first dispatch. Preparation supplies no new business facts. Do not design an alternative implementation or demand repository answers the executor is authorized to investigate.",
+      "text": "You are the independent check of one management candidate, not its author. Read the original input, the pre-candidate state, candidate changes and exact prepared effects. ir and compiled give the pre-candidate state only of what this candidate changed: the tasks, content, bindings and outputs it changed, the current Atoms it replaced or removed, and Relations when they changed; everything else is unchanged and appears once, in prepared. prepared.ir is the post-candidate task understanding; prepared.compiled is the whole resulting plan, including retained and waiting Atoms and Relations, with each current Atom complete and superseded or legacy versions only in prepared.compiled[].historical_atoms by identity and lifecycle status. Use prepared.atom_states to distinguish current work from historical or superseded versions. In an Atom task, a requirement block whose body reads (text identical to IR content <id>@<revision> <digest> supplied in this request) stands for the exact text of that IR content item, which the same request supplies (in prepared.ir or ir). prepared.dispatchable_atoms lists the refs of the current host-facing subset, whose content is in prepared.compiled; prepared.eligible_task_ids and prepared.eligible_execution_ids are the code-computed start/continue scope. Decisions are in candidate.groups[].execution_decisions. Judge the whole resulting plan against the current delegation, not only the first dispatch. Preparation supplies no new business facts. Do not design an alternative implementation or demand repository answers the executor is authorized to investigate.",
       "segment": "check_contract"
     },
     {
@@ -664,6 +664,12 @@
       "segment": "check_rules"
     },
     {
+      "id": "K.rules.7",
+      "source": "src/model/compiler-model-v2.ts#V2_CHECK_CONTRACT.rules",
+      "text": "A later or more specific explicit statement decides what it states, even where its account of the earlier state differs from the earlier text: that is settled meaning. Keep the related source text, and do not turn it into a question, an unresolved judgement, a parent IR issue or a check finding, or write a completion that waits on a clarification. Ask only where input or authorization is actually missing.",
+      "segment": "check_rules"
+    },
+    {
       "id": "S.ir.ir_change_contract.6",
       "source": "src/model/generation-schema.ts#strict stage projection",
       "text": "- revise: { action:\"revise\", target:\"task\"|\"current_scope\"|\"binding\"|\"output\"|\"content\", id, expected_revision, value:<complete new value>, sources } For a local content source edit that keeps the item's other sources, use edit instead of re-declaring the whole item: { action:\"edit\", target:\"content\", id, expected_revision, remove:[SourceRef], add:[SourceRef], basis:[SourceRef], reason }. remove addresses fragments inside this item's current sources; code keeps everything else, merges add, materializes the new text and writes the withdrawal record from this operation itself, so do not also send a superseded entry for the same removal. basis may cite any source still available to this batch, including earlier delegations, not only this batch's events.",
@@ -674,7 +680,7 @@
     {
       "id": "S.ir.ir_change_contract.14",
       "source": "src/model/generation-schema.ts#strict stage projection",
-      "text": "On updates retain unchanged content, revise changed items, create new requirements, retire withdrawn ones, and replace compilation before dispatch. Do not reactivate historical instructions. If an old normative passage is withdrawn or replaced, add a superseded source_coverage entry selecting exactly the dropped old text, empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry. Retained parts of a mixed paragraph can use exact quotes. A directive describing how to revise a rule is management text; the active rule text it supplies is normative. Explicitly preserve unchanged subrules instead of treating a whole old paragraph as withdrawn without cause. Coverage accounting proves preservation and declared roles, not semantic correctness.",
+      "text": "On updates retain unchanged content, revise changed items, create new requirements, retire withdrawn ones, and replace compilation before dispatch. Do not reactivate historical instructions. If an old normative passage is withdrawn or replaced, add a superseded source_coverage entry selecting exactly the dropped old text, empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry. Retained parts of a mixed paragraph can use exact quotes. A directive describing how to revise a rule is management text; the active rule text it supplies is normative. Explicitly preserve unchanged subrules instead of treating a whole old paragraph as withdrawn without cause. Coverage accounting proves preservation and declared roles, not semantic correctness. Withdraw only the text the current input actually voids. Dropping a whole sentence or item is right only when every part of it is voided, or when its remaining parts are restated by newly selected text; otherwise withdraw only the voided fragment, and when unsure keep the old text so that it stands beside the new text in input order. A revise that no longer selects old text withdraws that text, exactly as an edit removal or a retire does.",
       "segment": "ir_change_contract",
       "stage": "ir",
       "replaces": "C.ir_change_contract.14"
@@ -682,7 +688,7 @@
     {
       "id": "S.ci.ir_change_contract.14",
       "source": "src/model/generation-schema.ts#strict stage projection",
-      "text": "On updates retain unchanged content, revise changed items, create new requirements, retire withdrawn ones, and replace compilation before dispatch. Do not reactivate historical instructions. If an old normative passage is withdrawn or replaced, add a superseded source_coverage entry selecting exactly the dropped old text, empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry. Retained parts of a mixed paragraph can use exact quotes. A directive describing how to revise a rule is management text; the active rule text it supplies is normative. Explicitly preserve unchanged subrules instead of treating a whole old paragraph as withdrawn without cause. Coverage accounting proves preservation and declared roles, not semantic correctness.",
+      "text": "On updates retain unchanged content, revise changed items, create new requirements, retire withdrawn ones, and replace compilation before dispatch. Do not reactivate historical instructions. If an old normative passage is withdrawn or replaced, add a superseded source_coverage entry selecting exactly the dropped old text, empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry. Retained parts of a mixed paragraph can use exact quotes. A directive describing how to revise a rule is management text; the active rule text it supplies is normative. Explicitly preserve unchanged subrules instead of treating a whole old paragraph as withdrawn without cause. Coverage accounting proves preservation and declared roles, not semantic correctness. Withdraw only the text the current input actually voids. Dropping a whole sentence or item is right only when every part of it is voided, or when its remaining parts are restated by newly selected text; otherwise withdraw only the voided fragment, and when unsure keep the old text so that it stands beside the new text in input order. A revise that no longer selects old text withdraws that text, exactly as an edit removal or a retire does.",
       "segment": "ir_change_contract",
       "stage": "ci",
       "replaces": "C.ir_change_contract.14"

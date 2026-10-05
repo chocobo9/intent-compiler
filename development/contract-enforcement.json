@@ -1968,9 +1968,9 @@
     },
     {
       "file": "src/core/intent-state-v2.ts",
-      "pattern": "throw new TypeError\\(",
+      "pattern": "throw new (?:TypeError|RevisionMismatch)\\(",
       "expected": 35,
-      "why": "IR 变更干跑的全部拒绝点；每个都要能对到一条条款。其中 12 个是局部来源编辑（edit）的拒绝点，对应严格阶段投影条款 S.ir.ir_change_contract.6；新增的一处是 edit 的 remove/add/basis 在过滤前拒绝非 SourceRef 成员。"
+      "why": "IR 变更干跑的全部拒绝点；每个都要能对到一条条款。其中 12 个是局部来源编辑（edit）的拒绝点，对应严格阶段投影条款 S.ir.ir_change_contract.6；新增的一处是 edit 的 remove/add/basis 在过滤前拒绝非 SourceRef 成员。4 处 expected_revision 不匹配抛 RevisionMismatch（TypeError 子类），用于在反馈中指出同批前面已修改同一对象的 change。"
     }
   ],
   "facts_to_recheck": [

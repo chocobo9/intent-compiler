@@ -1,3 +1,4 @@
+import { changedPriorState, projectCompiled } from "./request-projection.js"
 import {
   canonicalJson,
   digestOf,
@@ -48,9 +49,9 @@ import type {
   ExistingObjectDirectory,
 } from "../model/compiler-model-v2.js"
 import { V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
-import { bindCurrentRequirements, selectSourceEvents } from "./requirement-flow.js"
+import { bindCurrentRequirements, selectedSourceHistory, selectSourceEvents, userInputOrder, type RequirementAssembly } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
-import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "./source-payload.js"
+import { locateQuote, materializeSourceContent, recordEditedRemovals, sourceSegments, userText, validateSourceCoverage, withdrawnPassages } from "./source-payload.js"
 import { ParentGeneration, type ParentGenerationState } from "./parent-generation.js"
 
 export interface IntentCompilerV2Options {
@@ -232,6 +233,15 @@ async function advance(
    * *offered* (`source_segments`, `event_source_refs`) stays this batch only.
    */
   const resolvableSources = store.readEvents().map(row => row.event)
+  /**
+   * Delivered requirement passages name their user input by its place in the
+   * whole run, and include what an item once selected and later withdrew.
+   */
+  const assembly: RequirementAssembly = {
+    inputOrder: userInputOrder(store.readEvents()),
+    texts: new Map(store.readEvents().flatMap(row => { const text = userText(row.event); return text === undefined ? [] : [[row.event.event_id, text] as const] })),
+    selected: selectedSourceHistory(snapshot.management_log, snapshot.ir),
+  }
   if (events.length === 0) {
     return {
       ok: true,
@@ -414,7 +424,7 @@ async function advance(
     }
     const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements, carriedEventIds, display)
     if (candidateErrors.length > 0) return candidateErrors
-    try { prepared = prepareCandidate(snapshot, result.candidate, events, availableSources, strictRequirements, capabilities) }
+    try { prepared = prepareCandidate(snapshot, result.candidate, events, availableSources, strictRequirements, capabilities, assembly) }
     catch (error) { return [`${errorMessage(error)}${applicationHint(errorMessage(error))}`] }
     return []
   }
@@ -452,6 +462,7 @@ async function advance(
         source_events: sourceEvents,
         ir: snapshot.ir,
         compiled: snapshot.compiled,
+        atom_states: snapshot.atom_states,
         capabilities: modelInput.capabilities ?? { operations: [], material: [] },
         prepared: prepared?.view,
         sequence: mgmtSequence,
@@ -740,7 +751,7 @@ async function advance(
 }
 
 /** Prepare on private state; no persistence, authorization or host effects. */
-function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events: readonly CompilerEvent[], availableSources: readonly CompilerEvent[], strictRequirements: boolean, capabilities?: CapabilitySource) {
+function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events: readonly CompilerEvent[], availableSources: readonly CompilerEvent[], strictRequirements: boolean, capabilities?: CapabilitySource, assembly?: RequirementAssembly) {
   const execution = hydrateExecutionManager(snapshot)
   const atoms = new AtomStateLedger(snapshot.atom_states)
   let compiledIntentSequence = snapshot.compiled_intent_sequence
@@ -797,6 +808,7 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
         ? bindCurrentRequirements(
           group, ir[taskRefs[0] as string] as TaskIntent, snapshot.ir[taskRefs[0] as string], availableSources,
           (compiled[taskRefs[0] as string]?.atoms ?? []).filter(atom => ["ready", "executing"].includes(atoms.status(taskRefs[0] as string, atom))),
+          assembly,
         )
         : group.compilation.drafts
       if (strictRequirements) for (const draft of drafts) for (const atom of draft.atoms) {
@@ -965,6 +977,7 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
   }
   const view = {
     ir, compiled, atom_states: atoms.snapshot(), dispatchable_atoms: dispatchableAtoms,
+    withdrawals: strictRequirements ? withdrawnPassages(candidate, snapshot.ir, availableSources) : [],
     execution_decisions: candidate.groups.flatMap(group => group.execution_decisions),
     eligible_task_ids: eligibility?.task_ids ?? taskIds,
     eligible_execution_ids: eligibility?.execution_ids ?? execution.list().filter(e => e.status === "active").map(e => e.execution_id),
@@ -1382,6 +1395,17 @@ function semanticCheckTaskIds(candidate: Candidate, events: readonly CompilerEve
     ? [...new Set(candidate.groups.flatMap(group => group.task_refs))] : compiledTasks(candidate)
 }
 
+/** The complete prepared facts behind a check; the request shows the model a projection of them. */
+interface PreparedCheckView {
+  ir: Record<string, TaskIntent>
+  compiled: Record<string, CompiledIntent>
+  atom_states: AtomStateRecord[]
+  dispatchable_atoms: import("./intent-contract.js").Atom[]
+  withdrawals: import("./source-payload.js").WithdrawnPassage[]
+  eligible_task_ids: string[]
+  eligible_execution_ids: string[]
+}
+
 async function runSemanticCheck(
   model: CompilerModelV2,
   candidate: Candidate,
@@ -1392,7 +1416,9 @@ async function runSemanticCheck(
     ir: Record<string, TaskIntent>
     compiled: Record<string, CompiledIntent>
     capabilities: CapabilityCatalog
-    prepared?: import("../model/compiler-model-v2.js").CompilerModelV2CheckInput["prepared"]
+    /** Pre-candidate lifecycle records, to tell the plan's historical versions from its current Atoms. */
+    atom_states: readonly AtomStateRecord[]
+    prepared?: PreparedCheckView
     sequence: number
     /** Strict requests receive the assembled-task check contract; legacy keeps the base one. */
     strictRequirements: boolean
@@ -1421,11 +1447,19 @@ async function runSemanticCheck(
   const taskIds = semanticCheckTaskIds(candidate, input.events)
   if (taskIds.length === 0) return undefined
   const basisEventIds = input.events.map((event) => event.event_id)
+  // The model's view shows each body once: the pre-candidate state only for
+  // what this candidate changed, historical Atom versions by identity, and
+  // requirement blocks that repeat an IR item supplied here by pointer.
+  const prior = input.prepared === undefined
+    ? { ir: input.ir, compiled: input.compiled }
+    : changedPriorState(input.ir, input.prepared.ir, input.compiled, input.prepared.compiled, input.atom_states, input.prepared.atom_states)
+  const suppliedIrs = input.prepared === undefined ? [input.ir] : [input.prepared.ir, prior.ir]
   const preparedForCheck = input.prepared === undefined ? undefined : {
     ir: input.prepared.ir,
-    compiled: input.prepared.compiled,
+    compiled: projectCompiled(input.prepared.compiled, input.prepared.atom_states, suppliedIrs),
     atom_states: input.prepared.atom_states,
-    dispatchable_atoms: input.prepared.dispatchable_atoms,
+    dispatchable_atoms: input.prepared.dispatchable_atoms.map(atomRef),
+    withdrawals: input.prepared.withdrawals,
     eligible_task_ids: input.prepared.eligible_task_ids,
     eligible_execution_ids: input.prepared.eligible_execution_ids,
   }
@@ -1436,8 +1470,8 @@ async function runSemanticCheck(
     events: input.events,
     source_events: input.source_events ?? [],
     event_source_refs: eventSourceRefs([...(input.source_events ?? []), ...input.events]),
-    ir: input.ir,
-    compiled: input.compiled,
+    ir: prior.ir,
+    compiled: projectCompiled(prior.compiled, input.atom_states, suppliedIrs),
     capabilities: input.capabilities,
     candidate: structuredClone(candidate),
     ...(preparedForCheck === undefined ? {} : { prepared: structuredClone(preparedForCheck) }),
@@ -2141,6 +2175,9 @@ export interface SourceRefStats {
    */
   unresolvedRefs: Array<{
     source_id: string
+    path: string
+    /** Diagnostic only: never used to select or repair a reference. */
+    diagnostic?: string
     /** The selector the answer actually wrote, so a repair can name it. */
     segment_id?: string
     quote?: string
@@ -2151,6 +2188,37 @@ export interface SourceRefStats {
 
 /** Why one source reference could not be resolved. */
 export type SourceRefDefect = "source_unknown" | "segment_unknown" | "selector_conflict" | "quote_unresolved" | "span_invalid"
+
+/** Exact fragments explain copying defects; the simplified comparison's outcome is stated beside them. */
+function quoteDiagnostic(quote: string, text: string): string {
+  const simplified = locateQuote(quote, text)
+  const note = simplified.match === "none" && simplified.simplified !== "not_tried"
+    ? ` Ignoring whitespace runs, backticks, backslashes and the quote's edge punctuation, it ${simplified.simplified === "empty" ? "has no words left" : simplified.simplified === "ambiguous" ? "still occurs more than once" : "still occurs nowhere"}.`
+    : ""
+  return `${exactQuoteDiagnostic(quote, text)}${note}`
+}
+
+function exactQuoteDiagnostic(quote: string, text: string): string {
+  const start = text.indexOf(quote)
+  if (start >= 0) return "Exact quote occurs more than once; select a unique passage or explicit span."
+  const lines = quote.split("\n")
+  if (lines.length > 1) {
+    return `Diagnostic only, exact line occurrences (UTF-16 starts; -1 means absent): ${lines.map((line, i) => {
+      const at = line.length ? text.indexOf(line) : -1
+      return `line ${i + 1}: ${at}${at >= 0 && text.indexOf(line, at + 1) >= 0 ? " (repeated)" : ""}`
+    }).join(", ")}. These lines do not establish a continuous quote; separate passages need separate SourceRefs.`
+  }
+  // Only a unique exact prefix anchors this excerpt. A mismatch is reported,
+  // never fixed; an absent/ambiguous anchor yields no guessed candidate.
+  const prefix = quote.slice(0, 16)
+  const at = prefix.length === 16 ? text.indexOf(prefix) : -1
+  if (at < 0 || text.indexOf(prefix, at + 1) >= 0) return "No unique exact 16-unit prefix anchor; compare the supplied source text."
+  let offset = prefix.length
+  while (offset < quote.length && quote[offset] === text[at + offset]) offset++
+  const character = (value: string | undefined): string => value === undefined ? "end of text"
+    : `${JSON.stringify(value)} U+${value.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`
+  return `Diagnostic only, unique exact prefix at UTF-16 ${at}; first mismatch at quote offset ${offset}: quote ${character(quote[offset])}, source ${character(text[at + offset])}; source context=${JSON.stringify(text.slice(at + Math.max(0, offset - 16), at + offset + 17))}. This anchor is not a resolved selection.`
+}
 
 /**
  * A finding blocks a batch only when its evidence resolves.  The checker is a
@@ -2223,7 +2291,7 @@ export function resolveSourceRefs(
   const stats: SourceRefStats = { total: 0, resolved: 0, normalized: 0, unresolved: 0, unresolvedRefs: [] }
   const segments = new Map(sourceSegments(events).map(segment => [`${segment.source_id}\0${segment.segment_id}`, segment]))
   /** Keep the audit's list bounded; the counters above stay exact. */
-  const noteUnresolved = (value: Record<string, unknown>, span: Record<string, unknown> | undefined, reason: SourceRefDefect): void => {
+  const noteUnresolved = (value: Record<string, unknown>, span: Record<string, unknown> | undefined, reason: SourceRefDefect, path: string): void => {
     if (stats.unresolvedRefs.length >= MAX_UNRESOLVED_REFS) return
     const unit = typeof span?.unit === "string" ? span.unit : "utf16"
     const start = typeof span?.start === "number" ? span.start : 0
@@ -2234,74 +2302,81 @@ export function resolveSourceRefs(
     // span here would misdescribe the defect the repair has to fix.
     stats.unresolvedRefs.push({
       source_id: String(value.source_id),
+      path,
+      ...(reason === "quote_unresolved" && quote !== undefined ? { diagnostic: quoteDiagnostic(quote, textBySource.get(String(value.source_id))!) } : {}),
       ...(typeof value.segment_id === "string" ? { segment_id: value.segment_id } : {}),
       ...(quote === undefined ? {} : { quote }),
       ...(span === undefined ? {} : { span: { unit, start, end } }),
       reason,
     })
   }
-  const visit = (value: unknown): void => {
+  const visit = (value: unknown, path: string): void => {
     if (Array.isArray(value)) {
-      for (const entry of value) visit(entry)
+      value.forEach((entry, index) => visit(entry, `${path}[${index}]`))
       return
     }
     if (!isRecord(value)) return
     if (typeof value.source_id === "string" && typeof value.digest === "string") {
+      // Resolve on a private copy. Failed selectors remain exactly as written,
+      // including nullable placeholders and any conflicting span.
+      const original = value
+      const selected = structuredClone(value)
       stats.total += 1
-      const text = textBySource.get(value.source_id)
+      const text = textBySource.get(selected.source_id)
       if (text === undefined) {
         // A source the batch does not contain: counted, left as the model wrote
         // it, so the record shows the defect instead of hiding it.
         stats.unresolved += 1
-        noteUnresolved(value, isRecord(value.span) ? value.span : undefined, "source_unknown")
+        noteUnresolved(original, isRecord(original.span) ? original.span : undefined, "source_unknown", path)
       } else {
         // The generated response schema carries every selector as a required,
         // nullable property, so a model writes `quote: null` (and `span: null`)
         // beside the selector it actually used.  A placeholder null is not a
         // second selector: only a non-empty string selects a quote.
-        const quote = typeof value.quote === "string" && value.quote.length > 0 ? value.quote : undefined
-        if (value.segment_id === null) delete value.segment_id
-        if (typeof value.segment_id === "string") {
-          const segment = segments.get(`${value.source_id}\0${value.segment_id}`)
+        const quote = typeof selected.quote === "string" && selected.quote.length > 0 ? selected.quote : undefined
+        if (selected.segment_id === null) delete selected.segment_id
+        if (typeof selected.segment_id === "string") {
+          const segment = segments.get(`${selected.source_id}\0${selected.segment_id}`)
           if (!segment || quote !== undefined) {
             stats.unresolved += 1
-            noteUnresolved(value, undefined, segment ? "selector_conflict" : "segment_unknown")
+            noteUnresolved(original, undefined, segment ? "selector_conflict" : "segment_unknown", path)
             return
           }
-          value.span = { ...segment.span }
-          delete value.segment_id
+          selected.span = { ...segment.span }
+          delete selected.segment_id
         } else if (quote !== undefined) {
-          const start = text.indexOf(quote)
-          const repeated = start >= 0 && text.indexOf(quote, start + 1) >= 0
-          if (start < 0 || repeated) {
+          const located = locateQuote(quote, text)
+          if (located.match !== "exact" && located.match !== "simplified") {
             // A plausible model-written span must not rescue a missing or
             // ambiguous quote. The whole candidate fails the source gate.
-            delete value.span
+            delete selected.span
             stats.unresolved += 1
-            noteUnresolved(value, undefined, "quote_unresolved")
+            noteUnresolved(original, undefined, "quote_unresolved", path)
             return
           }
-          value.span = { unit: "utf16", start, end: start + quote.length }
+          selected.span = { unit: "utf16", start: located.start, end: located.end }
         }
         // Drop the remaining placeholders: a persisted candidate carries the
         // selector that was used, not three properties with two nulls.
-        if (value.quote !== undefined) delete value.quote
-        if (value.span === null) delete value.span
-        const span = isRecord(value.span) ? value.span : undefined
+        if (selected.quote !== undefined) delete selected.quote
+        if (selected.span === null) delete selected.span
+        const span = isRecord(selected.span) ? selected.span : undefined
         if (span !== undefined && (span.unit !== "utf16" || !Number.isInteger(span.start) || !Number.isInteger(span.end) || span.start < 0 || span.end <= span.start || span.end > text.length)) {
           stats.unresolved += 1
-          noteUnresolved(value, span, "span_invalid")
+          noteUnresolved(original, span, "span_invalid", path)
         } else {
           const expected = digestText(text)
-          if (value.digest !== expected) stats.normalized += 1
-          value.digest = expected
+          if (selected.digest !== expected) stats.normalized += 1
+          selected.digest = expected
           stats.resolved += 1
+          for (const key of Object.keys(original)) delete original[key]
+          Object.assign(original, selected)
         }
       }
     }
-    for (const key of Object.keys(value)) visit(value[key])
+    for (const key of Object.keys(value)) visit(value[key], `${path}.${key}`)
   }
-  visit(candidate)
+  visit(candidate, "$")
   return stats
 }
 
@@ -2311,6 +2386,14 @@ function applicationHint(message: string): string {
   }
   if (/already exists/u.test(message)) {
     return " (revise the existing task instead of creating it again, or use a new unique local_ref)"
+  }
+  // A batch applies its changes in order and each one advances the object's
+  // revision, so a second change to the same object cannot match either number.
+  if (/already changed task \S+ to revision/u.test(message)) {
+    return " (state the task change once: put goal and current_scope in one revise task with the revision recorded in the supplied IR, or drop the redundant change)"
+  }
+  if (/already changed \S+ \S+ to revision/u.test(message)) {
+    return " (state the change to this object once: one revise with the complete new value and the revision recorded in the supplied IR, or drop the redundant change)"
   }
   if (/expected_revision/u.test(message)) {
     return " (use the revision currently recorded in the supplied IR)"

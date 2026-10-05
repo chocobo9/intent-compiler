@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { digestText, type Candidate, type CompilerEvent, type ContentItem, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
-import { materializeSourceContent, sourceSegments, validateSourceCoverage } from "../src/core/source-payload.js"
+import { locateQuote, materializeSourceContent, sourceSegments, validateSourceCoverage, withdrawnPassages } from "../src/core/source-payload.js"
 import { resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 
 const event = (id: string, text: string): CompilerEvent => ({ schema_version: 2, run_id: "run", event_id: id, kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text } })
@@ -251,4 +251,77 @@ test("a revision still cannot drop operative user text inside its own paragraph"
   const after = task(item("r", [ref(e, "First rule stays.")]))
   adopt(c, ref(e, "First rule stays."), "r")
   assert.throws(() => validateSourceCoverage(c, [e], [e], { t: before }, { t: after }), /dropped without/)
+})
+
+test("a withdrawal may drop only the voided fragment or a whole sentence whose rest is restated", () => {
+  const old = event("old", "Write the result CSV to out.csv, its SHA-256 to out.csv.sha256.")
+  const before = { t: task(item("r", [ref(old)])) }
+  const withdraw = (c: Candidate, source: SourceRef, basis: SourceRef) =>
+    c.source_coverage!.push({ source, disposition: "superseded", requirements: [], reason: "The update replaces the checksum rule.", basis: [basis] })
+
+  // Fragment: the CSV clause stays and the new checksum rule joins it.
+  const update = event("new", "Write the checksum with BLAKE2b-256 to out.csv.b2 instead.")
+  const fragment = candidate()
+  const kept = task(item("r", [ref(old, "Write the result CSV to out.csv"), ref(update)]))
+  kept.content[0]!.text_origin = "source"
+  withdraw(fragment, ref(old, ", its SHA-256 to out.csv.sha256."), ref(update))
+  assert.doesNotThrow(() => validateSourceCoverage(fragment, [update], [old, update], before, { t: kept }))
+  assert.deepEqual(withdrawnPassages(fragment, before, [old, update]), [{
+    source: ref(old, ", its SHA-256 to out.csv.sha256."), text: ", its SHA-256 to out.csv.sha256.", items: ["r"],
+    reason: "The update replaces the checksum rule.", basis: [{ source: ref(update), text: (update.payload as { text: string }).text }],
+  }])
+
+  // Whole sentence: the new input restates the clause that would otherwise be lost.
+  const restated = event("new", "Write the result CSV to out.csv and its BLAKE2b-256 to out.csv.b2.")
+  const whole = candidate()
+  const replaced = task(item("r", [ref(restated)]))
+  replaced.content[0]!.text_origin = "source"
+  withdraw(whole, ref(old), ref(restated))
+  assert.doesNotThrow(() => validateSourceCoverage(whole, [restated], [old, restated], before, { t: replaced }))
+  assert.equal(withdrawnPassages(whole, before, [old, restated])[0]!.text, (old.payload as { text: string }).text)
+
+  assert.deepEqual(withdrawnPassages(candidate(), before, [old]), [], "no superseded entry, no withdrawal")
+})
+
+test("an exact unique quote is located exactly as before; simplification never runs for it", () => {
+  const text = "Run `tool check` first.  Then run `tool build`."
+  assert.deepEqual(locateQuote("Then run `tool build`.", text), { match: "exact", start: 25, end: 47 })
+  assert.deepEqual(locateQuote("tool", text), { match: "ambiguous", simplified: "not_tried" }, "a repeated exact quote stays rejected")
+})
+
+test("a quote that differs only in whitespace, backticks, backslashes or edge punctuation locates the real source slice", () => {
+  const text = "Intro line.\n\n- Reads `<path>`, computes the digest, compares it with `<sum>`.\n- Writes   the report to `out\\_dir`.\n\nNext paragraph."
+  const slice = (quote: string) => {
+    const at = locateQuote(quote, text)
+    assert.equal(at.match, "simplified", quote)
+    if (at.match !== "simplified") throw new Error("fixture")
+    return text.slice(at.start, at.end)
+  }
+  assert.equal(slice("- Reads `<path>`, computes the digest, compares it with `<sum>`. "), "Reads `<path>`, computes the digest, compares it with `<sum>`.", "trailing space dropped, closing full stop kept")
+  assert.equal(slice("Reads <path>, computes the digest, compares it with <sum>."), "Reads `<path>`, computes the digest, compares it with `<sum>`.", "missing backticks")
+  assert.equal(slice("Writes the report to `out_dir`."), "Writes   the report to `out\\_dir`.", "whitespace run and escape backslash")
+  assert.equal(slice(". Reads `<path>`, computes the digest"), "Reads `<path>`, computes the digest", "a full stop from the previous line is not pulled in")
+  assert.equal(slice("<path>, computes the digest"), "`<path>`, computes the digest", "a code span the match cut in half keeps its other backtick")
+})
+
+test("simplification does not rescue placeholders, joined fragments or ambiguous text", () => {
+  const text = "Write the report.\n\nWrite the report.\n\nThen archive it to `store/`."
+  assert.deepEqual(locateQuote(". . .", text), { match: "none", simplified: "empty" })
+  assert.deepEqual(locateQuote("Write the report.  ", text), { match: "none", simplified: "ambiguous" })
+  assert.deepEqual(locateQuote("Write the report. archive it to store/", text), { match: "none", simplified: "none" }, "words joined across a gap")
+  assert.deepEqual(locateQuote("Write the report ... archive it to store/", text), { match: "none", simplified: "none" })
+})
+
+test("a simplified quote resolves to the source span; a failing one says the simplified comparison also failed", () => {
+  const e = event("e", "First behavior.\n\nThe tool writes `out.csv` and exits 0.")
+  const c = candidate()
+  c.groups[0]!.ir_changes = [{ action: "create", target: "content", local_ref: "r",
+    value: { text: "Output", about: [], scope: [{ target_id: "t" }], support: [] },
+    sources: [{ source_id: "e", digest: "sha256:placeholder", quote: "The tool writes out.csv and exits 0. " }, { source_id: "e", digest: "sha256:placeholder", quote: ". . ." }] } as never]
+  const stats = resolveSourceRefs(c, [e])
+  assert.equal(stats.resolved, 1)
+  assert.equal(stats.unresolved, 1)
+  const resolved = (c.groups[0]!.ir_changes[0] as { sources: SourceRef[] }).sources[0]!
+  assert.deepEqual(resolved, { source_id: "e", digest: digestText((e.payload as { text: string }).text), span: { unit: "utf16", start: 17, end: 55 } })
+  assert.match(stats.unresolvedRefs[0]!.diagnostic ?? "", /Ignoring whitespace runs, backticks, backslashes and the quote's edge punctuation, it has no words left\./u)
 })

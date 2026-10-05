@@ -6,6 +6,7 @@ import { buildGenerationExample, buildGenerationSchema, generationContract, gene
 import { createOpenCodeModelTransportV2 } from "../src/model/opencode-transport.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
 import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
+import { LATER_STATEMENT_SETTLES, MANAGEMENT_SYSTEM_PROMPT } from "../src/model/management-instructions.js"
 import { validateCandidateCheckSchema } from "../src/model/candidate-check-schema.js"
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
 import { CANDIDATE_JSON_SCHEMA } from "../src/model/candidate-schema.js"
@@ -183,6 +184,8 @@ test("OpenCode receives the stage boundary and a stage-valid example, and reject
             if (checkRequired) assert.doesNotMatch(body.system, /parent_issues/)
           }
           assert.match(body.system, new RegExp(`${stage.toUpperCase()} stage`))
+          assert.ok(body.system.includes(LATER_STATEMENT_SETTLES), `${stage}: the sent system text settles later explicit statements`)
+          if (stage === "ci") assert.ok(body.system.includes("including passages an assigned item once adopted and later withdrew, all labelled and ordered by user input"), "the CI system text says withdrawn passages are attached")
           assert.doesNotMatch(body.system, /Generate these directly in the existing Candidate fields/)
           assert.deepEqual(body.tools, { "*": false, StructuredOutput: true })
           // Valid JSON in the old Candidate shape is no longer valid for either stage.
@@ -212,6 +215,8 @@ test("structured provider sends the same stage boundary instead of a configured 
           assert.equal("checkRequired" in sent, false)
           if (checkRequired) assert.doesNotMatch(body.messages[0].content, /parent_issues/)
         }
+        assert.ok(body.messages[0].content.includes(LATER_STATEMENT_SETTLES), `${stage}: the sent system message settles later explicit statements`)
+        if (stage === "ci") assert.ok(body.messages[0].content.includes("including passages an assigned item once adopted and later withdrew, all labelled and ordered by user input"), "the CI system message says withdrawn passages are attached")
         assert.match(body.messages[0].content, new RegExp(`${stage.toUpperCase()} stage`))
         return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(example) } }] }))
       },
@@ -318,4 +323,17 @@ test("the local source edit is projected into the strict IR stage only, and the 
   }
   assert.deepEqual(V2_COMPILER_CONTRACT, baseContract, "projections must not mutate the base contract")
   assert.deepEqual(CANDIDATE_JSON_SCHEMA, baseSchema, "projections must not mutate the base schema")
+})
+
+test("both strict stages read the narrow-withdrawal rule and the system prompt settles later explicit statements", () => {
+  for (const stage of ["ir", "ci"] as const) {
+    const contract = generationContract(V2_COMPILER_CONTRACT, stage).ir_change_contract
+    assert.ok(contract.includes("Withdraw only the text the current input actually voids."), stage)
+    assert.ok(contract.includes("Dropping a whole sentence or item is right only when every part of it is voided, or when its remaining parts are restated by newly selected text; otherwise withdraw only the voided fragment"), stage)
+    assert.ok(contract.includes("when unsure keep the old text so that it stands beside the new text in input order"), stage)
+    assert.ok(contract.includes("A revise that no longer selects old text withdraws that text"), stage)
+  }
+  assert.ok(MANAGEMENT_SYSTEM_PROMPT.includes("A later or more specific explicit statement decides what it states, even where its account of the earlier state differs from the earlier text: that is settled meaning."))
+  assert.ok(MANAGEMENT_SYSTEM_PROMPT.includes("do not turn it into a question, an unresolved judgement, a parent IR issue or a check finding, or write a completion that waits on a clarification"))
+  assert.ok(MANAGEMENT_SYSTEM_PROMPT.includes("Ask only where input or authorization is actually missing."))
 })

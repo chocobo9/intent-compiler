@@ -121,7 +121,7 @@ export const CHECK_SYSTEM_PROMPT = [
   "Return exactly one JSON object matching the supplied JSON Schema.",
   "Use OpenCode's internal StructuredOutput submission only for this check result; business tools remain disabled. Do not execute the task or perform business work.",
   "You may only report inconsistencies with the original input and the current IR.",
-  "Compare the entire delegation with prepared.ir and the whole prepared.compiled plan, including waiting and retained Atoms and Relations. Use prepared.atom_states to distinguish history; the dispatchable subset alone is not the plan.",
+  "Compare the entire delegation with prepared.ir and the whole prepared.compiled plan, including waiting and retained Atoms and Relations; ir and compiled hold the pre-candidate state only of what the candidate changed. Use prepared.atom_states and historical_atoms to distinguish history; the dispatchable subset alone is not the plan.",
   "Do not supply the business answer, widen or narrow Authority, or rewrite the candidate.",
 ].join(" ")
 
