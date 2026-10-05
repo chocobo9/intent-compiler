@@ -306,7 +306,7 @@ export interface CandidateGroup {
     | { decision: "replace"; drafts: CompiledIntentDraft[] }
   execution_decisions: Array<{
     execution_id: string
-    decision: "continue" | "stop" | "await_result"
+    decision: "continue" | "stop" | "await_result" | "retry"
     reason: string
     basis: Ref[]
   }>
@@ -565,7 +565,17 @@ export interface ExecutionView {
   status: "pending_start" | "active" | "closed" | "blocked"
   host_identity?: string
   closed_reason?: string
+  retry?: ExecutionRetry
 }
+
+/**
+ * What a retry decision on a returned execution produced: a fresh dispatch of
+ * the same Atom version, or nothing because that version already ran the
+ * permitted number of times.
+ */
+export type ExecutionRetry =
+  | { outcome: "dispatched"; dispatch_id: string }
+  | { outcome: "limit_reached"; executions: number }
 
 export class IntentContractError extends Error {
   readonly code: string

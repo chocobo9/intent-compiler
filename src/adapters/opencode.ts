@@ -551,6 +551,12 @@ export async function advanceForTurn(compiler: IntentCompilerV2, runId: string):
   )
 }
 
+/**
+ * The registration source category of a host turn that runs pending retry
+ * dispatches instead of carrying a user input.
+ */
+export const HOST_DISPATCH_SOURCE_CATEGORY = "host_dispatch"
+
 async function onV2ChatMessage(
   options: OpenCodeAdapterOptions,
   compiler: IntentCompilerV2,
@@ -569,30 +575,45 @@ async function onV2ChatMessage(
       "Compiler input text must exactly match the declared harnessSystemText",
     )
   }
-  const raw = harness?.userInputText ?? incomingText
-  const event: CompilerEvent = {
-    schema_version: 2,
-    run_id: identity.runId,
-    event_id: v2UserEventId(identity.runId, input.sessionID, textParts[0]?.id ?? input.messageID ?? "message"),
-    kind: "user_input",
-    source: { producer_id: "host", channel: "user" },
-    ...(identity.taskIds === undefined ? {} : { task_ids: identity.taskIds }),
-    payload: {
-      text: raw,
-      ...(identity.source === undefined ? {} : { source: identity.source }),
-    },
+  // A host-dispatch turn carries no user text: it runs the retry that the last
+  // return batch decided after the executor turn holding that work had ended.
+  const hostDispatch = typeof identity.source === "object" && identity.source !== null
+    && (identity.source as { source_category?: unknown }).source_category === HOST_DISPATCH_SOURCE_CATEGORY
+  let advanced: AdvanceResult
+  if (hostDispatch) {
+    let offered: NonNullable<AdvanceResult["deliveries"]>
+    try {
+      offered = await compiler.pendingRetryDeliveries({ runId: identity.runId })
+    } catch (error: unknown) {
+      throw new OpenCodeAdapterError("COMPILER_PENDING_RETRY_FAILED", `Compiler pending retry lookup failed: ${errorMessage(error)}`)
+    }
+    advanced = { ok: true, run_id: identity.runId, disposition: offered.length > 0 ? "dispatched" : "unchanged",
+      pending_events: [], compiled_revisions: {}, ir_revisions: {}, deliveries: offered }
+  } else {
+    const raw = harness?.userInputText ?? incomingText
+    const event: CompilerEvent = {
+      schema_version: 2,
+      run_id: identity.runId,
+      event_id: v2UserEventId(identity.runId, input.sessionID, textParts[0]?.id ?? input.messageID ?? "message"),
+      kind: "user_input",
+      source: { producer_id: "host", channel: "user" },
+      ...(identity.taskIds === undefined ? {} : { task_ids: identity.taskIds }),
+      payload: {
+        text: raw,
+        ...(identity.source === undefined ? {} : { source: identity.source }),
+      },
+    }
+    let receipt: EventReceipt
+    try {
+      receipt = await compiler.acceptEvent(event)
+    } catch (error: unknown) {
+      throw new OpenCodeAdapterError("COMPILER_ACCEPT_EVENT_FAILED", `Compiler acceptEvent failed: ${errorMessage(error)}`)
+    }
+    if (!receipt.ok && receipt.status !== "duplicate") {
+      throw new OpenCodeAdapterError("COMPILER_ACCEPT_EVENT_REJECTED", receipt.message ?? receipt.code ?? "Compiler rejected the event")
+    }
+    advanced = await advanceForTurn(compiler, identity.runId)
   }
-  let receipt: EventReceipt
-  try {
-    receipt = await compiler.acceptEvent(event)
-  } catch (error: unknown) {
-    throw new OpenCodeAdapterError("COMPILER_ACCEPT_EVENT_FAILED", `Compiler acceptEvent failed: ${errorMessage(error)}`)
-  }
-  if (!receipt.ok && receipt.status !== "duplicate") {
-    throw new OpenCodeAdapterError("COMPILER_ACCEPT_EVENT_REJECTED", receipt.message ?? receipt.code ?? "Compiler rejected the event")
-  }
-
-  const advanced = await advanceForTurn(compiler, identity.runId)
 
   const deliveries: OpenCodeV2Delivery[] = (advanced.deliveries ?? []).map((delivery) => {
     return {

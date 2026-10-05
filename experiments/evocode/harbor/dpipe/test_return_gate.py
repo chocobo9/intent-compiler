@@ -6,7 +6,7 @@ import shlex
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-from intent_opencode_agent import OpenCode, OpenCodePatched
+from intent_opencode_agent import HOST_DISPATCH_INSTRUCTION, OpenCode, OpenCodePatched
 from harbor.agents.installed.base import ExecInput
 
 
@@ -43,6 +43,47 @@ class ReturnGateTest(unittest.TestCase):
             command.replace(" run --format=json -- ", " run --variant=medium --format=json -- "),
         ])
         self.assertEqual(agent._run_command_count, 1)
+
+    def test_pending_retry_runs_in_a_host_dispatch_turn_of_the_same_round(self):
+        agent = object.__new__(OpenCodePatched)
+        agent._host_dispatch = False
+        snapshots = [
+            {"dispatches": [{"dispatch_id": "d1"}], "executions": [{"execution_id": "e1", "dispatch_id": "d1"}]},
+            # The return batch of e1 decided a retry: d2 is offered, not started.
+            {"dispatches": [{"dispatch_id": "d1"}, {"dispatch_id": "d2", "retry_of": "e1"}],
+             "executions": [{"execution_id": "e1", "dispatch_id": "d1"}]},
+            {"dispatches": [{"dispatch_id": "d1"}, {"dispatch_id": "d2", "retry_of": "e1"}],
+             "executions": [{"execution_id": "e1", "dispatch_id": "d1"}, {"execution_id": "e2", "dispatch_id": "d2"}]},
+        ]
+        reads = iter(snapshots)
+        agent._read_snapshot = lambda **kwargs: next(reads)
+        turns = []
+        async def run_round(self, instruction, round_num, environment, context):
+            turns.append((instruction, self._host_dispatch))
+            (self.logs_dir / "command-0").mkdir(exist_ok=True)
+            (self.logs_dir / "command-0" / "stdout.txt").write_text(instruction, encoding="utf-8")
+        async def execute(*, command, **kwargs):
+            return SimpleNamespace(return_code=0)
+        with tempfile.TemporaryDirectory() as directory:
+            agent.logs_dir = Path(directory)
+            with patch.object(OpenCode, "run_round", run_round):
+                asyncio.run(agent.run_round("round input", 3, SimpleNamespace(exec=execute), None))
+            kept = (agent.logs_dir / "round-3-turn-1" / "command-0" / "stdout.txt").read_text(encoding="utf-8")
+        self.assertEqual(turns, [("round input", False), (HOST_DISPATCH_INSTRUCTION, True)])
+        self.assertEqual(kept, "round input")
+        self.assertFalse(agent._host_dispatch)
+
+    def test_host_dispatch_turn_registers_its_source_category(self):
+        agent = object.__new__(OpenCodePatched)
+        agent.model_name = "openai/gpt-5.6-sol"
+        agent._run_variant = "medium"
+        agent._active_round = 3
+        agent._experiment_run_id = "test"
+        agent._host_dispatch = True
+        command = "opencode run --format=json -- x | tee /logs/agent/opencode.txt"
+        with patch.object(OpenCode, "create_run_agent_commands", return_value=[ExecInput(command=command)]):
+            commands = agent.create_run_agent_commands("x")
+        self.assertEqual(commands[0].env["EXPERIMENT_INPUT_SOURCE_CATEGORY"], "host_dispatch")
 
     def run_gate(self, records, outcomes=True, exit_code="0"):
         snapshot = {

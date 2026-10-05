@@ -1,11 +1,21 @@
 import json
 import base64
 import shlex
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 from harbor.agents.installed.base import ExecInput
 from harbor.agents.installed.opencode import OpenCode
+
+# A retry is decided in a return batch, after the executor turn that held the
+# returned work has ended; the plugin runs it in a host turn of its own, marked
+# by this registration source category (HOST_DISPATCH_SOURCE_CATEGORY).
+HOST_DISPATCH_CATEGORY = "host_dispatch"
+HOST_DISPATCH_INSTRUCTION = "Run the work the Intent Compiler has pending for this task."
+# The compiler runs an Atom version at most twice, so one round needs at most
+# one host turn per returned retry; the bound only stops a broken loop.
+MAX_HOST_DISPATCH_TURNS = 2
 
 
 class OpenCodePatched(OpenCode):
@@ -24,6 +34,7 @@ class OpenCodePatched(OpenCode):
         self._experiment_run_id = experiment_run_id
         self._active_round = 1
         self._executions_before_round = set()
+        self._host_dispatch = False
         super().__init__(*args, **kwargs)
 
     @property
@@ -59,7 +70,8 @@ class OpenCodePatched(OpenCode):
                 "EXPERIMENT_TURN_ID": str(round_num),
                 "EXPERIMENT_INPUT_IDENTITY": f"{self._experiment_run_id}:round-{round_num}",
                 "EXPERIMENT_INPUT_SOURCE_CATEGORY": (
-                    "initial_requirement" if round_num == 1 else "incremental_change"
+                    HOST_DISPATCH_CATEGORY if getattr(self, "_host_dispatch", False)
+                    else "initial_requirement" if round_num == 1 else "incremental_change"
                 ),
                 "EXPERIMENT_TASK_OCCURRENCE_ID": (
                     f"d5_w9-dpipe-round-{round_num}"
@@ -92,6 +104,15 @@ class OpenCodePatched(OpenCode):
                 raise RuntimeError(f"Could not stage current round source chunk: {staged.return_code}")
         try:
             await super().run_round(instruction, round_num, environment, context)
+            for turn in range(2, 2 + MAX_HOST_DISPATCH_TURNS):
+                if not self._pending_retry_dispatches(self._read_snapshot(required=False)):
+                    break
+                self._keep_turn_logs(round_num, turn - 1)
+                self._host_dispatch = True
+                try:
+                    await super().run_round(HOST_DISPATCH_INSTRUCTION, round_num, environment, context)
+                finally:
+                    self._host_dispatch = False
         finally:
             try:
                 captured = await environment.exec(
@@ -139,6 +160,25 @@ class OpenCodePatched(OpenCode):
             f"Harbor dispatch gate: round {self._active_round} started "
             f"{len(new_executions)} execution(s)"
         )
+
+    @staticmethod
+    def _pending_retry_dispatches(snapshot):
+        """Retry dispatches the compiler offered that no execution has started."""
+        if snapshot is None:
+            return []
+        started = {item.get("dispatch_id") for item in snapshot.get("executions", [])}
+        return [item for item in snapshot.get("dispatches", [])
+                if item.get("retry_of") and item.get("dispatch_id") not in started]
+
+    def _keep_turn_logs(self, round_num, turn):
+        """The next host turn reuses the command log paths; keep this turn's copy."""
+        target = self.logs_dir / f"round-{int(round_num)}-turn-{int(turn)}"
+        target.mkdir(parents=True, exist_ok=True)
+        for item in self.logs_dir.iterdir():
+            if item.name.startswith("command-") and item.is_dir():
+                shutil.copytree(item, target / item.name, dirs_exist_ok=True)
+            elif item.is_file():
+                shutil.copy2(item, target / item.name)
 
     def _check_command_results(self):
         for index in range(self._run_command_count):

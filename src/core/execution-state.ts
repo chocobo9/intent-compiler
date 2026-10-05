@@ -3,6 +3,7 @@ import {
   type AuthorizationResult,
   type AssessmentDraft,
   type CapabilityCatalog,
+  type ExecutionRetry,
   type Condition,
   type CompiledIntent,
   type OperationRequest,
@@ -21,6 +22,8 @@ export interface DispatchRecord {
   atom_revision: number
   compiled_revision: number
   digest: string
+  /** The returned execution whose retry decision created this dispatch. */
+  retry_of?: string
 }
 
 export interface ExecutionRecord {
@@ -31,6 +34,7 @@ export interface ExecutionRecord {
   status: "pending_start" | "active" | "closed" | "blocked"
   host_identity?: string
   closed_reason?: string
+  retry?: ExecutionRetry
   allowed_calls: Array<{
     allowed_call_id: string
     host_call_id: string
@@ -149,6 +153,41 @@ export class ExecutionStateManager {
     }
     this.dispatches.set(dispatch.dispatch_id, dispatch)
     return dispatch
+  }
+
+  /**
+   * A retry offers the same Atom version again under a dispatch of its own, so
+   * the host can tell the new offer from the one that already ran.
+   */
+  createRetryDispatch(intent: CompiledIntent, atomId: string, retryOf: string): DispatchRecord {
+    const atom = intent.atoms.find((candidate) => candidate.atom_id === atomId)
+    if (!atom) throw new Error(`unknown atom ${atomId} in compiled intent ${intent.task_id}`)
+    const dispatch: DispatchRecord = {
+      dispatch_id: this.nextId("dispatch"),
+      task_id: intent.task_id,
+      compiled_intent_id: intent.compiled_intent_id,
+      atom_id: atom.atom_id,
+      atom_revision: atom.revision,
+      compiled_revision: intent.compiled_revision,
+      digest: atomRef(atom).digest,
+      retry_of: retryOf,
+    }
+    this.dispatches.set(dispatch.dispatch_id, dispatch)
+    return dispatch
+  }
+
+  /** Executions started for this exact Atom version, under any of its dispatches. */
+  executionsOfVersion(taskId: string, atomId: string, revision: number, digest: string): ExecutionRecord[] {
+    return [...this.executions.values()].filter((execution) => {
+      const dispatch = this.dispatches.get(execution.dispatch_id)
+      return dispatch !== undefined && dispatch.task_id === taskId && dispatch.atom_id === atomId
+        && dispatch.atom_revision === revision && dispatch.digest === digest
+    })
+  }
+
+  recordRetry(executionId: string, retry: ExecutionRetry): void {
+    const execution = this.executions.get(executionId)
+    if (execution) execution.retry = retry
   }
 
   dispatch(dispatchId: string): DispatchRecord | undefined {

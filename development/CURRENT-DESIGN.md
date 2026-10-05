@@ -175,10 +175,13 @@ IR 阶段不生成 compilation、coverage、execution_decisions、assessments �
 | `advance({runId}): Promise<AdvanceResult>` | 处理一批待办，生成、准备、核对并提交管理结果，返回交付、等待、澄清或失败 |
 | `authorize(request): AuthorizationResult` | 同步判断 start 或具体 operation，记录允许的执行/调用及拒绝；不调用模型 |
 | `inspect({runId}): Promise<RunView>` | 返回当前 IR/CI、待办、委托缺口、执行状态、coverage、核对和拒绝记录 |
+| `pendingRetryDeliveries({runId})` | 返回尚无执行的重试 dispatch（其 Atom 版本仍为当前且 ready），供宿主在单独一轮执行 |
 
 **交付与开始。** 当前直接交付最终 Atom。OpenCode Adapter 渲染、送达并通过 SDK 读回核对内容后发起 start。核心 start 检查 dispatch 对应的 Atom id/revision/digest 仍在当前 CI 中，Atom 状态为 ready，并通过范围、资格、前提和 Relation 检查。读回确认流程在 Adapter；核心 start 没有另设一项 delivery_ack 必须存在的检查。
 
 相同 Atom 内容可复用 dispatch。已有未闭合执行时，重复 start 返回身份冲突；当前行为与旧文设想的“重传同一开始请求幂等返回”不同。
+
+回传批处理时，任务未变且已派发过的 Atom 版本照旧跳过；同一版本再次执行只经由 retry 决定。
 
 **用户更新。** 接收更新即登记 `unresolved_user_event_ids`。出队和生成失败都不清除它，期间整个 run 拒绝新的 start/operation。成功处理后，候选覆盖且 scope=proceed 的任务可进入执行资格。现有执行只有明确 continue、身份和内容未变且范围允许时才能继续；stop 关闭资格，await_result 等待回传。conditional 目前不提供启动保证。
 
@@ -193,6 +196,10 @@ IR 阶段不生成 compilation、coverage、execution_decisions、assessments �
 **返回与验收。** `execution_return` 必须对应真实 execution 和原 Atom 的精确版本，state_claim 与 outcome 建议状态一致。保存前由宿主核对声明文件路径的摘要；不匹配或无法核验时拒绝该回传，保留原执行状态。异步摘要核验后再次读取执行身份。
 
 合法回传关闭本次执行资格并记录结果，blocked 交回也关闭资格；progress 不关闭。已关闭执行的身份匹配回传记为 historical，不重开执行或覆盖当前 Atom 状态。独立 operation_result 可以迟到。
+
+**重试。** 回传批的 execution_decisions 对已回传执行给出 stop 或 retry。retry 的成立条件由代码检查：该执行已关闭且有回传记录，本组 compilation 为 reuse，本批对同一 Atom 版本（id、revision、digest）有 not_satisfied 评估，该版本仍为当前、状态为 ready/completed/failed，任务 scope=proceed；任一条件不成立则候选退回返修。成立时原执行保持关闭，代码为同一 Atom 版本新建一个带 `retry_of` 的 dispatch，Atom 状态置回 ready，作为本批交付返回，原执行记 `retry: {outcome: "dispatched", dispatch_id}`。同一 Atom 版本最多执行 2 次（首次与一次重试），按该版本所有 dispatch 下的执行计数；已达上限时照 stop 收口，不新建 dispatch，原执行记 `retry: {outcome: "limit_reached", executions}`，在 snapshot 与 `inspect` 的执行视图中可见。unknown、satisfied 或 stop 的处理与此前相同。retry 只由模型在回答中显式给出，代码不从 reason 等文字推断。
+
+重试在回传批中决定，此时承载原工作的执行轮已结束。OpenCode 插件对回传后 advance 的交付不在同一轮送达；dpipe 宿主（`intent_opencode_agent.py`）在一轮的常规执行结束后读取 snapshot，若有尚无执行的重试 dispatch，就在同一轮内再起一次 OpenCode，并以注册来源类别 `host_dispatch` 标记。插件识别该类别后不记录用户输入、不调用 advance，改取 `pendingRetryDeliveries` 的交付，其后的读回、start、操作授权、回传和回传后评估与常规交付相同。每轮最多两次这样的宿主轮，第一次的命令日志另存为 `round-<n>-turn-<t>`。
 
 管理层分别判断派发时 Atom 的完成、当前目标的满足，以及历史成果的可用性和允许用途。Assessment 保存 target_ref、criteria、evidence、结果和方法。当前合同中 completion 写要达到的行为，evidence_required 是管理层判断时用的证据而非额外条件，重点放在本批新增或修改的行为、构建和代表性回归抽查；证据显示行为错误或产物缺失判 not_satisfied，没有反例只是未覆盖判 unknown 并写明未覆盖范围，满足判 satisfied。只有 not_satisfied 是 replace、返修或重新派发的依据，只有 unknown 时沿用当前计划、也不向用户提问；`assessment_supports` 仍把 unknown 与 not_satisfied 都视为条件未满足。执行层完成标签与业务自报结论作为证据输入，管理层核对其实际内容。
 

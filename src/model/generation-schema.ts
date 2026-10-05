@@ -225,6 +225,7 @@ function assessmentStageInstruction(): string {
     "generation_repair.ir_proposal carries the stored task groups; keep each group's task_refs and depends_on.",
     "Write the assessments and execution_decisions for this batch yourself from its evidence, with evidence refs to this batch's events: an execution return is never an IR source, only evidence for those fields.",
     "Compile only what the current IR and this evidence require: reuse the current Compiled Intent when the plan is unchanged, and replace it only where the plan must change. Preserve retained work and real dependencies.",
+    "For each returned execution, decide stop or retry. retry asks management to run the same Atom version once more as a new execution; it applies when this batch assesses that version not_satisfied and the plan is reused. Each Atom version runs at most twice, so a retry past that limit closes the execution like stop. With reuse and stop the returned Atom version does not run again until a user update changes the plan.",
     "Otherwise parent_issues is [].",
   ].join(" ")
 }
@@ -255,7 +256,7 @@ export function generationContract<T extends { ir_change_contract: string; atom_
         : "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
     ),
     ...(checkedCI && contract.rules !== undefined ? { rules: contract.rules.map(rule => {
-      if (rule.startsWith("When configured, an independent checker")) return `${CHECKED_PARENT_ROLE} Execution decisions belong in candidate.groups[].execution_decisions. After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return. Unreviewed work remains suspended.`
+      if (rule.startsWith("When configured, an independent checker")) return `${CHECKED_PARENT_ROLE} Execution decisions belong in candidate.groups[].execution_decisions. After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return, retry dispatches a returned Atom version once more. Unreviewed work remains suspended.`
       if (rule.startsWith("When validation_errors, previous_rejection")) return "On CI repairs, use the fixed parent IR and the reported plan defects to repair the complete plan. Preserve unrelated correct work, restore requirements present in that IR but missing from the plan, and correct assignments and Relations without changing IR or adding requirements absent from it. An independent IR finding returns to the IR stage through repair_target: ir."
       if (rule.startsWith("Before returning, compare the original delegation")) return "Before returning, compare every applicable fixed parent IR requirement with the whole plan's concrete tasks and completion. Fill missing plan behavior and remove unsupported plan restrictions while keeping the parent IR fixed."
       if (rule.startsWith("A first batch for a new delegation")) return "For initial compilation, compile the actual temporary parent IR supplied in request.ir and preserve the parent groups identified by generation_repair.ir_proposal."

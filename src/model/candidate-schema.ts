@@ -421,7 +421,7 @@ export const CANDIDATE_JSON_SCHEMA = {
             required: ["execution_id", "decision", "reason", "basis"],
             properties: {
               execution_id: { type: "string", minLength: 1 },
-              decision: { enum: ["continue", "stop", "await_result"] },
+              decision: { enum: ["continue", "stop", "await_result", "retry"], description: "continue keeps an active execution for unchanged authorized work; stop closes it; await_result permits only its return; retry closes a returned execution whose Atom version this batch assesses not_satisfied while the plan is reused, and management dispatches that same version once more (at most two executions per Atom version; past the limit it closes like stop)." },
               reason: { type: "string", minLength: 1 },
               basis: { type: "array", items: { $ref: "#/definitions/ref" } },
             },

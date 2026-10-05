@@ -31,6 +31,7 @@ import {
   type SemanticCheckRecord,
   type SourceRef,
   type StartRequest,
+  type Atom,
   type TaskIntent,
 } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
@@ -86,6 +87,12 @@ export interface IntentCompilerV2 {
   advance(input: { runId: string }): Promise<AdvanceResult>
   authorize(request: AuthorizeRequest): AuthorizationResult
   inspect(input: { runId: string }): Promise<RunView>
+  /**
+   * Retry dispatches that no execution has started yet.  A retry is decided in
+   * a return batch, after the host turn that carried the returned work, so the
+   * host reads the offer here and runs it in a turn of its own.
+   */
+  pendingRetryDeliveries(input: { runId: string }): Promise<NonNullable<AdvanceResult["deliveries"]>>
 }
 
 export class IntentCompilerV2Error extends Error {
@@ -187,6 +194,19 @@ export function createIntentCompilerV2(options: IntentCompilerV2Options): Intent
     authorize: (request: AuthorizeRequest) => authorize(options.store, hydrateExecutionManager(options.store.current()), new AtomStateLedger(options.store.current().atom_states), options.capabilities, request),
     async inspect(input: { runId: string }): Promise<RunView> {
       return inspect(options.store, hydrateExecutionManager(options.store.current()), input)
+    },
+    async pendingRetryDeliveries(input: { runId: string }) {
+      const snapshot = options.store.current()
+      if (input.runId !== snapshot.run_id) return []
+      const atoms = new AtomStateLedger(snapshot.atom_states)
+      const started = new Set(snapshot.executions.map(record => record.dispatch_id))
+      return snapshot.dispatches.flatMap(dispatch => {
+        if (dispatch.retry_of === undefined || started.has(dispatch.dispatch_id)) return []
+        const atom = snapshot.compiled[dispatch.task_id]?.atoms.find(candidate => candidate.atom_id === dispatch.atom_id && candidate.revision === dispatch.atom_revision)
+        if (!atom || atomRef(atom).digest !== dispatch.digest || atoms.status(dispatch.task_id, atom) !== "ready") return []
+        return [{ dispatch_id: dispatch.dispatch_id, task_id: dispatch.task_id, atom_id: dispatch.atom_id,
+          digest: dispatch.digest, compiled_revision: dispatch.compiled_revision, atom: structuredClone(atom) }]
+      })
     },
   })
 }
@@ -759,6 +779,43 @@ async function advance(
 }
 
 /** Prepare on private state; no persistence, authorization or host effects. */
+/** One Atom version runs at most twice: its first execution and one retry. */
+const ATOM_VERSION_EXECUTION_LIMIT = 2
+
+interface RetryTarget { executionId: string; taskId: string; atom: Atom }
+
+/**
+ * A retry repeats returned work whose plan stands: the execution has returned,
+ * this group keeps the compiled plan, assesses that same Atom version
+ * not_satisfied in this batch, and the version is still current and runnable.
+ */
+function retryTarget(
+  existing: ReturnType<ExecutionStateManager["list"]>[number],
+  group: Candidate["groups"][number],
+  compiled: Record<string, CompiledIntent>,
+  ir: Record<string, TaskIntent>,
+  atoms: AtomStateLedger,
+  execution: ExecutionStateManager,
+  outcomes: readonly ExecutionOutcomeRecord[],
+): RetryTarget {
+  const id = existing.execution_id
+  if (existing.status !== "closed" || !outcomes.some(outcome => outcome.execution_id === id)) {
+    throw new Error(`retry requires a returned execution: ${id} is ${existing.status}${outcomes.some(outcome => outcome.execution_id === id) ? "" : " with no recorded return"}`)
+  }
+  if (group.compilation.decision !== "reuse") throw new Error(`retry of ${id} keeps the compiled plan: use compilation reuse, or replace without retry to dispatch changed work`)
+  const dispatch = execution.dispatch(existing.dispatch_id)
+  const atom = compiled[existing.task_id]?.atoms.find(candidate => candidate.atom_id === dispatch?.atom_id && candidate.revision === dispatch?.atom_revision)
+  if (!dispatch || !atom || atomRef(atom).digest !== dispatch.digest) throw new Error(`retry of ${id}: its Atom version is no longer current`)
+  const ref = atomRef(atom)
+  const failed = group.assessments.some(assessment => assessment.result === "not_satisfied" && isRef(assessment.target_ref)
+    && assessment.target_ref.id === ref.id && assessment.target_ref.revision === ref.revision && assessment.target_ref.digest === ref.digest)
+  if (!failed) throw new Error(`retry of ${id} needs a not_satisfied assessment of ${ref.id}@${ref.revision} in this batch`)
+  const status = atoms.status(existing.task_id, atom)
+  if (!["ready", "completed", "failed"].includes(status)) throw new Error(`retry of ${id}: ${ref.id}@${ref.revision} is ${status}`)
+  if (ir[existing.task_id]?.current_scope.disposition !== "proceed") throw new Error(`retry of ${id}: task ${existing.task_id} does not proceed`)
+  return { executionId: id, taskId: existing.task_id, atom }
+}
+
 function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events: readonly CompilerEvent[], availableSources: readonly CompilerEvent[], strictRequirements: boolean, capabilities?: CapabilitySource, assembly?: RequirementAssembly, ownEventIds: ReadonlySet<string> = new Set()) {
   const execution = hydrateExecutionManager(snapshot)
   const atoms = new AtomStateLedger(snapshot.atom_states)
@@ -777,6 +834,7 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
   const changedTasks = new Set<string>()
   let irChanged = false
   let lifecycleChanged = false
+  const retries: RetryTarget[] = []
 
   for (const group of candidate.groups) {
     const taskRefs = group.task_refs
@@ -805,7 +863,10 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     for (const executionDecision of group.execution_decisions) {
       const existing = execution.getExecution(executionDecision.execution_id)
       if (!existing || !taskRefs.includes(existing.task_id)) throw new Error(`execution decision references an execution outside this group: ${executionDecision.execution_id}`)
-      if (executionDecision.decision === "stop") {
+      if (executionDecision.decision === "retry") {
+        retries.push(retryTarget(existing, group, compiled, ir, atoms, execution, snapshot.execution_outcomes))
+      }
+      if (executionDecision.decision === "stop" || executionDecision.decision === "retry") {
         execution.closeExecution(executionDecision.execution_id, executionDecision.reason)
         lifecycleChanged = true
       }
@@ -965,6 +1026,30 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
         })
       }
     }
+  }
+
+  // A retry offers the same Atom version once more, under a dispatch of its
+  // own; past the limit the execution stays closed and says why.
+  for (const retry of retries) {
+    const ran = execution.executionsOfVersion(retry.taskId, retry.atom.atom_id, retry.atom.revision, atomRef(retry.atom).digest).length
+    if (ran >= ATOM_VERSION_EXECUTION_LIMIT) {
+      execution.recordRetry(retry.executionId, { outcome: "limit_reached", executions: ran })
+      continue
+    }
+    const intent = compiled[retry.taskId]!
+    if (atoms.status(retry.taskId, retry.atom) !== "ready") atoms.record(retry.taskId, retry.atom, intent.compiled_intent_id, "ready")
+    const blocked = atomAdmission(retry.taskId, retry.atom, admission)
+    if (blocked !== undefined) throw new Error(`retry of ${retry.executionId} cannot dispatch ${retry.atom.atom_id}@${retry.atom.revision}: ${blocked}`)
+    const dispatch = execution.createRetryDispatch(intent, retry.atom.atom_id, retry.executionId)
+    execution.recordRetry(retry.executionId, { outcome: "dispatched", dispatch_id: dispatch.dispatch_id })
+    deliveries.push({
+      dispatch_id: dispatch.dispatch_id,
+      task_id: dispatch.task_id,
+      atom_id: dispatch.atom_id,
+      digest: dispatch.digest,
+      compiled_revision: dispatch.compiled_revision,
+      atom: retry.atom,
+    })
   }
 
   const userUpdate = events.some(event => event.kind === "user_input")
@@ -1638,6 +1723,7 @@ function toExecutionView(execution: ReturnType<ExecutionStateManager["list"]>[nu
     status: execution.status,
     ...(execution.host_identity === undefined ? {} : { host_identity: execution.host_identity }),
     ...(execution.closed_reason === undefined ? {} : { closed_reason: execution.closed_reason }),
+    ...(execution.retry === undefined ? {} : { retry: { ...execution.retry } }),
   }
 }
 

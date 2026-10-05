@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { createOpenCodeAdapter, type OpenCodeObserver } from "../src/adapters/opencode.js"
+import { createOpenCodeAdapter, HOST_DISPATCH_SOURCE_CATEGORY, type OpenCodeObserver } from "../src/adapters/opencode.js"
 import type { IntentCompilerV2, IntentCompilerV2Options } from "../src/core/intent-compiler-v2.js"
 import type {
   AdvanceResult,
@@ -64,14 +64,21 @@ function fakeCompiler(): IntentCompilerV2 & {
   events: CompilerEvent[]
   started: string[]
   operations: string[]
+  retryLookups: string[]
 } {
   const events: CompilerEvent[] = []
   const started: string[] = []
   const operations: string[] = []
+  const retryLookups: string[] = []
   return {
     events,
     started,
     operations,
+    retryLookups,
+    pendingRetryDeliveries: async ({ runId }) => {
+      retryLookups.push(runId)
+      return [{ ...DELIVERY, dispatch_id: "dispatch-retry" }]
+    },
     acceptEvent: async (event: CompilerEvent): Promise<EventReceipt> => {
       events.push(event)
       return { ok: true, run_id: event.run_id, event_id: event.event_id, status: "saved", sequence: events.length }
@@ -212,6 +219,26 @@ for (const boundary of ["dispose", "cli-drain"] as const) test(`${boundary} wait
   assert.equal(assessmentFinished, true)
   assert.equal(disposed, true)
   assert.equal(compiler.events.filter(event => event.kind === "execution_return").length, 1)
+})
+
+test("a host-dispatch turn runs the pending retry without recording a user input", async () => {
+  const compiler = fakeCompiler()
+  const output = { message: { id: "message-2" }, parts: [{ id: "part-2", type: "text" as const, text: "Run the work the Intent Compiler has pending for this task." }] }
+  const hooks = createOpenCodeAdapter({
+    arm: "compiler",
+    client: { session: { messages: async () => ({ data: [{ info: { id: "message-2" }, parts: output.parts }] }) } },
+    observer: observer(),
+    compiler,
+    resolveTurn: async () => ({ runId: "run-1", inputIdentity: "input-2", taskIds: ["t-fix"], source: { source_category: HOST_DISPATCH_SOURCE_CATEGORY } }),
+  }).hooks()
+
+  await hooks["chat.message"]({ sessionID: "session-2", messageID: "message-2" }, output)
+  assert.deepEqual(compiler.retryLookups, ["run-1"])
+  assert.equal(compiler.events.length, 0, "no user_input event and no advance for a host turn")
+  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [ATOM])
+  await hooks["chat.params"]({ sessionID: "session-2", message: { id: "message-2" } }, {})
+  assert.deepEqual(compiler.started, ["dispatch-retry"], "the retry dispatch is started like any delivery")
+  assert.equal(compiler.events[0]?.kind, "delivery_ack")
 })
 
 test("CLI drain waits for other in-flight hooks even when terminal processing fails", async () => {
