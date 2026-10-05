@@ -1,0 +1,17 @@
+# 2026-10-05 提交哈希对照（推送前移除 source-selection-evidence.zip）
+
+推送到公开仓库前，从未推送的历史中移除了 experiments/evocode/harbor/dpipe/records/2026-10-02-source-selection/source-selection-evidence.zip（含 R1-R5 原文与原始模型请求/回答）。自 89e11de 起的提交因此换了哈希；其余内容不变。README、prepare 脚本和运行目录 frozen_commit 中引用的旧哈希按下表对应。旧提交保留在本地分支 backup/intent-delivery-projection-pre-zip-drop；该目录的 SHA256SUMS.txt 与 evidence-index.json 仍列出这个 zip，文件本身未发布。
+
+旧哈希 新哈希 提交标题
+89e11de 2082110 Record R1-R5 source selection evidence and update handoff
+751c4d1 3c5d3ef Allow exact quote selection in strict source schemas
+6a33462 3b79861 docs: organize project handoff and preserve current design detail
+73a4f8b f8b3fbf Keep withdrawn source in delivered Atoms, relax quote location, project CI/check requests
+5966f2b ba74bce Judge check omissions on the delivered text; record R5-H and R5-I
+5521abf 88d9827 Derive a source ledger and require this turn's input to be placed
+555a8ef 57c108f Tighten the source ledger: content-only adoption, every own input, no earlier_unplaced in the check
+4415e44 7dc5e63 Separate completion from its evidence and judge unknown apart from not_satisfied
+f5beb28 9ea9e50 Let code fix the CI parent; the answer no longer returns parent_basis
+327c394 5bf04f1 Drop the retired parent_basis rejection when resuming earlier state
+45a6388 6a0fe8c Let management retry a not_satisfied Atom version once, and run it in the same round
+9f02561 401408a Add dpipe run drivers, offline run reports and current status notes
