@@ -6,6 +6,19 @@ import { materializeSourceContent, recordEditedRemovals, sourceSegments, validat
 import type { CompilerModelV2Input, CompilerModelV2Result } from "../model/compiler-model-v2.js"
 import type { IRProposal, CIProposal } from "../model/generation-schema.js"
 
+/** The CI parent_basis comparison was removed; runs saved before then still name its rejection. */
+export const RETIRED_PARENT_BASIS_REJECTION = "CI names a different parent basis"
+
+/** A recorded rejection message without that retired reason; undefined when nothing else remains. */
+export function withoutRetiredRejection(message: string): string | undefined {
+  const prefix = "candidate rejected: "
+  if (!message.startsWith(prefix)) return message
+  const reasons = message.slice(prefix.length).split("; ")
+  const kept = reasons.filter(reason => reason !== RETIRED_PARENT_BASIS_REJECTION)
+  if (kept.length === reasons.length) return message
+  return kept.length === 0 ? undefined : `${prefix}${kept.join("; ")}`
+}
+
 /** Temporary generation state, never accepted intent or an authorization. */
 export interface ParentGenerationState {
   source_basis: string
@@ -115,9 +128,11 @@ export class ParentGeneration {
     const carriesUserInput = options.input.events.some(event => event.kind === "user_input")
     this.state = restored?.source_basis === options.sourceBasis
       ? structuredClone(restored) : { source_basis: options.sourceBasis, phase: carriesUserInput ? "ir" : "ci", issues: [] }
-    // A draft saved under the earlier contract echoes the parent digest; the
-    // repair request carries the draft back, and the parent is code's.
+    // State saved under the earlier contract echoes the parent digest and the
+    // rejection it caused; the repair request carries both back, and the
+    // parent is code's.
     delete (this.state.ci_proposal as { parent_basis?: unknown } | undefined)?.parent_basis
+    this.state.issues = this.state.issues.filter(issue => issue !== RETIRED_PARENT_BASIS_REJECTION)
     if (!carriesUserInput) {
       this.state.derived = true
       delete this.state.ir_proposal

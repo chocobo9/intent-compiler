@@ -750,6 +750,65 @@ test("a CI answer echoing a wrong parent digest is compiled against the parent c
   assert.equal(JSON.stringify(record.generation ?? {}).includes(echo), false, "no state keeps the echo")
 })
 
+test("resuming state saved under the earlier contract drops only the retired parent_basis rejection", async () => {
+  const retired = "CI names a different parent basis"
+  // One batch fails on a CI answer with no groups; the saved record is then
+  // rewritten as the earlier contract would have left it, and the batch resumes.
+  const resume = async (edit: (record: any) => void) => {
+    let failing = true
+    const requests: CompilerModelV2Input[] = []
+    const { storeDir, compiler, store } = await setup(async input => {
+      if (input.generation_stage === "ir") return JSON.stringify(parent())
+      return JSON.stringify(failing ? { ...child(), groups: [] } : child())
+    })
+    store.applyDeltas({ max_management_requests: 3 })
+    assert.equal((await compiler.advance({ runId: "parent" })).ok, false)
+    const path = join(storeDir, "v2-runs", "parent", "snapshot.json")
+    const saved = JSON.parse(readFileSync(path, "utf8"))
+    const record = saved.management_log.at(-1)
+    assert.equal(record.generation.phase, "ci")
+    assert.match(record.error_message, /^candidate rejected: CI groups must preserve/)
+    edit(record)
+    saved.budget.max_management_requests = 8
+    writeFileSync(path, JSON.stringify(saved))
+    failing = false
+    const resumed = createIntentCompilerV2({ store: new IntentStoreV2({ storeDir, runId: "parent" }), model: createCompilerModelV2(async input => {
+      requests.push(structuredClone(input))
+      return JSON.stringify(child())
+    }, consistent) })
+    const result = await resumed.advance({ runId: "parent" })
+    assert.equal(result.ok, true, result.message)
+    assert.equal(requests[0]!.generation_stage, "ci")
+    assert.ok(requests[0]!.generation_repair!.ci_proposal, "the saved draft was restored")
+    return requests[0]!
+  }
+
+  const only = await resume(record => {
+    record.error_message = `candidate rejected: ${retired}`
+    record.generation.issues = [retired]
+  })
+  assert.equal(JSON.stringify(only).includes(retired), false)
+  assert.equal("previous_rejection" in only, false, "nothing else was rejected, so nothing is sent")
+  assert.deepEqual(only.validation_errors, [])
+  assert.deepEqual(only.generation_repair!.issues, [])
+
+  let other = ""
+  const mixed = await resume(record => {
+    other = record.generation.issues[0]
+    record.error_message = `candidate rejected: ${retired}; ${other}`
+    record.generation.issues = [retired, other]
+  })
+  assert.equal(JSON.stringify(mixed).includes(retired), false)
+  assert.equal(mixed.previous_rejection!.message, `candidate rejected: ${other}`)
+  assert.deepEqual(mixed.validation_errors, [other])
+
+  let kept: { message: string; issues: string[] } = { message: "", issues: [] }
+  const unchanged = await resume(record => { kept = { message: record.error_message, issues: [...record.generation.issues] } })
+  assert.equal(unchanged.previous_rejection!.message, kept.message, "another rejection is sent as recorded")
+  assert.deepEqual(unchanged.validation_errors, kept.issues)
+  assert.deepEqual(unchanged.generation_repair!.issues, kept.issues)
+})
+
 test("input that changes before the CI call still makes the prepared parent stale", async () => {
   let calls = 0
   const input = { ...CANDIDATE_EXAMPLE, run_id: "parent", events: [], ir: {}, compiled: {}, atom_refs: {}, executions: [],

@@ -52,7 +52,7 @@ import { V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, V2_COMPILER_C
 import { bindCurrentRequirements, selectSourceEvents, userInputOrder, type RequirementAssembly } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
 import { locateQuote, materializeSourceContent, recordedDispositions, recordEditedRemovals, selectedSourceHistory, sourceDispositionView, SourceLedger, sourceSegments, userText, validateSourceCoverage, withdrawnPassages } from "./source-payload.js"
-import { ParentGeneration, type ParentGenerationState } from "./parent-generation.js"
+import { ParentGeneration, withoutRetiredRejection, type ParentGenerationState } from "./parent-generation.js"
 
 export interface IntentCompilerV2Options {
   store: IntentStoreV2
@@ -289,17 +289,21 @@ async function advance(
   const priorFailure = [...snapshot.management_log]
     .reverse()
     .find((record) => record.status !== "accepted" && record.trigger_event_ids.some((eventId) => pendingIds.has(eventId)))
-  const previousRejection = priorFailure === undefined ? undefined : {
+  const priorFindings = priorFailure === undefined ? [] : (snapshot.semantic_checks.find((check) => check.sequence === priorFailure.sequence)?.findings ?? []).map((finding) => ({
+    dimension: finding.dimension ?? "unknown",
+    claim: finding.claim,
+    expected: finding.expected,
+    observed: finding.observed,
+    evidence_resolved: finding.evidence_resolved === true,
+  }))
+  // A failure recorded under the earlier CI contract may name only the retired
+  // parent_basis rejection; such a record has nothing left to send.
+  const priorMessage = withoutRetiredRejection(priorFailure?.error_message ?? "")
+  const previousRejection = priorFailure === undefined || (priorMessage === undefined && priorFindings.length === 0) ? undefined : {
     request_id: priorFailure.request_id,
     status: priorFailure.status,
-    message: priorFailure.error_message ?? "",
-    findings: (snapshot.semantic_checks.find((check) => check.sequence === priorFailure.sequence)?.findings ?? []).map((finding) => ({
-      dimension: finding.dimension ?? "unknown",
-      claim: finding.claim,
-      expected: finding.expected,
-      observed: finding.observed,
-      evidence_resolved: finding.evidence_resolved === true,
-    })),
+    message: priorMessage ?? "",
+    findings: priorFindings,
   }
   const modelInput: CompilerModelV2Input = {
     source_segments: sourceSegments(availableSources),
