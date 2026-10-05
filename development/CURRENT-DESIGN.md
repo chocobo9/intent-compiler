@@ -203,7 +203,7 @@ IR 阶段不生成 compilation、coverage、execution_decisions、assessments �
 
 用户原文只经 `opencode run` 的参数进入插件，由插件登记为 user_input；宿主不把原文写入执行层可读的位置。旧版宿主曾每轮写入 `/app/TASK_SPEC.md`，从旧镜像续跑时该文件仍在，宿主每轮开始时删除它，结果记入 `round-<n>-task-spec-cleanup.json`（removed 或 absent）。
 
-管理层分别判断派发时 Atom 的完成、当前目标的满足，以及历史成果的可用性和允许用途。Assessment 保存 target_ref、criteria、evidence、结果和方法。当前合同中 completion 写要达到的行为，evidence_required 是管理层判断时用的证据而非额外条件，重点放在本批新增或修改的行为、构建和代表性回归抽查；证据显示行为错误或产物缺失判 not_satisfied，没有反例只是未覆盖判 unknown 并写明未覆盖范围，满足判 satisfied。只有 not_satisfied 是 replace、返修或重新派发的依据，只有 unknown 时沿用当前计划、也不向用户提问；`assessment_supports` 仍把 unknown 与 not_satisfied 都视为条件未满足。执行层完成标签与业务自报结论作为证据输入，管理层核对其实际内容。
+管理层分别判断派发时 Atom 的完成、当前目标的满足，以及历史成果的可用性和允许用途。Assessment 保存 target_ref、criteria、evidence、结果和方法。当前合同中 completion 写要达到的行为，evidence_required 是管理层判断时用的证据而非额外条件，重点放在本批新增或修改的行为、构建和代表性回归抽查；证据显示行为错误或产物缺失判 not_satisfied，没有反例只是未覆盖判 unknown 并写明未覆盖范围，满足判 satisfied。评估对照的不只是完成条件，也包括 Atom 所分配的要求原文：证据与原文中的明确陈述相矛盾时判 not_satisfied，包括“只改哪些、其余照旧”这类陈述，即使完成条件没写到；编写计划时，这类边界作为变更行为的一部分写入完成条件。只有 not_satisfied 是 replace、返修或重新派发的依据，只有 unknown 时沿用当前计划、也不向用户提问；`assessment_supports` 仍把 unknown 与 not_satisfied 都视为条件未满足。执行层完成标签与业务自报结论作为证据输入，管理层核对其实际内容。
 
 已受理的外部动作可能继续完成。宿主须提供实际效果或未知状态，权限台账不能撤销已经发生的读写。当前 OpenCode 零派发时返回 `COMPILER_HOST_WAIT_UNSUPPORTED` 并携带管理结果；正常暂停和呈现澄清的宿主体验仍缺接线。
 

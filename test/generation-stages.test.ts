@@ -379,3 +379,19 @@ test("actual CI and assessment requests separate completion from its evidence an
   assert.ok(ASSESSMENT_RESULTS.includes("Only not_satisfied is grounds to replace, repair or redispatch work; with only unknown results keep the current plan and do not ask the user about them."))
   assert.ok(COMPLETION_EVIDENCE.includes("is not an additional completion condition"))
 })
+
+test("a change's stated unchanged part is carried into completion and judged against the assigned requirement text", () => {
+  const boundary = "that boundary belongs to the changed behavior: write it into completion"
+  const contradiction = "evidence that contradicts an explicit statement in that text, including a statement of what a change leaves as it was, is not_satisfied even when no completion entry names it"
+  for (const assessment of [false, true]) for (const profile of [undefined, "openai", "groq"] as const) {
+    const contract = generationContract(V2_COMPILER_CONTRACT, "ci", profile, assessment, true)
+    assert.ok(contract.atom_output_contract.includes(boundary), "CI contract: completion carries the stated unchanged part")
+    assert.ok(contract.rules.some(rule => rule.includes(contradiction)), "CI contract: the return rule judges against the requirement text")
+    const schema = buildGenerationSchema("ci", profile, { assessment, checkRequired: true }) as { definitions: { atom: { properties: { completion: { description: string } } }; group: { properties: { assessments: { description: string } } } } }
+    assert.ok(schema.definitions.atom.properties.completion.description.includes(boundary))
+    assert.ok(schema.definitions.group.properties.assessments.description.includes(contradiction))
+  }
+  const assessing = generationStageInstruction("ci", true, true)
+  assert.match(assessing, /The user's own words are the assigned requirement passages in the Atom task, labelled by user input/)
+  assert.ok(assessing.includes(contradiction))
+})
