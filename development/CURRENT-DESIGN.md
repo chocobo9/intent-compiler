@@ -194,7 +194,7 @@ IR 阶段不生成 compilation、coverage、execution_decisions、assessments �
 
 合法回传关闭本次执行资格并记录结果，blocked 交回也关闭资格；progress 不关闭。已关闭执行的身份匹配回传记为 historical，不重开执行或覆盖当前 Atom 状态。独立 operation_result 可以迟到。
 
-管理层分别判断派发时 Atom 的完成、当前目标的满足，以及历史成果的可用性和允许用途。Assessment 保存 target_ref、criteria、evidence、结果和方法；不足以判断时用 unknown。执行层完成标签与业务自报结论作为证据输入，管理层核对其实际内容。
+管理层分别判断派发时 Atom 的完成、当前目标的满足，以及历史成果的可用性和允许用途。Assessment 保存 target_ref、criteria、evidence、结果和方法。当前合同中 completion 写要达到的行为，evidence_required 是管理层判断时用的证据而非额外条件，重点放在本批新增或修改的行为、构建和代表性回归抽查；证据显示行为错误或产物缺失判 not_satisfied，没有反例只是未覆盖判 unknown 并写明未覆盖范围，满足判 satisfied。只有 not_satisfied 是 replace、返修或重新派发的依据，只有 unknown 时沿用当前计划、也不向用户提问；`assessment_supports` 仍把 unknown 与 not_satisfied 都视为条件未满足。执行层完成标签与业务自报结论作为证据输入，管理层核对其实际内容。
 
 已受理的外部动作可能继续完成。宿主须提供实际效果或未知状态，权限台账不能撤销已经发生的读写。当前 OpenCode 零派发时返回 `COMPILER_HOST_WAIT_UNSUPPORTED` 并携带管理结果；正常暂停和呈现澄清的宿主体验仍缺接线。
 

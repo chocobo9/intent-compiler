@@ -1,3 +1,4 @@
+import { ASSESSMENT_RESULTS, COMPLETION_EVIDENCE } from "./management-instructions.js"
 import { Ajv } from "ajv"
 import type { ErrorObject, Schema } from "ajv"
 
@@ -71,14 +72,14 @@ const ATOM_PROPERTIES = {
   preconditions: { type: "array", description: "Conditions required before this unit may start. Incoming Relations already require accepted predecessor results.", items: { $ref: "#/definitions/condition" } },
   completion: {
     type: "array",
-    description: "Successful results and evidence for this unit's assigned work. Preserve the scope of each requirement: a final whole-task criterion need not block an intermediate handoff unless that handoff requires it. A blocker report is not an alternative to successful implementation or verification.",
+    description: `Successful behavior for this unit's assigned work, each with the evidence that judges it. ${COMPLETION_EVIDENCE} Preserve the scope of each requirement: a final whole-task criterion need not block an intermediate handoff unless that handoff requires it. A blocker report is not an alternative to successful implementation or verification.`,
     items: {
       type: "object",
       additionalProperties: false,
       required: ["text", "evidence_required"],
       properties: {
         text: { type: "string", minLength: 1 },
-        evidence_required: { type: "string", minLength: 1 },
+        evidence_required: { type: "string", minLength: 1, description: "The evidence management uses to judge this entry's behavior; not an additional completion condition." },
       },
     },
   },
@@ -428,7 +429,7 @@ export const CANDIDATE_JSON_SCHEMA = {
         },
         assessments: {
           type: "array",
-          description: "Evaluate returned products and evidence against the exact Atom and current requirements. Insufficient evidence is unknown; an unmet condition is not_satisfied. Do not weaken the criteria to accept a blocker or an executor's completion claim.",
+          description: `Evaluate returned products and evidence against the exact Atom and current requirements. ${ASSESSMENT_RESULTS} Do not weaken the criteria to accept a blocker or an executor's completion claim.`,
           items: {
             type: "object",
             additionalProperties: false,

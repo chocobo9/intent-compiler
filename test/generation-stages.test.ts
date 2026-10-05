@@ -6,7 +6,7 @@ import { buildGenerationExample, buildGenerationSchema, generationContract, gene
 import { createOpenCodeModelTransportV2 } from "../src/model/opencode-transport.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
 import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
-import { LATER_STATEMENT_SETTLES, MANAGEMENT_SYSTEM_PROMPT } from "../src/model/management-instructions.js"
+import { ASSESSMENT_RESULTS, COMPLETION_EVIDENCE, LATER_STATEMENT_SETTLES, MANAGEMENT_SYSTEM_PROMPT } from "../src/model/management-instructions.js"
 import { validateCandidateCheckSchema } from "../src/model/candidate-check-schema.js"
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
 import { CANDIDATE_JSON_SCHEMA } from "../src/model/candidate-schema.js"
@@ -336,4 +336,36 @@ test("both strict stages read the narrow-withdrawal rule and the system prompt s
   assert.ok(MANAGEMENT_SYSTEM_PROMPT.includes("A later or more specific explicit statement decides what it states, even where its account of the earlier state differs from the earlier text: that is settled meaning."))
   assert.ok(MANAGEMENT_SYSTEM_PROMPT.includes("do not turn it into a question, an unresolved judgement, a parent IR issue or a check finding, or write a completion that waits on a clarification"))
   assert.ok(MANAGEMENT_SYSTEM_PROMPT.includes("Ask only where input or authorization is actually missing."))
+})
+
+test("actual CI and assessment requests separate completion from its evidence and judge unknown apart from not_satisfied", async () => {
+  const sent: string[] = []
+  const structured = createStructuredProviderTransport({
+    modelId: "test", providerId: "openai", apiKey: "test-only",
+    fetch: async (_url, init) => { sent.push(String(init?.body)); return new Response(JSON.stringify({ choices: [{ message: { content: "{}" } }] }), { status: 200 }) },
+  })
+  const opencode = createOpenCodeModelTransportV2({
+    directory: resolve("management-only"), providerId: "openai", modelId: "test",
+    client: { session: {
+      create: async () => ({ data: { id: "session" } }),
+      prompt: async ({ body }) => { sent.push(JSON.stringify(body)); return { data: { info: { structured: {} }, parts: [] } } },
+    } },
+  })
+  for (const transport of [structured, opencode]) {
+    for (const assessment of [false, true]) {
+      await transport({ ...request("ci"), ...(assessment ? { assessment_batch: true } : {}) } as never, { checkRequired: false }).catch(() => undefined)
+    }
+  }
+  assert.equal(sent.length, 4)
+  for (const body of sent) {
+    const text = JSON.parse(JSON.stringify(body)) as string
+    for (const phrase of [COMPLETION_EVIDENCE, ASSESSMENT_RESULTS]) {
+      assert.ok(text.includes(JSON.stringify(phrase).slice(1, -1)), `request carries: ${phrase.slice(0, 60)}`)
+    }
+    for (const old of ["the evidence needed to judge it", "Use unknown for insufficient evidence", "Insufficient evidence is unknown", "completion describes a successful result and its evidence", "Successful results and evidence for this unit"]) {
+      assert.equal(text.includes(old), false, `old wording is gone: ${old}`)
+    }
+  }
+  assert.ok(ASSESSMENT_RESULTS.includes("Only not_satisfied is grounds to replace, repair or redispatch work; with only unknown results keep the current plan and do not ask the user about them."))
+  assert.ok(COMPLETION_EVIDENCE.includes("is not an additional completion condition"))
 })

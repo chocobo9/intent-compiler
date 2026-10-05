@@ -1,4 +1,4 @@
-import { LATER_STATEMENT_SETTLES } from "./management-instructions.js"
+import { ASSESSMENT_RESULTS, LATER_STATEMENT_SETTLES } from "./management-instructions.js"
 import { Ajv } from "ajv"
 import type { Candidate, CandidateGroup, CompiledIntentDraft, Ref } from "../core/intent-contract.js"
 import { CANDIDATE_JSON_SCHEMA, LOCAL_SOURCE_EDIT_IR_CHANGE, type CandidateSchemaResult } from "./candidate-schema.js"
@@ -219,7 +219,8 @@ function assessmentStageInstruction(): string {
   return [
     "CI stage (execution assessment): request.ir is the stored IR and parent_basis identifies it; copy parent_basis exactly.",
     "This batch carries no user delegation, so the user requirements are not yours to revise: return no ir_changes and no source_coverage.",
-    "Judge the returned execution on two things only: whether it satisfies the assigned Atom's completion criteria as written, and whether it violates the user's own words. Assess that work — satisfied, not_satisfied or unknown — and name the evidence you used.",
+    "Judge the returned execution on two things only: whether it satisfies the assigned Atom's completion criteria as written, and whether it violates the user's own words. Assess that work — satisfied, not_satisfied or unknown — and name the evidence you used; evidence_required says what to look at and is not itself a condition.",
+    ASSESSMENT_RESULTS,
     "An objection to the stored IR's wording, redundancy, evidence phrasing or output description is not grounds to withhold that judgement: assess the work anyway and state the reservation in the assessment explanation.",
     "Report parent_issues only when a stored-IR defect makes the judgement impossible — for example a completion condition that cannot be observed in this host at all. The IR belongs to the whole task and is revised only by user input, so such a defect is recorded as a question for the next delegation, the IR is left unchanged, and this batch still completes.",
     "request.compiled shows each current Atom complete; superseded or legacy versions appear only in compiled[].historical_atoms by identity and lifecycle status. In an Atom task, a requirement block whose body reads (text identical to IR content <id>@<revision> <digest> supplied in this request) stands for the exact text of that IR content item in request.ir.",
