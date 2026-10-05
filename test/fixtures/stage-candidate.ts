@@ -13,23 +13,22 @@ export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate
       execution_decisions: _decisions, assessments: _assessments, checks: _checks, ...group
     }) => group),
   }
-  assert.ok(input.parent_basis, "CI must receive its actual parent identity")
   if (input.assessment_batch === true) {
     // An assessment batch carries no user delegation, so no IR stage authored
     // these decisions: this answer authors the ones the plan is committed from,
     // and owes the stored IR only its task identities and this batch's events.
     assert.ok(input.generation_repair?.ir_proposal, "an assessment batch still receives the stored task groups")
     return {
-      schema_version: 2, basis: copy.basis, parent_basis: input.parent_basis, parent_issues: [],
+      schema_version: 2, basis: copy.basis, parent_issues: [],
       groups: copy.groups.map(({ ir_changes: _changes, ...group }) => group),
     }
   }
   // Provider mocks follow the example actually sent; direct transport stubs
   // receive the same internal checker configuration as the real adapters.
   const example = JSON.parse(input.contract.example_candidate) as Record<string, unknown>
-  const checkRequired = generation?.checkRequired ?? ("parent_basis" in example && !("parent_issues" in example))
+  const checkRequired = generation?.checkRequired ?? (!("source_coverage" in example) && !("parent_issues" in example))
   return {
-    schema_version: 2, parent_basis: input.parent_basis, ...(checkRequired ? {} : { parent_issues: [] }),
+    schema_version: 2, ...(checkRequired ? {} : { parent_issues: [] }),
     groups: copy.groups.map(({ ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, ...group }) => {
       const parent = input.generation_repair?.ir_proposal?.groups.find(item => item.local_ref === group.local_ref)
       assert.ok(parent, "CI must receive the parent groups it must preserve")
@@ -51,7 +50,6 @@ export function repairCandidate(input: CompilerModelV2Input): Candidate {
   const child = input.generation_repair?.ci_proposal
   assert.ok(parent)
   assert.ok(child)
-  assert.equal(child.parent_basis, input.parent_basis)
   return {
     schema_version: 2, basis: structuredClone(parent.basis), source_coverage: structuredClone(parent.source_coverage),
     groups: child.groups.map(group => {

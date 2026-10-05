@@ -52,7 +52,7 @@ test("IR generation admits only intent changes, never a hidden compiled plan", (
 test("CI generation binds a parent and cannot carry intent edits or compile a disputed parent", () => {
   const { ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, ...group } = irGroup
   const proposal = {
-    schema_version: 2, parent_basis: "parent-1", parent_issues: [],
+    schema_version: 2, parent_issues: [],
     groups: [{
       ...group, compilation: { decision: "replace", drafts: [] }, coverage: [],
       execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "x", basis: [] }],
@@ -70,7 +70,8 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], depends_on: [] }] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], compilation: {
     decision: "replace", drafts: [{ local_ref: "d1", task_id: "t1", intent_basis: [], atoms: [], relations: [], attachments: [] }] } }] }).ok, false)
-  assert.equal(validateGenerationProposal("ci", { ...proposal, parent_basis: "" }).ok, false)
+  // Code fixes the parent of a CI call; the answer has no field naming it.
+  assert.equal(validateGenerationProposal("ci", { ...proposal, parent_basis: "parent-1" }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."], groups: [] }).ok, true)
   // An assessment batch still names its own basis events and task.
@@ -86,7 +87,7 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", checked).ok, false, "without verify the field remains required")
   assert.equal(validateGenerationProposal("ci", assessment, { assessment: true, checkRequired: true }).ok, true)
   const instruction = generationStageInstruction("ci", false, true)
-  const contract = generationContract(V2_COMPILER_CONTRACT, "ci", undefined, "parent-1", false, true)
+  const contract = generationContract(V2_COMPILER_CONTRACT, "ci", undefined, false, true)
   assert.doesNotMatch(instruction + contract.candidate_shape, /parent_issues/)
   assert.match(instruction, /independent check compares original requirements/)
   assert.match(instruction, /Do not add requirements absent from the parent IR/)
@@ -98,8 +99,8 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
     const schema = buildGenerationSchema("ci", profile, { checkRequired: true }) as { properties: Record<string, unknown>; required: string[] }
     assert.equal("parent_issues" in schema.properties, false)
     assert.equal(schema.required.includes("parent_issues"), false)
-    assert.equal("parent_issues" in buildGenerationExample("ci", profile, "parent-1", false, true), false)
-    assert.equal("parent_issues" in buildGenerationExample("ci", profile, "parent-1", true, true), true)
+    assert.equal("parent_issues" in buildGenerationExample("ci", profile, false, true), false)
+    assert.equal("parent_issues" in buildGenerationExample("ci", profile, true, true), true)
   }
 })
 
@@ -124,6 +125,15 @@ test("the CI projection drops only the parent copies the compiler fills", () => 
     assert.equal("basis" in assessment.properties, true, `an assessment still names its basis (${label})`)
     assert.equal("task_refs" in assessment.definitions.group.properties, true)
     assert.equal("task_id" in assessment.definitions.draft.properties, true)
+  }
+  // Every CI shape leaves the parent identity to code: no schema field, example
+  // value or instruction asks the answer to repeat it.
+  for (const profile of [undefined, "openai", "groq"] as const) for (const assessment of [false, true]) for (const checkRequired of [false, true]) {
+    const schema = buildGenerationSchema("ci", profile, { assessment, checkRequired }) as { properties: Record<string, unknown>; required: string[] }
+    assert.equal("parent_basis" in schema.properties, false)
+    assert.equal(schema.required.includes("parent_basis"), false)
+    const contract = generationContract(V2_COMPILER_CONTRACT, "ci", profile, assessment, checkRequired)
+    assert.doesNotMatch(contract.example_candidate + contract.candidate_shape + generationStageInstruction("ci", assessment, checkRequired), /parent_basis/)
   }
 })
 
@@ -150,18 +160,18 @@ test("ordinary CI coverage selects parent identities while assessment and other 
   entry.refs[0] = { id: "a-bundle", revision: 1, digest: "sha256:destination" }
   const validate = new Ajv({ strict: false }).compile({ $ref: "#/definitions/coverage", definitions: buildGenerationSchema("ci").definitions })
   assert.equal(validate(entry), true, "destination references retain their versioned expression")
-  const assessment = (buildGenerationExample("ci", undefined, "parent", true) as CIProposal).groups[0]!.coverage[1]!
+  const assessment = (buildGenerationExample("ci", undefined, true) as CIProposal).groups[0]!.coverage[1]!
   assessment.requirement = { id: "r-common", revision: 3, digest: "sha256:assessment" }
   const validateAssessment = new Ajv({ strict: false }).compile({ $ref: "#/definitions/coverage", definitions: buildGenerationSchema("ci", undefined, { assessment: true }).definitions })
   assert.equal(validateAssessment(assessment), true, "assessment requirements retain their versioned expression")
   assert.deepEqual(CANDIDATE_JSON_SCHEMA, canonical, "the shared legacy schema is unchanged")
 })
 
-function request(stage: "ir" | "ci"): CompilerModelV2Input & { generation_stage: "ir" | "ci"; parent_basis?: string } {
+function request(stage: "ir" | "ci"): CompilerModelV2Input & { generation_stage: "ir" | "ci" } {
   return {
     run_id: "run-1", events: [], ir: {}, compiled: {}, atom_refs: {}, executions: [],
     budget: { requests_used: 0, max_requests: 4 }, contract: V2_COMPILER_CONTRACT,
-    generation_stage: stage, ...(stage === "ci" ? { parent_basis: "actual-parent" } : {}),
+    generation_stage: stage,
   }
 }
 
@@ -252,7 +262,7 @@ test("strict stage projections replace the task division while the base contract
   assert.equal(baseExampleTask.includes("bundle accepts a config file path"), true, "the base example is the full-instruction variant")
 
   for (const stage of ["ir", "ci"] as const) {
-    const strict = generationContract(V2_COMPILER_CONTRACT, stage, "openai", "parent-x")
+    const strict = generationContract(V2_COMPILER_CONTRACT, stage, "openai")
     assert.equal(strict.atom_contract.includes(assembledSentence), true, `${stage} strict contract carries the assembled-task division`)
     assert.equal(strict.atom_contract.includes(baseSentence), false, `${stage} strict contract does not keep the copy-verbatim instruction too`)
     const description = schemaTaskDescription(buildGenerationSchema(stage, "openai"))
@@ -262,7 +272,7 @@ test("strict stage projections replace the task division while the base contract
     assert.equal(description.includes("copy its applicable current rule blocks verbatim here"), false)
   }
 
-  const ciExample = JSON.parse(generationContract(V2_COMPILER_CONTRACT, "ci", "openai", "parent-x").example_candidate)
+  const ciExample = JSON.parse(generationContract(V2_COMPILER_CONTRACT, "ci", "openai").example_candidate)
   const strictTask = ciExample.groups[0].compilation.drafts[0].atoms[0].task
   assert.equal(strictTask.includes("bundle accepts a config file path"), false, "the strict example does not copy rule text into task")
   assert.ok(strictTask.startsWith("Implement and validate bundle"))
@@ -283,7 +293,7 @@ test("the local source edit is projected into the strict IR stage only, and the 
   const relaxedBasis = "basis selecting the text available to this batch that mandates the change"
 
   for (const stage of ["ir", "ci"] as const) {
-    const strict = generationContract(V2_COMPILER_CONTRACT, stage, "openai", "parent-x")
+    const strict = generationContract(V2_COMPILER_CONTRACT, stage, "openai")
     assert.equal(strict.ir_change_contract.includes(editClause), stage === "ir", `${stage}: only the IR stage authors IR changes`)
     assert.equal(strict.ir_change_contract.includes(relaxedBasis), true, `${stage}: both strict stages read the same basis rule`)
     assert.equal(strict.ir_change_contract.includes(legacyBasis), false)

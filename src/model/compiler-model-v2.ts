@@ -21,8 +21,6 @@ import { validateGenerationProposal, type IRProposal, type CIProposal, type Gene
 
 export interface CompilerModelV2Input {
   generation_stage?: "ir" | "ci"
-  /** Code-computed identity of the actual temporary parent; never model-authored. */
-  parent_basis?: string
   /**
    * True when this batch carries no user delegation (an execution return or a
    * capability change).  The stored IR is then the parent: management may
@@ -499,6 +497,10 @@ export function createCompilerModelV2(
       }
       try {
         if (input.generation_stage !== undefined) {
+          // The parent of a CI call is the one code sent; an answer written to the
+          // earlier contract may still echo its digest, which nothing reads.
+          // call.text keeps the answer as returned.
+          if (input.generation_stage === "ci" && decoded !== null && typeof decoded === "object") delete (decoded as { parent_basis?: unknown }).parent_basis
           const schema = validateGenerationProposal(input.generation_stage, decoded, {
             assessment: input.assessment_batch === true, checkRequired: checkTransport !== undefined,
           })

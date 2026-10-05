@@ -25,9 +25,9 @@ function parent() {
     }) => group),
   }
 }
-function child(basis: string, checkRequired = true) {
+function child(checkRequired = true) {
   const c = structuredClone(CANDIDATE_EXAMPLE)
-  return { schema_version: 2, parent_basis: basis, ...(checkRequired ? {} : { parent_issues: [] }),
+  return { schema_version: 2, ...(checkRequired ? {} : { parent_issues: [] }),
     groups: c.groups.map(({ ir_changes: _irChanges, task_refs: _taskRefs, depends_on: _dependsOn, ...group }) => ({
       ...group,
       coverage: group.coverage.map(entry => ({ ...entry, requirement: {
@@ -104,7 +104,7 @@ test("the ordinary CI answer states no parent basis, and assembly restores it fr
   const { store, compiler } = await setup(async input => {
     if (input.generation_stage === "ir") return JSON.stringify(parent())
     ciAnswers += 1
-    return JSON.stringify(child(input.parent_basis!))
+    return JSON.stringify(child())
   })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
@@ -125,7 +125,7 @@ test("a CI group that names no parent group is still rejected", async () => {
   let checks = 0
   const { store, compiler } = await setup(async input => {
     if (input.generation_stage === "ir") return JSON.stringify(parent())
-    const next = child(input.parent_basis!)
+    const next = child()
     next.groups[0]!.local_ref = "g-not-in-parent"
     return JSON.stringify(next)
   }, async () => { checks += 1; return consistent() })
@@ -138,7 +138,7 @@ test("a CI group that names no parent group is still rejected", async () => {
 
 test("ordinary CI binds current parent coverage and refuses unknown, foreign or ambiguous requirements", async () => {
   const { store, compiler } = await setup(async input =>
-    JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!)))
+    JSON.stringify(input.generation_stage === "ir" ? parent() : child()))
   assert.equal((await compiler.advance({ runId: "parent" })).ok, true)
   const ir = structuredClone(store.current().ir)
   const item = ir.t1!.content.find(item => item.item_id === "r-common")!
@@ -150,7 +150,8 @@ test("ordinary CI binds current parent coverage and refuses unknown, foreign or 
     const current = structuredClone(ir)
     if (duplicate) current.t1!.content.push(structuredClone(item))
     const parentBasis = digestOf(current)
-    const answer = child(wrongBasis ? "another-parent" : parentBasis, false)
+    // An answer written to the earlier contract may still echo a parent digest.
+    const answer = { ...child(false), ...(wrongBasis ? { parent_basis: "another-parent" } : {}) }
     answer.groups[0]!.coverage[1]!.requirement.local_ref = selector
     const generation = new ParentGeneration({ input, sourceBasis: "fixture", checkRequired: false,
       remaining: () => 4, currentBasis: () => "fixture", call: async () => ({ ok: true, ci_proposal: answer as CIProposal }),
@@ -173,7 +174,11 @@ test("ordinary CI binds current parent coverage and refuses unknown, foreign or 
     assert.equal(rejected.ok, false)
     assert.match(rejected.error!.message, /unknown or ambiguous in parent task t1/)
   }
-  assert.match((await propose("r-common", false, true)).error!.message, /different parent basis/)
+  // The echo names nothing: the code's parent binds the coverage.
+  const echoed = await propose("r-common", false, true)
+  assert.equal(echoed.ok, true, echoed.error?.message)
+  assert.deepEqual(echoed.candidate!.groups[0]!.coverage[1]!.requirement, { id: "r-common", revision: 2, digest: digestOf(item) })
+  assert.equal("parent_basis" in echoed.candidate!, false)
 })
 
 async function setup(transport: Parameters<typeof createCompilerModelV2>[0], checker: Parameters<typeof createCompilerModelV2>[1] | null = consistent) {
@@ -189,7 +194,7 @@ test("a check attempt records the input it sent and the prepared view behind its
   const { store, compiler, storeDir } = await setup(async (input, generation) => {
     assert.equal(generation?.checkRequired, true)
     assert.equal("checkRequired" in input, false, "checker configuration is internal")
-    return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+    return JSON.stringify(input.generation_stage === "ir" ? parent() : child())
   })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
@@ -217,7 +222,7 @@ test("a check attempt records the input it sent and the prepared view behind its
 test("CI generation reads the materialized parent before any child can be committed", async () => {
   const stages: string[] = []
   const { store, compiler } = await setup(async request => {
-    const input = request as typeof request & { generation_stage: string; parent_basis: string }
+    const input = request as typeof request & { generation_stage: string }
     stages.push(input.generation_stage)
     assert.deepEqual(store.current().ir, {})
     assert.deepEqual(store.current().compiled, {})
@@ -230,8 +235,8 @@ test("CI generation reads the materialized parent before any child can be commit
     const shared = input.ir.t1!.content.find(c => c.item_id === "r-common")!
     assert.match(shared.text, /INPUT_MISSING/)
     assert.notEqual(shared.text, shared.interpretation)
-    assert.ok(input.parent_basis)
-    return JSON.stringify(child(input.parent_basis))
+    assert.equal("parent_basis" in input, false, "the parent is the IR this request carries")
+    return JSON.stringify(child())
   })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
@@ -246,7 +251,7 @@ test("an IR selecting only the tail of this turn's input is sent back with the u
   const requests: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
-    if (input.generation_stage === "ci") return JSON.stringify(child(input.parent_basis!, false))
+    if (input.generation_stage === "ci") return JSON.stringify(child(false))
     if (requests.filter(request => request.generation_stage === "ir").length > 1) return JSON.stringify(parent())
     const proposal = parent()
     for (const change of proposal.groups[0]!.ir_changes) {
@@ -272,7 +277,7 @@ test("stage requests drop the bodies their operation cannot use and keep the who
   const requests: CompilerModelV2Input[] = []
   const { compiler } = await setup(async input => {
     requests.push(structuredClone(input))
-    return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+    return JSON.stringify(input.generation_stage === "ir" ? parent() : child())
   })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
@@ -298,7 +303,7 @@ test("a rejected IR answer is told which source references failed and why", asyn
   const requests: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
-    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    if (input.generation_stage !== "ir") return JSON.stringify(child())
     const proposal = parent()
     if (requests.filter(request => request.generation_stage === "ir").length === 1) {
       let replaced = false
@@ -337,7 +342,7 @@ test("a failure list longer than the cap keeps the exact count and says it is ca
   const requests: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
-    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    if (input.generation_stage !== "ir") return JSON.stringify(child())
     const proposal = parent()
     if (requests.filter(request => request.generation_stage === "ir").length === 1) {
       let replaced = false
@@ -363,7 +368,7 @@ test("an IR request shows this run's aliases and no full event id", async () => 
   const requests: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
-    return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+    return JSON.stringify(input.generation_stage === "ir" ? parent() : child())
   })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, true, result.message)
@@ -391,10 +396,9 @@ test("one event keeps the same alias in later batches, including inside the IR b
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
     if (input.generation_stage === "ci") {
-      if (irCalls === 1) return JSON.stringify(child(input.parent_basis!))
+      if (irCalls === 1) return JSON.stringify(child())
       // The stored plan stands: reuse it, keeping the group the IR stage named.
       return JSON.stringify({ schema_version: 2,
-        parent_basis: input.parent_basis!,
         groups: [{ local_ref: "g2",
           compilation: { decision: "reuse", current: [compiledIntentRef(store.current().compiled.t1!)], reason: "the stored plan is unchanged" },
           execution_decisions: [], assessments: [], coverage: [], checks: [], questions: [] }] })
@@ -430,7 +434,7 @@ test("an alias this request did not offer is rejected by name, not by journal lo
   const requests: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
-    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    if (input.generation_stage !== "ir") return JSON.stringify(child())
     const proposal = parent()
     if (requests.filter(request => request.generation_stage === "ir").length === 1) {
       proposal.basis = { event_ids: ["e9"], refs: [] }
@@ -464,7 +468,7 @@ test("a full-id answer and an alias answer reach the same IR, plan and dispatch"
   const aliasAnswer = () => JSON.parse(JSON.stringify(parent()).split('"input-event-id"').join('"e1"')) as ReturnType<typeof parent>
   const run = async (answer: () => unknown) => {
     const { store, compiler } = await setup(async input =>
-      JSON.stringify(input.generation_stage === "ir" ? answer() : child(input.parent_basis!)))
+      JSON.stringify(input.generation_stage === "ir" ? answer() : child()))
     const result = await compiler.advance({ runId: "parent" })
     assert.equal(result.ok, true, result.message)
     return { store, result }
@@ -481,7 +485,7 @@ test("a journal that cannot be verified stops the batch before any alias is deri
   let calls = 0
   const { store, compiler, storeDir } = await setup(async input => {
     calls += 1
-    return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+    return JSON.stringify(input.generation_stage === "ir" ? parent() : child())
   })
   const journal = join(storeDir, "v2-runs", "parent", "events.jsonl")
   appendFileSync(journal, "{ this line never parses\n", "utf8")
@@ -543,7 +547,7 @@ test("a corrupt line for the queued event itself stops instead of reporting unch
 
 test("a binding create restores the alias inside value.ref before the IR is applied", async () => {
   const { store, compiler } = await setup(async input => {
-    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    if (input.generation_stage !== "ir") return JSON.stringify(child())
     const proposal = parent()
     proposal.groups[0]!.ir_changes.push({
       action: "create", target: "binding", local_ref: "b1",
@@ -564,7 +568,7 @@ test("a run whose event ids can be read as aliases keeps full ids and says why",
   const basis = { event_ids: ["e2", "input-event-id"], refs: [] }
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
-    if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
+    if (input.generation_stage !== "ir") return JSON.stringify(child())
     const note = "Name this event like an alias."
     return JSON.stringify({ ...parent(), basis, source_coverage: [{ source: { source_id: "e2", digest: digestText(note), span: { unit: "utf16", start: 0, end: note.length } },
       disposition: "management", requirements: [], reason: "A note about the event name, not a task requirement.", basis: [] }] })
@@ -591,7 +595,7 @@ test("the IR-stage contract and example are written in the alias form", async ()
   // The example keeps a placeholder id: copying it must fail loudly instead of
   // resolving to whichever event happens to carry the first alias.
   assert.match(ir.example_candidate, /"source_id": "input-event-id"/)
-  const ci = generationContract(V2_COMPILER_CONTRACT, "ci", undefined, "parent")
+  const ci = generationContract(V2_COMPILER_CONTRACT, "ci")
   assert.match(ci.reference_contract, /short event aliases/, "the clause covers both forms")
   assert.match(ci.example_candidate, /input-event-id/, "the CI example keeps full identities where it names parent objects")
   assert.equal(JSON.parse(ci.example_candidate).basis, undefined, "the ordinary CI example no longer copies the parent basis")
@@ -675,7 +679,7 @@ test("a turn answers its own delegation and carries the earlier uncompiled one a
       disposition: "unresolved", requirements: [], reason: "Kept for a later batch.", basis: [] }]
     if (input.generation_stage === "ir") return JSON.stringify(proposal)
     // The basis is the parent's; the ordinary CI answer cannot restate it.
-    return JSON.stringify(child(input.parent_basis!))
+    return JSON.stringify(child())
   })
   await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "next-turn", kind: "user_input",
     source: { channel: "user", producer_id: "user" }, payload: { text: "Add a status command that prints ok." } })
@@ -704,7 +708,7 @@ test("resume after a CI transport failure reuses the exact temporary parent with
     if (input.generation_stage === "ir") return JSON.stringify(parent())
     parents.push(structuredClone(input.ir))
     if (broken) throw Error("CI connection interrupted")
-    return JSON.stringify(child(input.parent_basis!))
+    return JSON.stringify(child())
   })
   assert.equal((await compiler.advance({ runId: "parent" })).ok, false)
   const saved = store.current().management_log.at(-1)!
@@ -721,16 +725,45 @@ test("resume after a CI transport failure reuses the exact temporary parent with
   assert.equal(store.current().ir.t1!.content[0]!.revision, 0)
 })
 
-test("a child cannot attach to another parent or spend a check on it", async () => {
+test("a CI answer echoing a wrong parent digest is compiled against the parent code sent", async () => {
+  // R7 execution-292:return: seven answers miscopied the digest and every one
+  // was refused although the rest of the answer matched its request.
   let checks = 0
-  const { store, compiler } = await setup(async input => JSON.stringify(input.generation_stage === "ir"
-    ? parent() : child("a-different-parent")), async () => { checks++; return consistent() })
+  let parentIR: unknown
+  const echo = "sha256:not-the-parent"
+  const { store, compiler } = await setup(async input => {
+    if (input.generation_stage === "ir") return JSON.stringify(parent())
+    parentIR = structuredClone(input.ir)
+    return JSON.stringify({ ...child(), parent_basis: echo })
+  }, async () => { checks++; return consistent() })
   const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  assert.equal(checks, 1)
+  assert.equal(store.current().budget.total_management_requests, 3)
+  const sent = parentIR as Record<string, { content: unknown[] }>
+  assert.deepEqual(store.current().ir.t1!.content, sent.t1!.content, "the committed requirements are the parent the request carried")
+  const item = store.current().ir.t1!.content.find(entry => entry.item_id === "r-common")!
+  assert.ok(store.current().compiled.t1!.atoms.some(atom => atom.goal_refs.some(ref => ref.id === "r-common" && ref.digest === digestOf(item))))
+  const record = store.current().management_log.at(-1)!
+  const ci = record.attempts!.find(attempt => attempt.generation_stage === "ci")!
+  assert.ok(ci.text!.includes(echo), "the answer is recorded as returned")
+  assert.equal(JSON.stringify(record.generation ?? {}).includes(echo), false, "no state keeps the echo")
+})
+
+test("input that changes before the CI call still makes the prepared parent stale", async () => {
+  let calls = 0
+  const input = { ...CANDIDATE_EXAMPLE, run_id: "parent", events: [], ir: {}, compiled: {}, atom_refs: {}, executions: [],
+    budget: { requests_used: 0, max_requests: 4 }, contract: V2_COMPILER_CONTRACT } as unknown as CompilerModelV2Input
+  const generation = new ParentGeneration({ input, sourceBasis: "before", checkRequired: false,
+    remaining: () => 4, currentBasis: () => "after", call: async () => { calls++; return { ok: true, ci_proposal: child(false) as CIProposal } },
+    aliases: { lookup: () => undefined, records: () => false }, resolve: () => ({ unresolved: 0 }),
+    validateBasis: () => ({ ok: true }), directory: () => ({ tasks: [] }) })
+  generation.state.phase = "ci"
+  generation.state.parent = { ir: {}, digest: digestOf({}), candidate: structuredClone(CANDIDATE_EXAMPLE) }
+  const result = await generation.propose(input)
   assert.equal(result.ok, false)
-  assert.match(result.message!, /different parent basis/)
-  assert.equal(checks, 0)
-  assert.equal(store.current().budget.total_management_requests, 2)
-  assert.deepEqual(store.current().compiled, {})
+  assert.match(result.error!.message, /Input changed before CI generation; the parent is stale/)
+  assert.equal(calls, 0)
 })
 
 test("generation reserves the complete chain before spending the first request", async () => {
@@ -757,9 +790,9 @@ test("without verify a reported parent defect still returns to IR and invalidate
       }
       return JSON.stringify(next)
     }
-    bases.push(input.parent_basis!)
-    if (parents === 1) return JSON.stringify({ ...child(input.parent_basis!, false), groups: [], parent_issues: ["Clarify the authorized scope in the parent before planning."] })
-    return JSON.stringify(child(input.parent_basis!, false))
+    bases.push(digestOf(input.ir))
+    if (parents === 1) return JSON.stringify({ ...child(false), groups: [], parent_issues: ["Clarify the authorized scope in the parent before planning."] })
+    return JSON.stringify(child(false))
   }, null)
   store.applyDeltas({ max_management_requests: 5 })
   const result = await compiler.advance({ runId: "parent" })
@@ -779,7 +812,7 @@ test("a checker identifying an IR defect repairs the parent before recompiling a
       const change = proposal.groups[0]!.ir_changes[0]!
       if (change.action === "create") (change.value as any).current_scope.text += " Retain all required behavior."
     }
-    return { text: JSON.stringify(input.generation_stage === "ir" ? proposal : child(input.parent_basis!)), usage: { input_tokens: 2, output_tokens: 1 } }
+    return { text: JSON.stringify(input.generation_stage === "ir" ? proposal : child()), usage: { input_tokens: 2, output_tokens: 1 } }
   }, async input => {
     checks++
     assert.equal((input.events[0]!.payload as { text: string }).text, CANDIDATE_EXAMPLE_INPUT)
@@ -815,7 +848,7 @@ test("changed host facts invalidate a saved temporary parent before resume", asy
     model: createCompilerModelV2(async input => {
       stages.push(input.generation_stage!)
       requests.push(structuredClone(input))
-      return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+      return JSON.stringify(input.generation_stage === "ir" ? parent() : child())
     }, consistent),
   })
   const result = await resumed.advance({ runId: "parent" })
@@ -838,7 +871,7 @@ test("Resume returns a rejected stage response to that stage and clears its feed
     }
     assert.equal(input.schema_rejected_draft, undefined)
     assert.deepEqual(input.validation_errors ?? [], [])
-    return JSON.stringify(child(input.parent_basis!))
+    return JSON.stringify(child())
   })
   assert.equal((await compiler.advance({ runId: "parent" })).ok, false)
   assert.deepEqual(store.current().ir, {})
@@ -855,14 +888,15 @@ test("an execution return is assessed by the CI stage alone and can never become
     store,
     model: createCompilerModelV2(async input => {
       batches.push({ stage: input.generation_stage, assessment: input.assessment_batch })
-      if (!returned) return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+      if (!returned) return JSON.stringify(input.generation_stage === "ir" ? parent() : child())
       // The assessment batch: no IR stage ran, so this stage authors the
       // decisions the plan is committed from, with the return as evidence.
+      // Its parent is the stored IR; a digest it echoes is not read.
       const atom = input.compiled!.t1!.atoms[0]!
       return JSON.stringify({
         schema_version: 2,
         basis: { event_ids: ["return"], refs: [] },
-        parent_basis: input.parent_basis!,
+        parent_basis: "sha256:miscopied-stored-ir",
         parent_issues: [],
         groups: [{
           local_ref: "t1", task_refs: ["t1"], depends_on: [],
@@ -903,6 +937,8 @@ test("an execution return is assessed by the CI stage alone and can never become
   assert.deepEqual(store.current().ir, irAfterFirst, "assessing a return must not rewrite the user's IR")
   assert.equal(store.current().assessments.at(-1)!.result, "unknown")
   assert.deepEqual(store.current().assessments.at(-1)!.basis_event_ids, ["return"])
+  assert.deepEqual(store.current().pending_event_ids, [])
+  assert.ok(store.current().management_log.at(-1)!.raw_response!.includes("sha256:miscopied-stored-ir"), "the answer is recorded as returned")
 })
 
 test("an assessment that finds the stored IR defective records it and still completes the return batch", async () => {
@@ -914,10 +950,10 @@ test("an assessment that finds the stored IR defective records it and still comp
     store,
     model: createCompilerModelV2(async input => {
       batches.push({ stage: input.generation_stage, assessment: input.assessment_batch })
-      if (!returned) return JSON.stringify(input.generation_stage === "ir" ? parent() : child(input.parent_basis!))
+      if (!returned) return JSON.stringify(input.generation_stage === "ir" ? parent() : child())
       // The assessment reports a defect in the stored IR instead of compiling around it.
       return JSON.stringify({ schema_version: 2, basis: { event_ids: ["return"], refs: [] },
-        parent_basis: input.parent_basis!, parent_issues: ["the stored content selection must exclude the host's wrapper quotes"], groups: [] })
+        parent_issues: ["the stored content selection must exclude the host's wrapper quotes"], groups: [] })
     }, consistent),
   })
   await compiler.acceptEvent({ schema_version: 2, run_id: "repair", event_id: "input-event-id", kind: "user_input",

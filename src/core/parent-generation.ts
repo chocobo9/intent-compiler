@@ -115,6 +115,9 @@ export class ParentGeneration {
     const carriesUserInput = options.input.events.some(event => event.kind === "user_input")
     this.state = restored?.source_basis === options.sourceBasis
       ? structuredClone(restored) : { source_basis: options.sourceBasis, phase: carriesUserInput ? "ir" : "ci", issues: [] }
+    // A draft saved under the earlier contract echoes the parent digest; the
+    // repair request carries the draft back, and the parent is code's.
+    delete (this.state.ci_proposal as { parent_basis?: unknown } | undefined)?.parent_basis
     if (!carriesUserInput) {
       this.state.derived = true
       delete this.state.ir_proposal
@@ -302,7 +305,6 @@ export class ParentGeneration {
       const assembled: CompilerModelV2Input = { ...base, ...(offeredRefs === undefined ? {} : { event_source_refs: offeredRefs }),
         generation_stage: stage, ir: structuredClone(ir),
         existing_objects: this.options.directory(ir),
-        ...(stage === "ci" ? { parent_basis: this.state.parent!.digest } : {}),
         validation_errors: repairIssues,
         generation_repair: { ir_proposal: stage === "ci" ? {
           ...this.state.parent!.candidate,
@@ -367,7 +369,6 @@ export class ParentGeneration {
     this.state.ci_proposal = structuredClone(child)
     const parent = this.state.parent!
     const derived = this.state.derived === true
-    if (child.parent_basis !== parent.digest) return this.reject("CI names a different parent basis", result)
     const reviewsParent = derived || !this.options.checkRequired
     if (!reviewsParent && child.parent_issues !== undefined) {
       return this.reject("Ordinary CI with an independent check must not return parent_issues", result)

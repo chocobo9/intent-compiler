@@ -84,10 +84,9 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
     const stageValue = "generation_stage" in request ? request.generation_stage : undefined
     const stage = stageValue === "ir" || stageValue === "ci" ? stageValue : undefined
     const profile = strict ? options.schemaProfile ?? (providerId === "groq" || endpoint.includes("dashscope") ? "groq" : "openai") : undefined
-    const parentBasis = "parent_basis" in request && typeof request.parent_basis === "string" ? request.parent_basis : undefined
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
     const stageRequest = stage !== undefined && "example_candidate" in request.contract
-      ? { ...request, contract: generationContract(request.contract, stage, profile, parentBasis, assessing, generation.checkRequired) }
+      ? { ...request, contract: generationContract(request.contract, stage, profile, assessing, generation.checkRequired) }
       : request
     let response: Response
     try {

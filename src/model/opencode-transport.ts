@@ -190,13 +190,12 @@ export function createOpenCodeModelTransportV2(
   return async (request, generation = {}) => {
     const stage = "generation_stage" in request ? request.generation_stage : undefined
     if (stage !== "ir" && stage !== "ci") return legacy(request)
-    const parentBasis = "parent_basis" in request && typeof request.parent_basis === "string" ? request.parent_basis : undefined
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
     const transport = createOpenCodeV2Transport(
       options,
       `${generationStageInstruction(stage, assessing, generation.checkRequired)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
       buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing }),
-      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", parentBasis, assessing, generation.checkRequired) }),
+      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", assessing, generation.checkRequired) }),
     )
     return transport(request)
   }

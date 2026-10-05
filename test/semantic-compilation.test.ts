@@ -97,7 +97,6 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
     if (input.generation_stage === "ci" && input.generation_repair?.ci_proposal) {
       assert.ok(input.validation_errors?.some(error => error.includes("waiting verify Atom")))
       const repaired = repairCandidate(input)
-      assert.equal(input.parent_basis, digestOf(input.ir))
       assert.equal(validateResponse(stageCandidate(input, repaired, generation)), true,
         "a CI repair must use its own response format without re-emitting parent source selections: " + JSON.stringify(validateResponse.errors))
       const compilation = repaired.groups[0]!.compilation
@@ -139,7 +138,6 @@ test("whole prepared CI reaches checking and repair before first dispatch, then 
   assert.equal(checks.length, 2)
   assert.deepEqual(proposals.map(input => input.generation_stage), ["ir", "ci", "ci"])
   assert.equal(proposals[2]!.assessment_batch, undefined, "a user batch keeps the IR/CI split")
-  assert.equal(proposals[1]!.parent_basis, proposals[2]!.parent_basis, "child repair must preserve the actual parent")
   assert.deepEqual(proposals[1]!.ir, proposals[2]!.ir, "CI repair must receive the same actual parent text and scopes")
   assert.equal(store.current().semantic_checks[0]!.findings[0]!.evidence_resolved, true, "newly prepared IR refs must be usable check evidence")
   assert.deepEqual(shownPlan(store.current().compiled), checks[1]!.prepared!.compiled)
