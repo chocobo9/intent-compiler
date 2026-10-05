@@ -237,8 +237,9 @@ export class ParentGeneration {
     }
     recordEditedRemovals(candidate, ir, editedRemovals)
     const carriedEventIds = new Set((this.options.input.carried_delegations ?? []).map((delegation) => delegation.event_id))
+    const ownEventIds = new Set(this.options.input.events.filter(event => event.kind === "user_input" && !carriedEventIds.has(event.event_id)).map(event => event.event_id))
     validateSourceCoverage(candidate, this.options.input.events, sources, this.options.input.ir, ir,
-      { carriedEventIds, display: (eventId) => this.display(eventId) })
+      { carriedEventIds, ownEventIds, display: (eventId) => this.display(eventId) })
     return { ir, candidate, digest: digestOf(ir) }
   }
 

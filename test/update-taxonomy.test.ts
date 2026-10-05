@@ -4,7 +4,7 @@ import { atomRef } from "../src/core/compiled-intent.js"
 import { canonicalJson, digestOf, digestText, type Atom, type AtomStateRecord, type CandidateGroup, type CompiledIntent, type CompilerEvent, type ContentItem, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
 import { changedPriorState, projectCompiled } from "../src/core/request-projection.js"
 import { bindCurrentRequirements, LATER_INPUT_GOVERNS, selectedSourceHistory, userInputOrder } from "../src/core/requirement-flow.js"
-import { locateQuote } from "../src/core/source-payload.js"
+import { locateQuote, SourceLedger } from "../src/core/source-payload.js"
 
 /**
  * Update behaviors organised by the dpipe update taxonomy
@@ -151,7 +151,8 @@ for (const c of cases) {
         { requirement: { local_ref: "r-target" }, disposition: "assigned", refs: [{ local_ref: "a1" }], explanation: "" },
       ],
     } as unknown as CandidateGroup
-    const assembly = { inputOrder: userInputOrder(records), texts: new Map(events.map(event => [event.event_id, textOf(event)])), selected: selectedSourceHistory([], { t1: prior }) }
+    const texts = new Map(events.map(event => [event.event_id, textOf(event)]))
+    const assembly = { inputOrder: userInputOrder(records), texts, ledger: new SourceLedger({ texts, selected: selectedSourceHistory([], { t1: prior }), dispositions: [] }) }
     const beforeIr = structuredClone(current)
     const delivered = bindCurrentRequirements(group, current, prior, events, [], assembly)[0]!.atoms[0]!
     assert.deepEqual(current, beforeIr, `${c.id}: the IR text, sources and digest are unchanged`)

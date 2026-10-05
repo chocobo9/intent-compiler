@@ -652,6 +652,13 @@ test("a strict batch commits the edited text and the withdrawal record the opera
     basis: [{ source: fixture.edit.basis, text: textOf.get(fixture.edit.basis.source_id)!.slice(fixture.edit.basis.span!.start, fixture.edit.basis.span!.end) }],
   }])
 
+  // The check sees this turn's passage the candidate states is not a requirement, with its reason.
+  const triggerText = (trigger.payload as { text: string }).text
+  assert.deepEqual(checks[0]!.prepared!.source_dispositions.not_requirements, [{
+    source, disposition: "management", text: triggerText,
+    reason: "the stored IR already carries the requirement text; this event only asks for the recorded correction",
+  }])
+
   // The assembled block names each passage's user input by its journal position
   // and still carries the withdrawn sentence: the edit cut it out of the middle
   // of one passage, so the delivered passages are exactly the item's sources

@@ -12,6 +12,7 @@ import { atomRef, compiledIntentRef, AtomStateLedger } from "../src/core/compile
 import { atomAdmission } from "../src/core/atom-admission.js"
 import { bindCurrentRequirements, contentKey, LATER_INPUT_GOVERNS, selectedSourceHistory, selectSourceEvents, userInputOrder, type RequirementAssembly } from "../src/core/requirement-flow.js"
 import { IntentStateManager } from "../src/core/intent-state-v2.js"
+import { SourceLedger } from "../src/core/source-payload.js"
 import { digestOf, digestText, type Candidate, type CompilerEvent, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
 
 const raw = "Implement CSV. Missing file must print ERROR: missing file."
@@ -161,7 +162,7 @@ test("a run order taken from a longer journal keeps every input's number", () =>
 })
 
 const assemblyOf = (inputOrder: ReadonlyMap<string, number>, texts: ReadonlyMap<string, string> = new Map(), selected: ReadonlyMap<string, readonly SourceRef[]> = new Map()): RequirementAssembly =>
-  ({ inputOrder, texts, selected })
+  ({ inputOrder, texts, ledger: new SourceLedger({ texts, selected, dispositions: [] }) })
 
 /**
  * Generic withdrawal fixture: input 1 states two duties in one sentence; input
@@ -186,8 +187,9 @@ function withdrawalFixture(update: string) {
   task.content[0]!.revision = 1
   group.coverage[1]!.requirement = { local_ref: "r1" }
   const records = [{ sequence: 1, event: e1 }, { sequence: 2, event: e2 }]
-  const assembly = assemblyOf(userInputOrder(records), new Map([["e1", e1Text], ["e2", update]]), selectedSourceHistory([], { t1: previous }))
-  return { group, task, previous, sentence, update, assembly, sources: [e1, e2] }
+  const selected = selectedSourceHistory([], { t1: previous })
+  const assembly = assemblyOf(userInputOrder(records), new Map([["e1", e1Text], ["e2", update]]), selected)
+  return { group, task, previous, sentence, update, assembly, selected, sources: [e1, e2] }
 }
 
 for (const [label, update] of [
@@ -211,9 +213,9 @@ for (const [label, update] of [
 }
 
 test("a passage another current item still selects is not attached again as withdrawn", () => {
-  const { group, task, sentence, assembly, sources } = withdrawalFixture("Write the checksum to report.b2 instead.")
+  const { group, task, sentence, assembly, selected, sources } = withdrawalFixture("Write the checksum to report.b2 instead.")
   const moved = structuredClone(task)
-  moved.content[1]!.sources = [...moved.content[1]!.sources, assembly.selected.get(contentKey("t1", "r1"))![1]!]
+  moved.content[1]!.sources = [...moved.content[1]!.sources, selected.get(contentKey("t1", "r1"))![1]!]
   moved.content[1]!.text = `${moved.content[1]!.text}\n\n${sentence}`
   const delivered = bindCurrentRequirements(group, moved, undefined, sources, [], assembly)[0]!.atoms[0]!.task
   assert.equal(delivered.split(sentence).length - 1, 1, "the moved sentence is delivered once, by the item that selects it now")
@@ -779,10 +781,11 @@ test("a second batch's actual CI and check requests show each body once and carr
   assert.deepEqual(prepared.withdrawals, [])
   // Every field the check contract names exists in this request.
   for (const field of ["ir", "compiled", "candidate", "events", "source_events", "event_source_refs"] as const) assert.ok(field in check, field)
-  for (const field of ["ir", "compiled", "atom_states", "dispatchable_atoms", "withdrawals", "eligible_task_ids", "eligible_execution_ids"] as const) assert.ok(field in prepared, `prepared.${field}`)
+  for (const field of ["ir", "compiled", "atom_states", "dispatchable_atoms", "withdrawals", "source_dispositions", "eligible_task_ids", "eligible_execution_ids"] as const) assert.ok(field in prepared, `prepared.${field}`)
+  assert.deepEqual(prepared.source_dispositions, { not_requirements: [], earlier_unplaced: [] }, "every passage of both inputs is adopted")
   assert.ok(Array.isArray(check.candidate.groups[0]!.execution_decisions))
   const contract = `${check.contract.check_contract}\n${check.contract.rules.join("\n")}`
-  for (const named of ["prepared.ir", "prepared.compiled", "prepared.atom_states", "prepared.dispatchable_atoms", "prepared.eligible_task_ids", "prepared.eligible_execution_ids", "prepared.withdrawals", "historical_atoms", "candidate.groups[].execution_decisions", "event_source_refs"]) {
+  for (const named of ["prepared.ir", "prepared.compiled", "prepared.atom_states", "prepared.dispatchable_atoms", "prepared.eligible_task_ids", "prepared.eligible_execution_ids", "prepared.withdrawals", "prepared.source_dispositions.not_requirements", "prepared.source_dispositions.earlier_unplaced", "historical_atoms", "candidate.groups[].execution_decisions", "event_source_refs"]) {
     assert.ok(contract.includes(named), `the contract names ${named}`)
   }
 })

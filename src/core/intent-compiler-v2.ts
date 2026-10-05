@@ -49,9 +49,9 @@ import type {
   ExistingObjectDirectory,
 } from "../model/compiler-model-v2.js"
 import { V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
-import { bindCurrentRequirements, selectedSourceHistory, selectSourceEvents, userInputOrder, type RequirementAssembly } from "./requirement-flow.js"
+import { bindCurrentRequirements, selectSourceEvents, userInputOrder, type RequirementAssembly } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
-import { locateQuote, materializeSourceContent, recordEditedRemovals, sourceSegments, userText, validateSourceCoverage, withdrawnPassages } from "./source-payload.js"
+import { locateQuote, materializeSourceContent, recordedDispositions, recordEditedRemovals, selectedSourceHistory, sourceDispositionView, SourceLedger, sourceSegments, userText, validateSourceCoverage, withdrawnPassages } from "./source-payload.js"
 import { ParentGeneration, type ParentGenerationState } from "./parent-generation.js"
 
 export interface IntentCompilerV2Options {
@@ -235,13 +235,17 @@ async function advance(
   const resolvableSources = store.readEvents().map(row => row.event)
   /**
    * Delivered requirement passages name their user input by its place in the
-   * whole run, and include what an item once selected and later withdrew.
+   * whole run, and include what the source ledger records as withdrawn from
+   * each item.  The ledger is derived from accepted records, never stored.
    */
+  const journalTexts = new Map(store.readEvents().flatMap(row => { const text = userText(row.event); return text === undefined ? [] : [[row.event.event_id, text] as const] }))
   const assembly: RequirementAssembly = {
     inputOrder: userInputOrder(store.readEvents()),
-    texts: new Map(store.readEvents().flatMap(row => { const text = userText(row.event); return text === undefined ? [] : [[row.event.event_id, text] as const] })),
-    selected: selectedSourceHistory(snapshot.management_log, snapshot.ir),
+    texts: journalTexts,
+    ledger: new SourceLedger({ texts: journalTexts, selected: selectedSourceHistory(snapshot.management_log, snapshot.ir), dispositions: recordedDispositions(snapshot.management_log) }),
   }
+  /** The user inputs this batch itself processes: its own turn, not carried delegations or execution returns. */
+  const ownEventIds = new Set(events.filter(event => event.kind === "user_input" && !carriedEventIds.has(event.event_id)).map(event => event.event_id))
   if (events.length === 0) {
     return {
       ok: true,
@@ -424,7 +428,7 @@ async function advance(
     }
     const candidateErrors = proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements, carriedEventIds, display)
     if (candidateErrors.length > 0) return candidateErrors
-    try { prepared = prepareCandidate(snapshot, result.candidate, events, availableSources, strictRequirements, capabilities, assembly) }
+    try { prepared = prepareCandidate(snapshot, result.candidate, events, availableSources, strictRequirements, capabilities, assembly, ownEventIds) }
     catch (error) { return [`${errorMessage(error)}${applicationHint(errorMessage(error))}`] }
     return []
   }
@@ -751,7 +755,7 @@ async function advance(
 }
 
 /** Prepare on private state; no persistence, authorization or host effects. */
-function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events: readonly CompilerEvent[], availableSources: readonly CompilerEvent[], strictRequirements: boolean, capabilities?: CapabilitySource, assembly?: RequirementAssembly) {
+function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events: readonly CompilerEvent[], availableSources: readonly CompilerEvent[], strictRequirements: boolean, capabilities?: CapabilitySource, assembly?: RequirementAssembly, ownEventIds: ReadonlySet<string> = new Set()) {
   const execution = hydrateExecutionManager(snapshot)
   const atoms = new AtomStateLedger(snapshot.atom_states)
   let compiledIntentSequence = snapshot.compiled_intent_sequence
@@ -878,7 +882,7 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
   if (strictRequirements) recordEditedRemovals(candidate, ir, editedRemovals)
 
   // Management acceptance: a satisfied assessment targeting a completed atom
-  if (strictRequirements) validateSourceCoverage(candidate, events, availableSources, snapshot.ir, ir)
+  if (strictRequirements) validateSourceCoverage(candidate, events, availableSources, snapshot.ir, ir, { ownEventIds })
 
   // is the code-committed signal that the atom becomes a historical record.
   const satisfiedTargets = candidate.groups
@@ -978,6 +982,9 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
   const view = {
     ir, compiled, atom_states: atoms.snapshot(), dispatchable_atoms: dispatchableAtoms,
     withdrawals: strictRequirements ? withdrawnPassages(candidate, snapshot.ir, availableSources) : [],
+    source_dispositions: strictRequirements && assembly !== undefined
+      ? sourceDispositionView(assembly.ledger, candidate.source_coverage ?? [], assembly.texts, ownEventIds, ir)
+      : { not_requirements: [], earlier_unplaced: [] },
     execution_decisions: candidate.groups.flatMap(group => group.execution_decisions),
     eligible_task_ids: eligibility?.task_ids ?? taskIds,
     eligible_execution_ids: eligibility?.execution_ids ?? execution.list().filter(e => e.status === "active").map(e => e.execution_id),
@@ -1402,6 +1409,7 @@ interface PreparedCheckView {
   atom_states: AtomStateRecord[]
   dispatchable_atoms: import("./intent-contract.js").Atom[]
   withdrawals: import("./source-payload.js").WithdrawnPassage[]
+  source_dispositions: import("./source-payload.js").SourceDispositionView
   eligible_task_ids: string[]
   eligible_execution_ids: string[]
 }
@@ -1460,6 +1468,7 @@ async function runSemanticCheck(
     atom_states: input.prepared.atom_states,
     dispatchable_atoms: input.prepared.dispatchable_atoms.map(atomRef),
     withdrawals: input.prepared.withdrawals,
+    source_dispositions: input.prepared.source_dispositions,
     eligible_task_ids: input.prepared.eligible_task_ids,
     eligible_execution_ids: input.prepared.eligible_execution_ids,
   }

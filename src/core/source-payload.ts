@@ -1,4 +1,4 @@
-import { digestOf, digestText, type Candidate, type CompilerEvent, type ContentItem, type IrChange, type LocalSourceEditRecord, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
+import { digestOf, digestText, type Candidate, type CandidateGroup, type CompilerEvent, type ContentItem, type IrChange, type LocalSourceEditRecord, type SourceDisposition, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
 
 export function userText(event: CompilerEvent): string | undefined {
   const value = event.payload as { text?: unknown } | undefined
@@ -201,6 +201,12 @@ export interface SourceCoverageOptions {
   carriedEventIds?: ReadonlySet<string>
   /** How a message writes one event id: the alias this request showed, when it did. */
   display?: EventIdDisplay
+  /**
+   * The user inputs this batch itself processes (its own turn, not carried
+   * delegations or execution returns).  When the batch commits IR changes,
+   * every passage of these inputs needs a destination in the source ledger.
+   */
+  ownEventIds?: ReadonlySet<string>
 }
 
 /** Validate explicit dispositions and preserve previously adopted source text. */
@@ -281,6 +287,22 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     const span = validSpan(source, texts, display), text = texts.get(source.source_id)!
     if (!disposed(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))) throw new Error(`previously normative source ${display(source.source_id)} was dropped without an explicit superseded disposition and current change basis`)
   }
+  // This turn's own input is accounted for in full once the batch changes the
+  // IR from it: each passage is adopted, or explicitly said not to be a
+  // requirement.  Earlier inputs and carried delegations are not re-examined.
+  if (candidate.groups.some(group => group.ir_changes.some(change => change.action !== "preserve"))) {
+    const ledger = new SourceLedger({ texts, selected: new Map(), dispositions: entries })
+    const unplaced = [...(options.ownEventIds ?? [])].flatMap(eventId => ledger.unplaced(eventId, current))
+    if (unplaced.length > 0) {
+      const listed = unplaced.map(passage => `${display(passage.source_id)}/${passage.segment_id} ${JSON.stringify(shortText(passage.text))}`)
+      throw new Error(`this turn's input has text with no destination: ${listed.join("; ")}. Adopt each passage into an IR content item, or give it a source_coverage entry saying why it is not a requirement; a segment_id disposes of the whole segment without copying it`)
+    }
+  }
+}
+
+function shortText(text: string): string {
+  const flat = text.replace(/\s+/gu, " ").trim()
+  return flat.length > 80 ? `${flat.slice(0, 77)}...` : flat
 }
 
 /** One passage this batch withdrew from the IR, with the text that justifies it. */
@@ -394,4 +416,154 @@ export function locateQuote(quote: string, text: string): QuoteLocation {
     else if (text[begin - 1] === "`") begin -= 1
   }
   return { match: "simplified", start: begin, end }
+}
+
+export const contentKey = (taskId: string, itemId: string): string => `${taskId}\u0000${itemId}`
+
+/**
+ * Every span each content item has selected in this run, read from records the
+ * store already keeps: the content changes of every accepted batch (create and
+ * revise sources, edit additions) and the sources of the prior IR.  A retire
+ * ends the item's history, so a later item reusing the id starts fresh.
+ */
+export function selectedSourceHistory(
+  log: readonly { status: string; candidate?: { groups: readonly CandidateGroup[] } }[],
+  ir: Record<string, TaskIntent>,
+): Map<string, SourceRef[]> {
+  const selected = new Map<string, SourceRef[]>()
+  const add = (key: string, sources: readonly SourceRef[] | undefined) => {
+    if (!Array.isArray(sources)) return
+    selected.set(key, [...(selected.get(key) ?? []), ...sources.filter(source => source.span !== undefined)])
+  }
+  for (const record of log) {
+    if (record.status !== "accepted" || record.candidate === undefined) continue
+    for (const group of record.candidate.groups) {
+      const taskId = group.task_refs[0]
+      if (taskId === undefined) continue
+      for (const change of group.ir_changes) {
+        if (change.action === "create" && change.target === "content") add(contentKey(taskId, change.local_ref), change.sources)
+        else if (change.action === "revise" && change.target === "content") add(contentKey(taskId, change.id), change.sources)
+        else if (change.action === "edit" && change.target === "content") add(contentKey(taskId, change.id), change.add as SourceRef[])
+        else if (change.action === "retire" && change.target === "content") selected.delete(contentKey(taskId, change.id))
+      }
+    }
+  }
+  for (const task of Object.values(ir)) for (const item of task.content) add(contentKey(task.task_id, item.item_id), item.sources)
+  return selected
+}
+
+/** Explicit dispositions every accepted batch recorded, in log order. */
+export function recordedDispositions(log: readonly { status: string; candidate?: { source_coverage?: readonly SourceDisposition[] } }[]): SourceDisposition[] {
+  return log.flatMap(record => record.status === "accepted" ? [...(record.candidate?.source_coverage ?? [])] : [])
+}
+
+/** Where a range of one user input went. */
+export type SourceDestination = "adopted" | "withdrawn" | "not_requirement" | "none"
+
+export interface UnplacedPassage {
+  source_id: string
+  segment_id: string
+  start: number
+  end: number
+  text: string
+}
+
+const NOT_REQUIREMENT = new Set(["context", "material", "management", "unresolved"])
+
+/**
+ * The source ledger: where every passage of every user input went, derived from
+ * accepted state and never stored.  A passage is adopted by an IR selection
+ * (content, goal, scope, binding or output sources, or a normative entry),
+ * withdrawn when an item once selected it and no item does now (or a superseded
+ * entry names it), explicitly not a requirement when a context, material,
+ * management or unresolved entry names it, and otherwise has no destination.
+ * Blank lines, Markdown heading lines and remainders without a letter or digit
+ * (list markers, fences) need no destination.  Re-deriving it
+ * after a failure or restart reads the same records, so the answer does not
+ * depend on which events a batch happened to carry.
+ */
+export class SourceLedger {
+  constructor(private readonly input: {
+    /** Text of every recorded user input, by event id. */
+    texts: ReadonlyMap<string, string>
+    /** Every span each content item has selected, keyed by `contentKey(task, item)`. */
+    selected: ReadonlyMap<string, readonly SourceRef[]>
+    /** Explicit source_coverage entries of accepted batches (and the candidate being prepared). */
+    dispositions: readonly SourceDisposition[]
+  }) {}
+
+  /** The same ledger with the dispositions a candidate adds. */
+  with(dispositions: readonly SourceDisposition[]): SourceLedger {
+    return new SourceLedger({ ...this.input, dispositions: [...this.input.dispositions, ...dispositions] })
+  }
+
+  /**
+   * The withdrawn part of one item: what it once selected that no current item
+   * of its task still selects, as resolvable ranges of the recorded inputs.
+   */
+  withdrawnFor(task: TaskIntent, itemId: string): Array<{ source_id: string; start: number; end: number }> {
+    const active = task.content.flatMap(entry => entry.sources)
+    return (this.input.selected.get(contentKey(task.task_id, itemId)) ?? []).flatMap(source => {
+      const text = this.input.texts.get(source.source_id)
+      if (source.span === undefined || text === undefined || source.digest !== digestText(text) || source.span.end > text.length) return []
+      const covering = active.filter(entry => entry.source_id === source.source_id && entry.span !== undefined).map(entry => entry.span!)
+      return uncoveredRanges(source.span.start, source.span.end, covering)
+        .filter(range => text.slice(range.start, range.end).trim())
+        .map(range => ({ source_id: source.source_id, ...range }))
+    })
+  }
+
+  /** Passages of one input that no selection, withdrawal or explicit entry accounts for. */
+  unplaced(eventId: string, ir: Record<string, TaskIntent>): UnplacedPassage[] {
+    const text = this.input.texts.get(eventId)
+    if (text === undefined) return []
+    const whole = { start: 0, end: text.length }
+    const spanOf = (ref: SourceRef) => ref.span === undefined ? whole : ref.span
+    const of = (refs: readonly SourceRef[]) => refs.filter(ref => ref.source_id === eventId).map(spanOf)
+    const tasks = Object.values(ir)
+    const adopted = of(tasks.flatMap(task => [
+      ...task.goal.sources, ...task.current_scope.sources,
+      ...task.content.flatMap(item => item.sources),
+      ...task.bindings.flatMap(binding => binding.sources ?? []),
+      ...task.outputs.flatMap(output => output.sources ?? []),
+    ]))
+    const everSelected = of([...this.input.selected.values()].flat())
+    const entries = of(this.input.dispositions.filter(entry => entry.disposition === "superseded" || entry.disposition === "normative" || NOT_REQUIREMENT.has(entry.disposition)).map(entry => entry.source))
+    const exempt = headingLines(text)
+    const segment = sourceSegments([{ schema_version: 2, run_id: "", event_id: eventId, kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text } }])
+    return segment.flatMap(part => residualRanges(text, part.span.start, part.span.end, [...adopted, ...everSelected, ...entries, ...exempt])
+      // A remainder with no letter or digit (a list marker, a fence, a lone
+      // punctuation mark left beside a selection) is layout, like a heading.
+      .filter(range => /[\p{L}\p{N}]/u.test(text.slice(range.start, range.end)))
+      .map(range => ({ source_id: eventId, segment_id: part.segment_id, start: range.start, end: range.end, text: text.slice(range.start, range.end) })))
+  }
+}
+
+/** What a check is shown of the ledger: the batch's own explicit non-requirements, and earlier inputs' unplaced passages. */
+export interface SourceDispositionView {
+  not_requirements: Array<{ source: SourceRef; disposition: SourceDisposition["disposition"]; reason: string; text: string }>
+  earlier_unplaced: UnplacedPassage[]
+}
+
+export function sourceDispositionView(
+  ledger: SourceLedger,
+  candidateEntries: readonly SourceDisposition[],
+  texts: ReadonlyMap<string, string>,
+  ownEventIds: ReadonlySet<string>,
+  ir: Record<string, TaskIntent>,
+): SourceDispositionView {
+  const withCandidate = ledger.with(candidateEntries)
+  return {
+    not_requirements: candidateEntries.filter(entry => NOT_REQUIREMENT.has(entry.disposition) && ownEventIds.has(entry.source.source_id)).flatMap(entry => {
+      const text = texts.get(entry.source.source_id)
+      if (text === undefined) return []
+      return [{ source: entry.source, disposition: entry.disposition, reason: entry.reason, text: entry.source.span === undefined ? text : text.slice(entry.source.span.start, entry.source.span.end) }]
+    }),
+    earlier_unplaced: [...texts.keys()].filter(eventId => !ownEventIds.has(eventId)).flatMap(eventId => withCandidate.unplaced(eventId, ir)),
+  }
+}
+
+/** Markdown heading lines and code fence lines are layout, not requirement text. */
+function headingLines(text: string): Array<{ start: number; end: number }> {
+  return [...text.matchAll(/^[ \t]{0,3}(?:#{1,6}(?:[ \t][^\n]*)?|```[\w-]*[ \t]*\r?)$/gmu)].map(match => ({ start: match.index!, end: match.index! + match[0].length }))
 }

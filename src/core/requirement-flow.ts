@@ -12,6 +12,7 @@ import {
   type TaskIntent,
 } from "./intent-contract.js"
 import { atomRef } from "./compiled-intent.js"
+import { contentKey, selectedSourceHistory, type SourceLedger } from "./source-payload.js"
 
 function contentRef(item: ContentItem): Ref {
   return { id: item.item_id, revision: item.revision, digest: digestOf(item) }
@@ -43,17 +44,17 @@ function textOf(event: CompilerEvent): string | undefined {
  */
 export const LATER_INPUT_GOVERNS = "These passages are in the order the user gave them; where a later input changes what an earlier passage states, the later input governs."
 
-/** What assembly reads besides the batch: the run's input order and every passage an item has selected. */
+/** What assembly reads besides the batch: the run's input order and the source ledger. */
 export interface RequirementAssembly {
   /** Each user input's 1-based position among the run's user inputs. */
   inputOrder: ReadonlyMap<string, number>
   /** The text of every recorded user input, so a passage outside this batch's sources still resolves. */
   texts: ReadonlyMap<string, string>
-  /** Every source span each content item has selected in this run, keyed by `contentKey(task, item)`. */
-  selected: ReadonlyMap<string, readonly SourceRef[]>
+  /** Where each passage went; assembly reads the withdrawn part of each item. */
+  ledger: SourceLedger
 }
 
-export const contentKey = (taskId: string, itemId: string): string => `${taskId}\u0000${itemId}`
+export { contentKey, selectedSourceHistory }
 
 function attachAssignedRequirements(
   instruction: string,
@@ -84,15 +85,7 @@ function orderedRequirementText(task: TaskIntent, item: ContentItem, texts: Read
   if (current.some(interval => interval === undefined || assembly.inputOrder.get(interval.source_id) === undefined || textOf(interval.source_id) === undefined)) return item.text
   if (current.map(interval => textOf(interval!.source_id)!.slice(interval!.start, interval!.end)).join("\n\n") !== item.text) return item.text
 
-  const active = task.content.flatMap(entry => entry.sources)
-  const withdrawn = (assembly.selected.get(contentKey(task.task_id, item.item_id)) ?? []).flatMap(source => {
-    const text = textOf(source.source_id)
-    if (source.span === undefined || text === undefined || source.digest !== digestText(text) || source.span.end > text.length || assembly.inputOrder.get(source.source_id) === undefined) return []
-    const covering = active.filter(entry => entry.source_id === source.source_id && entry.span !== undefined).map(entry => entry.span!)
-    return remainders(source.span.start, source.span.end, covering)
-      .filter(range => text.slice(range.start, range.end).trim())
-      .map(range => ({ source_id: source.source_id, ...range }))
-  })
+  const withdrawn = assembly.ledger.withdrawnFor(task, item.item_id).filter(range => assembly.inputOrder.get(range.source_id) !== undefined)
 
   const passages = merge([...current as Interval[], ...withdrawn])
     .map(interval => ({ input: assembly.inputOrder.get(interval.source_id)!, start: interval.start, text: textOf(interval.source_id)!.slice(interval.start, interval.end) }))
@@ -112,58 +105,12 @@ function merge(intervals: readonly Interval[]): Interval[] {
   return merged
 }
 
-/** The parts of [start, end) that no covering span reaches. */
-function remainders(start: number, end: number, covering: readonly { start: number; end: number }[]): Array<{ start: number; end: number }> {
-  const found: Array<{ start: number; end: number }> = []
-  let cursor = start
-  for (const span of [...covering].sort((a, b) => a.start - b.start)) {
-    if (span.end <= cursor || span.start >= end) continue
-    if (span.start > cursor) found.push({ start: cursor, end: Math.min(span.start, end) })
-    cursor = Math.max(cursor, span.end)
-    if (cursor >= end) return found
-  }
-  if (cursor < end) found.push({ start: cursor, end })
-  return found
-}
-
 /** Each user input's 1-based position among the run's user inputs, from the event journal. */
 export function userInputOrder(records: readonly { sequence: number; event: CompilerEvent }[]): Map<string, number> {
   return new Map([...records]
     .filter(record => record.event.kind === "user_input")
     .sort((a, b) => a.sequence - b.sequence)
     .map((record, index) => [record.event.event_id, index + 1]))
-}
-
-/**
- * Every span each content item has selected in this run, read from records the
- * store already keeps: the content changes of every accepted batch (create and
- * revise sources, edit additions) and the sources of the prior IR.  A retire
- * ends the item's history, so a later item reusing the id starts fresh.
- */
-export function selectedSourceHistory(
-  log: readonly { status: string; candidate?: { groups: readonly CandidateGroup[] } }[],
-  ir: Record<string, TaskIntent>,
-): Map<string, SourceRef[]> {
-  const selected = new Map<string, SourceRef[]>()
-  const add = (key: string, sources: readonly SourceRef[] | undefined) => {
-    if (!Array.isArray(sources)) return
-    selected.set(key, [...(selected.get(key) ?? []), ...sources.filter(source => source.span !== undefined)])
-  }
-  for (const record of log) {
-    if (record.status !== "accepted" || record.candidate === undefined) continue
-    for (const group of record.candidate.groups) {
-      const taskId = group.task_refs[0]
-      if (taskId === undefined) continue
-      for (const change of group.ir_changes) {
-        if (change.action === "create" && change.target === "content") add(contentKey(taskId, change.local_ref), change.sources)
-        else if (change.action === "revise" && change.target === "content") add(contentKey(taskId, change.id), change.sources)
-        else if (change.action === "edit" && change.target === "content") add(contentKey(taskId, change.id), change.add as SourceRef[])
-        else if (change.action === "retire" && change.target === "content") selected.delete(contentKey(taskId, change.id))
-      }
-    }
-  }
-  for (const task of Object.values(ir)) for (const item of task.content) add(contentKey(task.task_id, item.item_id), item.sources)
-  return selected
 }
 
 /** Relevant old user input is evidence for retained meaning, never a fresh delegation. */

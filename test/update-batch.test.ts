@@ -203,7 +203,8 @@ test("U2 a user update with reuse is checked against the prepared IR and work wi
   assert.ok(checked, "reuse must not bypass user-update checking")
   const prepared = checked.prepared
   assert.ok(prepared)
-  assert.deepEqual(Object.keys(prepared).sort(), ["atom_states", "compiled", "dispatchable_atoms", "eligible_execution_ids", "eligible_task_ids", "ir", "withdrawals"])
+  assert.deepEqual(Object.keys(prepared).sort(), ["atom_states", "compiled", "dispatchable_atoms", "eligible_execution_ids", "eligible_task_ids", "ir", "source_dispositions", "withdrawals"])
+  assert.deepEqual(prepared.source_dispositions.not_requirements, [], "a reuse batch states nothing about its input")
   assert.deepEqual(prepared.withdrawals, [], "a reuse batch withdraws nothing")
   assert.deepEqual(prepared.ir, h.store.current().ir)
   assert.deepEqual(prepared.dispatchable_atoms, [atomRef(h.dispatch.atom)])

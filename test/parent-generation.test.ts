@@ -12,6 +12,7 @@ import { ParentGeneration } from "../src/core/parent-generation.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 import { digestOf, digestText, type Candidate } from "../src/core/intent-contract.js"
+import { sourceSegments } from "../src/core/source-payload.js"
 import { bindCurrentRequirements } from "../src/core/requirement-flow.js"
 import type { CIProposal } from "../src/model/generation-schema.js"
 
@@ -241,11 +242,12 @@ test("CI generation reads the materialized parent before any child can be commit
   assert.equal(store.current().executions.length, 0)
 })
 
-test("an IR selecting only the tail leaves the head unclassified and reaches CI generation", async () => {
-  const stages: string[] = []
+test("an IR selecting only the tail of this turn's input is sent back with the unplaced segments, then the complete answer reaches CI", async () => {
+  const requests: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
-    stages.push(input.generation_stage!)
-    if (input.generation_stage === "ci") assert.deepEqual(input.generation_repair?.ir_proposal?.source_coverage, [])
+    requests.push(structuredClone(input))
+    if (input.generation_stage === "ci") return JSON.stringify(child(input.parent_basis!, false))
+    if (requests.filter(request => request.generation_stage === "ir").length > 1) return JSON.stringify(parent())
     const proposal = parent()
     for (const change of proposal.groups[0]!.ir_changes) {
       if (change.action === "create" && change.target === "content") change.sources = [{
@@ -253,16 +255,17 @@ test("an IR selecting only the tail leaves the head unclassified and reaches CI 
       }]
     }
     return JSON.stringify(proposal)
-  })
+  }, null)
   const result = await compiler.advance({ runId: "parent" })
-  assert.equal(result.ok, false)
-  assert.doesNotMatch(result.message!, /no complete disposition/)
-  assert.equal(stages[0], "ir")
-  // The IR stage handed over; this fixture writes no CI answer, so the batch
-  // ends there. Unselected text is neither classified nor a prepare blocker.
-  assert.ok(stages.includes("ci"), "the IR stage hands over instead of rejecting an unclassified head")
-  assert.deepEqual(store.current().ir, {})
-  assert.deepEqual(store.current().compiled, {})
+  assert.equal(result.ok, true, result.message)
+  assert.deepEqual(requests.map(request => request.generation_stage), ["ir", "ir", "ci"], "one IR repair, then CI")
+  const feedback = requests[1]!.validation_errors!.join("\n")
+  // s1 is the task goal's source; the head paragraphs after it have no destination.
+  assert.match(feedback, /this turn's input has text with no destination: e1\/s2 "/)
+  const first = sourceSegments([{ schema_version: 2, run_id: "parent", event_id: "e1", kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text: CANDIDATE_EXAMPLE_INPUT } }])[1]!
+  assert.ok(feedback.includes(first.text.replace(/\s+/gu, " ").trim().slice(0, 40)), "the feedback quotes the unplaced passage")
+  assert.match(feedback, /Adopt each passage into an IR content item, or give it a source_coverage entry saying why it is not a requirement/)
+  assert.notDeepEqual(store.current().ir, {})
 })
 
 test("stage requests drop the bodies their operation cannot use and keep the whole IR", async () => {
@@ -560,7 +563,9 @@ test("a run whose event ids can be read as aliases keeps full ids and says why",
   const { store, compiler } = await setup(async input => {
     requests.push(structuredClone(input))
     if (input.generation_stage !== "ir") return JSON.stringify(child(input.parent_basis!))
-    return JSON.stringify({ ...parent(), basis })
+    const note = "Name this event like an alias."
+    return JSON.stringify({ ...parent(), basis, source_coverage: [{ source: { source_id: "e2", digest: digestText(note), span: { unit: "utf16", start: 0, end: note.length } },
+      disposition: "management", requirements: [], reason: "A note about the event name, not a task requirement.", basis: [] }] })
   })
   await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "e2", kind: "user_input",
     source: { channel: "user", producer_id: "user" }, payload: { text: "Name this event like an alias." } })
@@ -662,6 +667,10 @@ test("a turn answers its own delegation and carries the earlier uncompiled one a
     // Keep only this turn's event in basis (on both stages): the carried
     // delegation then has no destination, and the batch must be sent back.
     proposal.basis = { event_ids: ["next-turn"], refs: [] }
+    // This turn's own text is accounted for, so the batch reaches the CI-stage check it is testing.
+    const own = "Add a status command that prints ok."
+    proposal.source_coverage = [{ source: { source_id: "next-turn", digest: digestText(own), span: { unit: "utf16", start: 0, end: own.length } },
+      disposition: "unresolved", requirements: [], reason: "Kept for a later batch.", basis: [] }]
     if (input.generation_stage === "ir") return JSON.stringify(proposal)
     // The basis is the parent's; the ordinary CI answer cannot restate it.
     return JSON.stringify(child(input.parent_basis!))
