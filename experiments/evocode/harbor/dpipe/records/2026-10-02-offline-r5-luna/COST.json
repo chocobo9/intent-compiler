@@ -1,0 +1,203 @@
+{
+  "new_calls": 6,
+  "max_new_calls": 8,
+  "IR_attempts": 6,
+  "CI_calls": 0,
+  "independent_check_calls": 0,
+  "historical_calls": {
+    "F2": 10,
+    "R3": 6,
+    "R4": 3
+  },
+  "calls": [
+    {
+      "call": 1,
+      "started_at": "2026-10-02T19:52:43.246Z",
+      "completed_at": "2026-10-02T19:53:56.015Z",
+      "stage": "ir",
+      "usage": {
+        "input_tokens": 62826,
+        "output_tokens": 3424,
+        "reasoning_tokens": 1466,
+        "cache_read_tokens": 1408,
+        "cache_write_tokens": 0,
+        "cost": 0
+      },
+      "seconds": 72.769,
+      "model": "openai/gpt-6-luna-fast",
+      "variant": "high-fast",
+      "session_id": "ses_f01d2c8c4ffexVBUC07uhafhKU",
+      "raw_host_tokens": {
+        "total": 69124,
+        "input": 62826,
+        "output": 3424,
+        "reasoning": 1466,
+        "cache": {
+          "write": 0,
+          "read": 1408
+        }
+      },
+      "raw_host_cost": 0
+    },
+    {
+      "call": 2,
+      "started_at": "2026-10-02T19:53:56.614Z",
+      "completed_at": "2026-10-02T19:54:54.917Z",
+      "stage": "ir",
+      "usage": {
+        "input_tokens": 66667,
+        "output_tokens": 3431,
+        "reasoning_tokens": 1052,
+        "cache_read_tokens": 1408,
+        "cache_write_tokens": 0,
+        "cost": 0
+      },
+      "seconds": 58.303,
+      "model": "openai/gpt-6-luna-fast",
+      "variant": "high-fast",
+      "session_id": "ses_f01d1c96fffeckpBm3YeXUiabH",
+      "raw_host_tokens": {
+        "total": 72558,
+        "input": 66667,
+        "output": 3431,
+        "reasoning": 1052,
+        "cache": {
+          "write": 0,
+          "read": 1408
+        }
+      },
+      "raw_host_cost": 0
+    },
+    {
+      "call": 3,
+      "started_at": "2026-10-02T19:54:55.438Z",
+      "completed_at": "2026-10-02T19:55:47.204Z",
+      "stage": "ir",
+      "usage": {
+        "input_tokens": 67903,
+        "output_tokens": 3204,
+        "reasoning_tokens": 771,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost": 0
+      },
+      "seconds": 51.766,
+      "model": "openai/gpt-6-luna-fast",
+      "variant": "high-fast",
+      "session_id": "ses_f01d0e39fffe4zFTxkr7o5renX",
+      "raw_host_tokens": {
+        "total": 71878,
+        "input": 67903,
+        "output": 3204,
+        "reasoning": 771,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "raw_host_cost": 0
+    },
+    {
+      "call": 4,
+      "started_at": "2026-10-02T19:55:47.773Z",
+      "completed_at": "2026-10-02T19:56:43.147Z",
+      "stage": "ir",
+      "usage": {
+        "input_tokens": 66294,
+        "output_tokens": 3031,
+        "reasoning_tokens": 1313,
+        "cache_read_tokens": 1408,
+        "cache_write_tokens": 0,
+        "cost": 0
+      },
+      "seconds": 55.374,
+      "model": "openai/gpt-6-luna-fast",
+      "variant": "high-fast",
+      "session_id": "ses_f01d0172fffeOuVd0EYUUvNhGm",
+      "raw_host_tokens": {
+        "total": 72046,
+        "input": 66294,
+        "output": 3031,
+        "reasoning": 1313,
+        "cache": {
+          "write": 0,
+          "read": 1408
+        }
+      },
+      "raw_host_cost": 0
+    },
+    {
+      "call": 5,
+      "started_at": "2026-10-02T19:56:43.686Z",
+      "completed_at": "2026-10-02T19:58:13.243Z",
+      "stage": "ir",
+      "usage": {
+        "input_tokens": 67472,
+        "output_tokens": 4426,
+        "reasoning_tokens": 1174,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost": 0
+      },
+      "seconds": 89.557,
+      "model": "openai/gpt-6-luna-fast",
+      "variant": "high-fast",
+      "session_id": "ses_f01cf3cc8fferdLjfjHjfoe7XM",
+      "raw_host_tokens": {
+        "total": 73072,
+        "input": 67472,
+        "output": 4426,
+        "reasoning": 1174,
+        "cache": {
+          "write": 0,
+          "read": 0
+        }
+      },
+      "raw_host_cost": 0
+    },
+    {
+      "call": 6,
+      "started_at": "2026-10-02T19:58:13.805Z",
+      "completed_at": "2026-10-02T19:59:06.305Z",
+      "stage": "ir",
+      "usage": {
+        "input_tokens": 66595,
+        "output_tokens": 3560,
+        "reasoning_tokens": 427,
+        "cache_read_tokens": 1408,
+        "cache_write_tokens": 0,
+        "cost": 0
+      },
+      "seconds": 52.5,
+      "model": "openai/gpt-6-luna-fast",
+      "variant": "high-fast",
+      "session_id": "ses_f01cddcbbffe7QgaZHzXRW6jcA",
+      "raw_host_tokens": {
+        "total": 71990,
+        "input": 66595,
+        "output": 3560,
+        "reasoning": 427,
+        "cache": {
+          "write": 0,
+          "read": 1408
+        }
+      },
+      "raw_host_cost": 0
+    }
+  ],
+  "usage_sum": {
+    "input_tokens": 397757,
+    "output_tokens": 21076,
+    "reasoning_tokens": 6203,
+    "cache_read_tokens": 5632,
+    "cache_write_tokens": 0
+  },
+  "host_total_tokens_sum": 430668,
+  "transport_seconds_sum": 380.269,
+  "batch_wall_seconds": 385.565,
+  "coding_session_failure_review_rounds": 1,
+  "artifact_manual_edits": 0,
+  "currency_cost": null,
+  "human_work_hours": null,
+  "note": "Host cost=0 does not establish free usage. No independent semantic check or accepted R5 materialization; coding-session usage unavailable."
+}

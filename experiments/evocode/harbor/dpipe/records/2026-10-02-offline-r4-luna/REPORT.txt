@@ -1,0 +1,22 @@
+R4 离线管理产物封存
+
+完整 IR、CI、最终 Atom a-dpipe@3 已形成。IR/CI/独立核对各1次，无返修，3/8次新增管理调用。独立核对 consistent；另有 coding-session 全轮审阅1轮，产物人工改写0项。未发现确定的遗漏或错误撤回。
+
+17个R3旧内容对象完全保留，新增4项：validate、crossjoin、checkpoint、validate pipeline。新增正文等于R4原文除开头引言外的全部内容；21个正文都原样进入Atom.task，22个goal_refs与22个coverage条目。审阅核查validate规则/消息/null字段/排序/错误，crossjoin列和行顺序，checkpoint哈希截取及行号，pipeline参数，实际task及completion。完整检查见 calls/03-session-review.json 与 review/materialization-proof.json。
+
+新增usage：{"input_tokens": 358100, "output_tokens": 7949, "reasoning_tokens": 3552, "cache_read_tokens": 1408, "cache_write_tokens": 0}
+宿主total合计：371009。逐次原始口径见COST.json。
+调用耗时合计：161.708秒；生成到核对响应：163.904秒。
+整批墙钟：1124.746秒，其中核对后等待session审阅及收尾：960.842秒。等待期间没有模型调用；不算模型生成耗时或人工工时。人工工时未计，coding session自身usage不可得。宿主cost=0不代表免费，金额未知。
+历史F2管理10次和R3管理6次另列，不占本次3次。
+
+源码冻结751c4d10aceb0597ef52b247d69696db1ae5685c；必要实验接线未提交，见provenance/driver-vs-R3.diff、prepare-offline-r4.py及launch-file-hashes.json。复用原compiler/transport/resolver/prepare绑定装配；模型为openai/gpt-6-luna-fast，high-fast/high/priority。实际metadata确认model与variant；后端实际tier未暴露。
+
+R3仅为冻结管理前态，真实执行仍只有F2 R2。新拟派发不是真实交付。没有R3成功回传、没有执行器/verifier、新增真实执行0。原R3 store哈希保持不变，最终Atom等于被核对的prepared Atom。管理容器已停止。
+
+首次输出就是最终接受的生成输出，无首次/返修质量差异；机械检查和审阅不证明执行成功。本报告没有补做R1/R2各自历史生成节点的完整审阅。
+
+产物入口：artifacts/ir.json、compiled.json、atoms.json、status.json。
+原始请求与响应：calls/01至03的wire-request、host-response、transport-result、stage-input及timing文件。
+冻结首次输入：calls/01-wire-request.json；对应前态：provenance/R3-original-snapshot.json、R3-frozen-artifacts。
+建议：本次R4三次即得到可审阅产物，可继续保留Luna作为后续准备候选；不能用这一轮抹去R3三次返修成本。本轮不自动扩展R5。

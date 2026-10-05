@@ -1,0 +1,108 @@
+历史断点与载荷索引（2026-10-02；轻量只读盘点）
+范围：指定四个 run、两个已有封存索引及其引用的 provenance/目录。未扫描全盘；未运行测试、容器、模型或重放；未改原证据。
+分类“恢复候选”只表示配套材料完整，不代表成功或本轮恢复实跑通过。
+第一遍使用汇总、record、目录清单；追加内容/哈希核验仅 F2 和 S3。其他配套结论沿用已有封存记录。
+
+Run 简称：
+S = intent-luna-dpipe-short-r1r3-20261001-102501-7eda30
+A = intent-luna-dpipe-cont-r4r5-20261001-212435-1e7a6b29
+B = intent-luna-dpipe-cont-r4r5-20261001-223836-466f6ff5
+F = intent-luna-dpipe-full-r1r5-20261002-053740-e6308341
+
+资源表（reward / 通过数为原官方运行；P/U = pending/unresolved）
+编号 | run/轮次 | 冻结版本 | reward/通过 | 新派发 | 原文、IR、Compiled、最终Atom位置 | 工作区/会话/store | 下一输入、回传、P/U | 分类
+S3 | S/R3 | c318ffa | 1 / 535/535 | 1 | S3载荷入口 | 完整 | R4未入队；累计2执行已回传；0/0 | 配套完整的恢复候选
+A4 | A/R4 | f94a16b | 1 / 639/639 | 1 | A4载荷入口；R4历史记录，非恢复store | 镜像/会话有；同点store缺 | 汇总称R4末0/0且已回传；缺store不能独立核清队列边界 | 仅载荷参考
+B4 | B/R4 | b31f41b | 0 / 627/639 | 1 | B4载荷入口 | 完整 | R5未入队；累计3执行已回传；0/0 | 配套完整的恢复候选
+B5 | B/R5 | b31f41b | 0 / 663/680 | 1 | B5载荷入口 | 完整 | 无R6；累计4执行已回传；0/0；R5已终止 | 配套完整的恢复候选
+F1 | F/R1 | c6e1f64 | 0.0 / 218/219 | 1 | F1载荷入口 | 完整 | R2未入队；累计1执行已回传；0/0 | 配套完整的恢复候选
+F2 | F/R2 | c6e1f64 | 1.0 / 481/481 | 1 | F2载荷入口 | 完整 | R3未入队；累计2执行已回传；0/0 | 配套完整的恢复候选
+F3 | F/R3 | c6e1f64 | 0.0 / 484/535 | 0 | F3载荷入口；无本轮新Atom，继承R2 | 完整 | R4未入队；累计2执行已回传；1/1 | 配套完整的恢复候选
+F4 | F/R4 | c6e1f64 | 0.0 / 608/639 | 1 | F4载荷入口 | 完整 | R5未入队；累计3执行已回传；0/0 | 配套完整的恢复候选
+F5 | F/R5 | c6e1f64 | 0.0 / 604/680 | 0 | F5载荷入口；无本轮新Atom，继承R4 | 完整 | 无R6；累计3执行已回传；1/1；R5已终止 | 配套完整的恢复候选
+
+本次表内数量（恢复候选 / 仅载荷参考 / 待核实）：R1 1/0/0；R2 1/0/0；R3 2/0/0；R4 2/1/0；R5 2/0/0。合计8/1/0。失败轮也可能是完整恢复候选；R5是终点状态，不意味着本任务有R6。
+S3包含R1–R3历史，原 multiround_results 的 reward 为0、0、1；不是前三轮连续满分。历史R1/R2未另计为恢复断点。
+最近quote失败断点未重复盘点、不计入以上数字，仅引用既有索引：
+D:\huawei\EvoCodeBench\harbor_runs\intent-luna-dpipe-quote-r3r5-20261002-135746z-81964e85\review\REPORT.txt
+
+完整冻结版本：
+S = c318ffa3f61567620bca9f0f6f599e050dfc0e84
+A = f94a16b7f4dd8a1c8c47a25a08ed0ff7507f6c76
+B = b31f41bb482e7f414addb6c77340d95dde9d713e
+F = c6e1f6444a3f9518a8dc11e07134bb6469b72e62
+
+路径规则（只定位，不重建）：
+运行根 R(run) = D:\huawei\EvoCodeBench\harbor_runs / 完整run名
+审计根 D(run) = D:\huawei\EvoCodeBench\harbor_intent_data / 完整run名 / audit
+原文：R(run)/task/round_N/instruction.md（初始instruction.md也保留）。实际接收原文以相应store/events.jsonl的 event.kind=user_input、event.payload.source.round=N、event.payload.text 为准。
+IR：同点 snapshot.json 的 ir["t-dpipe"]；Compiled：compiled["t-dpipe"]。
+最终Atom：该同点compiled.atoms中与本轮 dispatches 的 atom_id、atom_revision 匹配的版本；不要误取保留的历史revision。实际交付文本入口为 D(run)/round-NN/host-part.json，按对应execution.host_identity选会话；本轮未展开完整宿主会话。
+恢复材料：record指定的完整snapshot-image.tar含工作区和会话DB/WAL/SHM；同点store必须同时含snapshot.json、events.jsonl、check-inputs.jsonl。不可把历史check-input、prepared候选或后续最终store当恢复快照。
+
+各行证据与载荷入口：
+S3:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\original-r3\record.json
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\original-r3\resume-trial\task__TQa2FaD\state\round_3\snapshot-image.tar
+  原文/IR/Compiled/Atom/store = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\original-r3\compiler-store\v2-runs\intent-luna-dpipe-short-r1r3-20261001-102501-7eda30
+A4:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\212435-r4-artifact-only\record.json
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\212435-r4-artifact-only\resume-trial\task__YBuacd7\state\round_4\snapshot-image.tar
+  同点完整store = 缺失。所查封存目录、run/provenance及audit/round-04未见后续补封的R4 store；到此停止扩查。
+  原始要求 = D:\huawei\EvoCodeBench\harbor_runs\intent-luna-dpipe-cont-r4r5-20261001-212435-1e7a6b29\task\round_4\instruction.md
+  历史IR/CI prepared载荷定位 = D:\huawei\EvoCodeBench\harbor_intent_data\intent-luna-dpipe-cont-r4r5-20261001-212435-1e7a6b29\compiler-store\v2-runs\intent-luna-dpipe-short-r1r3-20261001-102501-7eda30\check-inputs.jsonl；仅查该文件既有R4 check记录（最终获准check为call-27）；不是从最终snapshot回推恢复状态。
+  实际最终Atom交付定位 = D:\huawei\EvoCodeBench\harbor_intent_data\intent-luna-dpipe-cont-r4r5-20261001-212435-1e7a6b29\audit\round-04\host-part.json；R4 dispatch-89 / execution-90。
+  汇总 = D:\huawei\EvoCodeBench\harbor_runs\intent-luna-dpipe-cont-r4r5-20261001-212435-1e7a6b29\RESULTS.md
+  后续有限取证修正 = D:\huawei\EvoCodeBench\harbor_runs\intent-luna-dpipe-cont-r4r5-20261001-212435-1e7a6b29\provenance\limited-forensics-call22-34.json；旧RESULTS中的finding归因不作为本表结论。
+B4:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\223836-r4\record.json
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\223836-r4\resume-trial\task__Pvb2H9v\state\round_4\snapshot-image.tar
+  原文/IR/Compiled/Atom/store = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\223836-r4\compiler-store\v2-runs\intent-luna-dpipe-short-r1r3-20261001-102501-7eda30
+B5:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\223836-r5\record.json
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\223836-r5\resume-trial\task__Pvb2H9v\state\round_5\snapshot-image.tar
+  原文/IR/Compiled/Atom/store = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\223836-r5\compiler-store\v2-runs\intent-luna-dpipe-short-r1r3-20261001-102501-7eda30
+F1:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-01\record.json
+  原文/IR/Compiled/Atom/store = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-01\compiler-store\v2-runs\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-01\resume-trial\task__JrtYABZ\state\round_1\snapshot-image.tar
+F2:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-02\record.json
+  原文/IR/Compiled/Atom/store = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-02\compiler-store\v2-runs\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-02\resume-trial\task__JrtYABZ\state\round_2\snapshot-image.tar
+F3:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-03\record.json
+  原文/IR/Compiled/Atom/store = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-03\compiler-store\v2-runs\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-03\resume-trial\task__JrtYABZ\state\round_3\snapshot-image.tar
+F4:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-04\record.json
+  原文/IR/Compiled/Atom/store = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-04\compiler-store\v2-runs\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-04\resume-trial\task__JrtYABZ\state\round_4\snapshot-image.tar
+F5:
+  record = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-05\record.json
+  原文/IR/Compiled/Atom/store = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-05\compiler-store\v2-runs\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341
+  工作区/会话镜像 = D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\round-05\resume-trial\task__JrtYABZ\state\round_5\snapshot-image.tar
+
+F2与S3的有限核验：
+F2: 已复核镜像SHA256及store三文件SHA256全部匹配record；没有展开镜像或重新执行DB检查，会话完整性和执行session匹配复用record已有封存证据。
+  user轮次 = [1, 2]；事件序号 = [1, 57]
+  pending/unresolved = 0/0；execution_return数 = 2；执行状态 = ['closed', 'closed']；最后回传评估批次 = accepted
+  最后派发 = {"atom_id": "a-dpipe", "atom_revision": 1, "compiled_intent_id": "compiled-2", "compiled_revision": 1, "digest": "sha256:e2ed622a182ba87a9c27c365f4268a2b52210e76a6c9784ee611e2b5daec3268", "dispatch_id": "dispatch-58", "task_id": "t-dpipe"}
+  最后管理批次完成（UTC） = 2026-10-02T10:05:34.566Z
+  store捕获（UTC） = 2026-10-02T10:05:36.222931+00:00
+  镜像SHA256 = d66bb5520aa4dbd605d11d12d16a969d1c166c4156fc2609b07db9d60e402d88
+  镜像边界：task__JrtYABZ__round-2__state，2026-10-02T10:06:57.040171+00:00；R3尚未入队。
+S3: 已复核镜像SHA256及store三文件SHA256全部匹配record；没有展开镜像或重新执行DB检查，会话完整性和执行session匹配复用record已有封存证据。
+  user轮次 = [1, 2, 3]；事件序号 = [1, 55, 56]
+  pending/unresolved = 0/0；execution_return数 = 2；执行状态 = ['closed', 'closed']；最后回传评估批次 = accepted
+  最后派发 = {"atom_id": "a-dpipe", "atom_revision": 1, "compiled_intent_id": "compiled-2", "compiled_revision": 1, "digest": "sha256:9e8b0b423a3ece8be918414c0b9159c300ce0823e47db4c332d1476d4ffa2a36", "dispatch_id": "dispatch-55", "task_id": "t-dpipe"}
+  最后管理批次完成（UTC） = 2026-10-01T15:10:08.841Z
+  镜像SHA256 = 3f3b1f71cff9f80d2272b832c37368e910198b620b1e989ca235c2fe7ed154d5
+  镜像边界：task__TQa2FaD__round-3__state，2026-10-01T15:11:43.106210+00:00；R4尚未入队。
+
+推荐：F2，原官方R2 481/481，R2回传与评估完成，下一轮输入未到，适合为两种R3输入提供同一开始状态。
+限制：这是c6e1f64历史compiler与历史会话状态；满分不证明IR完整正确。R3要求及参照IR本轮未构造、未审阅；未来实验接线仍需单独明确。S3虽535/535，但封存记录已指出IR漏normalize的sample修正，不宜直接充当完整正确的参照IR。
+本表只列原官方运行结果。已有补构建、离线候选重放或人工quote用例不计为这些官方成绩，也不计为新的恢复候选。本轮未执行这些操作。
+原封存hash清单：
+D:\huawei\EvoCodeBench\harbor_checkpoints\intent-dpipe-20261002-091821\SHA256SUMS.txt
+D:\huawei\EvoCodeBench\harbor_checkpoints\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341\SHA256SUMS.txt

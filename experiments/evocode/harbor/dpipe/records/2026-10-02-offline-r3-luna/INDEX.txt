@@ -1,0 +1,4 @@
+Run root: D:\huawei\EvoCodeBench\management_runs\intent-luna-dpipe-offline-r3-20261002-164739z-5d90df
+Review bundle: D:\huawei\EvoCodeBench\management_runs\intent-luna-dpipe-offline-r3-20261002-164739z-5d90df\review-evidence.zip
+Baseline: 751c4d10aceb0597ef52b247d69696db1ae5685c
+No executor/verifier. 6 new calls, 10 historical. Uncommitted experiment wiring.

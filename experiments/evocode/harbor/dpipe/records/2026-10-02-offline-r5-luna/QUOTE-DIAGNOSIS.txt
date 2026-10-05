@@ -1,0 +1,35 @@
+R5 quote_unresolved 原因分析（只读原证据，离线 resolver 重放）
+
+结论：直接拒绝原因是实际模型输出的 quote 不等于原文中的唯一连续子串。6轮失败不是重复匹配歧义，全部为零匹配；不是源文缺失，也未发现宿主响应到compiler保存、上一轮输出到下一轮返修草稿之间篡改quote。问题包含非连续文字拼接、标点/空白抄写错误，以及返修回退，不能仅归结为最后一个空格。
+
+逐次实际输出：
+1：5个失败引用。verify旧规则尾部多U+0020空格；另外4个是add/basis重复引用，模型把原文中不相邻的verify/manifest/BLAKE2b定义条目拼成一个quote。每个单行都在原文出现一次，但拼接后的整串不存在。
+2：2个。verify旧规则的 `<checksum>` 缺闭合反引号；basis写 .sha256 sidecar files，原文是 `.sha256` sidecar files，中间反引号不能省略。
+3：2个。verify仍缺反引号；sidecar长引用仍漏掉.sha256后面的闭合反引号。
+4：1个。verify反引号补上，但又带尾部空格。
+5：1个。verify已正确，ingest checksum删除引用新添两个前导空格，原文不含这些缩进。
+6：1个。ingest修好，verify再次带尾部空格。第6次请求的返修草稿里verify是正确的，第6次模型输出才重新改坏。
+
+关键实际文字（用JSON转义显示不可见字符）：
+正确verify句末："... in `<checksum>`."
+第1/4/6次："... in `<checksum>`. "
+第2/3次："... in `<checksum>."
+原文句号后紧接\n；quote可以在句号结束，不必包含换行，但不能添加原文不存在的空格。
+
+路径核对：6次host-response.data.info.structured分别与JSON解析后的transport-result.text、compiler management_log最后批次attempt.text完全相等。第2至6次实际wire请求的generation_repair.ir_proposal中verify.quote分别等于上一轮实际输出。第6次实际wire同时提供了正确返修quote和原文e1/s37，故不能归因为正确文字未送入、日志配错或修复投影自动加空格。核查边界是宿主所记录响应，不声称取得提供方内部生成轨迹。
+
+实际resolver离线重放：
+node diagnosis/replay-resolver.mjs <本运行目录>
+该脚本导入本轮冻结runtime/dist/core/intent-compiler-v2.js中的resolveSourceRefs，使用实际wire中source_segments重建各源原文，逐次重放原始提案。结果unresolved=[5,2,2,1,1,1]，与原运行一致。
+仅在内存中构造第6次对照，删除verify.quote末尾一个U+0020后，unresolved=0。未保存为候选或改写store。这个控制只证明该字符造成最终source gate拒绝，不证明IR语义、撤回边界、CI分配或执行正确；不算原运行修复成功。
+
+返修机制中的已确认限制：
+1. parent-generation.ts:67-81把报错quote截为前60字符加省略号。实际消息中的verify只显示到“compares against the hex…”，尾空格/缺反引号都在被截断部分；未提供具体字段路径、差异字符或对照片段。完整原文和完整失败草稿仍在请求中，不能说信息完全缺失。
+2. parent-generation.ts:330先保存decoded IR proposal，prepare在其副本上解析；来源门失败时尚无成功prepared parent。后续返回的是待修完整提案，已正确的quote也仍需模型重新输出。第5到第6次的verify回退证明本次存在这种返修不稳定。
+3. 以上反馈粒度与整份重发机制可能增加返修负担，但没有对照运行证明改变它们即可改善。不要把相关性写成“模型因为截断才失败”，也不据此直接要求新增规则、接口或模糊匹配。
+
+对接口的限定判断：
+quote是原文定位选择器，不是可重写摘要，也不是多段文字的拼接容器；精确匹配拒绝本批字符串符合当前合同。现有多个SourceRef可表达多处选择，无需因首轮拼接错误立即扩展来源接口。也不能机械改用整段segment：verify所在s37还包含必须保留的退出码和输出规则，整段删除会扩大撤回范围。
+此次问题由模型选择/抄写和返修回退直接触发；源码中观察到的反馈限制单列为设计改进线索，不把它冒充已证实的运行时缺陷。
+
+本次没有修改实现、正式产物、运行日志、原封存包或model输入；没有模型调用、容器启动、执行器、verifier或补跑。原封存SHA256SUMS中的所有文件再次核对不变。诊断材料另存diagnosis/，不覆盖本轮失败成绩与成本。下一步若要试修复，应另行决定并另记版本和预算。

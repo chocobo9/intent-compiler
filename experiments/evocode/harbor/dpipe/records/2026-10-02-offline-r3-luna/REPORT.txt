@@ -1,0 +1,72 @@
+R3 离线管理产物生成与质量评估｜2026-10-02
+
+运行：intent-luna-dpipe-offline-r3-20261002-164739z-5d90df
+结论：形成完整 R3 IR、Compiled Intent 和 1 个最终当前 Atom a-dpipe@2。使用 6/8 次新增管理调用，单批结束，未使用剩余额度。未调用执行器或官方 verifier。
+起点：F2 成功 R2（481/481）；本次是从成功 R2 继续准备 R3，不是新版从零完成。F2 历史管理调用 10 次另列。
+源码基线：751c4d10aceb0597ef52b247d69696db1ae5685c。src 未改；4 个实验接线文件未提交。
+
+逐次生成与返修（同一批，未人工改写产物）：
+调用 | 阶段/结果 | input | output | reasoning | cache read | cache write | 调用秒
+1 | 首次 IR；drift CLI 引用缺闭合反引号，quote_unresolved | 53175 | 4697 | 1646 | 1408 | 0 | 94.509
+2 | IR 返修1；旧 percentile 公式引用缺闭合反引号，quote_unresolved | 731 | 6236 | 1034 | 58752 | 0 | 91.303
+3 | IR 返修2；fill 引用以 . If 开头，原文为 - If，两处 quote_unresolved | 59582 | 4349 | 1099 | 1408 | 0 | 68.872
+4 | IR 返修3；通过解析与父 IR 准备 | 57789 | 3840 | 1321 | 1408 | 0 | 65.437
+5 | 首次 CI；通过 prepare、绑定和正文装配 | 71710 | 5039 | 1002 | 1408 | 0 | 77.494
+6 | 独立会话核对；consistent，findings=[] | 161128 | 36 | 737 | 0 | 0 | 13.942
+
+新增汇总：input 404115；output 24197；reasoning 6839；cache read 64384；cache write 0。宿主另报 total 合计 499535。各口径原样保留，不把 reasoning 重复并入 output。
+历史 10 次：input 469311；output 27602；reasoning 8309；cache read 84096；cache write 0。
+调用耗时合计 411.557 秒；首次生成到独立核对响应 414.213 秒；整批墙钟 878.479 秒（14 分 38.479 秒），其中独立核对响应后审阅等待及收尾 464.266 秒。这个等待不是人工工时。
+原始 compiler 的最后 check duration 包含 session 审阅等待；逐调用耗时取 calls/*-timing.json 的传输边界。
+宿主 cost 均为 0，但没有实际账单或确认费率，金额未知，不能解释为免费。
+独立 Luna 核对 1 次，另有 coding session 质量审阅 1 轮，用户人工审阅尚未发生，产物人工改写 0 项。未计人工工时；本 coding session 自身 token/金额未纳入宿主 usage，无法据此给出全成本金额。
+
+质量观察（检查实际 prepared 及最终字段，不以 consistent 代替审阅）：
+首次输出尚不能形成产物：drift 长 quote 少一个闭合反引号。后两次分别在 percentile 公式闭合反引号、fill 项目前缀再次失败。第四次 IR 才通过既有精确 resolver。没有模糊匹配、自动修补或放宽校验。
+最终 14 个旧内容项全部保留，3 项按 R3 更新，新增 3 项，共 17 项；均原样装配进当前 Atom.task，18 个 goal_refs 包含父任务及各内容项。
+fill：保留上下锚点搜索、跳过非数值、插值、格式及 encode；仅撤回旧“任一锚点缺失则留空”，补入仅下/仅上/双锚/无锚四种行为。
+normalize：仅撤回旧 population zscore 行，改 n-1；n<2 和零标准差规则存在。ParseFloat(bit64)、minmax、其他逐行行为及输出格式保留；profile population stddev 正文未改。显式 R3 更新决定适用行为。
+profile：p05/p95 以及原插值方法齐全。drift：类型和分布检查适用条件、四种指标、schema 类型、输出字段、detail 格式、固定排序、文件/CSV 错误和 JSON 格式齐全。
+resample：组排序、过采样原顺序、欠采样 seed+groupIndex、Go RNG/Fisher-Yates 与抽样后索引排序齐全。watermark：列顺序、空值、分隔字节、HMAC-SHA256 截前8字节、16位小写hex及缺列错误齐全。pipeline drift 参数映射及 omitted/0 默认0.1齐全。
+CI 分配到一个集成实现 Atom；task 要求完成所有附入行为；completion 覆盖集成实现、行为验证和 go build -o dpipe ./...。失败回传不算完成。
+独立核对使用与所有生成调用不同的会话，返回 consistent/findings=[]；coding session 未追加拒绝或覆盖 verdict。
+本次有限审阅未发现剩余确定语义缺陷。呈现限制：fill 修正四条附在同时含 encode 的内容项末尾，未重组章节；最终 task 约5.6万字符，仍有输入与执行负担。未证明未来执行成功或生成稳定。
+
+边界与接线：
+使用 F2 封存镜像和完整 store 的独立副本；首次实际 IR 输入除现有 source alias 投影外等于 F2 IR。新来源仅 R3，原文与 supplied segments 一致；无未来轮次或官方测试答案。原 F2 三个 store 文件结束后哈希仍匹配。
+复用冻结 runtime 的 createIntentCompilerV2 / createCompilerModelV2、原 OpenCode transport、prepare/绑定/装配。入口按绝对 /opt/offline/intent-compiler-runtime/dist 加载；14个相关模块字节与已有冻结源码构建审计一致；宿主 plugin=[]。
+新增实验接线负责复制、单批8次硬预算、保存原始请求响应、独立核对后的 session 审阅等待及仅追加拒绝、导出产物。没有修改核心 resolver/schema/合同/verifier。增加4个实验文件及宿主副本预算 guard；不减少核心检查义务。
+新增接线的必要离线验证：4个 guard 测试覆盖第9次拒绝、无法手动将失败变通过、追加拒绝保留原响应、无效来源/缺证据拒绝；均通过。driver 语法检查通过。此处不代表模型质量或执行效果。
+管理宿主初次启动遇到 shell CRLF，在任何模型调用前改为 LF 并恢复启动；只有一次付费生成批次。
+实际模型响应 metadata 均为 openai/gpt-6-luna-fast，variant high-fast。配置 reasoningEffort=high、serviceTier=priority；后端实际应用 tier/内部模型版本未暴露，不推定。
+store 多1条拟派发记录（总3条），真实执行仍2条，execution_outcomes 完全未变。旧 execution.closed_reason 被本次 CI 重述；除此之外旧执行字段不变。未伪造成功回传。pending/unresolved 0/0 仅表示准备态。
+管理容器已停止。原断点与历史证据保持原样。
+
+建议：值得下一步用 Sol 做一次同初始输入比较，重点看是否减少本次3轮来源定位返修和获取产物的总成本；本次 Luna 已能在8次内形成可审阅产物，不能据此认定 Sol 一定更好或 Luna 不可用。本轮没有调用 Sol，也未扩展 R4–R15。
+
+证据入口（相对本运行目录）：
+artifacts/ir.json；artifacts/compiled.json；artifacts/atoms.json；artifacts/status.json。
+calls/01-wire-request.json 是冻结首次请求；provenance/F2-original-snapshot.json 和 initial-r3-event.json 保留可复用起点。后续比较显式变更模型配置，不能从本次返修后的 store 起跑冒充同输入。
+calls/01..06-host-response.json / *-transport-result.json / *-stage-input.json / *-timing.json 保存全部首次及返修原始结果。
+review/quote-failures.json 给出实际失败字段、原始 quote、原文精确对应片段及下次请求诊断。
+review/materialization-proof.json、calls/06-session-review.json、calls/06-parsed-model-check.json 保存装配检查、session审阅与独立核对。
+COST.json 保留逐次原始 usage、会话、模型、配置及边界。provenance/final-boundary.json 记录原证据未变和准备态差异。
+WIRING.diff 是4个新增实验文件完整 diff；provenance/host-budget-guard.diff 是隔离宿主副本的预算接线 diff。
+provenance/frozen-first-input-proof.json 的派生文本哈希已直接按 UTF-8 原始 JSON 重算；早先 PowerShell 派生审阅副本有编码显示问题，未影响实际请求、响应、store 或最终产物。旧探索性 nearby quote 对比未作为证据结论。
+
+关键最终字段节录：
+{
+  "atom_id": "a-dpipe",
+  "revision": 2,
+  "task_prefix": "Continue the dpipe implementation in the provided /app workspace. Inspect the current implementation, integrate the complete applicable command and transform behavior from the attached requirement blocks, and validate the resulting tool. Cover the original ingest, transform, verify, manifest, and sequential pipeline commands; profile and compare; all specified original and added transforms; drift and its pipeline step; profile percentile extensions; and the specified linear-fill and z-score corrections. Keep the public interfaces and specified behaviors in the attached requirements; leave unspecified internal design open. Build and validate the integrated result, then return the implementation and concrete evidence. On failure or blockage, return the concrete facts and unmet conditions for management.\n\n[assigned requirement r-purpose@0 sha256:c265106631661d3017424a30418eca8875968cff378bafeaa70e4cfd0a1f156f]\n\"Build a deterministic data p",
+  "completion": [
+    {
+      "text": "The integrated CLI implements every applicable assigned behavior and interface: ingestion, transformation, verification, manifest, pipeline, profile, compare, drift, and all specified transforms, including deterministic outputs, required ordering, error cases, profile p05/p95, linear-fill boundary extrapolation, sample-standard-deviation z-score normalization, and drift pipeline integration.",
+      "evidence_required": "Implementation plus behavioral invocations with fixtures and observed output files, stdout, stderr and exit codes covering each command and specified behavior; exercise all transformation operations and assigned edge cases, error outcomes, profile statistics/correlations and added percentiles, compare classifications/options/order, drift classifications/metrics/order/errors, sequential pipeline success and stop-on-failure, deterministic repeated outputs where required, and the corrected fill and normalization cases."
+    },
+    {
+      "text": "The required build invocation succeeds from /app/.",
+      "evidence_required": "Observed successful execution of `go build -o dpipe ./...` from `/app/`."
+    }
+  ]
+}

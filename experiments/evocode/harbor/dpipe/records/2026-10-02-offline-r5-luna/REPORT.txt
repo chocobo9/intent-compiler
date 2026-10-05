@@ -1,0 +1,21 @@
+R5 离线管理生成失败审阅
+
+结论：本批结束但失败，未形成接受的R5 IR、CI或最终Atoms。只有6份未接受的IR提案。store中的IR/compiled/dispatches仍与封存R4完全相同，不能当成R5产物。没有进入CI或独立核对，也没有等待session review。
+
+六次均因quote_unresolved被拒。各轮失败引用数分别为 5, 2, 2, 1, 1, 1。此前返修修复部分引用，但引入/保留其他不精确引用。最后实际字段为 groups[0].ir_changes 中 r-verify 的 remove[0].quote：
+模型：'- Reads `<path>`, computes SHA-256, compares against the hex string in `<checksum>`. '（句号后空格）
+原文：'- Reads `<path>`, computes SHA-256, compares against the hex string in `<checksum>`.\n'（句号后换行）
+完整原始字段及原文见review/final-verify-comparison.json。拒绝与实际文字不一致相符；未做模糊匹配、人工删空格或离线修复后冒充生成成功。
+
+为何6/8停止：src/core/parent-generation.ts:119在IR阶段要求剩余IR+CI+check共3次；src/core/intent-compiler-v2.ts:531-532检查后续必要调用是否还放得下。剩2次不足，按既有规则停止，不是已用完8次，也不是请求超时。调用status ok只表示返回成功；advance-result为invalid_candidate、retryable=false。
+
+草稿中可见checksum迁移、sidecar清理、lineage及pipeline更新的意图，但没有通过生产准备得到实际最终正文，因此不认定整轮语义质量通过，也不宣称只修这一处空格就必然得到合格产物。尤其混合旧条款的撤回必须在实际物化后核查；本轮不人工重建或修补。
+
+新增6次调用，均为IR。usage：{"input_tokens": 397757, "output_tokens": 21076, "reasoning_tokens": 6203, "cache_read_tokens": 5632, "cache_write_tokens": 0}；宿主total合计430668。
+调用传输耗时合计380.269秒；批次墙钟385.565秒。F2历史10次、R3历史6次、R4历史3次另列。失败取证审阅1轮，产物人工改写0项；人工工时及本coding session自身usage未计。cost=0不代表免费，实际金额未知。
+
+冻结源码751c4d10aceb0597ef52b247d69696db1ae5685c；模型openai/gpt-6-luna-fast，high-fast/high/priority。没有修改实现、启动执行器/verifier、补跑、追加预算或调用Sol。原R4 store结束后哈希不变；真实执行仍2条且回传完全未变；R5 pending/unresolved为1/1。管理宿主已停止。
+
+这次不能把R5纳入可执行的冻结产物序列，也不能从这份失败store继续R6并声称R5已经准备好。下一步应单独决定R5如何重试；保留首次输入用于同输入比较，本轮不自动启动。
+
+证据：calls/01..06-wire-request.json、host-response.json、transport-result.json、stage-input.json、timing.json；review/final-rejected-IR-proposal.json、quote-failures.json、final-boundary.json；advance-result.json；COST.json；provenance/launch-file-hashes.json及driver-vs-R4.diff。首次输入和失败响应全部保留，未用旧R4产物填充R5 artifacts目录。

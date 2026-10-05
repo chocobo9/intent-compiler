@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+const url=import.meta.resolve('./intent-compiler-runtime/dist/core/intent-compiler-v2.js');
+const {resolveSourceRefs}=await import(url);
+const candidate={refs:[{source_id:'probe',digest:'ignored',quote:'0123456789abcdef. '}]};
+const stats=resolveSourceRefs(candidate,[{event_id:'probe',source:{channel:'user',producer_id:'offline-probe'},payload:{text:'0123456789abcdef.\n'}}]);
+if(stats.unresolved!==1 || !stats.unresolvedRefs[0].diagnostic || !stats.unresolvedRefs[0].path)throw Error('Patched diagnostic module not confirmed');
+const files=['core/intent-compiler-v2.js','core/parent-generation.js','model/compiler-model-v2.js','model/opencode-transport.js'];
+const hashes=Object.fromEntries(files.map(f=>[f,crypto.createHash('sha256').update(fs.readFileSync('/opt/offline/intent-compiler-runtime/dist/'+f)).digest('hex')]));
+const result={resolved_module:url,loaded_module_sha256:hashes,offline_probe:stats,paid_calls:0};
+fs.writeFileSync('/opt/offline/provenance/container-module-load-proof.json',JSON.stringify(result,null,2)+'\n');
+console.log(JSON.stringify(result));
