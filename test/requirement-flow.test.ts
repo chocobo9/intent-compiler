@@ -294,6 +294,10 @@ test("check, commit and dispatch read the same assembled task", async () => {
   assert.equal(contract.includes("each passage is labelled with the number of the run's user input it came from and listed in input order"), true)
   assert.equal(contract.includes("the attached passages include those an item once adopted and later withdrew"), true)
   assert.equal(contract.split("\n").at(-1)!.startsWith("prepared.withdrawals lists every passage this candidate withdrew from the IR"), true)
+  assert.equal(contract.includes("Whether a current requirement is omitted is judged on the delivered text: report an omission only when a current requirement cannot be found in the final task of the Atoms that need it, or when that delivered text presents it with a changed meaning."), true)
+  assert.equal(contract.includes("It is context for what this batch changed. A withdrawal wider than what the current input actually voids is not a finding while the delivered Atom tasks still carry those passages"), true)
+  assert.equal(contract.includes("Removed words that still apply and are not restated are an omitted requirement"), false, "an imprecise IR withdrawal alone is no longer a D4 finding")
+  assert.equal(contract.includes("check omitted or wrongly classified meaning"), false, "omission is judged on the delivered text, not on prepared.ir")
   assert.deepEqual(contract.split("\n").slice(0, -2), V2_CHECK_CONTRACT.check_contract.split("\n").slice(0, -1),
     "only the assembled-task comparison clause changes and the withdrawal clause is added; the other check duties remain")
   assert.equal(V2_CHECK_CONTRACT.check_contract.includes("prepared.withdrawals"), false)
