@@ -10,16 +10,45 @@ export function sourceSegments(events: readonly CompilerEvent[]): SourceSegment[
   return events.flatMap(event => {
     const text = userText(event)
     if (text === undefined) return []
-    const ends = [...text.matchAll(/\r?\n[ \t]*\r?\n/gu)].map(match => match.index! + match[0].length)
-    ends.push(text.length)
-    let start = 0
-    const segments: SourceSegment[] = []
-    for (const end of ends) {
-      if (end > start && text.slice(start, end).trim()) segments.push({ source_id: event.event_id, segment_id: `s${segments.length + 1}`, span: { unit: "utf16", start, end }, text: text.slice(start, end) })
-      start = end
-    }
-    return segments
+    return segmentBounds(text).map(bounds => ({ source_id: event.event_id, segment_id: bounds.segment_id, span: { unit: "utf16" as const, start: bounds.start, end: bounds.end }, text: text.slice(bounds.start, bounds.end) }))
   })
+}
+
+/** Paragraph segments of one text, numbered as source_segments numbers them. */
+function segmentBounds(text: string): Array<{ segment_id: string; start: number; end: number }> {
+  const ends = [...text.matchAll(/\r?\n[ \t]*\r?\n/gu)].map(match => match.index! + match[0].length)
+  ends.push(text.length)
+  let start = 0
+  const segments: Array<{ segment_id: string; start: number; end: number }> = []
+  for (const end of ends) {
+    if (end > start && text.slice(start, end).trim()) segments.push({ segment_id: `s${segments.length + 1}`, start, end })
+    start = end
+  }
+  return segments
+}
+
+const EXCERPT_WHOLE = 160
+const EXCERPT_EDGE = 70
+const LISTED_RANGES = 3
+const LISTED_SOURCES = 4
+
+/**
+ * Where a range of one source lies, in the terms a repair can use: its UTF-16
+ * offsets, the segments it touches, and its first and last words.  The excerpt
+ * is bounded; a long passage is never pasted whole.
+ */
+function rangeView(text: string, range: { start: number; end: number }): string {
+  const touched = segmentBounds(text).filter(segment => segment.start < range.end && range.start < segment.end).map(segment => segment.segment_id)
+  const segments = touched.length === 0 ? "" : touched.length === 1 ? ` (segment ${touched[0]})` : ` (segments ${touched[0]}-${touched.at(-1)})`
+  const flat = text.slice(range.start, range.end).replace(/\s+/gu, " ").trim()
+  const quoted = flat.length <= EXCERPT_WHOLE ? JSON.stringify(flat)
+    : `${JSON.stringify(flat.slice(0, EXCERPT_EDGE))} ... ${JSON.stringify(flat.slice(-EXCERPT_EDGE))} (${flat.length} characters)`
+  return `utf16 ${range.start}-${range.end}${segments} ${quoted}`
+}
+
+function listed<T>(values: readonly T[], limit: number, show: (value: T) => string, separator: string): string {
+  const hidden = values.length - limit
+  return values.slice(0, limit).map(show).join(separator) + (hidden > 0 ? `${separator}${hidden} more not listed` : "")
 }
 
 /** How a message writes one event id: an alias when the request showed one, else the id. */
@@ -184,11 +213,6 @@ export function residualRanges(
   return found
 }
 
-/** Every byte in the range is selected, whitespace, or the host's own wrapper. */
-function disposed(text: string, start: number, end: number, spans: readonly { start: number; end: number }[]): boolean {
-  return residualRanges(text, start, end, spans).length === 0
-}
-
 export interface SourceCoverageOptions {
   /**
    * Delegations carried from earlier turns because no batch has compiled them
@@ -253,7 +277,15 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     } else {
       if (entry.requirements.length > 0) throw new Error(`non-normative source_coverage[${index}] cannot assign an IR requirement`)
       const overlapping = spansFor(activeSources, entry.source.source_id).some(active => text.slice(Math.max(active.start, span.start), Math.min(active.end, span.end)).trim() && active.start < span.end && span.start < active.end)
-      if (overlapping) throw new Error(`source_coverage[${index}] classifies actively adopted text as ${entry.disposition}`)
+      if (overlapping) {
+        const adopted = items.flatMap(item => item.sources.filter(source => source.source_id === entry.source.source_id).flatMap(source => {
+          const active = validSpan(source, texts, display)
+          const range = { start: Math.max(active.start, span.start), end: Math.min(active.end, span.end) }
+          return range.start < range.end && text.slice(range.start, range.end).trim() ? [{ item: item.item_id, range }] : []
+        }))
+        const where = listed(adopted, LISTED_RANGES, overlap => `${rangeView(text, overlap.range)} is a current source of IR ${overlap.item}`, "; ")
+        throw new Error(`source_coverage[${index}] classifies actively adopted text as ${entry.disposition}: in ${display(entry.source.source_id)} ${where}`)
+      }
       if (entry.disposition === "superseded") {
         const basisOk = entry.basis.some(ref => {
           if (!texts.has(ref.source_id)) return false
@@ -283,10 +315,19 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     const retained = oldItems.filter(old => old.item_id === item.item_id).flatMap(old => old.sources).filter(old => !currentIds.has(old.source_id))
     if (!covered(text, span.start, span.end, spansFor([...(adoptedByItem.get(item) ?? []), ...retained], source.source_id))) throw new Error(`new normative selection ${display(source.source_id)} in ${item.item_id} has no matching source_coverage assignment`)
   }
-  for (const source of oldSources) {
-    const span = validSpan(source, texts, display), text = texts.get(source.source_id)!
-    if (!disposed(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))) throw new Error(`previously normative source ${display(source.source_id)} was dropped without an explicit superseded disposition and current change basis`)
+  // The first failing source decides the batch, as before; the message also
+  // lists the other prior selections left without a destination.
+  const dropped: Array<{ source_id: string; detail: string }> = []
+  const droppedError = () => new Error(`previously normative source ${[...new Set(dropped.map(entry => display(entry.source_id)))].join(", ")} was dropped without an explicit superseded disposition and current change basis: ${listed(dropped, LISTED_SOURCES, entry => entry.detail, " | ")}`)
+  for (const old of oldItems) for (const source of old.sources) {
+    let span: NonNullable<SourceRef["span"]>
+    try { span = validSpan(source, texts, display) } catch (error) { if (dropped.length > 0) throw droppedError(); throw error }
+    const text = texts.get(source.source_id)!
+    const residual = residualRanges(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))
+    if (residual.length === 0) continue
+    dropped.push({ source_id: source.source_id, detail: `IR ${old.item_id} selected ${display(source.source_id)} utf16 ${span.start}-${span.end}; no current source or superseded entry covers ${listed(residual, LISTED_RANGES, range => rangeView(text, range), "; ")}` })
   }
+  if (dropped.length > 0) throw droppedError()
   // This turn's own input is accounted for in full in every batch that has
   // one: each passage is adopted into a content item, or explicitly said not to
   // be a requirement.  Earlier inputs and carried delegations are not re-examined.

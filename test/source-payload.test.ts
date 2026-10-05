@@ -421,3 +421,50 @@ test("earlier inputs' unplaced passages are re-derived for review from accepted 
   const rejected = { ...disposed, status: "validation_failed" }
   assert.deepEqual(Object.keys(unplacedByInput({ management_log: [accepted, rejected], ir }, journal)), ["old"], "a rejected batch's entry does not place text")
 })
+
+// R10 rerun mgmt-20: a revision reselected an earlier input's passage piecewise and
+// left out one block; the rejection named only the 19,310-character input, so
+// the repair had to guess which text was missing.
+test("a dropped earlier selection is named by item, range, segment and a bounded excerpt", () => {
+  const fields = Array.from({ length: 60 }, (_, i) => `"field${i}": ${i}`).join(", ")
+  const block = `- Writes a JSON manifest to the output:\n{"files": [{${fields}}]}`
+  const old = event("old", `Intro line.\n\n${block}\n\n- The files array is sorted by path.`)
+  const previous = { t: task(item("r-m", [ref(old, `${block}\n\n- The files array is sorted by path.`)])) }
+  const current = { t: task(item("r-m", [ref(old, "- The files array is sorted by path.")])) }
+  const text = (old.payload as { text: string }).text
+  const start = text.indexOf(block), end = start + block.length
+  let message = ""
+  assert.throws(() => validateSourceCoverage(candidate(), [], [old], previous, current), (error: Error) => { message = error.message; return true })
+  assert.match(message, /^previously normative source old was dropped without an explicit superseded disposition and current change basis: /)
+  assert.ok(message.includes(`IR r-m selected old utf16 ${start}-`), message)
+  assert.ok(message.includes(`no current source or superseded entry covers utf16 ${start}-${end} (segment s2) "- Writes a JSON manifest to the output:`), message)
+  const flat = block.replace(/\s+/gu, " ")
+  assert.ok(message.includes(`(${flat.length} characters)`), "a long range shows its first and last words and its length")
+  assert.ok(!message.includes('"field30": 30'), "the middle of a long passage is not pasted")
+  assert.ok(message.length < 500, `message length ${message.length}`)
+})
+
+test("text still adopted by an item cannot be superseded, and the message names the overlap and the item", () => {
+  const old = event("old", "Keep the files array sorted by path.\n\nOld rule to replace.")
+  const next = event("next", "Replace the old rule.")
+  const kept = ref(old, "Keep the files array sorted by path.")
+  const previous = { t: task(item("r-m", [kept])) }
+  const current = { t: task(item("r-m", [kept])) }
+  const c = candidate()
+  c.source_coverage!.push({ source: ref(old), disposition: "superseded", requirements: [], reason: "The update replaces it.", basis: [ref(next)] })
+  assert.throws(() => validateSourceCoverage(c, [next], [old, next], previous, current),
+    (error: Error) => error.message === 'source_coverage[0] classifies actively adopted text as superseded: in old utf16 0-36 (segment s1) "Keep the files array sorted by path." is a current source of IR r-m')
+})
+
+test("a dropped selection with many uncovered ranges lists three and counts the rest", () => {
+  const parts = ["A1 dropped", "K1 kept", "A2 dropped", "K2 kept", "A3 dropped", "K3 kept", "A4 dropped", "K4 kept", "A5 dropped"]
+  const old = event("old", parts.join("\n\n"))
+  const previous = { t: task(item("r", [ref(old)])) }
+  const current = { t: task(item("r", parts.filter(part => part.endsWith("kept")).map(part => ref(old, part)))) }
+  assert.throws(() => validateSourceCoverage(candidate(), [], [old], previous, current), (error: Error) => {
+    assert.ok(error.message.includes('"A1 dropped"') && error.message.includes('"A3 dropped"'), error.message)
+    assert.ok(!error.message.includes('"A4 dropped"'))
+    assert.ok(error.message.endsWith("; 2 more not listed"), error.message)
+    return true
+  })
+})

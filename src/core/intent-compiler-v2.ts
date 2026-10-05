@@ -2501,7 +2501,10 @@ function applicationHint(message: string): string {
   // cannot close these by moving a span by a few bytes; it has to change the
   // requirement or drop the entry.
   if (/classifies actively adopted text as/u.test(message)) {
-    return " (this passage is still a source of an IR content item in this batch: revise that item's sources so it no longer adopts the text, or remove this entry)"
+    return " (two consistent ways: keep the text adopted and leave it out of this entry; or withdraw it by removing it from that item's sources and keeping a superseded entry that covers it, with the current change as basis)"
+  }
+  if (/was dropped without an explicit superseded disposition/u.test(message)) {
+    return " (two consistent ways: restore that text to the item's sources; or write a superseded source_coverage entry that covers it, with the current change as basis)"
   }
   if (/omits source text from its IR destinations/u.test(message)) {
     return " (a normative entry must select text its named IR items also select: widen the item's sources to the full passage, or narrow this entry to the part the item adopts)"
