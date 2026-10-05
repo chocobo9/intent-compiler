@@ -201,6 +201,8 @@ IR 阶段不生成 compilation、coverage、execution_decisions、assessments �
 
 重试在回传批中决定，此时承载原工作的执行轮已结束。OpenCode 插件对回传后 advance 的交付不在同一轮送达；dpipe 宿主（`intent_opencode_agent.py`）在一轮的常规执行结束后读取 snapshot，若有尚无执行的重试 dispatch，就在同一轮内再起一次 OpenCode，并以注册来源类别 `host_dispatch` 标记。插件识别该类别后不记录用户输入、不调用 advance，改取 `pendingRetryDeliveries` 的交付，其后的读回、start、操作授权、回传和回传后评估与常规交付相同。每轮最多两次这样的宿主轮，第一次的命令日志另存为 `round-<n>-turn-<t>`。
 
+用户原文只经 `opencode run` 的参数进入插件，由插件登记为 user_input；宿主不把原文写入执行层可读的位置。旧版宿主曾每轮写入 `/app/TASK_SPEC.md`，从旧镜像续跑时该文件仍在，宿主每轮开始时删除它，结果记入 `round-<n>-task-spec-cleanup.json`（removed 或 absent）。
+
 管理层分别判断派发时 Atom 的完成、当前目标的满足，以及历史成果的可用性和允许用途。Assessment 保存 target_ref、criteria、evidence、结果和方法。当前合同中 completion 写要达到的行为，evidence_required 是管理层判断时用的证据而非额外条件，重点放在本批新增或修改的行为、构建和代表性回归抽查；证据显示行为错误或产物缺失判 not_satisfied，没有反例只是未覆盖判 unknown 并写明未覆盖范围，满足判 satisfied。只有 not_satisfied 是 replace、返修或重新派发的依据，只有 unknown 时沿用当前计划、也不向用户提问；`assessment_supports` 仍把 unknown 与 not_satisfied 都视为条件未满足。执行层完成标签与业务自报结论作为证据输入，管理层核对其实际内容。
 
 已受理的外部动作可能继续完成。宿主须提供实际效果或未知状态，权限台账不能撤销已经发生的读写。当前 OpenCode 零派发时返回 `COMPILER_HOST_WAIT_UNSUPPORTED` 并携带管理结果；正常暂停和呈现澄清的宿主体验仍缺接线。

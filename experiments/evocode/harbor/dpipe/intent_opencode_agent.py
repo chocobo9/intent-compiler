@@ -1,5 +1,4 @@
 import json
-import base64
 import shlex
 import shutil
 from datetime import datetime, timezone
@@ -16,6 +15,9 @@ HOST_DISPATCH_INSTRUCTION = "Run the work the Intent Compiler has pending for th
 # The compiler runs an Atom version at most twice, so one round needs at most
 # one host turn per returned retry; the bound only stops a broken loop.
 MAX_HOST_DISPATCH_TURNS = 2
+# Earlier host versions wrote each round's instruction here, inside the
+# executor's workspace; resumed images can still carry it.
+STALE_TASK_SPEC = "/app/TASK_SPEC.md"
 
 
 class OpenCodePatched(OpenCode):
@@ -90,18 +92,10 @@ class OpenCodePatched(OpenCode):
         self._executions_before_round = self._execution_ids(
             self._read_snapshot(required=False)
         )
-        encoded = base64.b64encode(instruction.encode("utf-8")).decode("ascii")
-        staged = await environment.exec(command=": > /app/TASK_SPEC.md", cwd="/app")
-        if staged.return_code != 0:
-            raise RuntimeError(f"Could not initialize current round source: {staged.return_code}")
-        for offset in range(0, len(encoded), 6000):
-            chunk = encoded[offset:offset + 6000]
-            staged = await environment.exec(
-                command=f"printf %s {chunk} | base64 -d >> /app/TASK_SPEC.md",
-                cwd="/app",
-            )
-            if staged.return_code != 0:
-                raise RuntimeError(f"Could not stage current round source chunk: {staged.return_code}")
+        # The executor receives the delivered Atom, never the user's text. The
+        # instruction reaches management only as the opencode run argument; an
+        # image saved by an earlier host version may still hold a copy here.
+        await self._remove_stale_task_spec(round_num, environment)
         try:
             await super().run_round(instruction, round_num, environment, context)
             for turn in range(2, 2 + MAX_HOST_DISPATCH_TURNS):
@@ -160,6 +154,23 @@ class OpenCodePatched(OpenCode):
             f"Harbor dispatch gate: round {self._active_round} started "
             f"{len(new_executions)} execution(s)"
         )
+
+    async def _remove_stale_task_spec(self, round_num, environment):
+        """Delete a leftover user-text copy from the workspace and record whether one existed."""
+        result = await environment.exec(
+            command=f"if [ -e {STALE_TASK_SPEC} ]; then rm -f {STALE_TASK_SPEC} && echo removed; else echo absent; fi",
+            cwd="/app",
+        )
+        if result.return_code != 0:
+            raise RuntimeError(f"Could not remove stale {STALE_TASK_SPEC}: {result.return_code}")
+        outcome = "removed" if "removed" in (getattr(result, "stdout", "") or "") else "absent"
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        (self.logs_dir / f"round-{int(round_num)}-task-spec-cleanup.json").write_text(
+            json.dumps({"round": int(round_num), "path": STALE_TASK_SPEC, "outcome": outcome}) + "\n",
+            encoding="utf-8",
+        )
+        print(f"Round {round_num} workspace user-text copy {STALE_TASK_SPEC}: {outcome}")
+        return outcome
 
     @staticmethod
     def _pending_retry_dispatches(snapshot):
