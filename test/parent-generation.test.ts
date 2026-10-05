@@ -260,9 +260,9 @@ test("an IR selecting only the tail of this turn's input is sent back with the u
   assert.equal(result.ok, true, result.message)
   assert.deepEqual(requests.map(request => request.generation_stage), ["ir", "ir", "ci"], "one IR repair, then CI")
   const feedback = requests[1]!.validation_errors!.join("\n")
-  // s1 is the task goal's source; the head paragraphs after it have no destination.
-  assert.match(feedback, /this turn's input has text with no destination: e1\/s2 "/)
-  const first = sourceSegments([{ schema_version: 2, run_id: "parent", event_id: "e1", kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text: CANDIDATE_EXAMPLE_INPUT } }])[1]!
+  // A task goal's source places nothing: the head paragraphs from s1 on have no destination.
+  assert.match(feedback, /this turn's input has text with no destination: e1\/s1 "/)
+  const first = sourceSegments([{ schema_version: 2, run_id: "parent", event_id: "e1", kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text: CANDIDATE_EXAMPLE_INPUT } }])[0]!
   assert.ok(feedback.includes(first.text.replace(/\s+/gu, " ").trim().slice(0, 40)), "the feedback quotes the unplaced passage")
   assert.match(feedback, /Adopt each passage into an IR content item, or give it a source_coverage entry saying why it is not a requirement/)
   assert.notDeepEqual(store.current().ir, {})
@@ -400,7 +400,9 @@ test("one event keeps the same alias in later batches, including inside the IR b
           execution_decisions: [], assessments: [], coverage: [], checks: [], questions: [] }] })
     }
     if (++irCalls === 1) return JSON.stringify(parent())
-    return JSON.stringify({ schema_version: 2, basis: { event_ids: ["later-turn"], refs: [] }, source_coverage: [],
+    // The new turn cannot be compiled yet: its passage is named by segment id and the question says what is missing.
+    return JSON.stringify({ schema_version: 2, basis: { event_ids: ["later-turn"], refs: [] },
+      source_coverage: [{ source: { source_id: "e2", digest: "sha256:placeholder", segment_id: "s1" }, disposition: "unresolved", requirements: [], reason: "The exact status output is still open.", basis: [] }],
       groups: [{ local_ref: "g2", task_refs: ["t1"], depends_on: [],
         ir_changes: [{ action: "preserve", reason: "the stored IR stands", sources: [] }],
         questions: [{ text: "What exact output should the status command print?", affects: [] }] }] })

@@ -983,8 +983,8 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     ir, compiled, atom_states: atoms.snapshot(), dispatchable_atoms: dispatchableAtoms,
     withdrawals: strictRequirements ? withdrawnPassages(candidate, snapshot.ir, availableSources) : [],
     source_dispositions: strictRequirements && assembly !== undefined
-      ? sourceDispositionView(assembly.ledger, candidate.source_coverage ?? [], assembly.texts, ownEventIds, ir)
-      : { not_requirements: [], earlier_unplaced: [] },
+      ? sourceDispositionView(candidate.source_coverage ?? [], assembly.texts, ownEventIds)
+      : { not_requirements: [] },
     execution_decisions: candidate.groups.flatMap(group => group.execution_decisions),
     eligible_task_ids: eligibility?.task_ids ?? taskIds,
     eligible_execution_ids: eligibility?.execution_ids ?? execution.list().filter(e => e.status === "active").map(e => e.execution_id),

@@ -203,8 +203,8 @@ export interface SourceCoverageOptions {
   display?: EventIdDisplay
   /**
    * The user inputs this batch itself processes (its own turn, not carried
-   * delegations or execution returns).  When the batch commits IR changes,
-   * every passage of these inputs needs a destination in the source ledger.
+   * delegations or execution returns).  Every passage of these inputs needs a
+   * destination in the source ledger, whether or not the batch changes the IR.
    */
   ownEventIds?: ReadonlySet<string>
 }
@@ -287,16 +287,14 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     const span = validSpan(source, texts, display), text = texts.get(source.source_id)!
     if (!disposed(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))) throw new Error(`previously normative source ${display(source.source_id)} was dropped without an explicit superseded disposition and current change basis`)
   }
-  // This turn's own input is accounted for in full once the batch changes the
-  // IR from it: each passage is adopted, or explicitly said not to be a
-  // requirement.  Earlier inputs and carried delegations are not re-examined.
-  if (candidate.groups.some(group => group.ir_changes.some(change => change.action !== "preserve"))) {
-    const ledger = new SourceLedger({ texts, selected: new Map(), dispositions: entries })
-    const unplaced = [...(options.ownEventIds ?? [])].flatMap(eventId => ledger.unplaced(eventId, current))
-    if (unplaced.length > 0) {
-      const listed = unplaced.map(passage => `${display(passage.source_id)}/${passage.segment_id} ${JSON.stringify(shortText(passage.text))}`)
-      throw new Error(`this turn's input has text with no destination: ${listed.join("; ")}. Adopt each passage into an IR content item, or give it a source_coverage entry saying why it is not a requirement; a segment_id disposes of the whole segment without copying it`)
-    }
+  // This turn's own input is accounted for in full in every batch that has
+  // one: each passage is adopted into a content item, or explicitly said not to
+  // be a requirement.  Earlier inputs and carried delegations are not re-examined.
+  const ledger = new SourceLedger({ texts, selected: new Map(), dispositions: entries })
+  const unplaced = [...(options.ownEventIds ?? [])].flatMap(eventId => ledger.unplaced(eventId, current))
+  if (unplaced.length > 0) {
+    const listed = unplaced.map(passage => `${display(passage.source_id)}/${passage.segment_id} ${JSON.stringify(shortText(passage.text))}`)
+    throw new Error(`this turn's input has text with no destination: ${listed.join("; ")}. Adopt each passage into an IR content item, or give it a source_coverage entry saying why it is not a requirement; a segment_id disposes of the whole segment without copying it`)
   }
 }
 
@@ -472,8 +470,8 @@ const NOT_REQUIREMENT = new Set(["context", "material", "management", "unresolve
 
 /**
  * The source ledger: where every passage of every user input went, derived from
- * accepted state and never stored.  A passage is adopted by an IR selection
- * (content, goal, scope, binding or output sources, or a normative entry),
+ * accepted state and never stored.  A passage is adopted by a located content
+ * selection or a normative entry,
  * withdrawn when an item once selected it and no item does now (or a superseded
  * entry names it), explicitly not a requirement when a context, material,
  * management or unresolved entry names it, and otherwise has no destination.
@@ -491,11 +489,6 @@ export class SourceLedger {
     /** Explicit source_coverage entries of accepted batches (and the candidate being prepared). */
     dispositions: readonly SourceDisposition[]
   }) {}
-
-  /** The same ledger with the dispositions a candidate adds. */
-  with(dispositions: readonly SourceDisposition[]): SourceLedger {
-    return new SourceLedger({ ...this.input, dispositions: [...this.input.dispositions, ...dispositions] })
-  }
 
   /**
    * The withdrawn part of one item: what it once selected that no current item
@@ -517,16 +510,12 @@ export class SourceLedger {
   unplaced(eventId: string, ir: Record<string, TaskIntent>): UnplacedPassage[] {
     const text = this.input.texts.get(eventId)
     if (text === undefined) return []
-    const whole = { start: 0, end: text.length }
-    const spanOf = (ref: SourceRef) => ref.span === undefined ? whole : ref.span
-    const of = (refs: readonly SourceRef[]) => refs.filter(ref => ref.source_id === eventId).map(spanOf)
-    const tasks = Object.values(ir)
-    const adopted = of(tasks.flatMap(task => [
-      ...task.goal.sources, ...task.current_scope.sources,
-      ...task.content.flatMap(item => item.sources),
-      ...task.bindings.flatMap(binding => binding.sources ?? []),
-      ...task.outputs.flatMap(output => output.sources ?? []),
-    ]))
+    // Only a located span places text; a reference to a whole input places nothing.
+    const of = (refs: readonly SourceRef[]) => refs.filter(ref => ref.source_id === eventId && ref.span !== undefined).map(ref => ref.span!)
+    // Adoption is what reaches the delivered task: content selections (and
+    // normative entries, below).  Goal, scope, binding and output sources keep
+    // their own meaning in the IR but are not delivered, so they place nothing.
+    const adopted = of(Object.values(ir).flatMap(task => task.content.flatMap(item => item.sources)))
     const everSelected = of([...this.input.selected.values()].flat())
     const entries = of(this.input.dispositions.filter(entry => entry.disposition === "superseded" || entry.disposition === "normative" || NOT_REQUIREMENT.has(entry.disposition)).map(entry => entry.source))
     const exempt = headingLines(text)
@@ -539,28 +528,37 @@ export class SourceLedger {
   }
 }
 
-/** What a check is shown of the ledger: the batch's own explicit non-requirements, and earlier inputs' unplaced passages. */
+/** What a check is shown of the ledger: this turn's passages the candidate states are not requirements. */
 export interface SourceDispositionView {
   not_requirements: Array<{ source: SourceRef; disposition: SourceDisposition["disposition"]; reason: string; text: string }>
-  earlier_unplaced: UnplacedPassage[]
 }
 
 export function sourceDispositionView(
-  ledger: SourceLedger,
   candidateEntries: readonly SourceDisposition[],
   texts: ReadonlyMap<string, string>,
   ownEventIds: ReadonlySet<string>,
-  ir: Record<string, TaskIntent>,
 ): SourceDispositionView {
-  const withCandidate = ledger.with(candidateEntries)
   return {
     not_requirements: candidateEntries.filter(entry => NOT_REQUIREMENT.has(entry.disposition) && ownEventIds.has(entry.source.source_id)).flatMap(entry => {
       const text = texts.get(entry.source.source_id)
       if (text === undefined) return []
       return [{ source: entry.source, disposition: entry.disposition, reason: entry.reason, text: entry.source.span === undefined ? text : text.slice(entry.source.span.start, entry.source.span.end) }]
     }),
-    earlier_unplaced: [...texts.keys()].filter(eventId => !ownEventIds.has(eventId)).flatMap(eventId => withCandidate.unplaced(eventId, ir)),
   }
+}
+
+/**
+ * Earlier inputs' passages with no destination, for review only: re-derived on
+ * demand from a store's accepted records, IR and event journal (for example a
+ * frozen snapshot.json and events.jsonl).  No batch and no check reads it.
+ */
+export function unplacedByInput(
+  snapshot: { management_log: readonly { status: string; candidate?: Candidate }[]; ir: Record<string, TaskIntent> },
+  journal: readonly { event: CompilerEvent }[],
+): Record<string, UnplacedPassage[]> {
+  const texts = new Map(journal.flatMap(row => { const text = userText(row.event); return text === undefined ? [] : [[row.event.event_id, text] as const] }))
+  const ledger = new SourceLedger({ texts, selected: selectedSourceHistory(snapshot.management_log, snapshot.ir), dispositions: recordedDispositions(snapshot.management_log) })
+  return Object.fromEntries([...texts.keys()].map(eventId => [eventId, ledger.unplaced(eventId, snapshot.ir)]).filter(([, passages]) => passages.length > 0))
 }
 
 /** Markdown heading lines and code fence lines are layout, not requirement text. */

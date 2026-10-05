@@ -782,10 +782,11 @@ test("a second batch's actual CI and check requests show each body once and carr
   // Every field the check contract names exists in this request.
   for (const field of ["ir", "compiled", "candidate", "events", "source_events", "event_source_refs"] as const) assert.ok(field in check, field)
   for (const field of ["ir", "compiled", "atom_states", "dispatchable_atoms", "withdrawals", "source_dispositions", "eligible_task_ids", "eligible_execution_ids"] as const) assert.ok(field in prepared, `prepared.${field}`)
-  assert.deepEqual(prepared.source_dispositions, { not_requirements: [], earlier_unplaced: [] }, "every passage of both inputs is adopted")
+  assert.deepEqual(prepared.source_dispositions, { not_requirements: [] }, "this turn states nothing is not a requirement; earlier inputs are not shown to the check")
   assert.ok(Array.isArray(check.candidate.groups[0]!.execution_decisions))
   const contract = `${check.contract.check_contract}\n${check.contract.rules.join("\n")}`
-  for (const named of ["prepared.ir", "prepared.compiled", "prepared.atom_states", "prepared.dispatchable_atoms", "prepared.eligible_task_ids", "prepared.eligible_execution_ids", "prepared.withdrawals", "prepared.source_dispositions.not_requirements", "prepared.source_dispositions.earlier_unplaced", "historical_atoms", "candidate.groups[].execution_decisions", "event_source_refs"]) {
+  assert.equal(contract.includes("earlier_unplaced"), false, "earlier inputs' unplaced passages are not the check's to judge")
+  for (const named of ["prepared.ir", "prepared.compiled", "prepared.atom_states", "prepared.dispatchable_atoms", "prepared.eligible_task_ids", "prepared.eligible_execution_ids", "prepared.withdrawals", "prepared.source_dispositions.not_requirements", "historical_atoms", "candidate.groups[].execution_decisions", "event_source_refs"]) {
     assert.ok(contract.includes(named), `the contract names ${named}`)
   }
 })

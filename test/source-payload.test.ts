@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { digestText, type Candidate, type CompilerEvent, type ContentItem, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
-import { locateQuote, materializeSourceContent, recordedDispositions, selectedSourceHistory, SourceLedger, sourceSegments, validateSourceCoverage, withdrawnPassages } from "../src/core/source-payload.js"
+import { locateQuote, materializeSourceContent, recordedDispositions, selectedSourceHistory, SourceLedger, sourceSegments, unplacedByInput, validateSourceCoverage, withdrawnPassages } from "../src/core/source-payload.js"
 import { resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 
 const event = (id: string, text: string): CompilerEvent => ({ schema_version: 2, run_id: "run", event_id: id, kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text } })
@@ -352,14 +352,17 @@ test("blank lines, Markdown headings, fence lines and bare list markers need no 
   assert.doesNotThrow(() => validateSourceCoverage(changing(candidate()), [e], [e], {}, { t: ir }, { ownEventIds: new Set(["turn"]) }))
 })
 
-test("execution returns, unchanged batches and earlier inputs are not held to the ledger", () => {
+test("execution returns and earlier inputs are not held to the ledger; an own input is, even without IR changes", () => {
   const old = event("old", "An earlier sentence nobody adopted.\n\nAn adopted rule.")
   const now = event("now", "A new rule.")
   const ir = task(adopted("r1", [whole(old, "An adopted rule.")]), adopted("r2", [whole(now, "A new rule.")]))
   // The earlier input keeps its unplaced sentence; only this turn's input is checked.
   assert.doesNotThrow(() => validateSourceCoverage(changing(candidate()), [now], [old, now], {}, { t: ir }, { ownEventIds: new Set(["now"]) }))
-  // A batch that changes no IR is not checked, even for its own input.
-  assert.doesNotThrow(() => validateSourceCoverage(candidate(), [old], [old, now], {}, { t: ir }, { ownEventIds: new Set(["old"]) }))
+  // A batch that changes no IR is still checked for its own input.
+  assert.throws(() => validateSourceCoverage(candidate(), [old], [old, now], {}, { t: ir }, { ownEventIds: new Set(["old"]) }),
+    /old\/s1 "An earlier sentence nobody adopted\."/)
+  // A batch with no own input (an execution return or an assessment) checks nothing.
+  assert.doesNotThrow(() => validateSourceCoverage(candidate(), [], [old, now], {}, { t: ir }, { ownEventIds: new Set() }))
   // An execution return has no user text, so it never has a ledger entry.
   const ret: CompilerEvent = { schema_version: 2, run_id: "run", event_id: "ret", kind: "execution_return", source: { channel: "executor", producer_id: "host" }, payload: { text: "done" } } as never
   const ledger = new SourceLedger({ texts: new Map([["old", (old.payload as { text: string }).text]]), selected: new Map(), dispositions: [] })
@@ -388,4 +391,33 @@ test("the ledger depends on accepted state, not on which events a batch carries"
   assert.deepEqual(derive([...texts]), [])
   assert.deepEqual(derive([...texts].reverse()), derive([...texts]))
   assert.equal(recordedDispositions(log).length, 1, "a failed batch's entries do not count")
+})
+
+test("only content selections place text: a goal citation and a whole-input reference leave it unplaced", () => {
+  const e = event("turn", "Build the report tool.\n\nThe report must be sorted by date.")
+  const own = { ownEventIds: new Set(["turn"]) }
+  const ir = task(adopted("r", [whole(e, "Build the report tool.")]))
+  // The rule is cited by the task goal only: it is not delivered, so it is reported.
+  ir.goal.sources = [whole(e, "The report must be sorted by date.")]
+  assert.throws(() => validateSourceCoverage(changing(candidate()), [e], [e], {}, { t: ir }, own), /turn\/s2 "The report must be sorted by date\."/)
+  // A reference to the whole input (no span) in scope or goal places nothing either.
+  const spanless = structuredClone(ir)
+  spanless.goal.sources = [{ source_id: "turn", digest: digestText((e.payload as { text: string }).text) }]
+  spanless.current_scope.sources = [{ source_id: "turn", digest: digestText((e.payload as { text: string }).text) }]
+  assert.throws(() => validateSourceCoverage(changing(candidate()), [e], [e], {}, { t: spanless }, own), /turn\/s2 "The report must be sorted by date\."/)
+  // Adopting it into content places it.
+  const placed = task(adopted("r", [whole(e, "Build the report tool."), whole(e, "The report must be sorted by date.")]))
+  assert.doesNotThrow(() => validateSourceCoverage(changing(candidate()), [e], [e], {}, { t: placed }, own))
+})
+
+test("earlier inputs' unplaced passages are re-derived for review from accepted records", () => {
+  const old = event("old", "Thanks.\n\nA rule.")
+  const journal = [{ event: old }, { event: { schema_version: 2, run_id: "run", event_id: "ret", kind: "execution_return", source: { channel: "executor", producer_id: "host" }, payload: { text: "done" } } as never }]
+  const ir = { t: task(adopted("r", [whole(old, "A rule.")])) }
+  const accepted = { status: "accepted", candidate: { ...candidate(), source_coverage: [] } }
+  assert.deepEqual(unplacedByInput({ management_log: [accepted], ir }, journal), { old: [{ source_id: "old", segment_id: "s1", start: 0, end: 7, text: "Thanks." }] })
+  const disposed = { status: "accepted", candidate: { ...candidate(), source_coverage: [{ source: whole(old, "Thanks."), disposition: "context" as const, requirements: [], reason: "An opening line.", basis: [] }] } }
+  assert.deepEqual(unplacedByInput({ management_log: [accepted, disposed], ir }, journal), {})
+  const rejected = { ...disposed, status: "validation_failed" }
+  assert.deepEqual(Object.keys(unplacedByInput({ management_log: [accepted, rejected], ir }, journal)), ["old"], "a rejected batch's entry does not place text")
 })
