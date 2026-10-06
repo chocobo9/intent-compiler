@@ -4,7 +4,10 @@ from datetime import datetime, timezone
 parser=argparse.ArgumentParser()
 parser.add_argument("--run-id", required=True, help="Unique job name and data directory for a new run")
 parser.add_argument("--model", choices=["deepseek/deepseek-flash", "openai/gpt-5.6-sol", "openai/gpt-6-luna-fast"], default="deepseek/deepseek-flash")
+parser.add_argument("--rounds", type=int, default=15, help="Run rounds 1..N of the 15-round task (default 15)")
 args=parser.parse_args()
+if not 1 <= args.rounds <= 15:
+    raise ValueError("--rounds must be between 1 and 15")
 run_id=args.run_id
 if not run_id.startswith(("intent-sol-dpipe-", "intent-luna-dpipe-", "intent-deepseek-dpipe-")) or not all(c.isalnum() or c in "-_" for c in run_id):
     raise ValueError("Invalid unique dpipe run-id")
@@ -79,7 +82,7 @@ for command, name in ((["rev-parse", "HEAD"], "compiler-head.txt"), (["status", 
 (provenance/"management-policy.json").write_text(json.dumps({
     "prompt_timeout_ms": 300000, "cancellation_timeout_ms": 10000,
     "max_deadline_failures_per_batch": 2, "max_management_requests_per_batch": 8,
-    "max_total_management_requests": 180, "rounds": 15,
+    "max_total_management_requests": 180, "rounds": args.rounds,
     "budget_basis": "15 rounds with user and return batches; three stages, one legitimate IR<->CI round trip and one mechanical repair",
 }, indent=2), encoding="utf-8")
 shutil.copy2(src/"environment"/"Dockerfile",task/"environment"/"Dockerfile")
@@ -173,12 +176,12 @@ shutil.copy2(Path(__file__).with_name("install-opencode-patched.sh.j2"), host/"i
 config=json.loads(Path(__file__).with_name("intent.example.json").read_text(encoding="utf-8"))
 config["job_name"]=run_id
 config["jobs_dir"]=str(results)
-config["verifier"]["multiround_max_round"]=15
+config["verifier"]["multiround_max_round"]=args.rounds
 config["agents"][0]["import_path"]="intent_opencode_agent:OpenCodePatched"
 config["agents"][0]["model_name"]=args.model
 config["agents"][0]["kwargs"]={"dispatch_snapshot_path":str(data/"compiler-store"/"v2-runs"/run_id/"snapshot.json"),"variant":executor_variant,"experiment_run_id":run_id}
 config["tasks"][0]["path"]=str(task)
 (run/"intent.json").write_text(json.dumps(config,indent=2)+"\n",encoding="utf-8")
 print(run)
-print("Prepared 15 original instruction/test/solution rounds.")
+print(f"Prepared 15 original instruction/test/solution rounds; this run stops after round {args.rounds}.")
 

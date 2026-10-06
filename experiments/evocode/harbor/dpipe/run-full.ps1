@@ -1,6 +1,7 @@
-# One fresh, frozen 15-round run. Never resumes or overwrites an earlier run.
+# One fresh, frozen run of rounds 1..Rounds (default all 15). Never resumes or overwrites an earlier run.
 param(
-    [string]$Model = 'openai/gpt-5.6-sol'
+    [string]$Model = 'openai/gpt-5.6-sol',
+    [ValidateRange(1, 15)][int]$Rounds = 15
 )
 $ErrorActionPreference = 'Stop'
 $project = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..\..'))
@@ -32,8 +33,8 @@ try {
         if (Test-Path -LiteralPath $path) { throw "Refusing existing directory: $path" }
     }
 
-    Write-Host "Preparing fresh run: $runId (model $Model)"
-    & python (Join-Path $PSScriptRoot 'prepare.py') --run-id $runId --model $Model
+    Write-Host "Preparing fresh run: $runId (model $Model, rounds 1..$Rounds)"
+    & python (Join-Path $PSScriptRoot 'prepare.py') --run-id $runId --model $Model --rounds $Rounds
     if ($LASTEXITCODE -ne 0) { throw 'Preparation failed. Evidence retained; Harbor was not started.' }
 
     $configPath = Join-Path $runDir 'intent.json'
@@ -41,9 +42,9 @@ try {
     if ($config.job_name -ne $runId -or $config.n_attempts -ne 1 -or
         $config.orchestrator.retry.max_retries -ne 0 -or
         $config.verifier.multiround_start_round -ne 1 -or
-        $config.verifier.multiround_max_round -ne 15 -or
+        $config.verifier.multiround_max_round -ne $Rounds -or
         $config.verifier.multiround_resume_source) {
-        throw 'Configuration is not a fresh single-attempt 1..15 run.'
+        throw "Configuration is not a fresh single-attempt 1..$Rounds run."
     }
     $hashes = Get-Content -LiteralPath "$runDir\provenance\official-task-hashes.json" -Raw | ConvertFrom-Json
     foreach ($entry in $hashes) {
@@ -79,7 +80,7 @@ try {
     $missingRounds = @()
     if ($trials.Count -eq 1) {
         $trialDir = $trials[0].FullName
-        $scores = @(1..15 | ForEach-Object {
+        $scores = @(1..$Rounds | ForEach-Object {
             $reward = Join-Path $trialDir "verifier\round_${_}_reward.txt"
             [pscustomobject]@{ Round = $_; Reward = $(if (Test-Path -LiteralPath $reward) {
                 (Get-Content -LiteralPath $reward -Raw).Trim()
