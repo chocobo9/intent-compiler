@@ -208,9 +208,12 @@ test("an unsupported condition kind denies rather than silently widening permiss
   }
   const notSatisfied: AssessmentDraft = { ...satisfied, result: "not_satisfied", explanation: "withdrawn after review" }
 
+  const batch = (assessment: AssessmentDraft, sequence: number) => ({ ...assessment, sequence })
   assert.equal(evaluateCondition(condition, { assessments: [satisfied] }), "satisfied")
-  assert.equal(evaluateCondition(condition, { assessments: [satisfied, notSatisfied] }), "unsatisfied", "the newest judgement wins")
-  assert.equal(evaluateCondition(condition, { assessments: [notSatisfied, satisfied] }), "satisfied")
+  assert.equal(evaluateCondition(condition, { assessments: [batch(satisfied, 1), batch(notSatisfied, 2)] }), "unsatisfied", "the newest batch's judgement wins")
+  assert.equal(evaluateCondition(condition, { assessments: [batch(notSatisfied, 1), batch(satisfied, 2)] }), "satisfied")
+  assert.equal(evaluateCondition(condition, { assessments: [batch(notSatisfied, 2), batch(satisfied, 2)] }), "unsatisfied",
+    "within one batch a not_satisfied is not hidden by a later satisfied")
   assert.equal(evaluateCondition(condition, {}), "unsupported", "without an assessment record source the condition cannot be evaluated")
   assert.equal(
     evaluateCondition({ kind: "capability_available", refs: [], expectation: "bash" }, { capabilities: { operations: [] } }),

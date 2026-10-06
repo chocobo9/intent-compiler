@@ -847,3 +847,41 @@ test("a dependency admits the successor when the predecessor's latest assessment
   assert.match(admit([judged("unknown")], state.execution_outcomes, guarded) ?? "", /preconditions are not satisfied/)
   assert.equal(admit([judged("satisfied")], state.execution_outcomes, guarded), undefined)
 })
+
+// Online R7-R15 return batches wrote 2-5 assessments of one Atom per batch, one
+// per completion entry, often ending with a satisfied build check; the last
+// one alone used to decide.
+test("a predecessor is judged by every assessment of its latest assessing batch", async () => {
+  const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "dependency-batch-")), runId: "chain" })
+  const proposal = candidate()
+  const group = proposal.groups[0]!
+  if (group.compilation.decision !== "replace") throw new Error("fixture")
+  const draft = group.compilation.drafts[0]!
+  draft.atoms.push({ ...structuredClone(draft.atoms[0]!), atom_id: "a2", task: "Deliver the report using the CSV implementation" })
+  draft.relations = [{ predecessor: { local_ref: "a1" }, successor: { local_ref: "a2" }, requires: "CSV implementation", conditions: [], basis: [source] }]
+  group.coverage[2]!.refs = [{ local_ref: "a2" }]
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, proposal))) })
+  await compiler.acceptEvent({ schema_version: 2, run_id: "chain", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
+  const first = await compiler.advance({ runId: "chain" })
+  const start = await compiler.authorize({ kind: "start", run_id: "chain", dispatch_id: first.deliveries![0]!.dispatch_id, host_identity: "host" })
+  const prior = atomRef(store.current().compiled.t1!.atoms[0]!)
+  await compiler.acceptEvent({ schema_version: 2, run_id: "chain", event_id: "return", kind: "execution_return", source: { producer_id: "host", channel: "executor" }, execution_id: start.execution_id!, payload: {
+    state_claim: "completed", outcome: { schema_version: 2, execution_id: start.execution_id!, atom_ref: prior, suggested_status: "completed", product_refs: [], file_changes: [], evidence_refs: [] } } })
+  const state = store.current()
+  const successor = state.compiled.t1!.atoms.find(atom => atom.atom_id === "a2")!
+  const guarded = { ...successor, preconditions: [{ kind: "assessment_supports" as const, refs: [prior] }] }
+  const at = (sequence: number | undefined, result: "satisfied" | "unknown" | "not_satisfied") =>
+    ({ target_ref: prior, criteria_refs: [], evidence_refs: [], result, explanation: `${result} @${sequence}`, method: "model" as const, ...(sequence === undefined ? {} : { sequence }) })
+  const admit = (assessments: ReturnType<typeof at>[], atom = successor) =>
+    atomAdmission("t1", atom, { compiled: state.compiled, ir: state.ir, atoms: new AtomStateLedger(state.atom_states), assessments, execution_outcomes: state.execution_outcomes })
+  assert.match(admit([at(3, "not_satisfied"), at(3, "satisfied")]) ?? "", /was assessed not_satisfied/, "a later satisfied in the same batch does not hide a not_satisfied")
+  assert.equal(admit([at(3, "unknown"), at(3, "satisfied")]), undefined, "unknown and satisfied in one batch admit")
+  assert.match(admit([at(3, "unknown"), at(3, "satisfied")], guarded) ?? "", /preconditions are not satisfied/, "but do not satisfy an explicit assessment_supports")
+  assert.equal(admit([at(3, "satisfied"), at(3, "satisfied")]), undefined)
+  assert.equal(admit([at(3, "satisfied"), at(3, "satisfied")], guarded), undefined, "an all-satisfied batch satisfies assessment_supports")
+  assert.equal(admit([at(2, "not_satisfied"), at(3, "satisfied"), at(3, "satisfied")]), undefined, "the latest batch revises an earlier not_satisfied")
+  assert.match(admit([at(2, "satisfied"), at(3, "not_satisfied")]) ?? "", /was assessed not_satisfied/)
+  // The batch being prepared has not committed its drafts: they are the newest batch.
+  assert.equal(admit([at(2, "not_satisfied"), at(undefined, "unknown"), at(undefined, "satisfied")]), undefined)
+  assert.match(admit([at(2, "satisfied"), at(undefined, "satisfied"), at(undefined, "not_satisfied")]) ?? "", /was assessed not_satisfied/)
+})

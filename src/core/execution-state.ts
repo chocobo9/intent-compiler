@@ -89,25 +89,31 @@ export function evaluateCondition(condition: Condition, context: AuthorizationCo
     if (target === undefined) return "unsupported"
     const assessments = context.assessments
     if (assessments === undefined) return "unsupported"
-    const supporting = latestAssessment(target, assessments)
-    if (supporting === undefined) return "unsatisfied"
-    return supporting.result === "satisfied" ? "satisfied" : "unsatisfied"
+    return assessmentVerdict(target, assessments) === "satisfied" ? "satisfied" : "unsatisfied"
   }
   return "unsupported"
 }
 
 /**
- * The newest assessment of this exact target version: management may revise a
- * judgement, and a later not_satisfied must not be shadowed by an older pass.
+ * Management's current judgement of this exact target version: all of its
+ * assessments in the most recent batch that assessed it.  A batch often writes
+ * several (one per completion entry); any not_satisfied among them decides,
+ * then any unknown, else satisfied.  A later batch revises an earlier one.
+ * Recorded assessments carry their batch sequence; drafts the batch being
+ * prepared has not committed carry none and are the newest batch.
  */
-export function latestAssessment<A extends { target_ref: { id: string; revision: number; digest: string } }>(target: Ref, assessments: readonly A[]): A | undefined {
-  for (let index = assessments.length - 1; index >= 0; index -= 1) {
-    const assessment = assessments[index] as A
-    if (assessment.target_ref.id === target.id && assessment.target_ref.revision === target.revision && assessment.target_ref.digest === target.digest) {
-      return assessment
-    }
-  }
-  return undefined
+export function assessmentVerdict(
+  target: Ref,
+  assessments: ReadonlyArray<{ target_ref: { id: string; revision: number; digest: string }; result: string; sequence?: number }>,
+): "satisfied" | "unknown" | "not_satisfied" | undefined {
+  const judged = assessments.filter(assessment => assessment.target_ref.id === target.id
+    && assessment.target_ref.revision === target.revision && assessment.target_ref.digest === target.digest)
+  const latest = judged.at(-1)
+  if (latest === undefined) return undefined
+  const batch = judged.filter(assessment => assessment.sequence === latest.sequence)
+  if (batch.some(assessment => assessment.result === "not_satisfied")) return "not_satisfied"
+  if (batch.some(assessment => assessment.result === "unknown")) return "unknown"
+  return "satisfied"
 }
 
 /**
