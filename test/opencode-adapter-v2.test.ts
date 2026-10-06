@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { createOpenCodeAdapter, HOST_DISPATCH_SOURCE_CATEGORY, type OpenCodeObserver } from "../src/adapters/opencode.js"
+import { createOpenCodeAdapter, HOST_DISPATCH_SOURCE_CATEGORY, turnClaimsCompletion, type OpenCodeObserver } from "../src/adapters/opencode.js"
 import type { IntentCompilerV2, IntentCompilerV2Options } from "../src/core/intent-compiler-v2.js"
 import type {
   AdvanceResult,
@@ -185,7 +185,8 @@ for (const boundary of ["dispose", "cli-drain"] as const) test(`${boundary} wait
     arm: "compiler", compiler, observer: observer(),
     client: { session: { messages: async () => ({ data: [
       { info: { id: "message-1", role: "user" }, parts: output.parts },
-      { info: { id: "answer-1", role: "assistant", finish: "stop" },
+      // The turn is cut short: the denied edit ends the session mid tool call.
+      { info: { id: "answer-1", role: "assistant", finish: "tool-calls" },
         parts: [
           { type: "text", text: "Blocked: file editing was denied; no implementation exists." },
           { type: "tool", tool: "bash", state: { status: "completed", input: { command: "od -An -tx1 -v /app/smoke.txt" }, output: " 6f 6b 0a\n" } },
@@ -394,4 +395,23 @@ test("v2 compiler arm reports the clarify outcome with its questions", async () 
       return typed.code === "COMPILER_HOST_WAIT_UNSUPPORTED" && String(typed.message).includes("which output does the guide belong to?")
     },
   )
+})
+
+// Run e75d62af R1: execution-2 did all the work and ended with a final report,
+// but one apply_patch format error at step 15 recorded the return as stopped.
+test("a turn that ended normally after tool work claims completion, even past a recovered tool error", () => {
+  const work = { tool_results: [{ tool: "bash" }] }
+  const recovered = [
+    { finish: "tool-calls", text: "", tool_results: [{ tool: "read" }], tool_errors: [{ tool: "apply_patch", error: "invalid patch format" }] },
+    { finish: "tool-calls", text: "", ...work },
+    { finish: "stop", text: "Implemented every command; build and checks pass.", tool_results: [] },
+  ]
+  assert.equal(turnClaimsCompletion(recovered, true), true, "a recovered tool error does not undo a normal end")
+  // R9 execution-356 and R10 execution-395: a denied call ended the session mid tool call.
+  assert.equal(turnClaimsCompletion([{ finish: "tool-calls", text: "", ...work }], true), false, "the last step was cut short")
+  assert.equal(turnClaimsCompletion([{ finish: "stop", text: "   ", ...work }], true), false, "no final text")
+  assert.equal(turnClaimsCompletion([{ finish: "stop", text: "Done.", tool_results: [] }], true), false, "no tool work")
+  assert.equal(turnClaimsCompletion([{ finish: "stop", text: "Done.", ...work }], false), false, "the turn could not be reconciled")
+  // The claim is the executor's; a final report of a blocker is judged by management against the evidence.
+  assert.equal(turnClaimsCompletion([{ finish: "stop", text: "Blocked: the build tool is missing.", ...work }], true), true)
 })

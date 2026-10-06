@@ -193,7 +193,7 @@ IR 阶段不生成 compilation、coverage、execution_decisions、assessments �
 
 旧夹具原文“其余 Condition 类型（artifact_exists、user_confirms、object_version_matches）仍按 unsupported 处理并拒绝”对应这些未实现的叶条件。实际组合使用三值逻辑：all 中有 unsatisfied 则不满足，否则有 unsupported 则未知；any 中有 satisfied 则满足，否则有 unsupported 则未知。最终准入只接受 satisfied，所以 any 的其他分支已经满足时，可以放行。
 
-**返回与验收。** `execution_return` 必须对应真实 execution 和原 Atom 的精确版本，state_claim 与 outcome 建议状态一致。保存前由宿主核对声明文件路径的摘要；不匹配或无法核验时拒绝该回传，保留原执行状态。异步摘要核验后再次读取执行身份。
+**返回与验收。** `execution_return` 必须对应真实 execution 和原 Atom 的精确版本，state_claim 与 outcome 建议状态一致。保存前由宿主核对声明文件路径的摘要；不匹配或无法核验时拒绝该回传，保留原执行状态。异步摘要核验后再次读取执行身份。OpenCode 宿主按执行轮次的结束方式给出 state_claim：最后一条消息 finish=stop、有最终文本、且轮次中做过工具工作，即为 completed；执行中出现过、之后又继续工作的工具错误不否定它。轮次没有正常结束（最后一条消息不是 stop、没有最终文本，例如被拒的调用中断了会话）则为 stopped，只有这种回传会触发代码的再执行。完成声明只是执行层的主张，是否验收仍由管理评估判断。
 
 合法回传关闭本次执行资格并记录结果，blocked 交回也关闭资格；progress 不关闭。已关闭执行的身份匹配回传记为 historical，不重开执行或覆盖当前 Atom 状态。独立 operation_result 可以迟到。
 

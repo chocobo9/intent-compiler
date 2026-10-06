@@ -960,16 +960,7 @@ async function onEvent(
             })),
         }))
       const reportText = report.map(message => message.text).filter(Boolean).join("\n\n")
-      // The executor proposes the Atom's status from what it actually observed:
-      // a turn that ended normally, produced tool work, and hit no tool error
-      // claims completion.  Management still decides whether to accept it, and a
-      // blocked or empty turn claims nothing.
-      const toolErrors = report.flatMap(message => message.tool_errors ?? [])
-      const toolWork = report.flatMap(message => message.tool_results ?? [])
-      const claimsCompletion = succeeded
-        && report.at(-1)?.finish === "stop"
-        && toolErrors.length === 0
-        && toolWork.length > 0
+      const claimsCompletion = turnClaimsCompletion(report, succeeded)
       for (let index = 0; index < delivery.v2ExecutionIds.length; index += 1) {
         const executionId = delivery.v2ExecutionIds[index] as string
         const dispatched = delivery.v2Deliveries?.[index]
@@ -1047,6 +1038,24 @@ async function onEvent(
     if (!result.ok) throw new OpenCodeAdapterError("DELIVERY_RECONCILIATION_REJECTED", result.message ?? "Compiler rejected delivery reconciliation")
     delivery.reconciled = true
   }
+}
+
+/**
+ * Whether an executor turn claims completion: it ended normally (the last
+ * message finished with stop and has a final text) after doing tool work.  A
+ * tool error the executor recovered from and worked past does not undo that; a
+ * turn cut short (a denied call ending the session, no final text) claims
+ * nothing.  Management still judges the claim against the evidence.
+ */
+export function turnClaimsCompletion(
+  report: ReadonlyArray<{ finish?: unknown; text?: string; tool_results?: readonly unknown[] }>,
+  succeeded: boolean,
+): boolean {
+  const last = report.at(-1)
+  return succeeded
+    && last?.finish === "stop"
+    && (last.text ?? "").trim().length > 0
+    && report.some(message => (message.tool_results ?? []).length > 0)
 }
 
 async function rejectCompilerDelivery(
