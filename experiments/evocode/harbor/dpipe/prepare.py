@@ -66,7 +66,10 @@ snapshot=json.loads(snapshot_path.read_text(encoding="utf-8"))
 # One batch has to afford a legitimate IR<->CI round trip, not just three
 # stages plus one repair: IR + CI + check is already 3, a CI rejection that
 # returns to the IR stage costs 2 more, and a mechanical defect costs another.
-snapshot["budget"].update(max_management_requests=8, max_total_management_requests=180)
+# Fresh R1 batches in runs 856312ae and cb04de9f needed 7 and more than 8
+# calls (transport timeout, source selector repairs, check rework), so a
+# batch gets 12.
+snapshot["budget"].update(max_management_requests=12, max_total_management_requests=180)
 snapshot_path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
 provenance=run/"provenance"
 provenance.mkdir()
@@ -81,9 +84,9 @@ for command, name in ((["rev-parse", "HEAD"], "compiler-head.txt"), (["status", 
 }, indent=2), encoding="utf-8")
 (provenance/"management-policy.json").write_text(json.dumps({
     "prompt_timeout_ms": 300000, "cancellation_timeout_ms": 10000,
-    "max_deadline_failures_per_batch": 2, "max_management_requests_per_batch": 8,
+    "max_deadline_failures_per_batch": 2, "max_management_requests_per_batch": 12,
     "max_total_management_requests": 180, "rounds": args.rounds,
-    "budget_basis": "15 rounds with user and return batches; three stages, one legitimate IR<->CI round trip and one mechanical repair",
+    "budget_basis": "15 rounds with user and return batches; per batch three stages, IR<->CI round trips, mechanical repairs, check rework and a transport timeout (12; fresh R1 batches needed 7 and more than 8)",
 }, indent=2), encoding="utf-8")
 shutil.copy2(src/"environment"/"Dockerfile",task/"environment"/"Dockerfile")
 shutil.copy2(src/"steps"/"round-1"/"instruction.md",task/"instruction.md")

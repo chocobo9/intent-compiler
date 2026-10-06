@@ -2455,7 +2455,7 @@ export function resolveSourceRefs(
   const stats: SourceRefStats = { total: 0, resolved: 0, normalized: 0, unresolved: 0, unresolvedRefs: [] }
   const segments = new Map(sourceSegments(events).map(segment => [`${segment.source_id}\0${segment.segment_id}`, segment]))
   /** Keep the audit's list bounded; the counters above stay exact. */
-  const noteUnresolved = (value: Record<string, unknown>, span: Record<string, unknown> | undefined, reason: SourceRefDefect, path: string): void => {
+  const noteUnresolved = (value: Record<string, unknown>, span: Record<string, unknown> | undefined, reason: SourceRefDefect, path: string, detail?: string): void => {
     if (stats.unresolvedRefs.length >= MAX_UNRESOLVED_REFS) return
     const unit = typeof span?.unit === "string" ? span.unit : "utf16"
     const start = typeof span?.start === "number" ? span.start : 0
@@ -2468,6 +2468,7 @@ export function resolveSourceRefs(
       source_id: String(value.source_id),
       path,
       ...(reason === "quote_unresolved" && quote !== undefined ? { diagnostic: quoteDiagnostic(quote, textBySource.get(String(value.source_id))!) } : {}),
+      ...(detail === undefined ? {} : { diagnostic: detail }),
       ...(typeof value.segment_id === "string" ? { segment_id: value.segment_id } : {}),
       ...(quote === undefined ? {} : { quote }),
       ...(span === undefined ? {} : { span: { unit, start, end } }),
@@ -2501,12 +2502,25 @@ export function resolveSourceRefs(
         if (selected.segment_id === null) delete selected.segment_id
         if (typeof selected.segment_id === "string") {
           const segment = segments.get(`${selected.source_id}\0${selected.segment_id}`)
-          if (!segment || quote !== undefined) {
+          if (!segment) {
             stats.unresolved += 1
-            noteUnresolved(original, undefined, segment ? "selector_conflict" : "segment_unknown", path)
+            noteUnresolved(original, undefined, "segment_unknown", path)
             return
           }
-          selected.span = { ...segment.span }
+          if (quote === undefined) {
+            selected.span = { ...segment.span }
+          } else {
+            // A quote inside the segment it names is the more precise selection.
+            const located = locateQuote(quote, segment.text)
+            if (located.match !== "exact" && located.match !== "simplified") {
+              const repeated = located.match === "ambiguous" || ("simplified" in located && located.simplified === "ambiguous")
+              stats.unresolved += 1
+              noteUnresolved(original, undefined, "selector_conflict", path,
+                repeated ? `the quote occurs more than once in segment ${selected.segment_id}` : `the quote is not in segment ${selected.segment_id}`)
+              return
+            }
+            selected.span = { unit: "utf16", start: segment.span.start + located.start, end: segment.span.start + located.end }
+          }
           delete selected.segment_id
         } else if (quote !== undefined) {
           const located = locateQuote(quote, text)

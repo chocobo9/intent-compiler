@@ -43,15 +43,41 @@ test("nullable selector placeholders do not make a segment selection unresolvabl
   assert.deepEqual(Object.keys(change.sources[0]!).sort(), ["digest", "source_id", "span"])
 })
 
-test("a real quote beside a segment id is still one selector too many", () => {
-  const e = event("e", "First behavior.\n\nSecond behavior.")
+// Full runs 856312ae and cb04de9f: R1 IR answers named a segment and a quote
+// inside it, and were refused as "selector_conflict" until the batch ran out.
+function segmentAndQuote(text: string, segment_id: string, quote: string) {
+  const e = event("e", text)
   const c = candidate()
   c.groups[0]!.ir_changes = [{ action: "create", target: "content", local_ref: "r",
     value: { text: "Short label", about: [], scope: [{ target_id: "t" }], support: [] },
-    sources: [{ source_id: "e", digest: "sha256:placeholder", segment_id: "s1", quote: "First behavior.", span: null }] } as never]
+    sources: [{ source_id: "e", digest: "sha256:placeholder", segment_id, quote, span: null }] } as never]
   const stats = resolveSourceRefs(c, [e])
+  const change = c.groups[0]!.ir_changes[0] as unknown as { sources: SourceRef[] }
+  return { stats, source: change.sources[0]! }
+}
+
+test("a quote inside the segment it names selects the quote", () => {
+  const text = "Intro.\n\nFirst behavior. More detail here.\n\nSecond behavior."
+  const { stats, source } = segmentAndQuote(text, "s2", "More detail here.")
+  assert.equal(stats.unresolved, 0)
+  assert.equal(stats.resolved, 1)
+  const start = text.indexOf("More detail here.")
+  assert.deepEqual(source.span, { unit: "utf16", start, end: start + "More detail here.".length })
+  assert.deepEqual(Object.keys(source).sort(), ["digest", "source_id", "span"])
+})
+
+test("a quote outside the segment it names is refused and says so", () => {
+  const { stats } = segmentAndQuote("First behavior.\n\nSecond behavior.", "s1", "Second behavior.")
   assert.equal(stats.unresolved, 1)
   assert.equal(stats.unresolvedRefs[0]?.reason, "selector_conflict")
+  assert.equal(stats.unresolvedRefs[0]?.diagnostic, "the quote is not in segment s1")
+})
+
+test("a quote repeated inside the segment it names is refused and says so", () => {
+  const { stats } = segmentAndQuote("Then retry once. Later retry once.\n\nOther.", "s1", "retry once")
+  assert.equal(stats.unresolved, 1)
+  assert.equal(stats.unresolvedRefs[0]?.reason, "selector_conflict")
+  assert.equal(stats.unresolvedRefs[0]?.diagnostic, "the quote occurs more than once in segment s1")
 })
 
 test("an unresolvable reference records which part failed", () => {
