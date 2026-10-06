@@ -468,7 +468,7 @@ test("accepted result releases a dependent Atom on reuse, and revised acceptance
   } })
   assert.equal(returned.ok, true)
   const before = store.current()
-  assert.match(atomAdmission("t1", before.compiled.t1!.atoms[1]!, { compiled: before.compiled, ir: before.ir, atoms: new AtomStateLedger(before.atom_states), assessments: [], execution_outcomes: before.execution_outcomes }) ?? "", /has not been accepted/)
+  assert.match(atomAdmission("t1", before.compiled.t1!.atoms[1]!, { compiled: before.compiled, ir: before.ir, atoms: new AtomStateLedger(before.atom_states), assessments: [], execution_outcomes: before.execution_outcomes }) ?? "", /has not been assessed for this dependency/)
   proposal = { schema_version: 2, basis: { event_ids: ["return"], refs: [] }, source_coverage: [], groups: [{
     local_ref: "accept", task_refs: ["t1"], depends_on: [], ir_changes: [], compilation: { decision: "reuse", current: [compiledIntentRef(before.compiled.t1!)], reason: "accepted predecessor releases known successor" }, execution_decisions: [], assessments: [{ target_ref: prior, result: "satisfied", criteria_refs: [], evidence_refs: [], explanation: "result checked against dependency", method: "model" }], coverage: [], checks: [], questions: [],
   }] }
@@ -484,7 +484,7 @@ test("accepted result releases a dependent Atom on reuse, and revised acceptance
   store.applyDeltas({ assessments: [{ ...proposal.groups[0]!.assessments[0]!, result: "not_satisfied", basis_event_ids: ["return"], sequence: 999 }] })
   const denied = await compiler.authorize({ kind: "start", run_id: "chain", dispatch_id: second.deliveries![0]!.dispatch_id, host_identity: "host" })
   assert.equal(denied.ok, false)
-  assert.match(denied.message ?? "", /has not been accepted/)
+  assert.match(denied.message ?? "", /was assessed not_satisfied/)
 })
 
 test("cyclic local dependencies are rejected rather than accepted as permanently waiting", async () => {
@@ -809,4 +809,41 @@ test("a second batch's actual CI and check requests show each body once and carr
   for (const named of ["prepared.ir", "prepared.compiled", "prepared.atom_states", "prepared.dispatchable_atoms", "prepared.eligible_task_ids", "prepared.eligible_execution_ids", "prepared.withdrawals", "prepared.source_dispositions.not_requirements", "historical_atoms", "candidate.groups[].execution_decisions", "event_source_refs"]) {
     assert.ok(contract.includes(named), `the contract names ${named}`)
   }
+})
+
+// Run a241c3c8 R1: ingest returned completed and was assessed unknown (no
+// counterexample, one ordering case not covered); transform never started
+// because the dependency gate required satisfied.
+test("a dependency admits the successor when the predecessor's latest assessment is satisfied or unknown", async () => {
+  const store = new IntentStoreV2({ storeDir: mkdtempSync(join(tmpdir(), "dependency-gate-")), runId: "chain" })
+  const proposal = candidate()
+  const group = proposal.groups[0]!
+  if (group.compilation.decision !== "replace") throw new Error("fixture")
+  const draft = group.compilation.drafts[0]!
+  draft.atoms.push({ ...structuredClone(draft.atoms[0]!), atom_id: "a2", task: "Deliver the report using the CSV implementation" })
+  draft.relations = [{ predecessor: { local_ref: "a1" }, successor: { local_ref: "a2" }, requires: "CSV implementation", conditions: [], basis: [source] }]
+  group.coverage[2]!.refs = [{ local_ref: "a2" }]
+  const compiler = createIntentCompilerV2({ store, model: createCompilerModelV2(async input => JSON.stringify(stageCandidate(input, proposal))) })
+  await compiler.acceptEvent({ schema_version: 2, run_id: "chain", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } })
+  const first = await compiler.advance({ runId: "chain" })
+  const start = await compiler.authorize({ kind: "start", run_id: "chain", dispatch_id: first.deliveries![0]!.dispatch_id, host_identity: "host" })
+  const prior = atomRef(store.current().compiled.t1!.atoms[0]!)
+  await compiler.acceptEvent({ schema_version: 2, run_id: "chain", event_id: "return", kind: "execution_return", source: { producer_id: "host", channel: "executor" }, execution_id: start.execution_id!, payload: {
+    state_claim: "completed", outcome: { schema_version: 2, execution_id: start.execution_id!, atom_ref: prior, suggested_status: "completed", product_refs: [], file_changes: [], evidence_refs: [] } } })
+  const state = store.current()
+  const successor = state.compiled.t1!.atoms.find(atom => atom.atom_id === "a2")!
+  const judged = (result: "satisfied" | "unknown" | "not_satisfied") => ({ target_ref: prior, criteria_refs: [], evidence_refs: [], result, explanation: "x", method: "model" as const })
+  const admit = (assessments: ReturnType<typeof judged>[], outcomes = state.execution_outcomes, atom = successor) =>
+    atomAdmission("t1", atom, { compiled: state.compiled, ir: state.ir, atoms: new AtomStateLedger(state.atom_states), assessments, execution_outcomes: outcomes })
+  assert.equal(admit([judged("satisfied")]), undefined, "satisfied admits")
+  assert.equal(admit([judged("unknown")]), undefined, "unknown keeps the plan going")
+  assert.equal(admit([judged("satisfied"), judged("unknown")]), undefined, "the latest assessment decides")
+  assert.match(admit([judged("not_satisfied")]) ?? "", /was assessed not_satisfied/)
+  assert.match(admit([judged("unknown"), judged("not_satisfied")]) ?? "", /was assessed not_satisfied/, "a later not_satisfied is not shadowed")
+  assert.match(admit([]) ?? "", /has not been assessed for this dependency/)
+  assert.match(admit([judged("satisfied")], []) ?? "", /has no completed result/, "an assessment without a completed result admits nothing")
+  // An explicit assessment_supports condition keeps its own meaning: satisfied only.
+  const guarded = { ...successor, preconditions: [{ kind: "assessment_supports" as const, refs: [prior] }] }
+  assert.match(admit([judged("unknown")], state.execution_outcomes, guarded) ?? "", /preconditions are not satisfied/)
+  assert.equal(admit([judged("satisfied")], state.execution_outcomes, guarded), undefined)
 })

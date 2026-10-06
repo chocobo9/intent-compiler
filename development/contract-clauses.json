@@ -258,13 +258,13 @@
     {
       "id": "C.atom_contract.7",
       "source": "src/model/compiler-model-v2.ts#V2_COMPILER_CONTRACT",
-      "text": "Start eligibility requires satisfied preconditions AND accepted incoming Relation results. Preview and later confirmed write-back are separate atoms. Future work whose behavior is known may already be a dependent Atom; record genuinely unknown later work as unresolved coverage instead of an empty Atom.",
+      "text": "Start eligibility requires satisfied preconditions AND, for each incoming Relation, the predecessor's completed result with a latest management assessment of satisfied or unknown (not not_satisfied, and not yet unassessed). Preview and later confirmed write-back are separate atoms. Future work whose behavior is known may already be a dependent Atom; record genuinely unknown later work as unresolved coverage instead of an empty Atom.",
       "segment": "atom_contract"
     },
     {
       "id": "C.atom_contract.8",
       "source": "src/model/compiler-model-v2.ts#V2_COMPILER_CONTRACT",
-      "text": "A Relation is { predecessor: Ref|{local_ref:\"new-atom-id\"}, successor: Ref|{local_ref:\"new-atom-id\"}, requires:\"exact usable result/ordering reason\", conditions:[], basis:[Ref|SourceRef] }. For new Atoms use local_ref; management resolves final content digests after requirement assignment. For existing Atoms copy their exact supplied Ref. Relations are operational dependencies: the successor waits for the exact predecessor version to complete and receive management acceptance. No self/cyclic dependencies. A replacement draft states all still-applicable relations, including retained work; dropping an edge changes execution order.",
+      "text": "A Relation is { predecessor: Ref|{local_ref:\"new-atom-id\"}, successor: Ref|{local_ref:\"new-atom-id\"}, requires:\"exact usable result/ordering reason\", conditions:[], basis:[Ref|SourceRef] }. For new Atoms use local_ref; management resolves final content digests after requirement assignment. For existing Atoms copy their exact supplied Ref. Relations are operational dependencies: the successor waits for the exact predecessor version to complete and for a management assessment of it that is not not_satisfied. No self/cyclic dependencies. A replacement draft states all still-applicable relations, including retained work; dropping an edge changes execution order.",
       "segment": "atom_contract"
     },
     {
@@ -528,7 +528,7 @@
     {
       "id": "C.rules.18",
       "source": "src/model/compiler-model-v2.ts#V2_COMPILER_CONTRACT.rules",
-      "text": "Supported conditions are scope_allows, capability_available (expectation is the operation id), assessment_supports (exact target Ref), all and any. Other condition kinds block the work. A Relation already waits for accepted predecessor completion; do not add an unsupported artifact_exists condition just to duplicate this dependency. Management acceptance considers execution evidence and requires, not a bare executor completion claim.",
+      "text": "Supported conditions are scope_allows, capability_available (expectation is the operation id), assessment_supports (exact target Ref), all and any. Other condition kinds block the work. A Relation already waits for the predecessor's completed result and an assessment that is not not_satisfied; do not add an unsupported artifact_exists condition just to duplicate this dependency. Management acceptance considers execution evidence and requires, not a bare executor completion claim.",
       "segment": "rules"
     },
     {

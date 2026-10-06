@@ -89,24 +89,25 @@ export function evaluateCondition(condition: Condition, context: AuthorizationCo
     if (target === undefined) return "unsupported"
     const assessments = context.assessments
     if (assessments === undefined) return "unsupported"
-    // The newest assessment for the target decides: management may revise a
-    // judgement, and a later not_satisfied must not be shadowed by an older pass.
-    let supporting: (typeof assessments)[number] | undefined
-    for (let index = assessments.length - 1; index >= 0; index -= 1) {
-      const assessment = assessments[index] as (typeof assessments)[number]
-      if (
-        assessment.target_ref.id === target.id
-        && assessment.target_ref.revision === target.revision
-        && assessment.target_ref.digest === target.digest
-      ) {
-        supporting = assessment
-        break
-      }
-    }
+    const supporting = latestAssessment(target, assessments)
     if (supporting === undefined) return "unsatisfied"
     return supporting.result === "satisfied" ? "satisfied" : "unsatisfied"
   }
   return "unsupported"
+}
+
+/**
+ * The newest assessment of this exact target version: management may revise a
+ * judgement, and a later not_satisfied must not be shadowed by an older pass.
+ */
+export function latestAssessment<A extends { target_ref: { id: string; revision: number; digest: string } }>(target: Ref, assessments: readonly A[]): A | undefined {
+  for (let index = assessments.length - 1; index >= 0; index -= 1) {
+    const assessment = assessments[index] as A
+    if (assessment.target_ref.id === target.id && assessment.target_ref.revision === target.revision && assessment.target_ref.digest === target.digest) {
+      return assessment
+    }
+  }
+  return undefined
 }
 
 /**

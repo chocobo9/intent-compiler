@@ -1920,8 +1920,8 @@
       "id": "relation-admission",
       "clause": "C.atom_contract.7",
       "class": "B",
-      "match": "predecessor ${relation.predecessor.id} has not been accepted for this dependency",
-      "why": "后继启动需要具体前驱版本真实完成且被管理层接受"
+      "match": "predecessor ${relation.predecessor.id} was assessed not_satisfied",
+      "why": "后继启动需要具体前驱版本真实完成，且其最近一次管理评估为 satisfied 或 unknown（not_satisfied 或尚无评估则不放行）"
     },
     {
       "id": "source-coverage",
