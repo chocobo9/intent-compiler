@@ -7,14 +7,16 @@ from pathlib import Path
 from harbor.agents.installed.base import ExecInput
 from harbor.agents.installed.opencode import OpenCode
 
-# A retry is decided in a return batch, after the executor turn that held the
-# returned work has ended; the plugin runs it in a host turn of its own, marked
-# by this registration source category (HOST_DISPATCH_SOURCE_CATEGORY).
+# A return batch offers work (an unlocked successor, a retry, a rerun) after the
+# executor turn that held the returned work has ended; the plugin runs it in a
+# host turn of its own, marked by this registration source category
+# (HOST_DISPATCH_SOURCE_CATEGORY).
 HOST_DISPATCH_CATEGORY = "host_dispatch"
 HOST_DISPATCH_INSTRUCTION = "Run the work the Intent Compiler has pending for this task."
-# The compiler runs an Atom version at most twice, so one round needs at most
-# one host turn per returned retry; the bound only stops a broken loop.
-MAX_HOST_DISPATCH_TURNS = 2
+# The compiler runs one Atom version at most twice between user inputs, so a
+# round needs at most that many host turns per Atom version still in the plan
+# (not legacy or superseded); the bound only stops a broken loop.
+EXECUTIONS_PER_ATOM_VERSION = 2
 # Earlier host versions wrote each round's instruction here, inside the
 # executor's workspace; resumed images can still carry it.
 STALE_TASK_SPEC = "/app/TASK_SPEC.md"
@@ -98,15 +100,7 @@ class OpenCodePatched(OpenCode):
         await self._remove_stale_task_spec(round_num, environment)
         try:
             await super().run_round(instruction, round_num, environment, context)
-            for turn in range(2, 2 + MAX_HOST_DISPATCH_TURNS):
-                if not self._pending_retry_dispatches(self._read_snapshot(required=False)):
-                    break
-                self._keep_turn_logs(round_num, turn - 1)
-                self._host_dispatch = True
-                try:
-                    await super().run_round(HOST_DISPATCH_INSTRUCTION, round_num, environment, context)
-                finally:
-                    self._host_dispatch = False
+            await self._run_pending_dispatches(round_num, environment, context)
         finally:
             try:
                 captured = await environment.exec(
@@ -172,14 +166,59 @@ class OpenCodePatched(OpenCode):
         print(f"Round {round_num} workspace user-text copy {STALE_TASK_SPEC}: {outcome}")
         return outcome
 
+    async def _run_pending_dispatches(self, round_num, environment, context):
+        """Keep adding host turns in this round while the compiler has offered work no execution has started."""
+        record = {"round": int(round_num), "turns": [], "stopped": None}
+        snapshot = self._read_snapshot(required=False)
+        while True:
+            pending = self._pending_dispatches(snapshot)
+            cap = EXECUTIONS_PER_ATOM_VERSION * max(1, self._current_atom_count(snapshot))
+            record["cap"] = max(record.get("cap", 0), cap)
+            if not pending:
+                record["stopped"] = "no pending dispatch"
+                break
+            if len(record["turns"]) >= record["cap"]:
+                record["stopped"] = "turn cap reached"
+                break
+            self._keep_turn_logs(round_num, len(record["turns"]) + 1)
+            before = self._execution_ids(snapshot)
+            self._host_dispatch = True
+            try:
+                await super().run_round(HOST_DISPATCH_INSTRUCTION, round_num, environment, context)
+            finally:
+                self._host_dispatch = False
+            snapshot = self._read_snapshot(required=False)
+            started = sorted(self._execution_ids(snapshot) - before)
+            record["turns"].append({"pending": [item.get("dispatch_id") for item in pending], "started": started})
+            if not started:
+                record["stopped"] = "host turn started no execution"
+                break
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
+        (self.logs_dir / f"round-{int(round_num)}-host-turns.json").write_text(json.dumps(record) + "\n", encoding="utf-8")
+        print(f"Round {round_num} host dispatch turns: {len(record['turns'])} (cap {record['cap']}); stopped: {record['stopped']}")
+        return record
+
     @staticmethod
-    def _pending_retry_dispatches(snapshot):
-        """Retry dispatches the compiler offered that no execution has started."""
+    def _atom_status(snapshot):
+        """Latest recorded status of each Atom version."""
+        return {(item.get("task_id"), item.get("atom_id"), item.get("atom_revision")): item.get("status")
+                for item in (snapshot or {}).get("atom_states", [])}
+
+    @classmethod
+    def _current_atom_count(cls, snapshot):
+        """Atom versions in the current plan: neither legacy nor superseded."""
+        return sum(1 for status in cls._atom_status(snapshot).values() if status not in ("legacy", "superseded"))
+
+    @classmethod
+    def _pending_dispatches(cls, snapshot):
+        """Dispatches no execution has started whose Atom version is ready; the compiler applies admission."""
         if snapshot is None:
             return []
         started = {item.get("dispatch_id") for item in snapshot.get("executions", [])}
+        status = cls._atom_status(snapshot)
         return [item for item in snapshot.get("dispatches", [])
-                if item.get("retry_of") and item.get("dispatch_id") not in started]
+                if item.get("dispatch_id") not in started
+                and status.get((item.get("task_id"), item.get("atom_id"), item.get("atom_revision"))) == "ready"]
 
     def _keep_turn_logs(self, round_num, turn):
         """The next host turn reuses the command log paths; keep this turn's copy."""
