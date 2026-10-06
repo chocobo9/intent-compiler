@@ -20,6 +20,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build && npm run clean:test && tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js && npm run clean:test",
     "gate:replay": "node experiments/evocode/gate-replay.mjs",
+    "replay:recorded": "npm run build && node experiments/evocode/harbor/dpipe/replay-recorded.mjs",
     "check": "npm run typecheck"
   },
   "bin": {

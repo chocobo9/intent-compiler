@@ -1,0 +1,40 @@
+{
+  "note": "Pre-registered before the R3-R15 replay (2026-10-06), from the rejection messages recorded in the mainline stores and the side runs. Rules are tried in order against the first issue of a recorded rejected attempt; the first match decides. 'expect' is what the new code should do with that answer: accept (the rejection was a copied identity code now binds), reject (a source or semantic gate that must hold), reject_known_gap (should be code-bound but is not yet). Attempts that are not rejections are counted separately: transport failures, check verdicts, budget closure.",
+  "rules": [
+    { "class": "A", "expect": "accept", "label": "CI parent_basis copied wrong", "fixed_by": "327c394 (5bf04f1)",
+      "pattern": "CI names a different parent basis" },
+    { "class": "A", "expect": "accept", "label": "assessment evidence_refs locators invented", "fixed_by": "f867e9a",
+      "pattern": "candidate sources must cite a resolvable user text span or event;.*evidence_refs" },
+    { "class": "A", "expect": "accept", "label": "Atom authority.basis selector out of range", "fixed_by": "ae25731",
+      "pattern": "candidate sources must cite a resolvable user text span or event;.*authority\\.(basis|rules)" },
+    { "class": "A", "expect": "accept", "label": "expected_revision copied wrong", "fixed_by": "86347f5",
+      "pattern": "expected_revision \\d+ does not match current \\d+(?!: ir_changes\\[\\d+\\] \\([^)]*\\) (earlier in this group|in an earlier group of this batch) already changed)" },
+    { "class": "A", "expect": "accept", "label": "assessment basis.event_ids copied wrong", "fixed_by": "86347f5",
+      "pattern": "must name this batch's events in basis\\.event_ids" },
+    { "class": "A", "expect": "accept", "label": "previous_atom_ref digest copied wrong", "fixed_by": "86347f5",
+      "pattern": "previous_atom_ref digest does not match" },
+    { "class": "A-gap", "expect": "reject_known_gap", "label": "coverage.refs names an Atom version that is not the plan's current one", "fixed_by": null,
+      "pattern": "points to an Atom revision .* that is not the current one" },
+    { "class": "A", "expect": "accept", "label": "segment_id plus a quote inside that segment (then a selector conflict)", "fixed_by": "c65a94f",
+      "amended": "added after the first full replay (2026-10-06): R10 mgmt-20 #0 gives segment s8 and a quote equal to that segment's text; c65a94f selects a quote inside the segment it names. Decided from the recorded answer, not from the new outcome: every reference that gives both a segment_id and a quote has the quote inside that segment of the request, and selector_conflict is the only defect the message names. Otherwise the rejection stays B.",
+      "pattern": "selector_conflict", "predicate": "quote_inside_named_segment" },
+    { "class": "B", "expect": "reject", "label": "user text with no destination",
+      "pattern": "has text with no destination" },
+    { "class": "B", "expect": "reject", "label": "adopted text classified as non-normative or superseded",
+      "pattern": "classifies actively adopted text as" },
+    { "class": "B", "expect": "reject", "label": "normative source dropped without a superseded disposition",
+      "pattern": "was dropped without an explicit superseded disposition" },
+    { "class": "B", "expect": "reject", "label": "IR source selector does not resolve (quote, segment, span, wrong event, placeholder)",
+      "pattern": "IR sources do not resolve" },
+    { "class": "B", "expect": "reject", "label": "IR group task or identity duplicated",
+      "pattern": "Each IR group must have one distinct task" },
+    { "class": "B", "expect": "reject", "label": "same IR object changed twice in one batch",
+      "pattern": "already changed .* to revision" }
+  ],
+  "separate": {
+    "transport": "a recorded attempt with a failure diagnostic and no answer text: not a rejection, not counted as flip or regression",
+    "check": "an independent check verdict; fed back as recorded and marked not comparable, inconsistent verdicts counted on their own",
+    "budget": "a batch closed for budget (B4); counted on its own",
+    "unclassified": "a recorded rejection no rule matches; listed for review"
+  }
+}
