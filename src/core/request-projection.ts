@@ -1,5 +1,6 @@
 import { digestOf, type Atom, type AtomStateRecord, type CompiledIntent, type Ref, type TaskIntent } from "./intent-contract.js"
 import { atomRef } from "./compiled-intent.js"
+import { latestAssessmentBatch } from "./execution-state.js"
 
 /**
  * What a CI or check request shows of the plan.  The store, the commit and the
@@ -73,6 +74,28 @@ export function projectCompiled(
       }),
     }]
   }))
+}
+
+/**
+ * What a request shows of the assessment history: for each current Atom
+ * version (not legacy, and not replaced by a later revision), every record of the latest batch that
+ * assessed it, verbatim.  The batch is the one the admission verdict reads
+ * (latestAssessmentBatch), so the model sees exactly what code judges by;
+ * earlier batches and historical versions are not sent.
+ */
+export function projectAssessments<A extends { target_ref: Ref; sequence?: number }>(
+  assessments: readonly A[],
+  compiled: Record<string, CompiledIntent>,
+  states: readonly AtomStateRecord[],
+): A[] {
+  const shown = new Set<A>()
+  for (const [taskId, intent] of Object.entries(compiled)) {
+    for (const atom of intent.atoms) {
+      if (isHistorical(atom, intent, states)) continue
+      for (const record of latestAssessmentBatch(atomRef(atom), assessments)) shown.add(record)
+    }
+  }
+  return assessments.filter(record => shown.has(record))
 }
 
 /**

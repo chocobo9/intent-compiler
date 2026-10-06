@@ -1,4 +1,5 @@
-import { projectCompiled } from "./request-projection.js"
+import { RETRY_IN_DELEGATION_BATCH } from "../model/generation-schema.js"
+import { projectAssessments, projectCompiled } from "./request-projection.js"
 import { atomRef, compiledIntentRef } from "./compiled-intent.js"
 import { digestOf, type Candidate, type CompiledIntent, type LocalSourceEditRecord, type Ref, type SourceRef, type TaskIntent } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
@@ -374,7 +375,8 @@ export class ParentGeneration {
         // identity; a requirement block that repeats a parent IR item verbatim
         // points at it.
         : { ...shared, compiled: plan === undefined ? plan : projectCompiled(plan, this.options.input.atom_states ?? [], [this.state.parent!.ir]),
-          atom_refs: atomRefs, executions: executionView, execution_outcomes: outcomes, assessments: assessmentRecords }
+          atom_refs: atomRefs, executions: executionView, execution_outcomes: outcomes,
+          ...(assessmentRecords === undefined ? {} : { assessments: projectAssessments(assessmentRecords, plan ?? {}, this.options.input.atom_states ?? []) }) }
       const ir = stage === "ci" ? this.state.parent!.ir : this.options.input.ir
       // An assessment batch repairs the stored IR from the user's own text: do
       // not offer the execution return as a citable source for that stage.
@@ -503,6 +505,9 @@ export class ParentGeneration {
       // everything structural (group and task identity, dependencies, retained
       // IR changes) is filled by this code, so the child never reproduces it.
       const original = parent.candidate.groups[groups.length]!
+      if ((group.execution_decisions ?? []).some(decision => decision.decision === "retry")) {
+        return this.reject(RETRY_IN_DELEGATION_BATCH, result)
+      }
       const boundTask = original.task_refs[0]
       if (boundTask === undefined || parent.ir[boundTask] === undefined) {
         return this.reject(`group ${original.local_ref} is not bound to a stored task`, result)
@@ -542,6 +547,8 @@ export class ParentGeneration {
       groups.push({
         ...bound,
         local_ref: original.local_ref,
+        // A delegation batch assesses nothing, whatever a restored draft still carries.
+        ...(derived ? {} : { assessments: [] }),
         coverage,
         compilation,
         task_refs: [...original.task_refs],
@@ -573,9 +580,11 @@ export class ParentGeneration {
    */
   private bindCodeIdentities<G extends CIProposalGroup>(group: G, taskId: string): G {
     const copy = structuredClone(group)
-    for (const assessment of copy.assessments) assessment.target_ref = this.returnedVersion(assessment.target_ref)
+    // A delegation batch's answer carries no assessments (the assessment batch's does).
+    const assessments = copy.assessments ?? []
+    for (const assessment of assessments) assessment.target_ref = this.returnedVersion(assessment.target_ref)
     bindRefDigests(copy, this.versions())
-    const judged = { ...copy, assessments: copy.assessments.map(assessment => ({ ...assessment, evidence_refs: this.returnEvidence(assessment.target_ref) })) }
+    const judged = { ...copy, execution_decisions: copy.execution_decisions ?? [], assessments: assessments.map(assessment => ({ ...assessment, evidence_refs: this.returnEvidence(assessment.target_ref) })) }
     const compilation = judged.compilation
     if (compilation.decision !== "replace") return judged
     const task = this.state.parent!.ir[taskId]!
@@ -626,7 +635,7 @@ export class ParentGeneration {
       const ref = atomRef(atom)
       return `${ref.id}@${ref.revision}:${ref.digest}`
     }))
-    return group.assessments.map(assessment => assessment.target_ref)
+    return (group.assessments ?? []).map(assessment => assessment.target_ref)
       .filter(ref => !atoms.has(`${ref?.id}@${ref?.revision}:${ref?.digest}`))
       .map(ref => `${ref?.id}@${ref?.revision}`)
   }

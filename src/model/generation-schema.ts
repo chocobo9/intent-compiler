@@ -22,7 +22,11 @@ export type IRProposal = Omit<Candidate, "groups"> & {
  * own basis events and the task each group assesses, and keeps the fuller
  * shape.
  */
-export type CIProposalGroup = Omit<CandidateGroup, "ir_changes" | "task_refs" | "depends_on" | "compilation" | "local_ref"> & {
+export type CIProposalGroup = Omit<CandidateGroup, "ir_changes" | "task_refs" | "depends_on" | "compilation" | "local_ref" | "assessments" | "execution_decisions"> & {
+  /** Assessment groups only: a delegation batch assesses nothing. */
+  assessments?: CandidateGroup["assessments"]
+  /** Assessment groups, and delegation batches while an execution is active (never retry there). */
+  execution_decisions?: CandidateGroup["execution_decisions"]
   /** Assessment groups only; an ordinary CI group binds to its parent group by position. */
   local_ref?: string
   task_refs?: string[]
@@ -134,7 +138,23 @@ export interface GenerationSchemaOptions {
   assessment?: boolean
   /** Existing checker configuration, passed within code rather than model input. */
   checkRequired?: boolean
+  /**
+   * An ordinary CI batch whose request shows an execution with status active:
+   * only then does the answer carry execution decisions (continue, stop or
+   * await_result).  Assessments and retry belong to the assessment batch.
+   */
+  activeExecutions?: boolean
 }
+
+/** Whether a request's executions include one that is running; the schema is built per request from this. */
+export function hasActiveExecution(request: unknown): boolean {
+  const executions = request !== null && typeof request === "object" ? (request as { executions?: unknown }).executions : undefined
+  return Array.isArray(executions) && executions.some(entry => entry !== null && typeof entry === "object" && (entry as { status?: unknown }).status === "active")
+}
+
+export const RETRY_IN_DELEGATION_BATCH = "retry is decided only in the batch that carries the execution return, which assesses that Atom version not_satisfied; a delegation batch may continue, stop or await_result an active execution"
+
+const ORDINARY_DECISION_DESCRIPTION = "continue keeps an active execution for unchanged authorized work; stop closes it; await_result permits only its return."
 
 export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSchemaProfile, options: GenerationSchemaOptions = {}): Record<string, unknown> {
   const schema = structuredClone(profile === undefined
@@ -175,6 +195,14 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
       relation.properties[end] = { ...structuredClone(atomId), description: "The Atom by its atom_id, new or existing. Code binds the version in this plan; give no revision or digest." }
     }
     if (options.assessment !== true) {
+      // Assessments and retry belong to the return batch; a delegation batch
+      // decides only what becomes of a running execution.
+      remove(group, ["assessments"])
+      if (options.activeExecutions === true) {
+        const decision = (group.properties.execution_decisions.items as SchemaNode).properties.decision as SchemaNode
+        decision.enum = decision.enum.filter((value: string) => value !== "retry")
+        decision.description = ORDINARY_DECISION_DESCRIPTION
+      } else remove(group, ["execution_decisions"])
       // The parent proposal already fixes these, and assembly takes the parent
       // values: an ordinary CI answer states the basis and each group's task
       // identity and dependencies only to have them checked and replaced.  An
@@ -230,6 +258,8 @@ export function validateGenerationProposal(stage: GenerationStage, value: unknow
   const validate = new Ajv({ allErrors: true, strict: false, allowUnionTypes: true }).compile(buildGenerationSchema(stage, undefined, options))
   const ok = validate(value)
   const errors = (validate.errors ?? []).map(error => `${error.instancePath || "/"}: ${error.message ?? "invalid"}`)
+  if (stage === "ci" && options.assessment !== true && Array.isArray((value as CIProposal | undefined)?.groups)
+    && (value as CIProposal).groups.some(group => Array.isArray(group?.execution_decisions) && group.execution_decisions.some(decision => decision?.decision === "retry"))) errors.push(`/groups: ${RETRY_IN_DELEGATION_BATCH}`)
   if (ok && stage === "ci") {
     const proposal = value as CIProposal
     if (proposal.parent_issues?.length && proposal.groups.length > 0) errors.push("/groups: must be empty when parent_issues is nonempty")
@@ -250,18 +280,25 @@ function atomIdOf(endpoint: unknown): { local_ref: string } {
  * An answer written to the earlier CI contract still carries identities code
  * now binds: authority.basis, each rule's resource_ref, each Relation's basis,
  * exact Relation endpoint versions, each assessment's evidence_refs, an
- * assessment's basis.event_ids and an ordinary group's local_ref.  They are
+ * assessment's basis.event_ids and an ordinary group's local_ref, assessments
+ * and (with no active execution) empty execution_decisions.  They are
  * dropped (an endpoint keeps its atom id) before the answer is validated; the
  * recorded text keeps them as returned.
  */
-export function dropCodeBoundIdentities(answer: unknown, assessment: boolean): void {
+export function dropCodeBoundIdentities(answer: unknown, assessment: boolean, activeExecutions = false): void {
   if (answer === null || typeof answer !== "object" || !Array.isArray((answer as { groups?: unknown }).groups)) return
   const basis = (answer as { basis?: unknown }).basis
   if (assessment && basis !== null && typeof basis === "object") delete (basis as { event_ids?: unknown }).event_ids
   for (const group of (answer as { groups: unknown[] }).groups) {
     if (group === null || typeof group !== "object") continue
     const record = group as Record<string, any>
-    if (!assessment) delete record.local_ref
+    if (!assessment) {
+      delete record.local_ref
+      // A delegation batch carries no assessments, and an empty decision list
+      // is no decision when no execution is active.
+      delete record.assessments
+      if (!activeExecutions && Array.isArray(record.execution_decisions) && record.execution_decisions.length === 0) delete record.execution_decisions
+    }
     for (const judged of Array.isArray(record.assessments) ? record.assessments : []) if (judged && typeof judged === "object") delete judged.evidence_refs
     const drafts = record.compilation?.decision === "replace" && Array.isArray(record.compilation.drafts) ? record.compilation.drafts : []
     for (const draft of drafts) {
@@ -291,7 +328,7 @@ export function dropCodeBoundIrIdentities(answer: unknown): void {
 }
 
 /** Project the existing encoding example, without inventing another task. */
-export function buildGenerationExample(stage: GenerationStage, profile?: StrictSchemaProfile, assessment = false, checkRequired = false): IRProposal | CIProposal {
+export function buildGenerationExample(stage: GenerationStage, profile?: StrictSchemaProfile, assessment = false, checkRequired = false, activeExecutions = false): IRProposal | CIProposal {
   const example = structuredClone(profile === undefined ? CANDIDATE_EXAMPLE : buildStrictCandidateExample(profile)) as Candidate
   // The example keeps its fixture ids in every stage.  A live alias here would
   // be copyable and would resolve to a real event — the one silent
@@ -310,9 +347,11 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
   return <CIProposal><unknown>{
     ...rest, ...(ordinary ? {} : { basis: { refs: basis.refs } }),
     ...(ordinary && checkRequired ? {} : { parent_issues: [] }),
-    groups: example.groups.map(({ ir_changes: _irChanges, task_refs, depends_on, local_ref, ...group }) => ({
+    groups: example.groups.map(({ ir_changes: _irChanges, task_refs, depends_on, local_ref, assessments, execution_decisions, ...group }) => ({
       ...(ordinary ? {} : { local_ref }),
       ...group,
+      ...(ordinary ? {} : { assessments }),
+      ...(ordinary && !activeExecutions ? {} : { execution_decisions: ordinary ? execution_decisions.filter(decision => decision.decision !== "retry") : execution_decisions }),
       coverage: ordinary ? group.coverage.map(entry => ({ ...entry, requirement: {
         local_ref: "local_ref" in entry.requirement ? entry.requirement.local_ref : entry.requirement.id,
       } })) : group.coverage,
@@ -362,19 +401,51 @@ function assessmentStageInstruction(): string {
 
 const CHECKED_PARENT_ROLE = "Compile the fixed parent IR into a plan and requirement assignments. The independent check compares original requirements and applicable updates with the parent IR and the final prepared candidate; deciding whether the original requirements were correctly represented belongs to that check. Do not add requirements absent from the parent IR or return the parent for semantic correction."
 
-export function generationStageInstruction(stage: GenerationStage, assessment = false, checkRequired = false): string {
+export function generationStageInstruction(stage: GenerationStage, assessment = false, checkRequired = false, activeExecutions = false): string {
   if (assessment && stage === "ci") return assessmentStageInstruction()
   const shared = `You are the read-only management model for Intent Compiler v2. One Intent IR maintains the whole user task; its Compiled Intent is the complete plan containing Atoms and Relations. Do not execute business work, use business tools, inspect or modify files, invent execution facts, or answer the business task. Return only the current generation stage's schema-constrained projection. The field contracts describe the final Candidate; fields excluded by this stage belong to the other stage and must not be returned. Original sources remain evidence for understanding, never permission to bypass the supplied stage boundary. Preserve user requirements, their real role and scope, and distinguish success from a blocker. ${LATER_STATEMENT_SETTLES}`
   return `${shared}\n${stage === "ir"
     ? "IR stage: interpret current delegation and updates against prior state, select every effective requirement and its source, role and scope, and return the IR changes and any explicit source dispositions. Return no compilation, coverage, execution decisions, assessments or checks. Do not write Atoms. Preserve existing identities and unchanged requirements. Declare required input/output identities when field scopes depend on them. The compiler will materialize this IR before asking for the execution plan."
-    : `CI stage: request.ir is the actual temporary parent IR to compile. It is fixed for this response. The compiler already holds the parent proposal's basis and each parent group's task identity and dependencies, and fills them at assembly, so this response carries no basis, task_refs, depends_on or compilation.drafts[].task_id: bind to a parent group by its local_ref only. In coverage.requirement use only {local_ref: <content item_id or task_id in this group's parent task>}; code binds the current parent revision and digest. Coverage refs still express the actual destinations. compilation.intent_basis identifies the task/content used by the plan. generation_repair.ir_proposal identifies the parent groups and their open questions, not a substitute for the actual IR text. Compile each group's compilation and coverage, author the execution_decisions, assessments and checks the executions require, and add questions only for concrete compilation uncertainty; the compiler keeps the parent's questions. ${checkRequired ? CHECKED_PARENT_ROLE : "If the parent IR itself needs correction, report parent_issues instead of changing it."} Return no ir_changes or source_coverage. Write each Atom's work instruction — action, boundaries, ordering and handoff — from the complete applicable IR requirements, including definitions, public interfaces, shared rules, conditions and exceptions; management code attaches the assigned requirement texts verbatim to the delivered task after preparation, including passages an assigned item once adopted and later withdrew, all labelled and ordered by user input, so do not copy or paraphrase rule blocks into the candidate task. request.compiled shows each current Atom complete; superseded or legacy versions appear only in compiled[].historical_atoms by identity and lifecycle status. In an existing Atom task, a requirement block whose body reads (text identical to IR content <id>@<revision> <digest> supplied in this request) stands for the exact text of that IR content item, which the same request supplies in request.ir. Coverage selects what the attached text will contain; references and coverage cannot replace executable behavior. Preserve retained work and real dependencies. ${checkRequired ? "" : "Original input may reveal an IR omission or wrong role/scope: report concrete parent_issues and groups: [] so management returns to the IR stage; never silently repair the parent or add an unsupported requirement in the plan. Otherwise parent_issues is []."}`}`
+    : `CI stage: request.ir is the actual temporary parent IR to compile. It is fixed for this response. The compiler already holds the parent proposal's basis and each parent group's task identity and dependencies, and fills them at assembly, so this response carries no basis, task_refs, depends_on or compilation.drafts[].task_id: bind to a parent group by its local_ref only. In coverage.requirement use only {local_ref: <content item_id or task_id in this group's parent task>}; code binds the current parent revision and digest. Coverage refs still express the actual destinations. compilation.intent_basis identifies the task/content used by the plan. generation_repair.ir_proposal identifies the parent groups and their open questions, not a substitute for the actual IR text. Compile each group's compilation and coverage, author the checks the plan requires${activeExecutions ? " and an execution decision (continue, stop or await_result) for each active execution" : ""}, and add questions only for concrete compilation uncertainty; the compiler keeps the parent's questions. ${checkRequired ? CHECKED_PARENT_ROLE : "If the parent IR itself needs correction, report parent_issues instead of changing it."} Return no ir_changes or source_coverage. Execution assessments and retry belong to the batches that carry an execution return, not to this one: write no assessments. Write each Atom's work instruction — action, boundaries, ordering and handoff — from the complete applicable IR requirements, including definitions, public interfaces, shared rules, conditions and exceptions; management code attaches the assigned requirement texts verbatim to the delivered task after preparation, including passages an assigned item once adopted and later withdrew, all labelled and ordered by user input, so do not copy or paraphrase rule blocks into the candidate task. request.compiled shows each current Atom complete; superseded or legacy versions appear only in compiled[].historical_atoms by identity and lifecycle status. In an existing Atom task, a requirement block whose body reads (text identical to IR content <id>@<revision> <digest> supplied in this request) stands for the exact text of that IR content item, which the same request supplies in request.ir. Coverage selects what the attached text will contain; references and coverage cannot replace executable behavior. Preserve retained work and real dependencies. ${checkRequired ? "" : "Original input may reveal an IR omission or wrong role/scope: report concrete parent_issues and groups: [] so management returns to the IR stage; never silently repair the parent or add an unsupported requirement in the plan. Otherwise parent_issues is []."}`}`
+}
+
+const RETURN_ASSESSMENT_RULE = "On execution_return, compare"
+const BASE_DECISION_SENTENCE = "After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return, retry dispatches a returned Atom version once more."
+const ORDINARY_DECISION_SENTENCE = "Execution decisions are offered only while an execution is active. After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return. Assessments and retry belong to the batches that carry an execution return."
+const ORDINARY_RETURN_RULE = `Execution returns are assessed by their own batches, so this batch writes no assessments and no retry. Read execution_outcomes, assessments (the latest batch's assessment of each current Atom version, verbatim) and atom_states with current events. ${ASSESSMENT_RESULTS} Reuse the CI when remaining work is unchanged; replace affected work when the current delegation requires replanning, preserving the required result and all unaffected work. An executor's completed claim, blocker report or missing-check explanation is not success evidence. Never weaken completion or rewrite IR to make a return pass. A closed execution is never reopened.`
+const BASE_ATOM_REFS_CI = "Name assessments.target_ref and previous_atom_ref by an Atom id and revision supplied in atom_refs; management binds each Ref's digest, and binds an assessment of this batch's return to the Atom version that execution ran."
+
+/**
+ * A delegation batch's CI answer carries no assessments: they, and retry,
+ * belong to the batch that carries the return.  The rules say so, and name
+ * execution decisions only for an active execution.  Replaced wording that is
+ * absent throws, so a changed base contract cannot silently keep the old text.
+ */
+function ordinaryCIRules(rules: readonly string[]): string[] {
+  let returnRule = false
+  let decisions = false
+  const out = rules.map(rule => {
+    if (rule.startsWith(RETURN_ASSESSMENT_RULE)) { returnRule = true; return ORDINARY_RETURN_RULE }
+    if (rule.includes(BASE_DECISION_SENTENCE)) { decisions = true; return rule.replace(BASE_DECISION_SENTENCE, ORDINARY_DECISION_SENTENCE) }
+    return rule
+  })
+  if (!returnRule || !decisions) throw new Error("contract rules no longer carry the return-assessment or execution-decision clause; the delegation-batch wording cannot be projected")
+  return out
+}
+
+/** The ordinary CI Atom contract names no assessment target. */
+function withoutAssessmentRefs(atomContract: string): string {
+  const next = atomContract.replace(BASE_ATOM_REFS_CI, "Name previous_atom_ref by an Atom id and revision supplied in atom_refs; management binds each Ref's digest.")
+  if (next === atomContract) throw new Error("Atom contract no longer carries the assessment target wording; the delegation-batch wording cannot be projected")
+  return next
 }
 
 /** Retain field semantics while replacing the joint-response shape and example. */
 export function generationContract<T extends { ir_change_contract: string; atom_contract: string; candidate_shape: string; example_candidate: string }>(
-  contract: T & { rules?: readonly string[]; reference_contract?: string }, stage: GenerationStage, profile?: StrictSchemaProfile, assessment = false, checkRequired = false,
+  contract: T & { rules?: readonly string[]; reference_contract?: string }, stage: GenerationStage, profile?: StrictSchemaProfile, assessment = false, checkRequired = false, activeExecutions = false,
 ): T {
   const checkedCI = stage === "ci" && !assessment && checkRequired
+  const ordinaryCI = stage === "ci" && !assessment
   // Every strict stage reads the identities code binds the same way.
   const rules = contract.rules?.map(rule => rule === BASE_EXISTING_OBJECTS_RULE ? BOUND_EXISTING_OBJECTS_RULE : rule)
   return {
@@ -384,14 +455,14 @@ export function generationContract<T extends { ir_change_contract: string; atom_
     ir_change_contract: stage === "ir"
       ? strictLocalSourceEdit(codeBoundRevisions(strictSupersededBasis(contract.ir_change_contract)))
       : codeBoundRevisions(strictSupersededBasis(contract.ir_change_contract)),
-    atom_contract: (stage === "ci" ? codeBoundIdentities : (text: string) => text)(assembledAtomContract(contract.atom_contract)).replace(
+    atom_contract: (ordinaryCI ? (text: string) => withoutAssessmentRefs(codeBoundIdentities(text)) : stage === "ci" ? codeBoundIdentities : (text: string) => text)(assembledAtomContract(contract.atom_contract)).replace(
       "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
       checkedCI ? "Compile the affected task, input/output, completion condition, Relation and assignment from the fixed parent IR; the independent check judges whether the original update was correctly represented."
         : "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
     ),
-    ...(stage === "ci" && !checkedCI && rules !== undefined ? { rules: rules.map(boundEvidence) } : {}),
-    ...(checkedCI && rules !== undefined ? { rules: rules.map(boundEvidence).map(rule => {
-      if (rule.startsWith("When configured, an independent checker")) return `${CHECKED_PARENT_ROLE} Execution decisions belong in candidate.groups[].execution_decisions. After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return, retry dispatches a returned Atom version once more. Unreviewed work remains suspended.`
+    ...(stage === "ci" && !checkedCI && rules !== undefined ? { rules: (ordinaryCI ? ordinaryCIRules : (all: readonly string[]) => [...all])(rules.map(boundEvidence)) } : {}),
+    ...(checkedCI && rules !== undefined ? { rules: ordinaryCIRules(rules.map(boundEvidence)).map(rule => {
+      if (rule.startsWith("When configured, an independent checker")) return `${CHECKED_PARENT_ROLE} Execution decisions belong in candidate.groups[].execution_decisions. ${ORDINARY_DECISION_SENTENCE} Unreviewed work remains suspended.`
       if (rule.startsWith("When validation_errors, previous_rejection")) return "On CI repairs, use the fixed parent IR and the reported plan defects to repair the complete plan. Preserve unrelated correct work, restore requirements present in that IR but missing from the plan, and correct assignments and Relations without changing IR or adding requirements absent from it. An independent IR finding returns to the IR stage through repair_target: ir."
       if (rule.startsWith("Before returning, compare the original delegation")) return "Before returning, compare every applicable fixed parent IR requirement with the whole plan's concrete tasks and completion. Fill missing plan behavior and remove unsupported plan restrictions while keeping the parent IR fixed."
       if (rule.startsWith("A first batch for a new delegation")) return "For initial compilation, compile the actual temporary parent IR supplied in request.ir and preserve the parent groups identified by generation_repair.ir_proposal."
@@ -402,7 +473,7 @@ export function generationContract<T extends { ir_change_contract: string; atom_
       ? "IR stage response = {schema_version:2,basis,source_coverage,groups}. Each group uses the existing CandidateGroup fields except compilation, coverage, execution_decisions, assessments and checks, which are forbidden in this response. The final Candidate is assembled only after CI generation."
       : assessment
         ? "CI stage (execution assessment) response = {schema_version:2,basis:{refs},parent_issues,groups}. Each group uses the existing CandidateGroup fields except ir_changes. source_coverage is forbidden. Management fills basis.event_ids with this batch's trigger events; basis.refs may cite existing objects you assessed. Keep each group's task_refs and depends_on, and write assessments and execution_decisions from this batch's evidence. Assess the returned work against the Atom's completion criteria and the user's own words; a reservation about the IR's wording, redundancy or evidence phrasing belongs in the assessment explanation, and parent_issues is only for a stored-IR defect that makes the judgement impossible. If parent_issues is nonempty, groups must be empty."
-        : `CI stage response = {schema_version:2,${checkedCI ? "" : "parent_issues,"}groups}. Each group uses the existing CandidateGroup fields except ir_changes, task_refs, depends_on and compilation.drafts[].task_id, which the compiler fills from the parent; source_coverage and basis are forbidden. coverage.requirement is {local_ref: <content item_id or task_id in this group's parent task>}, with no revision or digest; coverage refs keep their destination expression. Bind to a parent group by its local_ref. ${checkedCI ? CHECKED_PARENT_ROLE : "If parent_issues is nonempty, groups must be empty; otherwise"} Supply each parent group's compilation and coverage, and add questions only for concrete compilation uncertainty (the compiler keeps the parent's questions).`,
-    example_candidate: JSON.stringify(buildGenerationExample(stage, profile, assessment, checkRequired), null, 2),
+        : `CI stage response = {schema_version:2,${checkedCI ? "" : "parent_issues,"}groups}. Each group uses the existing CandidateGroup fields except ir_changes, task_refs, depends_on and compilation.drafts[].task_id, which the compiler fills from the parent, and assessments, which belong to the batch that carries an execution return; source_coverage and basis are forbidden. execution_decisions is present only while an execution is active, and then offers continue, stop or await_result. coverage.requirement is {local_ref: <content item_id or task_id in this group's parent task>}, with no revision or digest; coverage refs keep their destination expression. Bind to a parent group by its local_ref. ${checkedCI ? CHECKED_PARENT_ROLE : "If parent_issues is nonempty, groups must be empty; otherwise"} Supply each parent group's compilation and coverage, and add questions only for concrete compilation uncertainty (the compiler keeps the parent's questions).`,
+    example_candidate: JSON.stringify(buildGenerationExample(stage, profile, assessment, checkRequired, activeExecutions), null, 2),
   }
 }

@@ -8,7 +8,7 @@ import { CANDIDATE_JSON_SCHEMA } from "./candidate-schema.js"
 import { canonicalJson } from "../core/intent-contract.js"
 import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
 import type { StrictSchemaProfile } from "./candidate-schema-strict.js"
-import { buildGenerationSchema, generationContract, generationStageInstruction, type GenerationSchemaOptions } from "./generation-schema.js"
+import { buildGenerationSchema, generationContract, generationStageInstruction, hasActiveExecution, type GenerationSchemaOptions } from "./generation-schema.js"
 
 export interface StructuredProviderTransportOptions {
   endpoint?: string
@@ -85,8 +85,9 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
     const stage = stageValue === "ir" || stageValue === "ci" ? stageValue : undefined
     const profile = strict ? options.schemaProfile ?? (providerId === "groq" || endpoint.includes("dashscope") ? "groq" : "openai") : undefined
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
+    const active = stage === "ci" && !assessing && hasActiveExecution(request)
     const stageRequest = stage !== undefined && "example_candidate" in request.contract
-      ? { ...request, contract: generationContract(request.contract, stage, profile, assessing, generation.checkRequired) }
+      ? { ...request, contract: generationContract(request.contract, stage, profile, assessing, generation.checkRequired, active) }
       : request
     let response: Response
     try {
@@ -100,7 +101,7 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
         body: JSON.stringify({
           model: modelId,
           messages: [
-            { role: "system", content: stage === undefined ? options.systemPrompt ?? SYSTEM_PROMPT : `${generationStageInstruction(stage, assessing, generation.checkRequired)} Return one JSON text response matching the supplied stage Schema.` },
+            { role: "system", content: stage === undefined ? options.systemPrompt ?? SYSTEM_PROMPT : `${generationStageInstruction(stage, assessing, generation.checkRequired, active)} Return one JSON text response matching the supplied stage Schema.` },
             { role: "user", content: canonicalJson(stageRequest) },
           ],
           response_format: {
@@ -108,7 +109,7 @@ export function createStructuredProviderTransport<Request extends CompilerModelV
             json_schema: {
               name: stage === undefined ? "candidate_v2" : `${stage}_proposal_v2`,
               strict,
-              schema: stage === undefined ? options.schema ?? CANDIDATE_JSON_SCHEMA : buildGenerationSchema(stage, profile, { ...generation, assessment: assessing }),
+              schema: stage === undefined ? options.schema ?? CANDIDATE_JSON_SCHEMA : buildGenerationSchema(stage, profile, { ...generation, assessment: assessing, activeExecutions: active }),
             },
           },
           ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),

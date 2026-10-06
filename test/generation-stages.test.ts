@@ -55,11 +55,10 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
     schema_version: 2, parent_issues: [],
     groups: [{
       ...group, compilation: { decision: "replace", drafts: [] }, coverage: [],
-      execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "x", basis: [] }],
-      assessments: [{ target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [], result: "unknown", explanation: "x", method: "model" }],
       checks: [{ scenario: "s", expected: "e", observed_in_candidate: "o", sources: [], unresolved: false }],
     }],
   }
+  const assessed = { target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [], result: "unknown", explanation: "x", method: "model" }
   assert.equal(validateGenerationProposal("ci", proposal).ok, true)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], ir_changes: [] }] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, source_coverage: [] }).ok, false)
@@ -68,7 +67,7 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", { ...proposal, basis }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], task_refs: ["t1"] }] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], depends_on: [] }] }).ok, false)
-  assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], assessments: [{ ...proposal.groups[0]!.assessments[0], evidence_refs: [] }] }] }).ok, false,
+  assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], assessments: [{ ...assessed, evidence_refs: [] }] }] }, { assessment: true }).ok, false,
     "an assessment's evidence is bound by code to the batch's return")
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], local_ref: "g1" }] }).ok, false,
     "an ordinary CI group binds to its parent group by position")
@@ -79,7 +78,8 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."], groups: [] }).ok, true)
   // An assessment batch still names its own task; code fills its basis events.
-  const assessment = { ...proposal, basis: { refs: basis.refs }, groups: [{ ...proposal.groups[0], local_ref: "g1", task_refs: ["t1"], depends_on: [] }] }
+  const assessment = { ...proposal, basis: { refs: basis.refs }, groups: [{ ...proposal.groups[0], local_ref: "g1", task_refs: ["t1"], depends_on: [],
+    execution_decisions: [{ execution_id: "exec-1", decision: "retry", reason: "x", basis: [] }], assessments: [assessed] }] }
   assert.equal(validateGenerationProposal("ci", assessment, { assessment: true }).ok, true)
   assert.equal(validateGenerationProposal("ci", { ...assessment, basis }, { assessment: true }).ok, false,
     "an assessment's basis events are this batch's trigger events, filled by code")
@@ -397,7 +397,8 @@ test("a change's stated unchanged part is carried into completion and judged aga
     assert.ok(contract.rules.some(rule => rule.includes(contradiction)), "CI contract: the return rule judges against the requirement text")
     const schema = buildGenerationSchema("ci", profile, { assessment, checkRequired: true }) as { definitions: { atom: { properties: { completion: { description: string } } }; group: { properties: { assessments: { description: string } } } } }
     assert.ok(schema.definitions.atom.properties.completion.description.includes(boundary))
-    assert.ok(schema.definitions.group.properties.assessments.description.includes(contradiction))
+    if (assessment) assert.ok(schema.definitions.group.properties.assessments.description.includes(contradiction))
+    else assert.equal("assessments" in schema.definitions.group.properties, false, "a delegation batch writes no assessments")
   }
   const assessing = generationStageInstruction("ci", true, true)
   assert.match(assessing, /The user's own words are the assigned requirement passages in the Atom task, labelled by user input/)
@@ -459,9 +460,65 @@ test("strict stages ask for ids only where code binds revisions, digests and an 
   }
   assert.match(V2_COMPILER_CONTRACT.ir_change_contract, /id, expected_revision,/, "the legacy contract keeps its shape")
   const ci = generationContract(V2_COMPILER_CONTRACT, "ci", "openai")
-  assert.match(ci.atom_contract, /binds an assessment of this batch's return to the Atom version that execution ran/)
+  assert.doesNotMatch(ci.atom_contract, /assessments.target_ref|binds an assessment of this batch/, "a delegation batch names no assessment target")
   assert.doesNotMatch(ci.atom_contract, /Use the exact refs supplied in atom_refs/)
   const assessing = generationContract(V2_COMPILER_CONTRACT, "ci", "openai", true)
+  assert.match(assessing.atom_contract, /binds an assessment of this batch's return to the Atom version that execution ran/)
   assert.doesNotMatch(generationStageInstruction("ci", true) + assessing.candidate_shape, /must name exactly this batch's trigger events/)
   assert.deepEqual((buildGenerationExample("ci", undefined, true) as CIProposal).basis, { refs: [] })
+})
+
+// Assessments and retry belong to the batch that carries the return; a
+// delegation batch decides only what becomes of a running execution.
+test("a delegation batch's CI answer has no assessments, and execution decisions only for an active execution, never retry", () => {
+  for (const profile of [undefined, "openai", "groq"] as const) {
+    const quiet = buildGenerationSchema("ci", profile, { checkRequired: true }) as { definitions: { group: { properties: Record<string, any>; required: string[] } } }
+    for (const key of ["assessments", "execution_decisions"]) {
+      assert.equal(key in quiet.definitions.group.properties, false, `${key} is absent with no active execution (${profile ?? "default"})`)
+      assert.equal(quiet.definitions.group.required.includes(key), false)
+    }
+    const running = buildGenerationSchema("ci", profile, { checkRequired: true, activeExecutions: true }) as typeof quiet
+    assert.equal("assessments" in running.definitions.group.properties, false, "no assessments even while an execution runs")
+    assert.deepEqual(running.definitions.group.properties.execution_decisions.items.properties.decision.enum, ["continue", "stop", "await_result"])
+    assert.doesNotMatch(running.definitions.group.properties.execution_decisions.items.properties.decision.description, /retry/)
+    assert.deepEqual(running.definitions.group.properties.execution_decisions.items.required, ["execution_id", "decision", "reason", "basis"], "the decision's fields are unchanged")
+    // The assessment batch keeps both, retry included.
+    const assessing = buildGenerationSchema("ci", profile, { assessment: true, checkRequired: true, activeExecutions: true }) as typeof quiet
+    assert.ok("assessments" in assessing.definitions.group.properties)
+    assert.deepEqual(assessing.definitions.group.properties.execution_decisions.items.properties.decision.enum, ["continue", "stop", "await_result", "retry"])
+    // The examples validate against their own schemas and carry the same shape.
+    for (const active of [false, true]) {
+      const options = { checkRequired: true, activeExecutions: active }
+      const example = JSON.parse(generationContract(V2_COMPILER_CONTRACT, "ci", profile, false, true, active).example_candidate) as { groups: Array<Record<string, unknown>> }
+      assert.equal("assessments" in example.groups[0]!, false)
+      assert.equal("execution_decisions" in example.groups[0]!, active)
+      const validate = new Ajv({ strict: false, allowUnionTypes: true }).compile(buildGenerationSchema("ci", profile, options))
+      assert.equal(validate(example), true, JSON.stringify(validate.errors))
+    }
+  }
+  // Without a strict profile an answer that still carries them is refused or reduced.
+  const group = { compilation: { decision: "reuse", current: [], reason: "r" }, coverage: [], checks: [], questions: [] }
+  const retry = { execution_id: "exec-1", decision: "retry", reason: "x", basis: [] }
+  assert.equal(validateGenerationProposal("ci", { schema_version: 2, parent_issues: [], groups: [{ ...group, execution_decisions: [retry] }] }, { activeExecutions: true }).ok, false, "retry is not a delegation batch's decision")
+  assert.equal(validateGenerationProposal("ci", { schema_version: 2, parent_issues: [], groups: [{ ...group, execution_decisions: [{ ...retry, decision: "continue" }] }] }, { activeExecutions: true }).ok, true)
+  const old = { schema_version: 2, groups: [{ ...group, assessments: [{ result: "satisfied" }], execution_decisions: [] }] }
+  dropCodeBoundIdentities(old, false, false)
+  assert.deepEqual(Object.keys(old.groups[0]!).sort(), ["checks", "compilation", "coverage", "questions"], "the earlier shape's assessments and empty decisions are dropped")
+  const kept = { schema_version: 2, groups: [{ ...group, assessments: [{ result: "satisfied" }], execution_decisions: [{ ...retry, decision: "continue" }] }] }
+  dropCodeBoundIdentities(kept, false, true)
+  assert.equal("assessments" in kept.groups[0]!, false)
+  assert.equal(kept.groups[0]!.execution_decisions.length, 1)
+
+  // Wording: the delegation batch is told assessments are not its, and the assessment batch is not.
+  const contract = generationContract(V2_COMPILER_CONTRACT, "ci", "openai", false, true)
+  const text = [contract.candidate_shape, ...contract.rules, generationStageInstruction("ci", false, true), generationStageInstruction("ci", false, true, true)].join("\n")
+  assert.match(text, /write no assessments/)
+  assert.match(text, /retry belong to the batches that carry an execution return/i)
+  assert.doesNotMatch(text, /retry dispatches a returned Atom version once more/)
+  assert.doesNotMatch(text, /author the execution_decisions, assessments and checks/)
+  assert.match(generationStageInstruction("ci", false, true, true), /an execution decision \(continue, stop or await_result\) for each active execution/)
+  assert.doesNotMatch(generationStageInstruction("ci", false, true), /execution decision/)
+  const assessing = generationContract(V2_COMPILER_CONTRACT, "ci", "openai", true, true)
+  assert.match(assessing.rules.join("\n"), /retry dispatches a returned Atom version once more/)
+  assert.deepEqual(V2_COMPILER_CONTRACT.rules.filter(rule => rule.startsWith("On execution_return, compare")).length, 1, "the base contract is untouched")
 })

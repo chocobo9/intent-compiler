@@ -1054,3 +1054,30 @@ test("an assessment that finds the stored IR defective records it and still comp
   assert.deepEqual(record.trigger_event_ids, ["return"])
   assert.deepEqual(store.current().questions.map(question => question.text), second.questions)
 })
+
+// Assessments and retry belong to the batch that carries the return.
+test("a delegation batch's answer that still carries assessments is accepted and records none", async () => {
+  const { store, compiler } = await setup(async input => {
+    if (input.generation_stage === "ir") return JSON.stringify(parent())
+    const next = child() as ReturnType<typeof child> & { groups: Array<Record<string, unknown>> }
+    next.groups[0]!.assessments = [{ target_ref: { id: "a-bundle", revision: 0, digest: "sha256:x" }, criteria_refs: [], evidence_refs: [], result: "satisfied", explanation: "judged in a delegation batch", method: "model" }]
+    return JSON.stringify(next)
+  })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  assert.deepEqual(store.current().assessments, [], "the earlier shape's assessments are not recorded")
+  assert.deepEqual(store.current().management_log.at(-1)!.candidate!.groups[0]!.assessments, [])
+})
+
+test("a delegation batch's retry decision is rejected with the reason", async () => {
+  const { store, compiler } = await setup(async input => {
+    if (input.generation_stage === "ir") return JSON.stringify(parent())
+    const next = child() as ReturnType<typeof child> & { groups: Array<Record<string, unknown>> }
+    next.groups[0]!.execution_decisions = [{ execution_id: "exec-1", decision: "retry", reason: "again", basis: [] }]
+    return JSON.stringify(next)
+  })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, false)
+  assert.match(result.message!, /retry is decided only in the batch that carries the execution return/)
+  assert.deepEqual(store.current().compiled, {})
+})

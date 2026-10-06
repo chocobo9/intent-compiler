@@ -72,6 +72,7 @@ export function repairCandidate(input: CompilerModelV2Input): Candidate {
         : group.compilation
       return {
         ...structuredClone(group), compilation, local_ref: original.local_ref,
+        execution_decisions: structuredClone(group.execution_decisions ?? []), assessments: structuredClone(group.assessments ?? []),
         task_refs: [...original.task_refs], depends_on: [...original.depends_on],
         ir_changes: structuredClone(original.ir_changes),
       }

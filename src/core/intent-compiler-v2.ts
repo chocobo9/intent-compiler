@@ -1,4 +1,4 @@
-import { changedPriorState, projectCompiled } from "./request-projection.js"
+import { changedPriorState, projectAssessments, projectCompiled } from "./request-projection.js"
 import {
   canonicalJson,
   digestOf,
@@ -50,6 +50,7 @@ import type {
   ExistingObjectDirectory,
 } from "../model/compiler-model-v2.js"
 import { V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, V2_COMPILER_CONTRACT } from "../model/compiler-model-v2.js"
+import { RETRY_IN_DELEGATION_BATCH } from "../model/generation-schema.js"
 import { bindCurrentRequirements, selectSourceEvents, userInputOrder, type RequirementAssembly } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
 import { locateQuote, materializeSourceContent, recordedDispositions, recordEditedRemovals, selectedSourceHistory, sourceDispositionView, SourceLedger, sourceSegments, userText, validateSourceCoverage, withdrawnPassages } from "./source-payload.js"
@@ -350,7 +351,7 @@ async function advance(
     executions: execution.list().map(toExecutionView),
     atom_states: snapshot.atom_states,
     execution_outcomes: snapshot.execution_outcomes,
-    assessments: snapshot.assessments,
+    assessments: projectAssessments(snapshot.assessments, snapshot.compiled, snapshot.atom_states),
     capabilities: describeCapabilities(capabilities, events),
     budget: {
       requests_used: snapshot.budget.management_requests,
@@ -917,6 +918,7 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
       const existing = execution.getExecution(executionDecision.execution_id)
       if (!existing || !taskRefs.includes(existing.task_id)) throw new Error(`execution decision references an execution outside this group: ${executionDecision.execution_id}`)
       if (executionDecision.decision === "retry") {
+        if (events.some(event => event.kind === "user_input")) throw new Error(RETRY_IN_DELEGATION_BATCH)
         retries.push(retryTarget(existing, group, compiled, ir, atoms, execution, snapshot.execution_outcomes))
       }
       if (executionDecision.decision === "stop" || executionDecision.decision === "retry") {
