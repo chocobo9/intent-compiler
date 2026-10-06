@@ -679,38 +679,34 @@ test("an uncompiled delegation beyond the carried cap keeps its text and is list
   }
 })
 
-test("a turn answers its own delegation and carries the earlier uncompiled one as an unresolved task", async () => {
+// Full run 856312ae mgmt-4: every CI answer was refused because the IR answer's
+// basis left out the carried R2 delegation, which code already knew.
+test("a turn's basis names its carried delegation by code; the carried text still has to be placed", async () => {
   const seen: CompilerModelV2Input[] = []
   const { store, compiler } = await setup(async input => {
     seen.push(structuredClone(input))
     const proposal = parent()
-    // Keep only this turn's event in basis (on both stages): the carried
-    // delegation then has no destination, and the batch must be sent back.
+    // The answer names only this turn's event; the carried delegation is left out.
     proposal.basis = { event_ids: ["next-turn"], refs: [] }
-    // This turn's own text is accounted for, so the batch reaches the CI-stage check it is testing.
     const own = "Add a status command that prints ok."
     proposal.source_coverage = [{ source: { source_id: "next-turn", digest: digestText(own), span: { unit: "utf16", start: 0, end: own.length } },
       disposition: "unresolved", requirements: [], reason: "Kept for a later batch.", basis: [] }]
     if (input.generation_stage === "ir") return JSON.stringify(proposal)
-    // The basis is the parent's; the ordinary CI answer cannot restate it.
     return JSON.stringify(child())
   })
+  // The first delegation was never compiled, so the next turn carries it.
+  store.applyDeltas({ max_management_requests: 2 })
+  assert.equal((await compiler.advance({ runId: "parent" })).ok, false)
+  store.applyDeltas({ max_management_requests: 8 })
   await compiler.acceptEvent({ schema_version: 2, run_id: "parent", event_id: "next-turn", kind: "user_input",
     source: { channel: "user", producer_id: "user" }, payload: { text: "Add a status command that prints ok." } })
-  assert.equal((await compiler.advance({ runId: "parent" })).ok, false)
   const second = await compiler.advance({ runId: "parent" })
-  assert.equal(second.ok, false)
+  assert.equal(second.ok, true, second.message)
   const carriedRequests = seen.filter(input => input.carried_delegations !== undefined)
   assert.ok(carriedRequests.length > 0, "the turn's batch carries the earlier uncompiled delegation")
-  assert.deepEqual(carriedRequests[0]!.events.map(event => event.event_id), ["e2", "e1"])
-  assert.deepEqual(carriedRequests[0]!.carried_delegations, [{
-    event_id: "e1", sequence: 1, failed_batches: 0, stalled: false,
-  }])
-  // This defect is reported through the CI-stage candidate check, and that
-  // request still shows full ids, so its message keeps naming the full id.
-  assert.match(second.message!, /carried delegation input-event-id is missing from basis\.event_ids/)
-  assert.deepEqual(store.carriedDelegations().map(gap => ({ id: gap.event_id, failed: gap.failed_batches })),
-    [{ id: "input-event-id", failed: 2 }, { id: "next-turn", failed: 2 }])
+  const committed = store.current().management_log.at(-1)!
+  assert.deepEqual([...committed.trigger_event_ids].sort(), ["input-event-id", "next-turn"])
+  assert.ok(!store.carriedDelegations().some(gap => gap.event_id === "input-event-id"), "the carried delegation is placed and no longer carried")
 })
 
 test("resume after a CI transport failure reuses the exact temporary parent without committing it early", async () => {

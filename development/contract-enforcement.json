@@ -1649,7 +1649,7 @@
       "where": [
         {
           "file": "src/core/intent-compiler-v2.ts",
-          "match": "carried delegation ${displayEventId(eventId)} is missing from basis.event_ids"
+          "match": "result.candidate.basis.event_ids = [...new Set([...result.candidate.basis.event_ids, ...carriedEventIds])]"
         },
         {
           "file": "src/core/source-payload.ts",
@@ -1661,7 +1661,7 @@
         }
       ],
       "fixture": "test/source-payload.test.ts",
-      "note": "代码按事件日志/当前IR/批次日志派生携带缺口（未接受或显式unresolved），批次必须把每个缺口列入basis并显式处置（选入IR或写明source_coverage去因）；是否真把要求理解正确仍是模型语义职责。2026-10-01 C 适用范围：仅普通且 checkRequired=true 的 CI 将本条整条投影为按固定父 IR 编译本批及携带工作，原委托是否保留由独立核对判断；IR 仍执行选入/处置要求，CI 装配保留父 basis 和 source_coverage，上述登记门槛不变。IR、无核对 CI、assessment 和 legacy 保留基础规则；前后全文见 CI-COVERAGE-IDENTITY.md 收口审计。"
+      "note": "代码按事件日志/当前IR/批次日志派生携带缺口（未接受或显式unresolved），批次必须把每个缺口列入basis并显式处置（选入IR或写明source_coverage去因）；是否真把要求理解正确仍是模型语义职责。2026-10-01 C 适用范围：仅普通且 checkRequired=true 的 CI 将本条整条投影为按固定父 IR 编译本批及携带工作，原委托是否保留由独立核对判断；IR 仍执行选入/处置要求，CI 装配保留父 basis 和 source_coverage，上述登记门槛不变。IR、无核对 CI、assessment 和 legacy 保留基础规则；前后全文见 CI-COVERAGE-IDENTITY.md 收口审计。2026-10-06：basis 中的携带委托由代码补入（非空 basis 时追加），不再作为拒绝；携带委托是否被处理仍由 source-payload 的选入/处置检查判定。"
     },
     "C.rules.21": {
       "state": "advice",
@@ -1812,13 +1812,6 @@
       "match": "records no destination"
     },
     {
-      "id": "carried-delegation-unnamed",
-      "clause": "C.rules.23",
-      "class": "A",
-      "match": "carried delegation ${displayEventId(eventId)} is missing from basis.event_ids",
-      "where": "src/core/intent-compiler-v2.ts#candidateIssues"
-    },
-    {
       "id": "carried-delegation-unacknowledged",
       "clause": "C.rules.23",
       "class": "A",
@@ -1945,7 +1938,7 @@
     {
       "file": "src/core/intent-compiler-v2.ts",
       "pattern": "issues\\.push\\(",
-      "expected": 16,
+      "expected": 15,
       "why": "候选层面的可修订拒绝；每加一条都要在 gate_index 里有名字，否则就是没人要求过的规则（r11d 的教训）"
     },
     {

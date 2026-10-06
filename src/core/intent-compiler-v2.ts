@@ -453,6 +453,14 @@ async function advance(
     const display = (eventId: string) => generation?.state.phase === "ir" ? generation.display(eventId) : eventId
     if (!result.ok || result.candidate === undefined) return proposalIssues(result, events, snapshot.ir, snapshot.compiled, dryRun, strictRequirements, carriedEventIds, display)
     result.candidate = structuredClone(result.candidate)
+    // A delegation batch answers every carried delegation as well as its own
+    // turn; code knows which those are and names them.  Whether a carried
+    // delegation was actually handled is judged where its text has to be
+    // adopted or disposed.  An empty basis is still the answer's own claim
+    // that the batch has nothing to act on, and is checked as such.
+    if (result.candidate.basis.event_ids.length > 0) {
+      result.candidate.basis.event_ids = [...new Set([...result.candidate.basis.event_ids, ...carriedEventIds])]
+    }
     // Compare what management received and returned, before resolving selectors.
     const attempt = attemptsLog.at(-1)
     if (attempt?.kind === "propose" && activeRepairContext !== undefined) {
@@ -2049,7 +2057,7 @@ export function candidateIssues(
   compiled: Record<string, CompiledIntent>,
   buildOptions: BuildCompiledIntentOptions,
   strictRequirements = false,
-  carriedEventIds: ReadonlySet<string> = new Set(),
+  _carriedEventIds: ReadonlySet<string> = new Set(),
   displayEventId: (eventId: string) => string = (eventId) => eventId,
 ): string[] {
   const issues: string[] = []
@@ -2058,14 +2066,6 @@ export function candidateIssues(
   const basisCheck = validateCandidateBasis(candidate, events, displayEventId)
   if (!basisCheck.ok) {
     issues.push(`${basisCheck.message ?? "candidate basis is invalid"}; pending event ids for this batch: ${eventIds.map(displayEventId).join(", ")}`)
-  }
-  // A carried delegation is an unresolved task from an earlier turn.  The batch
-  // has to name it, so "the previous turn's work" cannot silently fall out of
-  // the accounting while the new turn proceeds.
-  for (const eventId of carriedEventIds) {
-    if (!candidate.basis.event_ids.includes(eventId)) {
-      issues.push(`carried delegation ${displayEventId(eventId)} is missing from basis.event_ids: it is an unresolved task from an earlier turn; name it, then select its operative text into IR content or dispose its passage in source_coverage with a question explaining what is still missing`)
-    }
   }
   if (carriesUserInput && !candidate.groups.some((group) => group.task_refs.length > 0)) {
     issues.push(
@@ -2585,9 +2585,6 @@ function applicationHint(message: string): string {
   }
   if (/carried delegation .* has no disposition/u.test(message)) {
     return " (this batch carries that earlier delegation: select its operative text into IR content, or write one source_coverage entry naming its passage and a questions[] entry saying what is still missing)"
-  }
-  if (/carried delegation .* is missing from basis\.event_ids/u.test(message)) {
-    return " (name every carried delegation from carried_delegations in basis.event_ids together with this turn's own event; they are unresolved tasks this batch must account for)"
   }
   if (/basis references unknown event|names the wrong input events/u.test(message)) {
     return " (basis.event_ids must name exactly this batch's trigger events; an execution return is evidence for assessments, not a basis event)"
