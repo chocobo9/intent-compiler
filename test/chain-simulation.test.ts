@@ -11,9 +11,6 @@ import { stageCandidate } from "./fixtures/stage-candidate.js"
 // and host turn loop; scripted management and executor.  Each scenario states
 // what a round should end with; the audit item it covers is named in the title.
 
-/** Scenarios that fail on the code the audit reviewed (7e817a9); the gate fixes remove the mark. */
-const OPEN = "fails before the chain-gate fixes (chain-gate-audit-2026-10-06)"
-
 type Judge =(atomId: string, executionId: string, input: CompilerModelV2Input) => ReturnJudgement | string
 
 function userEventOf(input: CompilerModelV2Input): string {
@@ -100,7 +97,7 @@ test("scenario 1b: executor variants (recovered tool error, stop, timeout) still
   assert.deepEqual(round.pendingEventIds, [])
 })
 
-test("scenario 2 (B1): a return batch that fails once is recovered within the same round", { todo: OPEN }, async () => {
+test("scenario 2 (B1): a return batch that fails once is recovered within the same round", async () => {
   let host: ChainHost | undefined
   const failedBatches = (eventId: string) => host!.snapshot().management_log
     .filter(record => record.status !== "accepted" && record.trigger_event_ids.includes(eventId)).length
@@ -119,7 +116,7 @@ test("scenario 2 (B1): a return batch that fails once is recovered within the sa
   assert.deepEqual(round.pendingEventIds, [])
 })
 
-test("scenario 3 (B2): two returns pending at once are both assessed and the successor is not delayed", { todo: OPEN }, async () => {
+test("scenario 3 (B2): two returns pending at once are both assessed and the successor is not delayed", async () => {
   // a-bundle and a-inspect are independent and delivered in one turn; a-step3 follows a-inspect.
   const plan = (event: string) => {
     const candidate = chainCandidate(3, event)
@@ -269,13 +266,17 @@ test("scenario 6 (B4): where a delegation batch closes after check rework, under
   const host = new ChainHost({ propose: scripted.propose, check, budget: { perBatch: 8, total: 180 } })
   const round = await host.round(CANDIDATE_EXAMPLE_INPUT)
   report("scenario 6", round, host)
-  const batch = host.snapshot().management_log[0]!
-  const calls = (batch.attempts ?? []).map(a => a.generation_stage ?? a.kind)
-  console.log(`  [scenario 6] batch 1: status=${batch.status} error=${batch.error_code} calls=${JSON.stringify(calls)} used=${calls.length}/8 checks=${checks}`)
+  const log = host.snapshot().management_log
+  const calls = log.map(batch => (batch.attempts ?? []).map(a => a.generation_stage ?? a.kind))
+  log.forEach((batch, i) => console.log(`  [scenario 6] batch ${i + 1}: status=${batch.status} error=${batch.error_code ?? "-"} calls=${JSON.stringify(calls[i])} used=${calls[i]!.length}`))
   // Recorded, not a target: the B4 change waits for review.  IR→CI→check costs
   // 3 and an IR-targeted rejection restarts at IR, so two rejections use 6 of 8
-  // requests and the third attempt (3 more) no longer fits.
-  assert.equal(checks, 2)
-  assert.equal(batch.status, "validation_failed")
-  assert.equal(calls.length, 6)
+  // requests and the third attempt (3 more) no longer fits: the delegation
+  // batch closes with 2 unused.  A host turn then runs management once more
+  // (B1), and that batch, starting over at IR, is accepted.
+  assert.equal(log[0]!.status, "validation_failed")
+  assert.deepEqual(calls[0], ["ir", "ci", "check", "ir", "ci", "check"])
+  assert.equal(log[1]!.status, "accepted")
+  assert.deepEqual(calls[1], ["ir", "ci", "check"])
+  assert.equal(round.host.turns[0]!.offered[0], "a-bundle@0")
 })

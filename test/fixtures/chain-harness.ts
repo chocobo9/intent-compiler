@@ -61,7 +61,7 @@ export interface TurnRecord {
 export interface HostLoopRecord {
   turns: TurnRecord[]
   cap: number
-  stopped: "no pending dispatch" | "turn cap reached" | "host turn started no execution"
+  stopped: "nothing pending" | "turn cap reached" | "host turn started no execution"
 }
 
 export interface RoundRecord {
@@ -121,15 +121,18 @@ export class ChainHost {
     return { user, host, pendingEventIds: [...snapshot.pending_event_ids], pendingDispatches: pendingDispatches(snapshot).map(d => d.dispatch_id) }
   }
 
-  /** `_run_pending_dispatches`: keep adding host turns while offered work has not started. */
+  /**
+   * `_run_pending_dispatches`: keep adding host turns while offered work has not
+   * started or events wait for management.
+   */
   async runPendingDispatches(): Promise<HostLoopRecord> {
-    const record: HostLoopRecord = { turns: [], cap: 0, stopped: "no pending dispatch" }
+    const record: HostLoopRecord = { turns: [], cap: 0, stopped: "nothing pending" }
     let snapshot = this.snapshot()
     for (;;) {
       const pending = pendingDispatches(snapshot)
       const cap = EXECUTIONS_PER_ATOM_VERSION * Math.max(1, currentAtomCount(snapshot))
       record.cap = Math.max(record.cap, cap)
-      if (pending.length === 0) { record.stopped = "no pending dispatch"; break }
+      if (pending.length === 0 && snapshot.pending_event_ids.length === 0) { record.stopped = "nothing pending"; break }
       if (record.turns.length >= record.cap) { record.stopped = "turn cap reached"; break }
       const before = executionIds(snapshot)
       const turn = await this.turn("host", HOST_DISPATCH_INSTRUCTION, { source_category: HOST_DISPATCH_SOURCE_CATEGORY })

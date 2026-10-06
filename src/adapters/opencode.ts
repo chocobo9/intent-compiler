@@ -577,7 +577,9 @@ async function onV2ChatMessage(
   }
   // A host-dispatch turn carries no user text: it runs the work a return batch
   // offered (an unlocked successor, a retry, a rerun) after the executor turn
-  // holding the returned work had ended.
+  // holding the returned work had ended.  With nothing offered it runs
+  // management once more, so events a failed batch put back are processed in
+  // this round instead of waiting for the next user input.
   const hostDispatch = typeof identity.source === "object" && identity.source !== null
     && (identity.source as { source_category?: unknown }).source_category === HOST_DISPATCH_SOURCE_CATEGORY
   let advanced: AdvanceResult
@@ -588,8 +590,9 @@ async function onV2ChatMessage(
     } catch (error: unknown) {
       throw new OpenCodeAdapterError("COMPILER_PENDING_DELIVERIES_FAILED", `Compiler pending delivery lookup failed: ${errorMessage(error)}`)
     }
-    advanced = { ok: true, run_id: identity.runId, disposition: offered.length > 0 ? "dispatched" : "unchanged",
-      pending_events: [], compiled_revisions: {}, ir_revisions: {}, deliveries: offered }
+    advanced = offered.length > 0
+      ? { ok: true, run_id: identity.runId, disposition: "dispatched", pending_events: [], compiled_revisions: {}, ir_revisions: {}, deliveries: offered }
+      : await advanceForTurn(compiler, identity.runId)
   } else {
     const raw = harness?.userInputText ?? incomingText
     const event: CompilerEvent = {

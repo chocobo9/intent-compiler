@@ -85,7 +85,7 @@ IR 保存整个任务的当前要求，包括当前暂停、尚未满足和暂�
 
 **IR 内容。** 严格模式的 `IR.content` 保存规范性业务要求：有来源的正文、适用范围和版本。代码将模型选中的原文区间物化为 `text`；同一来源的相邻或重叠区间合并，不相邻段落以空行连接。模型的 `interpretation` 另存。
 
-- `create` 建立新内容；`revise：指明目标及 expected_revision`，替换该条内容的来源集合。
+- `create` 建立新内容；`revise` 指明目标 id，期望版本为所给 IR 中该对象的当前版本、由生成层代码填入，替换该条内容的来源集合。
 - `edit` 对既有来源区间执行 remove/add，保留未受影响部分；纯增加允许 `remove=[]`，remove/add 同时为空会被拒绝。edit 保留原 interpretation。
 - 代码根据实际移除、且未被同批其他内容继续选择的区间形成 superseded 记录。模型负责确认这种移除符合用户更新的含义。合同要求只撤回当前输入实际作废的文字：整句或整项删除仅在每部分都作废、或剩余部分已由新选入原文重述时成立，拿不准时保留旧文本与新文本按先后并列；revise 未继续选中的旧文本同样是撤回。
 
@@ -126,7 +126,7 @@ Atom.constraints 默认空；重复要求时，text 和 scope 必须与已分配
 
 IR 请求读取当前 IR、本批事件和选入的历史来源，不携带旧 CI 与执行证据正文。历史来源按当前输入、IR 已引用事件及未决委托选择。普通 CI 请求读取准备后的父 IR 和计划所需执行状态，不携带 IR 阶段的 `source_history` 正文视图。CI 与核对请求中的计划是投影：每个 Atom 的当前版本完整，历史版本只在 `historical_atoms` 给出身份与生命周期；附入块的正文与同一请求中同 id、revision、digest 的 IR 条目原文逐字相同时改为指向该条目，带输入标注的块原样保留。核对请求中，改动前的 `ir`、`compiled` 只含本批改动的对象，`prepared.dispatchable_atoms` 为引用。已提交的 IR、CI、Atom 不受投影影响。
 
-IR 阶段不生成 compilation、coverage、execution_decisions、assessments 或 checks。普通 CI 阶段不输出 `ir_changes/source_coverage`；它按父态 group 的顺序逐一对应（每个父 group 一个 CI group，CI group 不写 local_ref），由代码补 local_ref、basis、task_refs、depends_on、draft.task_id，以及 coverage 要求的当前完整 Ref。CI 阶段（普通与执行评估）的回答也不写代码已知的身份：Relation 端点只写 atom_id，由代码绑定为本计划中该 Atom 的版本（本批提出的版本优先，否则为计划中该 atom_id 的最新版本，找不到或跨任务重名则拒绝）；Atom 的 authority.basis、各 rule 的 resource_ref 和 Relation 的 basis 由代码绑定为该任务 IR 条目的 Ref；重新提交计划中已有版本（同 atom_id、revision）的 Atom 时沿用该版本已绑定的值，内容保持不变。按旧合同写出、仍带这些字段的回答，解码时去掉这些字段（端点保留 atom_id），原始文本照录。规则授权的语义（operation_id、input/output refs、conditions、allowed_use）和哪些 Atom 有依赖仍由模型给出。评估的 evidence_refs 也不由回答给出：代码把它绑定为本批中该目标 Atom 版本的回传事件（没有对应时为本批全部回传事件）的整事件引用，回答依据了回传中的哪些内容由 explanation 说明；按旧合同写出、带定位（segment_id、quote、span）的 evidence_refs 在解码时去掉。回答的 basis.event_ids 非空时，代码补入本批的全部携带委托；携带委托是否真的被处理，仍由来源选入或处置的检查判定。空 basis 仍按原规则拒绝。具体字段形状在 [generation-schema.ts](../src/model/generation-schema.ts) 维护。
+IR 阶段不生成 compilation、coverage、execution_decisions、assessments 或 checks。普通 CI 阶段不输出 `ir_changes/source_coverage`；它按父态 group 的顺序逐一对应（每个父 group 一个 CI group，CI group 不写 local_ref），由代码补 local_ref、basis、task_refs、depends_on、draft.task_id，以及 coverage 要求的当前完整 Ref。CI 阶段（普通与执行评估）的回答也不写代码已知的身份：Relation 端点只写 atom_id，由代码绑定为本计划中该 Atom 的版本（本批提出的版本优先，否则为计划中该 atom_id 的最新版本，找不到或跨任务重名则拒绝）；Atom 的 authority.basis、各 rule 的 resource_ref 和 Relation 的 basis 由代码绑定为该任务 IR 条目的 Ref；重新提交计划中已有版本（同 atom_id、revision）的 Atom 时沿用该版本已绑定的值，内容保持不变。按旧合同写出、仍带这些字段的回答，解码时去掉这些字段（端点保留 atom_id），原始文本照录。规则授权的语义（operation_id、input/output refs、conditions、allowed_use）和哪些 Atom 有依赖仍由模型给出。评估的 evidence_refs 也不由回答给出：代码把它绑定为本批中该目标 Atom 版本的回传事件（没有对应时为本批全部回传事件）的整事件引用，回答依据了回传中的哪些内容由 explanation 说明；按旧合同写出、带定位（segment_id、quote、span）的 evidence_refs 在解码时去掉。其余代码已知的身份同样由代码绑定（2026-10-06 全链路门槛清单 A1–A5）：IR 阶段回答不写 revise、retire、edit 的 expected_revision，代码取所给 IR 中该对象的当前版本，同一批对同一对象改两次仍按“已改到某版本”拒绝并说明原因；各阶段回答中的 Ref 由回答选 id 与 revision，凡对应唯一已存版本（IR 任务及其内容、绑定、输出，计划列出的任一 Atom 版本，Compiled Intent）的，代码写入该版本的 digest，对不上任何已存版本的保持原样，由读取它的检查报告；执行评估批中，评估目标是本批回传的 Atom 时，target_ref 绑定为该执行所运行的版本，目标对不上计划中任何 Atom 版本时退回并说明原因；执行评估批的 basis.event_ids 由代码填为本批事件，回答只写 basis.refs。按旧合同写出的 expected_revision 与评估批 basis.event_ids 在解码时去掉。回答的 basis.event_ids 非空时，代码补入本批的全部携带委托；携带委托是否真的被处理，仍由来源选入或处置的检查判定。空 basis 仍按原规则拒绝。具体字段形状在 [generation-schema.ts](../src/model/generation-schema.ts) 维护。
 
 **父 IR 问题按路径处理。**
 
@@ -199,7 +199,7 @@ IR 阶段不生成 compilation、coverage、execution_decisions、assessments �
 
 **重试。** 回传批的 execution_decisions 对已回传执行给出 stop 或 retry。retry 的成立条件由代码检查：该执行已关闭且有回传记录，本组 compilation 为 reuse，本批对同一 Atom 版本（id、revision、digest）有 not_satisfied 评估，该版本仍为当前、状态为 ready/completed/failed，任务 scope=proceed；任一条件不成立则候选退回返修。成立时原执行保持关闭，代码为同一 Atom 版本新建一个带 `retry_of` 的 dispatch，Atom 状态置回 ready，作为本批交付返回，原执行记 `retry: {outcome: "dispatched", dispatch_id}`。回传的 state_claim 不是 completed（例如会话被终止）、且该任务计划未变（本批未重编译该任务）、版本仍为当前时，代码不经模型决定，同样为同一版本新建带 `retry_of` 的 dispatch，原执行记 `cause: "incomplete_return"`；计划已变时由重编译派发新工作。同一 Atom 版本在两次用户输入之间最多执行 2 次，不论来自首次派发、retry、未完成后的再执行，还是重编译时的再交付。每个执行开始时记下当时最新用户输入的日志序号（`user_input_window`），计数只算同一窗口内该版本的执行；早于此字段的执行不计入任何窗口。已达上限时照 stop 收口，不新建 dispatch，该版本最近一次执行记 `retry: {outcome: "limit_reached", executions, cause}`（cause 为 retry_decision、incomplete_return 或 redelivery），在 snapshot 与 `inspect` 的执行视图中可见。dispatch 在未开始或其执行仍未关闭时复用；同一内容的已有 dispatch 都带有已关闭执行时，再次交付即再次执行，使用新 dispatch，因此“已派发未开始”就是没有执行的 dispatch。unknown、satisfied 或 stop 在执行声称完成时的处理与此前相同。retry 只由模型在回答中显式给出，代码不从 reason 等文字推断。
 
-回传批产生的派发（解锁的后继、retry、未完成后的再执行、重编译的再交付）在承载原工作的执行轮结束后才出现。OpenCode 插件对回传后 advance 的交付不在同一轮送达；dpipe 宿主（`intent_opencode_agent.py`）在一轮的常规执行结束后读取 snapshot，只要还有没有执行的 dispatch 且其 Atom 版本状态为 ready，就在同一轮内再起一次 OpenCode，并以注册来源类别 `host_dispatch` 标记。插件识别该类别后不记录用户输入、不调用 advance，改取 `pendingDeliveries` 的交付（编译器再检查版本、状态、准入和资格），其后的读回、start、操作授权、回传和回传后评估与常规交付相同。宿主轮的上限为 2 × 计划中尚非 legacy/superseded 的 Atom 版本数（每版本两次执行），每轮重新计算；某个宿主轮没有启动任何执行时也停止。每轮的宿主轮记录写入 `round-<n>-host-turns.json`（cap、各轮待执行与已启动的执行、停止原因），上一回合的命令日志另存为 `round-<n>-turn-<t>`。多回合使一轮耗时增加：`intent.example.json` 的 agent `override_timeout_sec` 设为 7200 秒（任务默认 1800 秒）；从既有运行目录续跑的配置需同样设置。
+回传批产生的派发（解锁的后继、retry、未完成后的再执行、重编译的再交付）在承载原工作的执行轮结束后才出现。OpenCode 插件对回传后 advance 的交付不在同一轮送达；dpipe 宿主（`intent_opencode_agent.py`）在一轮的常规执行结束后读取 snapshot，只要还有没有执行的 dispatch 且其 Atom 版本状态为 ready，或 snapshot 中仍有管理层未处理的事件（失败的批会把事件放回队列），就在同一轮内再起一次 OpenCode，并以注册来源类别 `host_dispatch` 标记。插件识别该类别后不记录用户输入，先取 `pendingDeliveries` 的交付（编译器再检查版本、状态、准入和资格）；没有可交付时调用一次 advance 处理待处理事件，其交付在本轮执行。其后的读回、start、操作授权、回传和回传后评估与常规交付相同。宿主轮的上限为 2 × 计划中尚非 legacy/superseded 的 Atom 版本数（每版本两次执行），每轮重新计算；某个宿主轮没有启动任何执行时也停止。每轮的宿主轮记录写入 `round-<n>-host-turns.json`（cap、各轮待执行的 dispatch、待处理事件与已启动的执行、停止原因），上一回合的命令日志另存为 `round-<n>-turn-<t>`。多回合使一轮耗时增加：`intent.example.json` 的 agent `override_timeout_sec` 设为 7200 秒（任务默认 1800 秒）；从既有运行目录续跑的配置需同样设置。
 
 用户原文只经 `opencode run` 的参数进入插件，由插件登记为 user_input；宿主不把原文写入执行层可读的位置。旧版宿主曾每轮写入 `/app/TASK_SPEC.md`，从旧镜像续跑时该文件仍在，宿主每轮开始时删除它，结果记入 `round-<n>-task-spec-cleanup.json`（removed 或 absent）。
 
@@ -216,7 +216,7 @@ IR 阶段不生成 compilation、coverage、execution_decisions、assessments �
 
 **当前实现。** store 分开保存事件、snapshot 和 check-inputs。相同事件 ID 与摘要按重复处理；同 ID 不同内容拒绝。snapshot 用临时文件加 rename 写入；多个文件之间没有统一事务或完整 WAL 恢复机制。
 
-待办队列与未决用户事件分开维护。当前优先以最新用户事件为主批，携带有界的较早委托缺口；失败不使未决用户输入从记录中消失。事件是否已登记按事件来源引用和管理记录判断，完整需求是否遗漏仍由语义审阅判断。
+待办队列与未决用户事件分开维护。当前优先以最新用户事件为主批，携带有界的较早委托缺口；失败不使未决用户输入从记录中消失。没有待处理用户事件时，一批取全部其他待处理事件（回传、能力变化），按先后排列，几个回传在同一批评估。事件是否已登记按事件来源引用和管理记录判断，完整需求是否遗漏仍由语义审阅判断。
 
 开始处理批次会重置批内请求计数，总请求数继续累计。重新打开 store 从事件和管理记录恢复未决委托及未消费回传，读取旧格式时进行兼容转换。当前没有“进程重开即统一冻结并核对所有未闭合宿主执行”的完整恢复流程。
 

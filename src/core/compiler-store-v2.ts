@@ -448,8 +448,9 @@ export class IntentStoreV2 {
    * user inputs that no batch has compiled are not replayed in front of it (the
    * 20260929 run fell rounds behind that way); they ride along as carried
    * delegations the batch must account for.  With no delegation pending the
-   * batch takes the oldest other event (an execution return or a capability
-   * change) so returns are assessed.
+   * batch takes every other pending event (execution returns, capability
+   * changes), oldest first: one batch assesses all returned work, so a later
+   * return never waits behind an earlier one for its successor to run.
    *
    * The returned array is [this turn's own event, ...carried delegations], and
    * `advance` relies on that order.
@@ -457,7 +458,7 @@ export class IntentStoreV2 {
   popPending(): CompilerEvent[] {
     const pending = this.pendingEvents()
     const primary = pending.filter((event) => event.kind === "user_input").at(-1) ?? pending[0]
-    const batch: CompilerEvent[] = primary === undefined ? [] : [primary]
+    const batch: CompilerEvent[] = primary === undefined ? [] : primary.kind === "user_input" ? [primary] : pending
     if (primary !== undefined && primary.kind === "user_input") {
       const byId = new Map(this.readEvents().map((record) => [record.event.event_id, record.event]))
       for (const gap of this.carriedDelegations()) {

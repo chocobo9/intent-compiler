@@ -133,7 +133,7 @@ class ReturnGateTest(unittest.TestCase):
         turns, record, kept = self.run_host_world(world, run_offers)
         self.assertEqual(turns, [("round input", False)] + [(HOST_DISPATCH_INSTRUCTION, True)] * 3)
         self.assertEqual([turn["started"] for turn in record["turns"]], [["e-d1"], ["e-d2"], ["e-d3"]])
-        self.assertEqual(record["stopped"], "no pending dispatch")
+        self.assertEqual(record["stopped"], "nothing pending")
         self.assertEqual(record["cap"], 6, "two executions per Atom version for the three Atoms not yet accepted")
         self.assertEqual(kept, "turn 1", "the first turn's logs are kept before the next turn reuses the paths")
 
@@ -155,7 +155,7 @@ class ReturnGateTest(unittest.TestCase):
         world = {"dispatches": [{"dispatch_id": "d0", "task_id": "t", "atom_id": "a1", "atom_revision": 0}], "executions": [],
                  "atom_states": [{"task_id": "t", "atom_id": "a1", "atom_revision": 0, "status": "ready"}]}
         turns, record, _ = self.run_host_world(world, lambda world, host_turn: None)
-        self.assertEqual(record["turns"], [{"pending": ["d0"], "started": []}])
+        self.assertEqual(record["turns"], [{"pending": ["d0"], "events": [], "started": []}])
         self.assertEqual(record["stopped"], "host turn started no execution")
 
     def test_stale_unstarted_offers_of_a_superseded_version_are_not_pending(self):
@@ -164,7 +164,31 @@ class ReturnGateTest(unittest.TestCase):
                                  {"task_id": "t", "atom_id": "a1", "atom_revision": 1, "status": "executing"}]}
         turns, record, _ = self.run_host_world(world, lambda world, host_turn: None)
         self.assertEqual(turns, [("round input", False)])
-        self.assertEqual(record["stopped"], "no pending dispatch")
+        self.assertEqual(record["stopped"], "nothing pending")
+
+    def test_an_unprocessed_event_gets_a_host_turn_that_runs_management_again(self):
+        # chain-gate-audit B1: a return batch failed and put its return back;
+        # nothing is offered, so only a host turn's management run can recover.
+        world = {"dispatches": [], "executions": [{"execution_id": "e1", "dispatch_id": "d0"}],
+                 "atom_states": [{"task_id": "t", "atom_id": "a1", "atom_revision": 0, "status": "completed"},
+                                 {"task_id": "t", "atom_id": "a2", "atom_revision": 0, "status": "ready"}],
+                 "pending_event_ids": ["e1:return"]}
+        def recover(world, host_turn):
+            if not host_turn:
+                return
+            world["pending_event_ids"] = []  # management processed the return and unlocked a2, which this turn runs
+            world["dispatches"].append({"dispatch_id": "d1", "task_id": "t", "atom_id": "a2", "atom_revision": 0})
+            world["executions"].append({"execution_id": "e2", "dispatch_id": "d1"})
+        turns, record, _ = self.run_host_world(world, recover)
+        self.assertEqual(turns, [("round input", False), (HOST_DISPATCH_INSTRUCTION, True)])
+        self.assertEqual(record["turns"], [{"pending": [], "events": ["e1:return"], "started": ["e2"]}])
+        self.assertEqual(record["stopped"], "nothing pending")
+
+    def test_a_management_run_that_starts_nothing_ends_the_loop(self):
+        world = {"dispatches": [], "executions": [], "atom_states": [], "pending_event_ids": ["e1:return"]}
+        turns, record, _ = self.run_host_world(world, lambda world, host_turn: None)
+        self.assertEqual(len(turns), 2, "one more management run, not a loop until the cap")
+        self.assertEqual(record["stopped"], "host turn started no execution")
 
     def test_host_dispatch_turn_registers_its_source_category(self):
         agent = object.__new__(OpenCodePatched)

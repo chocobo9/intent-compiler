@@ -167,15 +167,18 @@ class OpenCodePatched(OpenCode):
         return outcome
 
     async def _run_pending_dispatches(self, round_num, environment, context):
-        """Keep adding host turns in this round while the compiler has offered work no execution has started."""
+        """Keep adding host turns in this round while the compiler has offered work no execution has started,
+        or holds events no management batch has processed (a failed batch puts its events back); a host turn
+        with nothing offered runs management once more."""
         record = {"round": int(round_num), "turns": [], "stopped": None}
         snapshot = self._read_snapshot(required=False)
         while True:
             pending = self._pending_dispatches(snapshot)
+            events = self._pending_events(snapshot)
             cap = EXECUTIONS_PER_ATOM_VERSION * max(1, self._current_atom_count(snapshot))
             record["cap"] = max(record.get("cap", 0), cap)
-            if not pending:
-                record["stopped"] = "no pending dispatch"
+            if not pending and not events:
+                record["stopped"] = "nothing pending"
                 break
             if len(record["turns"]) >= record["cap"]:
                 record["stopped"] = "turn cap reached"
@@ -189,7 +192,7 @@ class OpenCodePatched(OpenCode):
                 self._host_dispatch = False
             snapshot = self._read_snapshot(required=False)
             started = sorted(self._execution_ids(snapshot) - before)
-            record["turns"].append({"pending": [item.get("dispatch_id") for item in pending], "started": started})
+            record["turns"].append({"pending": [item.get("dispatch_id") for item in pending], "events": events, "started": started})
             if not started:
                 record["stopped"] = "host turn started no execution"
                 break
@@ -219,6 +222,11 @@ class OpenCodePatched(OpenCode):
         return [item for item in snapshot.get("dispatches", [])
                 if item.get("dispatch_id") not in started
                 and status.get((item.get("task_id"), item.get("atom_id"), item.get("atom_revision"))) == "ready"]
+
+    @staticmethod
+    def _pending_events(snapshot):
+        """Events queued for management that no batch has processed."""
+        return list((snapshot or {}).get("pending_event_ids") or [])
 
     def _keep_turn_logs(self, round_num, turn):
         """The next host turn reuses the command log paths; keep this turn's copy."""

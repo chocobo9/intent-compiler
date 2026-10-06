@@ -415,3 +415,25 @@ test("a turn that ended normally after tool work claims completion, even past a 
   // The claim is the executor's; a final report of a blocker is judged by management against the evidence.
   assert.equal(turnClaimsCompletion([{ finish: "stop", text: "Blocked: the build tool is missing.", ...work }], true), true)
 })
+
+// chain-gate-audit B1: a return batch failed and put its return back; the
+// host's next turn has nothing offered, so it runs management once more.
+test("a host-dispatch turn with nothing offered runs management once more and delivers what it offers", async () => {
+  const compiler = fakeCompiler()
+  compiler.pendingDeliveries = async () => []
+  let advances = 0
+  const real = compiler.advance
+  compiler.advance = async (input) => { advances += 1; return real(input) }
+  const output = { message: { id: "message-3" }, parts: [{ id: "part-3", type: "text" as const, text: "Run the work the Intent Compiler has pending for this task." }] }
+  const hooks = createOpenCodeAdapter({
+    arm: "compiler",
+    client: { session: { messages: async () => ({ data: [{ info: { id: "message-3" }, parts: output.parts }] }) } },
+    observer: observer(),
+    compiler,
+    resolveTurn: async () => ({ runId: "run-1", inputIdentity: "input-3", source: { source_category: HOST_DISPATCH_SOURCE_CATEGORY } }),
+  }).hooks()
+  await hooks["chat.message"]({ sessionID: "session-3", messageID: "message-3" }, output)
+  assert.equal(advances, 1)
+  assert.equal(compiler.events.length, 0, "no user_input event for a host turn")
+  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [ATOM])
+})
