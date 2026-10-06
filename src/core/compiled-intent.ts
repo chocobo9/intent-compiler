@@ -158,6 +158,36 @@ export function buildCompiledIntents(
   return { ok: errors.length === 0, intents, atom_states: atomStates, errors }
 }
 
+/**
+ * An Atom's revision is code's.  Called once the requirement texts are
+ * attached, so "changed" is judged on the content that is stored: a new
+ * atom_id is revision 0; an id the plan holds, resubmitted with the held
+ * content, keeps the held revision and that version's bound authority; any
+ * other content takes the latest held revision plus one.  A supersession an
+ * unchanged Atom names of itself is dropped: there is nothing to replace.
+ */
+export function settleAtomRevisions(held: readonly Atom[], atoms: readonly AtomDraft[]): AtomDraft[] {
+  return atoms.map(atom => {
+    const prior = held.filter(candidate => candidate.atom_id === atom.atom_id).sort((a, b) => b.revision - a.revision)[0]
+    if (prior === undefined) return { ...atom, revision: 0 }
+    const unchanged: AtomDraft = {
+      ...atom,
+      revision: prior.revision,
+      authority: {
+        ...atom.authority,
+        basis: structuredClone(prior.authority.basis),
+        rules: atom.authority.rules.map((rule, index) => {
+          const kept = prior.authority.rules[index]
+          return { ...rule, resource_ref: kept && kept.operation_id === rule.operation_id ? structuredClone(kept.resource_ref) : rule.resource_ref }
+        }),
+      },
+    }
+    if (atomRef(contentOf(normalizeAtomDraft(unchanged))).digest !== atomRef(prior).digest) return { ...atom, revision: prior.revision + 1 }
+    const { previous_atom_ref: replaced, ...content } = unchanged
+    return replaced !== undefined && replaced.id !== atom.atom_id ? unchanged : content
+  })
+}
+
 export function summarizeCompiledIntent(intent: CompiledIntent): { digest: string; canonical: string } {
   validateCompiledIntent(intent)
   const canonical = canonicalJson(intent)

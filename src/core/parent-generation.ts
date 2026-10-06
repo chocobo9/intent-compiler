@@ -60,6 +60,8 @@ interface Options {
   resolve(candidate: Candidate): SourceRefReport
   validateBasis(candidate: Candidate, display: (eventId: string) => string): { ok: boolean; message?: string }
   directory(ir: Record<string, TaskIntent>): CompilerModelV2Input["existing_objects"]
+  /** The Atom version an execution was dispatched with, as the plan lists it; undefined when no such execution is known. */
+  executionAtom?(executionId: string): Ref | undefined
 }
 
 /** What the mechanical source gate found, bounded by the resolver. */
@@ -171,8 +173,73 @@ export function bindExpectedRevisions(group: Candidate["groups"][number], stored
   }
 }
 
+/**
+ * A content value's about and support refs name objects by id.  An object of
+ * the supplied IR is bound to the version that IR holds; one created in this
+ * batch has no digest yet, so it is bound to revision 0 and settled once the
+ * batch's changes are applied (settleContentRefs).  An id naming neither is
+ * rejected: the answer would otherwise cite nothing.
+ */
+export function bindContentRefs(candidate: Candidate, supplied: Record<string, TaskIntent>): void {
+  const created = new Set<string>()
+  for (const group of candidate.groups) for (const change of group.ir_changes) {
+    if (change.action === "create") created.add(change.local_ref)
+  }
+  const bind = (value: unknown, where: string): unknown => {
+    const id = namedId(value)
+    if (id === undefined) return value
+    for (const task of Object.values(supplied)) {
+      const version = irVersion(task, id)
+      if (version !== undefined) return version
+    }
+    if (created.has(id)) return { id, revision: 0, digest: "pending" }
+    throw new Error(`${where} names ${id}, which is neither an object of the supplied IR nor created in this batch; name an existing object by its id`)
+  }
+  for (const group of candidate.groups) for (const change of group.ir_changes) {
+    if (change.action !== "create" && change.action !== "revise") continue
+    if (change.target !== "content" || change.value === null || typeof change.value !== "object") continue
+    const value = change.value as { about?: unknown; support?: unknown }
+    const label = `content ${change.action === "create" ? change.local_ref : change.id}`
+    if (Array.isArray(value.about)) value.about = value.about.map(ref => bind(ref, `${label} about`))
+    if (Array.isArray(value.support)) for (const item of value.support) {
+      if (item !== null && typeof item === "object" && Array.isArray((item as { refs?: unknown }).refs)) {
+        (item as { refs: unknown[] }).refs = (item as { refs: unknown[] }).refs.map(ref => bind(ref, `${label} support`))
+      }
+    }
+  }
+}
+
+/** Write the digests of objects this batch created into the refs that named them; a few passes settle refs between requirements. */
+function settleContentRefs(ir: Record<string, TaskIntent>): void {
+  for (let pass = 0; pass < 4; pass += 1) {
+    let changed = false
+    for (const task of Object.values(ir)) for (const item of task.content) {
+      for (const ref of [...item.about, ...item.support.flatMap(support => support.refs)]) {
+        const version = Object.values(ir).map(owner => irVersion(owner, ref.id)).find(found => found !== undefined)
+        if (version !== undefined && version.revision === ref.revision && version.digest !== ref.digest) { ref.digest = version.digest; changed = true }
+      }
+    }
+    if (!changed) return
+  }
+}
+
 function unboundMessage(targets: readonly string[]): string {
   return `assessments.target_ref names no Atom version of this plan: ${targets.join(", ")}; name the assessed Atom by an id and revision listed in atom_refs`
+}
+
+/** The id an answer's Ref or {local_ref} names; a SourceRef or anything else names none. */
+function namedId(value: unknown): string | undefined {
+  if (value === null || typeof value !== "object" || "source_id" in value) return undefined
+  const named = value as { local_ref?: unknown; id?: unknown }
+  return typeof named.local_ref === "string" ? named.local_ref : typeof named.id === "string" ? named.id : undefined
+}
+
+/** Every IR object of a task an answer may name by id, with its current version. */
+function irVersion(task: TaskIntent, id: string): Ref | undefined {
+  if (id === task.task_id) return { id, revision: task.revision, digest: digestOf(task) }
+  const entry = task.content.find(item => item.item_id === id) ?? task.bindings.find(item => item.binding_id === id) ?? task.outputs.find(item => item.output_id === id)
+  if (entry === undefined) return undefined
+  return { id, revision: entry.revision, digest: digestOf(entry) }
 }
 
 const SOURCE_REPAIR_DRAFT_NOTICE = "generation_repair.ir_proposal is a code-derived repair draft, not raw model output: successfully resolved selectors reuse their exact UTF-16 spans and code-computed digests; failed references retain their original values. You may still revise the proposal's meaning and selections."
@@ -285,6 +352,7 @@ export class ParentGeneration {
     }
     // Identities code knows: the revision each change expects, and Ref digests.
     for (const group of candidate.groups) bindExpectedRevisions(group, this.options.input.ir)
+    bindContentRefs(candidate, this.options.input.ir)
     bindRefDigests(candidate, versionDigests([this.options.input.ir], this.options.input.compiled ?? {}))
     const basis = this.options.validateBasis(candidate, (eventId) => this.display(eventId))
     if (!basis.ok) throw Error(basis.message ?? "IR names the wrong input events")
@@ -323,6 +391,7 @@ export class ParentGeneration {
       }
     }
     recordEditedRemovals(candidate, ir, editedRemovals)
+    settleContentRefs(ir)
     const carriedEventIds = new Set((this.options.input.carried_delegations ?? []).map((delegation) => delegation.event_id))
     const ownEventIds = new Set(this.options.input.events.filter(event => event.kind === "user_input" && !carriedEventIds.has(event.event_id)).map(event => event.event_id))
     validateSourceCoverage(candidate, this.options.input.events, sources, this.options.input.ir, ir,
@@ -493,10 +562,13 @@ export class ParentGeneration {
         if (seen.has(taskId)) return this.reject(`assessment names task ${taskId} more than once`, result)
         seen.add(taskId)
         const skeleton = parent.candidate.groups.find(candidate => candidate.task_refs[0] === taskId)
-        const judged = this.bindCodeIdentities(group, taskId)
+        let judged: CIProposalGroup
+        try { judged = this.bindCodeIdentities(group, taskId) } catch (error) { return this.reject(error instanceof Error ? error.message : String(error), result) }
         const unbound = this.unboundTargets(judged)
         if (unbound.length > 0) return this.reject(unboundMessage(unbound), result)
-        groups.push({ ...judged, depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] } as Candidate["groups"][number])
+        const requirements = this.bindRequirements(judged.coverage, parent.ir[taskId]!)
+        if ("message" in requirements) return this.reject(requirements.message, result)
+        groups.push({ ...judged, coverage: requirements.bound, depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] } as Candidate["groups"][number])
         continue
       }
       // A delegation batch binds each group to the parent group at its position;
@@ -508,17 +580,9 @@ export class ParentGeneration {
         return this.reject(`group ${original.local_ref} is not bound to a stored task`, result)
       }
       const task = parent.ir[boundTask]!
-      const coverage: Candidate["groups"][number]["coverage"] = []
-      for (const entry of group.coverage) {
-        if (!("local_ref" in entry.requirement)) return this.reject("Ordinary CI coverage.requirement must select the fixed parent by local_ref, without revision or digest", result)
-        const id = entry.requirement.local_ref
-        const matches = [
-          ...(id === task.task_id ? [{ id, revision: task.revision, digest: digestOf(task) }] : []),
-          ...task.content.filter(item => item.item_id === id).map(item => ({ id, revision: item.revision, digest: digestOf(item) })),
-        ]
-        if (matches.length !== 1) return this.reject(`CI coverage requirement ${id} is unknown or ambiguous in parent task ${boundTask}`, result)
-        coverage.push({ ...entry, requirement: matches[0]! })
-      }
+      const requirements = this.bindRequirements(group.coverage, task)
+      if ("message" in requirements) return this.reject(requirements.message.replace("CI coverage.requirement", "Ordinary CI coverage.requirement"), result)
+      const coverage = requirements.bound
       if (group.compilation.decision === "replace") for (const draft of group.compilation.drafts) {
         for (const atom of draft.atoms) {
           for (const output of atom.outputs) {
@@ -533,7 +597,8 @@ export class ParentGeneration {
           }
         }
       }
-      const bound = this.bindCodeIdentities(group, boundTask)
+      let bound: CIProposalGroup
+      try { bound = this.bindCodeIdentities(group, boundTask) } catch (error) { return this.reject(error instanceof Error ? error.message : String(error), result) }
       const unbound = this.unboundTargets(bound)
       if (unbound.length > 0) return this.reject(unboundMessage(unbound), result)
       const compilation = bound.compilation.decision === "replace"
@@ -573,31 +638,91 @@ export class ParentGeneration {
    */
   private bindCodeIdentities<G extends CIProposalGroup>(group: G, taskId: string): G {
     const copy = structuredClone(group)
+    const task = this.state.parent!.ir[taskId]!
     for (const assessment of copy.assessments) assessment.target_ref = this.returnedVersion(assessment.target_ref)
+    // An answer names criteria by IR id; the version is the parent IR's.
+    for (const assessment of copy.assessments) {
+      assessment.criteria_refs = (assessment.criteria_refs as unknown[]).map(criterion => {
+        const id = namedId(criterion)
+        const bound = id === undefined ? undefined : irVersion(task, id)
+        if (bound === undefined) throw new Error(`assessments.criteria_refs names ${id ?? "no id"}, which is no IR item of task ${taskId}; name an IR requirement by its id`)
+        return bound
+      })
+    }
+    // A decision's basis is the Atom version its execution ran.
+    for (const decision of copy.execution_decisions) {
+      const ran = this.ranAtom(decision.execution_id)
+      ;(decision as { basis: Ref[] }).basis = ran === undefined ? [] : [ran]
+    }
     bindRefDigests(copy, this.versions())
     const judged = { ...copy, assessments: copy.assessments.map(assessment => ({ ...assessment, evidence_refs: this.returnEvidence(assessment.target_ref) })) }
     const compilation = judged.compilation
-    if (compilation.decision !== "replace") return judged
-    const task = this.state.parent!.ir[taskId]!
+    // The group's current Compiled Intent is code's to name.
+    if (compilation.decision !== "replace") {
+      const current = this.options.input.compiled?.[taskId]
+      return { ...judged, compilation: { ...compilation, current: current === undefined ? [] : [compiledIntentRef(current)] } }
+    }
     const taskRef = { id: task.task_id, revision: task.revision, digest: digestOf(task) }
-    const held = Object.values(this.options.input.compiled ?? {}).flatMap(intent => intent.atoms)
+    const held = this.options.input.compiled?.[taskId]?.atoms ?? []
+    const latest = (atomId: string) => held.filter(atom => atom.atom_id === atomId).sort((a, b) => b.revision - a.revision)[0]
     const drafts = compilation.drafts.map(draft => ({
       ...draft,
+      intent_basis: this.intentBasis(draft.intent_basis as unknown[], task),
       atoms: draft.atoms.map(atom => {
-        const prior = held.find(candidate => candidate.atom_id === atom.atom_id && candidate.revision === atom.revision)
+        const prior = latest(atom.atom_id)
+        const replaced = namedId((atom as { previous_atom_ref?: unknown }).previous_atom_ref)
+        const target = replaced === undefined ? undefined : latest(replaced)
+        if (replaced !== undefined && target === undefined) throw new Error(`previous_atom_ref names ${replaced}, which is no Atom of task ${taskId}'s plan; name the replaced Atom by an atom_id the plan lists`)
         const authority = atom.authority as Partial<typeof atom.authority>
-        return { ...atom, authority: {
-          ...authority,
-          basis: prior ? structuredClone(prior.authority.basis) : [structuredClone(taskRef)],
-          rules: (authority.rules ?? []).map((rule, index) => {
-            const kept = prior?.authority.rules[index]
-            return { ...rule, resource_ref: kept && kept.operation_id === rule.operation_id ? structuredClone(kept.resource_ref) : structuredClone(taskRef) }
-          }),
-        } } as typeof atom
+        // The revision is provisional: whether the content changed is known only
+        // once the requirement texts are attached, and the preparation settles it.
+        return { ...atom, revision: prior === undefined ? 0 : prior.revision + 1,
+          ...(target === undefined ? {} : { previous_atom_ref: atomRef(target) }),
+          authority: {
+            ...authority,
+            basis: [structuredClone(taskRef)],
+            rules: (authority.rules ?? []).map(rule => ({ ...rule, resource_ref: structuredClone(taskRef) })),
+          } } as typeof atom
       }),
       relations: draft.relations.map(relation => ({ ...relation, basis: [structuredClone(taskRef)] })),
     }))
     return { ...judged, compilation: { ...compilation, drafts } }
+  }
+
+  /** The Atom version an execution ran: the dispatch's version in the plan, else the version its return named. */
+  private ranAtom(executionId: string): Ref | undefined {
+    const dispatched = this.options.executionAtom?.(executionId)
+    if (dispatched !== undefined) return dispatched
+    return this.options.input.execution_outcomes?.find(outcome => outcome.execution_id === executionId)?.outcome.atom_ref
+  }
+
+  /** The plan's basis names the task or content it uses by id; the version is the parent's. */
+  private intentBasis(entries: unknown[], task: TaskIntent): Ref[] {
+    const bound = new Map<string, Ref>()
+    for (const entry of entries) {
+      const id = namedId(entry)
+      const isContent = id !== undefined && task.content.some(item => item.item_id === id)
+      const version = id !== undefined && (id === task.task_id || isContent) ? irVersion(task, id) : undefined
+      if (id === undefined || version === undefined) throw new Error(`compilation.intent_basis names ${id ?? "no id"}, which is no task or content item of parent task ${task.task_id}; name one by task_id or content item_id`)
+      bound.set(id, version)
+    }
+    return [...bound.values()]
+  }
+
+  /** Coverage requirements select the fixed parent by id; the version is the parent's. */
+  private bindRequirements(coverage: CIProposalGroup["coverage"], task: TaskIntent): { bound: Candidate["groups"][number]["coverage"] } | { message: string } {
+    const bound: Candidate["groups"][number]["coverage"] = []
+    for (const entry of coverage) {
+      if (!("local_ref" in entry.requirement)) return { message: "CI coverage.requirement must select the fixed parent by local_ref, without revision or digest" }
+      const id = entry.requirement.local_ref
+      const matches = [
+        ...(id === task.task_id ? [{ id, revision: task.revision, digest: digestOf(task) }] : []),
+        ...task.content.filter(item => item.item_id === id).map(item => ({ id, revision: item.revision, digest: digestOf(item) })),
+      ]
+      if (matches.length !== 1) return { message: `CI coverage requirement ${id} is unknown or ambiguous in parent task ${task.task_id}` }
+      bound.push({ ...entry, requirement: matches[0]! } as Candidate["groups"][number]["coverage"][number])
+    }
+    return { bound }
   }
 
   /** Stored versions an answer's Refs may name: the supplied and the parent IR, and every plan version. */

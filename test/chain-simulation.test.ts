@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { atomRef } from "../src/core/compiled-intent.js"
+import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 import { digestOf, digestText, type AtomDraft, type Candidate, type SourceRef } from "../src/core/intent-contract.js"
 import { CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import type { CompilerModelV2CheckInput, CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
@@ -279,4 +279,167 @@ test("scenario 6 (B4): where a delegation batch closes after check rework, under
   assert.equal(log[1]!.status, "accepted")
   assert.deepEqual(calls[1], ["ir", "ci", "check"])
   assert.equal(round.host.turns[0]!.offered[0], "a-bundle@0")
+})
+
+// Identities code binds (identity-versions): the answer names objects by id; the
+// version is code's.  Each scenario writes the field wrong or leaves it out.
+
+/** The R2 plan with the model's version claims made wrong: a stale destination version, bad revisions, no previous_atom_ref. */
+function sloppyRevisionPlan(host: ChainHost, tweak: (candidate: Candidate) => void = () => undefined) {
+  const revise = revisionPlan(host, {})
+  return (event: string): Candidate => {
+    const candidate = revise(event)
+    const group = candidate.groups[0]!
+    if (group.compilation.decision !== "replace") throw Error("fixture")
+    const atoms = group.compilation.drafts[0]!.atoms as AtomDraft[]
+    const bundle = atoms.find(a => a.atom_id === "a-bundle")!
+    const inspect = atoms.find(a => a.atom_id === "a-inspect")!
+    bundle.revision = 0
+    delete bundle.previous_atom_ref
+    inspect.revision = 5
+    for (const entry of group.coverage) {
+      entry.refs = entry.refs.map(ref => "local_ref" in ref && ref.local_ref === "a-bundle"
+        ? { id: "a-bundle", revision: 0, digest: `sha256:${"0".repeat(63)}9` } : ref)
+    }
+    tweak(candidate)
+    return candidate
+  }
+}
+
+test("scenario 5d: Atom revisions are code's (new 0, unchanged kept, changed +1) and a stale coverage destination is bound to the current version", async () => {
+  let plan: (event: string) => Candidate = event => chainCandidate(2, event)
+  const scripted = management(event => plan(event), satisfied)
+  const host = new ChainHost({ propose: scripted.propose })
+  // R1: the model wrote revision 3 for new Atoms; the plan stores 0.
+  plan = event => {
+    const candidate = chainCandidate(2, event)
+    const group = candidate.groups[0]!
+    if (group.compilation.decision !== "replace") throw Error("fixture")
+    for (const atom of group.compilation.drafts[0]!.atoms) atom.revision = 3
+    return candidate
+  }
+  await host.round(CANDIDATE_EXAMPLE_INPUT)
+  assert.deepEqual(chainOrder(host), ["a-bundle@0", "a-inspect@0"], "a new atom_id starts at revision 0 whatever was written")
+  plan = sloppyRevisionPlan(host)
+  const second = await host.round(UPDATE, { source_category: "update" })
+  assert.equal(second.user.error, undefined, "a stale destination version no longer rejects the batch")
+  const snapshot = host.snapshot()
+  const atoms = snapshot.compiled.t1!.atoms
+  assert.deepEqual(atoms.filter(a => a.atom_id === "a-bundle").map(a => a.revision).sort(), [0, 1], "changed content takes the latest revision plus one")
+  assert.deepEqual(atoms.filter(a => a.atom_id === "a-inspect").map(a => a.revision), [0], "unchanged content keeps its revision, whatever was written")
+  const bundle1 = atoms.find(a => a.atom_id === "a-bundle" && a.revision === 1)!
+  const state = snapshot.atom_states.find(s => s.atom_id === "a-bundle" && s.atom_revision === 1)!
+  assert.deepEqual(state.previous_atom_ref, atomRef(atoms.find(a => a.atom_id === "a-bundle" && a.revision === 0)!), "the supersession is filled for the same id")
+  const recorded = snapshot.management_log.filter(record => record.candidate?.groups[0]?.coverage.length).at(-1)!.candidate!.groups[0]!
+  const destinations = recorded.coverage.flatMap(entry => entry.refs).filter(ref => "id" in ref && ref.id === "a-bundle")
+  assert.ok(destinations.length > 0)
+  for (const ref of destinations) assert.deepEqual(ref, atomRef(bundle1), "the destination is the version in this plan")
+})
+
+test("scenario 5e: previous_atom_ref names another Atom by id only; code binds that Atom's latest version", async () => {
+  let plan: (event: string) => Candidate = event => chainCandidate(2, event)
+  const scripted = management(event => plan(event), satisfied)
+  const host = new ChainHost({ propose: scripted.propose })
+  await host.round(CANDIDATE_EXAMPLE_INPUT)
+  plan = sloppyRevisionPlan(host, candidate => {
+    // a-bundle is replaced by a differently named Atom; the model writes a stale version of the replaced one.
+    const text = JSON.stringify(candidate).replaceAll('"a-bundle"', '"a-bundle-v2"')
+    Object.assign(candidate, JSON.parse(text) as Candidate)
+    const group = candidate.groups[0]!
+    if (group.compilation.decision !== "replace") throw Error("fixture")
+    const replacement = group.compilation.drafts[0]!.atoms.find(a => a.atom_id === "a-bundle-v2")!
+    replacement.previous_atom_ref = { id: "a-bundle", revision: 7, digest: "sha256:stale" }
+  })
+  const second = await host.round(UPDATE, { source_category: "update" })
+  assert.equal(second.user.error, undefined, second.user.error?.message)
+  const snapshot = host.snapshot()
+  const held = snapshot.compiled.t1!.atoms.find(a => a.atom_id === "a-bundle")!
+  const replacement = snapshot.compiled.t1!.atoms.find(a => a.atom_id === "a-bundle-v2")!
+  assert.equal(replacement.revision, 0, "a new id starts at 0")
+  assert.deepEqual(snapshot.atom_states.find(s => s.atom_id === "a-bundle-v2")!.previous_atom_ref, atomRef(held), "the other id is kept and bound to its latest version")
+})
+
+test("scenario 4d: a return batch's reuse, decision basis, criteria and coverage requirement are bound by code", async () => {
+  const scripted = management(event => chainCandidate(2, event), (_atom, _execution, input) => {
+    const answer = JSON.parse(assessmentAnswer(input, () => ({ result: "satisfied" })))
+    const returnEvent = input.events.find(e => e.kind === "execution_return")!
+    const group = answer.groups[0]
+    group.compilation.current = [{ id: "compiled-99", revision: 4, digest: "sha256:wrong" }]
+    for (const decision of group.execution_decisions) decision.basis = [{ id: "a-unknown", revision: 3, digest: "sha256:wrong" }]
+    for (const assessment of group.assessments) assessment.criteria_refs = [
+      { source_id: returnEvent.event_id, digest: "sha256:r", segment_id: "s1" },
+      { id: "r-bundle", revision: 9, digest: "sha256:wrong" },
+    ]
+    group.coverage = [{ requirement: { id: "r-bundle", revision: 9, digest: "sha256:wrong" }, disposition: "assigned", refs: [{ id: "a-bundle", revision: 4, digest: "sha256:wrong" }], explanation: "kept" }]
+    return JSON.stringify(answer)
+  })
+  const host = new ChainHost({ propose: scripted.propose })
+  const round = await host.round(CANDIDATE_EXAMPLE_INPUT)
+  assert.deepEqual(chainOrder(host), ["a-bundle@0", "a-inspect@0"])
+  assert.deepEqual(round.pendingEventIds, [])
+  const snapshot = host.snapshot()
+  const recorded = snapshot.management_log.find(record => record.trigger_event_ids.some(id => id.endsWith(":return")))!.candidate!.groups[0]!
+  if (recorded.compilation.decision !== "reuse") throw Error("fixture")
+  assert.deepEqual(recorded.compilation.current, [compiledIntentRef(snapshot.compiled.t1!)], "reuse.current is the group's Compiled Intent")
+  const ran = new Map(snapshot.dispatches.map(d => [d.dispatch_id, d]))
+  for (const decision of recorded.execution_decisions) {
+    const execution = snapshot.executions.find(e => e.execution_id === decision.execution_id)!
+    const dispatch = ran.get(execution.dispatch_id)!
+    const atom = snapshot.compiled.t1!.atoms.find(a => a.atom_id === dispatch.atom_id && a.revision === dispatch.atom_revision)!
+    assert.deepEqual(decision.basis, [atomRef(atom)], "the basis is the Atom version the execution ran")
+  }
+  const item = snapshot.ir.t1!.content.find(c => c.item_id === "r-bundle")!
+  for (const assessment of recorded.assessments) {
+    assert.deepEqual(assessment.criteria_refs, [{ id: "r-bundle", revision: item.revision, digest: digestOf(item) }], "a return text is no criterion; an IR id gets its current version")
+  }
+  assert.deepEqual(recorded.coverage[0]!.requirement, { id: "r-bundle", revision: item.revision, digest: digestOf(item) }, "an assessment's coverage requirement is bound like an ordinary one")
+})
+
+test("scenario 4e: a criterion naming no IR item is rejected with the reason", async () => {
+  const scripted = management(event => chainCandidate(2, event), (_atom, _execution, input) => {
+    const answer = JSON.parse(assessmentAnswer(input, () => ({ result: "satisfied" })))
+    for (const assessment of answer.groups[0].assessments) assessment.criteria_refs = [{ id: "r-nowhere", revision: 0, digest: "sha256:x" }]
+    return JSON.stringify(answer)
+  })
+  const host = new ChainHost({ propose: scripted.propose })
+  await host.round(CANDIDATE_EXAMPLE_INPUT)
+  const failed = host.snapshot().management_log.filter(record => record.status !== "accepted")
+  assert.ok(failed.length > 0)
+  assert.match(failed[0]!.error_message ?? "", /criteria_refs names r-nowhere, which is no IR item of task t1/)
+})
+
+test("scenario 5f: a requirement's about and support name stored objects by id; code binds their version and digest", async () => {
+  let plan: (event: string) => Candidate = event => chainCandidate(2, event)
+  const scripted = management(event => plan(event), satisfied)
+  const host = new ChainHost({ propose: scripted.propose })
+  await host.round(CANDIDATE_EXAMPLE_INPUT)
+  const stored = new Map(host.snapshot().ir.t1!.content.map(item => [item.item_id, item]))
+  plan = sloppyRevisionPlan(host, candidate => {
+    const change = candidate.groups[0]!.ir_changes[0]!
+    if (change.action !== "revise" || change.target !== "content") throw Error("fixture")
+    const value = change.value as Record<string, unknown>
+    value.about = [{ id: "r-format" }]
+    value.support = [{ refs: [{ id: "r-common" }], explanation: "shared rule" }]
+  })
+  const second = await host.round(UPDATE, { source_category: "update" })
+  assert.equal(second.user.error, undefined, second.user.error?.message)
+  const revised = host.snapshot().ir.t1!.content.find(c => c.item_id === "r-bundle")!
+  const format = stored.get("r-format")!
+  assert.deepEqual(revised.about, [{ id: "r-format", revision: format.revision, digest: digestOf(format) }])
+  const common = stored.get("r-common")!
+  assert.deepEqual(revised.support[0]!.refs, [{ id: "r-common", revision: common.revision, digest: digestOf(common) }])
+})
+
+test("scenario 5g: an about naming neither a supplied object nor one created in the batch is rejected", async () => {
+  let plan: (event: string) => Candidate = event => chainCandidate(2, event)
+  const scripted = management(event => plan(event), satisfied)
+  const host = new ChainHost({ propose: scripted.propose })
+  await host.round(CANDIDATE_EXAMPLE_INPUT)
+  plan = sloppyRevisionPlan(host, candidate => {
+    const change = candidate.groups[0]!.ir_changes[0]!
+    if (change.action !== "revise" || change.target !== "content") throw Error("fixture")
+    ;(change.value as Record<string, unknown>).about = [{ id: "r-nowhere" }]
+  })
+  const second = await host.round(UPDATE, { source_category: "update" })
+  assert.match(second.user.error?.message ?? "", /about names r-nowhere, which is neither an object of the supplied IR nor created in this batch/)
 })

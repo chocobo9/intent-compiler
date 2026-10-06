@@ -69,7 +69,7 @@ export function repairCandidate(input: CompilerModelV2Input): Candidate {
       assert.ok(taskId)
       const compilation = group.compilation.decision === "replace"
         ? { ...group.compilation, drafts: group.compilation.drafts.map(draft => ({ ...draft, task_id: taskId })) }
-        : group.compilation
+        : { ...group.compilation, current: group.compilation.current ?? [] }
       return {
         ...structuredClone(group), compilation, local_ref: original.local_ref,
         task_refs: [...original.task_refs], depends_on: [...original.depends_on],
