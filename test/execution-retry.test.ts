@@ -8,7 +8,7 @@ import { createIntentCompilerV2, type IntentCompilerV2 } from "../src/core/inten
 import { createCompilerModelV2, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
-import type { AdvanceResult, Atom } from "../src/core/intent-contract.js"
+import { digestText, type AdvanceResult, type Atom } from "../src/core/intent-contract.js"
 
 // The R9 shape: an execution returns without the assigned work done, management
 // assesses it not_satisfied, and the compiled plan itself needs no change.
@@ -263,4 +263,34 @@ test("a four-Atom chain is dispatched, executed and returned in order within one
   assert.deepEqual(order, ["a-bundle", "a-inspect", "a-check", "a-report"])
   assert.deepEqual(await compiler.pendingDeliveries({ runId: "retry" }), [], "nothing left to run")
   assert.equal(store.current().executions.length, 4)
+})
+
+// Run e75d62af R1: ten return-batch answers were refused because evidence_refs
+// to execution-2:return named invented segment_ids ("x", "not-known", "return",
+// a message id) on an event that has no segments.
+test("an assessment's evidence is bound by code to the batch's return, whatever locators the answer wrote", async () => {
+  const { store, compiler, first, answerWith } = await setup()
+  const delivery = first.deliveries![0]!
+  const start = compiler.authorize({ kind: "start", run_id: "retry", dispatch_id: delivery.dispatch_id, host_identity: "host" })
+  const executionId = start.execution_id!
+  const eventId = `${executionId}:return`
+  await compiler.acceptEvent({ schema_version: 2, run_id: "retry", event_id: eventId, kind: "execution_return",
+    source: { producer_id: "host", channel: "executor" }, execution_id: executionId,
+    payload: { state_claim: "completed", text: "Implemented and checked the bundle command.", outcome: {
+      schema_version: 2, execution_id: executionId, atom_ref: atomRef(delivery.atom), suggested_status: "completed",
+      product_refs: [], file_changes: [], evidence_refs: [] } } })
+  answerWith(input => {
+    const answer = JSON.parse(assessment(input, executionId, "unknown", "stop"))
+    answer.groups[0].assessments[0].evidence_refs = [
+      { source_id: eventId, digest: "sha256:x", segment_id: "not-known", quote: null, span: null },
+      { source_id: eventId, digest: "sha256:x", segment_id: null, quote: "words the report never wrote", span: null },
+      { source_id: eventId, digest: "sha256:x", segment_id: "msg_10e4f5709001", quote: null, span: { unit: "utf16", start: 0, end: 999999 } },
+    ]
+    return JSON.stringify(answer)
+  })
+  const advanced = await compiler.advance({ runId: "retry" })
+  assert.equal(advanced.ok, true, advanced.message)
+  const stored = store.current().assessments.at(-1)!
+  assert.deepEqual(stored.evidence_refs, [{ source_id: eventId, digest: digestText("Implemented and checked the bundle command.") }],
+    "one whole-event reference to the return")
 })

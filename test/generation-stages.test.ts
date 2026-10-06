@@ -56,7 +56,7 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
     groups: [{
       ...group, compilation: { decision: "replace", drafts: [] }, coverage: [],
       execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "x", basis: [] }],
-      assessments: [{ target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [], evidence_refs: [], result: "unknown", explanation: "x", method: "model" }],
+      assessments: [{ target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [], result: "unknown", explanation: "x", method: "model" }],
       checks: [{ scenario: "s", expected: "e", observed_in_candidate: "o", sources: [], unresolved: false }],
     }],
   }
@@ -68,6 +68,8 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", { ...proposal, basis }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], task_refs: ["t1"] }] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], depends_on: [] }] }).ok, false)
+  assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], assessments: [{ ...proposal.groups[0]!.assessments[0], evidence_refs: [] }] }] }).ok, false,
+    "an assessment's evidence is bound by code to the batch's return")
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], local_ref: "g1" }] }).ok, false,
     "an ordinary CI group binds to its parent group by position")
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], compilation: {

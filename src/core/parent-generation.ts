@@ -1,5 +1,5 @@
 import { projectCompiled } from "./request-projection.js"
-import { digestOf, type Candidate, type LocalSourceEditRecord, type TaskIntent } from "./intent-contract.js"
+import { digestOf, type Candidate, type LocalSourceEditRecord, type SourceRef, type TaskIntent } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
 import { aliasDisplay, decodeIRProposal, expressIRRequest, type SourceAliasEntry, type SourceAliasIndex } from "./source-aliases.js"
 import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "./source-payload.js"
@@ -500,11 +500,13 @@ export class ParentGeneration {
    * versions when the plan is built.
    */
   private bindCodeIdentities<G extends CIProposalGroup>(group: G, taskId: string): G {
-    if (group.compilation.decision !== "replace") return group
+    const judged = { ...group, assessments: group.assessments.map(assessment => ({ ...assessment, evidence_refs: this.returnEvidence(assessment.target_ref) })) }
+    const compilation = judged.compilation
+    if (compilation.decision !== "replace") return judged
     const task = this.state.parent!.ir[taskId]!
     const taskRef = { id: task.task_id, revision: task.revision, digest: digestOf(task) }
     const held = Object.values(this.options.input.compiled ?? {}).flatMap(intent => intent.atoms)
-    const drafts = group.compilation.drafts.map(draft => ({
+    const drafts = compilation.drafts.map(draft => ({
       ...draft,
       atoms: draft.atoms.map(atom => {
         const prior = held.find(candidate => candidate.atom_id === atom.atom_id && candidate.revision === atom.revision)
@@ -520,7 +522,24 @@ export class ParentGeneration {
       }),
       relations: draft.relations.map(relation => ({ ...relation, basis: [structuredClone(taskRef)] })),
     }))
-    return { ...group, compilation: { ...group.compilation, drafts } }
+    return { ...judged, compilation: { ...compilation, drafts } }
+  }
+
+  /**
+   * The return events of this batch that an assessment of the target judges:
+   * the returns of that exact Atom version, or every return of the batch when
+   * none names it.  Each is a whole-event reference.
+   */
+  private returnEvidence(target: unknown): SourceRef[] {
+    const returns = this.options.input.events.filter(event => event.kind === "execution_return")
+    const ref = target !== null && typeof target === "object" ? target as { id?: unknown; revision?: unknown } : {}
+    const own = returns.filter(event => {
+      const atom = (event.payload as { outcome?: { atom_ref?: { id?: unknown; revision?: unknown } } } | undefined)?.outcome?.atom_ref
+      return atom?.id === ref.id && atom?.revision === ref.revision
+    })
+    const chosen = own.length > 0 ? own : returns
+    const known = this.options.input.event_source_refs ?? []
+    return chosen.flatMap(event => known.filter(source => source.source_id === event.event_id).map(source => ({ source_id: source.source_id, digest: source.digest })))
   }
 
   private reject(message: string, result?: CompilerModelV2Result): CompilerModelV2Result {

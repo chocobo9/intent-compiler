@@ -55,6 +55,14 @@ const CI_RELATION_SHAPE = 'A Relation is { predecessor:{local_ref:"atom-id"}, su
 const BASE_AUTHORITY_SHAPE = 'authority.lifetime must be \"this_execution\" and delegation must be \"not_supported\".'
 const CI_AUTHORITY_SHAPE = 'authority.lifetime must be \"this_execution\" and delegation must be \"not_supported\". Management fills authority.basis and each rule\'s resource_ref from the task\'s authorization; a rule states operation_id, input_refs, output_refs, conditions and allowed_use.'
 
+const BASE_ASSESSMENT_FIELDS = "Fill assessments.target_ref, criteria_refs, evidence_refs, result and explanation from that comparison."
+const CI_ASSESSMENT_FIELDS = "Fill assessments.target_ref, criteria_refs, result and explanation from that comparison; management binds evidence_refs to this batch's return event, so say in explanation which parts of the return the judgement relies on."
+
+/** A CI answer leaves an assessment's evidence reference to code. */
+function boundEvidence(rule: string): string {
+  return rule.replace(BASE_ASSESSMENT_FIELDS, CI_ASSESSMENT_FIELDS)
+}
+
 /** The CI stage names Atoms by id and leaves the identities code binds out of the answer. */
 function codeBoundIdentities(atomContract: string): string {
   return atomContract.replace(BASE_RELATION_SHAPE, CI_RELATION_SHAPE).replace(BASE_AUTHORITY_SHAPE, CI_AUTHORITY_SHAPE)
@@ -130,6 +138,9 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
       if (authority !== undefined) remove(authority, ["basis"])
     }
     remove(schema.definitions.permission_rule as SchemaNode, ["resource_ref"])
+    // An assessment's evidence is this batch's return; code binds the event and
+    // the explanation says which parts of it the judgement relied on.
+    remove(group.properties.assessments.items as SchemaNode, ["evidence_refs"])
     const relation = schema.definitions.relation as SchemaNode
     remove(relation, ["basis"])
     const endpointRefs = schema.definitions.ref_or_local as SchemaNode
@@ -209,7 +220,8 @@ function atomIdOf(endpoint: unknown): { local_ref: string } {
 /**
  * An answer written to the earlier CI contract still carries identities code
  * now binds: authority.basis, each rule's resource_ref, each Relation's basis,
- * exact Relation endpoint versions and an ordinary group's local_ref.  They are
+ * exact Relation endpoint versions, each assessment's evidence_refs and an
+ * ordinary group's local_ref.  They are
  * dropped (an endpoint keeps its atom id) before the answer is validated; the
  * recorded text keeps them as returned.
  */
@@ -219,6 +231,7 @@ export function dropCodeBoundIdentities(answer: unknown, assessment: boolean): v
     if (group === null || typeof group !== "object") continue
     const record = group as Record<string, any>
     if (!assessment) delete record.local_ref
+    for (const judged of Array.isArray(record.assessments) ? record.assessments : []) if (judged && typeof judged === "object") delete judged.evidence_refs
     const drafts = record.compilation?.decision === "replace" && Array.isArray(record.compilation.drafts) ? record.compilation.drafts : []
     for (const draft of drafts) {
       for (const atom of Array.isArray(draft?.atoms) ? draft.atoms : []) {
@@ -300,7 +313,7 @@ function assessmentStageInstruction(): string {
     "request.compiled shows each current Atom complete; superseded or legacy versions appear only in compiled[].historical_atoms by identity and lifecycle status. In an Atom task, a requirement block whose body reads (text identical to IR content <id>@<revision> <digest> supplied in this request) stands for the exact text of that IR content item in request.ir.",
     "basis.event_ids must name exactly this batch's trigger events.",
     "generation_repair.ir_proposal carries the stored task groups; keep each group's task_refs and depends_on.",
-    "Write the assessments and execution_decisions for this batch yourself from its evidence, with evidence refs to this batch's events: an execution return is never an IR source, only evidence for those fields.",
+    "Write the assessments and execution_decisions for this batch yourself from its evidence. Management binds each assessment's evidence_refs to this batch's return event, so say in explanation which parts of the return (report text, recorded tool results) the judgement relies on. An execution return is never an IR source, only evidence for those fields.",
     "Compile only what the current IR and this evidence require: reuse the current Compiled Intent when the plan is unchanged, and replace it only where the plan must change. Preserve retained work and real dependencies.",
     "For each returned execution, decide stop or retry. retry asks management to run the same Atom version once more as a new execution; it applies when this batch assesses that version not_satisfied and the plan is reused. A return without a completion claim is run once more by management when the plan stands. Each Atom version runs at most twice between two user inputs, however it is offered, so a retry past that limit closes the execution like stop. With reuse and stop the returned Atom version does not run again until a user update changes the plan.",
     "Otherwise parent_issues is [].",
@@ -332,7 +345,8 @@ export function generationContract<T extends { ir_change_contract: string; atom_
       checkedCI ? "Compile the affected task, input/output, completion condition, Relation and assignment from the fixed parent IR; the independent check judges whether the original update was correctly represented."
         : "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
     ),
-    ...(checkedCI && contract.rules !== undefined ? { rules: contract.rules.map(rule => {
+    ...(stage === "ci" && !checkedCI && contract.rules !== undefined ? { rules: contract.rules.map(boundEvidence) } : {}),
+    ...(checkedCI && contract.rules !== undefined ? { rules: contract.rules.map(boundEvidence).map(rule => {
       if (rule.startsWith("When configured, an independent checker")) return `${CHECKED_PARENT_ROLE} Execution decisions belong in candidate.groups[].execution_decisions. After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return, retry dispatches a returned Atom version once more. Unreviewed work remains suspended.`
       if (rule.startsWith("When validation_errors, previous_rejection")) return "On CI repairs, use the fixed parent IR and the reported plan defects to repair the complete plan. Preserve unrelated correct work, restore requirements present in that IR but missing from the plan, and correct assignments and Relations without changing IR or adding requirements absent from it. An independent IR finding returns to the IR stage through repair_target: ir."
       if (rule.startsWith("Before returning, compare the original delegation")) return "Before returning, compare every applicable fixed parent IR requirement with the whole plan's concrete tasks and completion. Fill missing plan behavior and remove unsupported plan restrictions while keeping the parent IR fixed."
