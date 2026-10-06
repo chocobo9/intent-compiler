@@ -75,7 +75,7 @@ function fakeCompiler(): IntentCompilerV2 & {
     started,
     operations,
     retryLookups,
-    pendingRetryDeliveries: async ({ runId }) => {
+    pendingDeliveries: async ({ runId }) => {
       retryLookups.push(runId)
       return [{ ...DELIVERY, dispatch_id: "dispatch-retry" }]
     },

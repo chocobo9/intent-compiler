@@ -165,8 +165,8 @@ export function createIntentCompilerRuntime(options: IntentCompilerRuntimeOption
     inspect(input: { runId: string }): Promise<RunView> {
       return compilerFor(input.runId).inspect(input)
     },
-    pendingRetryDeliveries(input: { runId: string }) {
-      return compilerFor(input.runId).pendingRetryDeliveries(input)
+    pendingDeliveries(input: { runId: string }) {
+      return compilerFor(input.runId).pendingDeliveries(input)
     },
   })
 }

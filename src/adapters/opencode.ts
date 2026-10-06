@@ -552,8 +552,8 @@ export async function advanceForTurn(compiler: IntentCompilerV2, runId: string):
 }
 
 /**
- * The registration source category of a host turn that runs pending retry
- * dispatches instead of carrying a user input.
+ * The registration source category of a host turn that runs pending dispatches
+ * instead of carrying a user input.
  */
 export const HOST_DISPATCH_SOURCE_CATEGORY = "host_dispatch"
 
@@ -575,17 +575,18 @@ async function onV2ChatMessage(
       "Compiler input text must exactly match the declared harnessSystemText",
     )
   }
-  // A host-dispatch turn carries no user text: it runs the retry that the last
-  // return batch decided after the executor turn holding that work had ended.
+  // A host-dispatch turn carries no user text: it runs the work a return batch
+  // offered (an unlocked successor, a retry, a rerun) after the executor turn
+  // holding the returned work had ended.
   const hostDispatch = typeof identity.source === "object" && identity.source !== null
     && (identity.source as { source_category?: unknown }).source_category === HOST_DISPATCH_SOURCE_CATEGORY
   let advanced: AdvanceResult
   if (hostDispatch) {
     let offered: NonNullable<AdvanceResult["deliveries"]>
     try {
-      offered = await compiler.pendingRetryDeliveries({ runId: identity.runId })
+      offered = await compiler.pendingDeliveries({ runId: identity.runId })
     } catch (error: unknown) {
-      throw new OpenCodeAdapterError("COMPILER_PENDING_RETRY_FAILED", `Compiler pending retry lookup failed: ${errorMessage(error)}`)
+      throw new OpenCodeAdapterError("COMPILER_PENDING_DELIVERIES_FAILED", `Compiler pending delivery lookup failed: ${errorMessage(error)}`)
     }
     advanced = { ok: true, run_id: identity.runId, disposition: offered.length > 0 ? "dispatched" : "unchanged",
       pending_events: [], compiled_revisions: {}, ir_revisions: {}, deliveries: offered }

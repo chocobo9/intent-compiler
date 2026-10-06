@@ -574,8 +574,16 @@ export interface ExecutionView {
  * permitted number of times.
  */
 export type ExecutionRetry =
-  | { outcome: "dispatched"; dispatch_id: string }
-  | { outcome: "limit_reached"; executions: number }
+  | { outcome: "dispatched"; dispatch_id: string; cause?: RerunCause }
+  | { outcome: "limit_reached"; executions: number; cause?: RerunCause }
+
+/**
+ * Why the same Atom version was offered again: management's retry decision, a
+ * return that ended without a completion claim, or a recompilation that
+ * re-offered an unchanged version.  Records written before causes were kept
+ * carry none and came from a retry decision.
+ */
+export type RerunCause = "retry_decision" | "incomplete_return" | "redelivery"
 
 export class IntentContractError extends Error {
   readonly code: string

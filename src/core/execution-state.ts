@@ -35,6 +35,12 @@ export interface ExecutionRecord {
   host_identity?: string
   closed_reason?: string
   retry?: ExecutionRetry
+  /**
+   * Journal sequence of the latest user input when this execution started.
+   * Executions of one Atom version are counted per such window; an execution
+   * recorded before windows were kept carries none and counts in no window.
+   */
+  user_input_window?: number
   allowed_calls: Array<{
     allowed_call_id: string
     host_call_id: string
@@ -131,15 +137,17 @@ export class ExecutionStateManager {
     const atom = intent.atoms.find((candidate) => candidate.atom_id === atomId)
     if (!atom) throw new Error(`unknown atom ${atomId} in compiled intent ${intent.task_id}`)
     const digest = atomRef(atom).digest
-    // Dispatch is idempotent per atom content identity: recompiling a task
-    // re-offers carried atoms, and the host must keep working against the same
-    // dispatch instead of accumulating one offer per compilation.  A new atom
-    // content (new id, revision, or content digest) gets a new dispatch.
+    // An offer is reused while it is unstarted or its execution is still open:
+    // recompiling a task re-offers carried atoms, and the host keeps working
+    // against the same dispatch.  Once every offer of this content has a closed
+    // execution, offering it again means running it again, under a new dispatch
+    // the host can tell apart.  New content always gets a new dispatch.
     const existing = [...this.dispatches.values()].find((candidate) => (
       candidate.task_id === intent.task_id
       && candidate.atom_id === atom.atom_id
       && candidate.atom_revision === atom.revision
       && candidate.digest === digest
+      && this.byDispatch.get(candidate.dispatch_id)?.status !== "closed"
     ))
     if (existing !== undefined) return { ...existing }
     const dispatch: DispatchRecord = {
@@ -185,6 +193,17 @@ export class ExecutionStateManager {
     })
   }
 
+  /** Executions of this Atom version since the given user input. */
+  executionsInWindow(taskId: string, atomId: string, revision: number, digest: string, userInputWindow: number | undefined): ExecutionRecord[] {
+    return this.executionsOfVersion(taskId, atomId, revision, digest)
+      .filter((execution) => execution.user_input_window !== undefined && execution.user_input_window === userInputWindow)
+  }
+
+  /** Whether any execution was ever started under this dispatch. */
+  started(dispatchId: string): boolean {
+    return this.byDispatch.has(dispatchId)
+  }
+
   recordRetry(executionId: string, retry: ExecutionRetry): void {
     const execution = this.executions.get(executionId)
     if (execution) execution.retry = retry
@@ -194,7 +213,7 @@ export class ExecutionStateManager {
     return this.dispatches.get(dispatchId)
   }
 
-  authorizeStart(request: StartRequest): AuthorizationResult {
+  authorizeStart(request: StartRequest, userInputWindow?: number): AuthorizationResult {
     const dispatch = this.dispatches.get(request.dispatch_id)
     if (!dispatch) return deny(request.run_id, "execution_inactive", `unknown dispatch ${request.dispatch_id}`)
     const existing = this.byDispatch.get(dispatch.dispatch_id)
@@ -214,6 +233,7 @@ export class ExecutionStateManager {
       atom_id: dispatch.atom_id,
       status: "active",
       host_identity: request.host_identity,
+      ...(userInputWindow === undefined ? {} : { user_input_window: userInputWindow }),
       allowed_calls: [],
     }
     this.executions.set(execution.execution_id, execution)

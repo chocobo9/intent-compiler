@@ -225,7 +225,7 @@ function assessmentStageInstruction(): string {
     "generation_repair.ir_proposal carries the stored task groups; keep each group's task_refs and depends_on.",
     "Write the assessments and execution_decisions for this batch yourself from its evidence, with evidence refs to this batch's events: an execution return is never an IR source, only evidence for those fields.",
     "Compile only what the current IR and this evidence require: reuse the current Compiled Intent when the plan is unchanged, and replace it only where the plan must change. Preserve retained work and real dependencies.",
-    "For each returned execution, decide stop or retry. retry asks management to run the same Atom version once more as a new execution; it applies when this batch assesses that version not_satisfied and the plan is reused. Each Atom version runs at most twice, so a retry past that limit closes the execution like stop. With reuse and stop the returned Atom version does not run again until a user update changes the plan.",
+    "For each returned execution, decide stop or retry. retry asks management to run the same Atom version once more as a new execution; it applies when this batch assesses that version not_satisfied and the plan is reused. A return without a completion claim is run once more by management when the plan stands. Each Atom version runs at most twice between two user inputs, however it is offered, so a retry past that limit closes the execution like stop. With reuse and stop the returned Atom version does not run again until a user update changes the plan.",
     "Otherwise parent_issues is [].",
   ].join(" ")
 }
