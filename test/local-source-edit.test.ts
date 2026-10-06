@@ -7,6 +7,7 @@ import { Ajv } from "ajv"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2, resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 import { IntentStateManager } from "../src/core/intent-state-v2.js"
+import { bindExpectedRevisions } from "../src/core/parent-generation.js"
 import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "../src/core/source-payload.js"
 import { createCompilerModelV2, V2_COMPILER_CONTRACT, type CompilerModelV2CheckInput } from "../src/model/compiler-model-v2.js"
 import { LATER_INPUT_GOVERNS } from "../src/core/requirement-flow.js"
@@ -210,6 +211,8 @@ test("manual offline R3 quote selection locates the old zscore rule and preserve
   })
   assert.equal(parsed.ok, true, parsed.error?.message)
   batch.groups[0]!.ir_changes = parsed.ir_proposal!.groups[0]!.ir_changes
+  // The answer names the item by id; the strict flow fills the revision it expects.
+  bindExpectedRevisions(batch.groups[0]!, previous)
   const change = batch.groups[0]!.ir_changes[0]!
   if (change.action !== "edit") throw new Error("fixture")
   assert.equal(resolveSourceRefs(batch, [oldEvent, newEvent]).unresolved, 0)

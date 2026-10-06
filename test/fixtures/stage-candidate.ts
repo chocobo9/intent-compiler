@@ -1,17 +1,22 @@
 import assert from "node:assert/strict"
 import type { Candidate } from "../../src/core/intent-contract.js"
 import type { CompilerModelV2Input } from "../../src/model/compiler-model-v2.js"
-import { dropCodeBoundIdentities, type IRProposal, type CIProposal, type GenerationSchemaOptions } from "../../src/model/generation-schema.js"
+import { dropCodeBoundIdentities, dropCodeBoundIrIdentities, type IRProposal, type CIProposal, type GenerationSchemaOptions } from "../../src/model/generation-schema.js"
 
 /** Encoding adapter for fixed lifecycle fixtures; it does not generate or repair meaning. */
 export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate, generation?: Pick<GenerationSchemaOptions, "checkRequired">): IRProposal | CIProposal {
   assert.ok(input.generation_stage, "strict lifecycle tests must use parent/child generation")
   const copy = structuredClone(candidate)
-  if (input.generation_stage === "ir") return {
-    ...copy, groups: copy.groups.map(({
-      compilation: _compilation, coverage: _coverage,
-      execution_decisions: _decisions, assessments: _assessments, checks: _checks, ...group
-    }) => group),
+  if (input.generation_stage === "ir") {
+    const answer = {
+      ...copy, groups: copy.groups.map(({
+        compilation: _compilation, coverage: _coverage,
+        execution_decisions: _decisions, assessments: _assessments, checks: _checks, ...group
+      }) => group),
+    }
+    // The IR answer names existing objects by id; code fills the revision each change expects.
+    dropCodeBoundIrIdentities(answer)
+    return answer as IRProposal
   }
   if (input.assessment_batch === true) {
     // An assessment batch carries no user delegation, so no IR stage authored

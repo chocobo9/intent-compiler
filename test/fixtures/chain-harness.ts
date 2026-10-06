@@ -5,7 +5,7 @@ import { createOpenCodeAdapter, HOST_DISPATCH_SOURCE_CATEGORY, type OpenCodeObse
 import { IntentStoreV2, type V2RunSnapshot } from "../../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 } from "../../src/core/intent-compiler-v2.js"
 import { compiledIntentRef } from "../../src/core/compiled-intent.js"
-import type { Candidate, CompilerEvent, Ref } from "../../src/core/intent-contract.js"
+import type { Candidate, CompilerEvent, Ref, SourceRef } from "../../src/core/intent-contract.js"
 import {
   createCompilerModelV2,
   type CompilerModelV2CheckTransport,
@@ -265,6 +265,8 @@ export interface ReturnJudgement {
   decision?: "stop" | "retry"
   /** Replace the assessed Atom reference, as a model that copied it wrong would. */
   targetRef?: (ref: Ref) => Ref
+  /** Replace the criteria references, likewise. */
+  criteriaRefs?: (refs: Array<Ref | SourceRef>) => Array<Ref | SourceRef>
 }
 
 /**
@@ -291,7 +293,8 @@ export function assessmentAnswer(input: CompilerModelV2Input, judge: (atomId: st
         execution_id: event.execution_id, decision: judgement.decision ?? "stop", reason: `${judgement.decision ?? "stop"} after ${judgement.result}`, basis: [ref],
       })),
       assessments: judged.map(({ ref, atom, judgement }) => ({
-        target_ref: judgement.targetRef ? judgement.targetRef(ref) : ref, criteria_refs: atom?.goal_refs ?? [],
+        target_ref: judgement.targetRef ? judgement.targetRef(ref) : ref,
+        criteria_refs: judgement.criteriaRefs ? judgement.criteriaRefs(atom?.goal_refs ?? []) : atom?.goal_refs ?? [],
         result: judgement.result, explanation: `the returned work is ${judgement.result}`, method: "model",
       })),
       coverage: [], checks: [], questions: [],

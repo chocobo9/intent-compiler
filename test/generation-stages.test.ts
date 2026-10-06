@@ -78,9 +78,11 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_basis: "parent-1" }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."], groups: [] }).ok, true)
-  // An assessment batch still names its own basis events and task.
-  const assessment = { ...proposal, basis, groups: [{ ...proposal.groups[0], local_ref: "g1", task_refs: ["t1"], depends_on: [] }] }
+  // An assessment batch still names its own task; code fills its basis events.
+  const assessment = { ...proposal, basis: { refs: basis.refs }, groups: [{ ...proposal.groups[0], local_ref: "g1", task_refs: ["t1"], depends_on: [] }] }
   assert.equal(validateGenerationProposal("ci", assessment, { assessment: true }).ok, true)
+  assert.equal(validateGenerationProposal("ci", { ...assessment, basis }, { assessment: true }).ok, false,
+    "an assessment's basis events are this batch's trigger events, filled by code")
   assert.equal(validateGenerationProposal("ci", assessment).ok, false, "the ordinary CI shape does not admit an assessment's copies")
   const { parent_issues: _issues, ...checked } = proposal
   assert.equal(validateGenerationProposal("ci", checked, { checkRequired: true }).ok, true)
@@ -309,7 +311,7 @@ test("the local source edit is projected into the strict IR stage only, and the 
   assert.equal(V2_COMPILER_CONTRACT.ir_change_contract.includes("can use exact quotes"), true, "legacy quote wording is untouched")
 
   const change = {
-    action: "edit", target: "content", id: "c1", expected_revision: 0,
+    action: "edit", target: "content", id: "c1",
     remove: [{ source_id: "user-1", digest: "sha256:d", quote: "Old rule." }],
     add: [{ source_id: "user-1", digest: "sha256:d", quote: "New rule." }],
     basis: [{ source_id: "user-1", digest: "sha256:d", quote: "New rule." }],
@@ -317,6 +319,8 @@ test("the local source edit is projected into the strict IR stage only, and the 
   }
   const proposal = { schema_version: 2, basis, source_coverage: [], groups: [{ ...irGroup, ir_changes: [change] }] }
   assert.equal(validateGenerationProposal("ir", proposal).ok, true, "the IR-stage projection admits the edit")
+  assert.equal(validateGenerationProposal("ir", { ...proposal, groups: [{ ...irGroup, ir_changes: [{ ...change, expected_revision: 0 }] }] }).ok, false,
+    "the revision an edit expects is filled by code from the supplied IR")
   const changeOnly = (schema: Record<string, unknown>) => ({ $ref: "#/definitions/ir_change", definitions: schema.definitions })
   const legacyCanonical = new Ajv({ strict: false, allowUnionTypes: true }).compile(changeOnly(CANDIDATE_JSON_SCHEMA as unknown as Record<string, unknown>))
   assert.equal(legacyCanonical(change), false, "the shared canonical shape (legacy answer validation) rejects an edit")
@@ -435,4 +439,29 @@ test("the CI answer leaves the identities code binds out, and an answer in the e
   const draft = group.compilation.drafts[0]
   assert.deepEqual(draft.atoms[0].authority, { rules: [{ operation_id: "read" }] })
   assert.deepEqual(draft.relations[0], { predecessor: { local_ref: "a1" }, successor: { local_ref: "a2" } })
+})
+
+// chain-gate-audit A2/A4/A1: the identities code binds are not asked of the
+// answer, and every strict stage's text says so.
+test("strict stages ask for ids only where code binds revisions, digests and an assessment's basis events", () => {
+  for (const stage of ["ir", "ci"] as const) {
+    const contract = generationContract(V2_COMPILER_CONTRACT, stage, "openai") as typeof V2_COMPILER_CONTRACT
+    assert.doesNotMatch(contract.ir_change_contract, /expected_revision/, `${stage}: no change states its expected revision`)
+    assert.match(contract.ir_change_contract, /Management fills the revision each revise, retire or edit expects/)
+    assert.doesNotMatch(contract.reference_contract, /expected revisions;/)
+    assert.match(contract.reference_contract, /computes every Ref's digest/)
+    assert.equal(contract.rules.some(rule => /expected_revision fields/.test(rule)), false)
+    assert.equal(contract.rules.some(rule => /binds the revision an IR change expects/.test(rule)), true)
+    for (const profile of [undefined, "openai", "groq"] as const) {
+      const text = JSON.stringify(buildGenerationSchema(stage, profile))
+      assert.equal(text.includes("expected_revision"), false, `${stage}/${profile ?? "default"} schema`)
+    }
+  }
+  assert.match(V2_COMPILER_CONTRACT.ir_change_contract, /id, expected_revision,/, "the legacy contract keeps its shape")
+  const ci = generationContract(V2_COMPILER_CONTRACT, "ci", "openai")
+  assert.match(ci.atom_contract, /binds an assessment of this batch's return to the Atom version that execution ran/)
+  assert.doesNotMatch(ci.atom_contract, /Use the exact refs supplied in atom_refs/)
+  const assessing = generationContract(V2_COMPILER_CONTRACT, "ci", "openai", true)
+  assert.doesNotMatch(generationStageInstruction("ci", true) + assessing.candidate_shape, /must name exactly this batch's trigger events/)
+  assert.deepEqual((buildGenerationExample("ci", undefined, true) as CIProposal).basis, { refs: [] })
 })

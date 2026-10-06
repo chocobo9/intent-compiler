@@ -17,7 +17,7 @@ import { validateCandidateCheckSchema } from "./candidate-check-schema.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "./candidate-example.js"
 import type { CandidateRepairContext } from "../core/candidate-repair.js"
 import type { AssessmentRecord, ExecutionOutcomeRecord } from "../core/compiler-store-v2.js"
-import { dropCodeBoundIdentities, validateGenerationProposal, type IRProposal, type CIProposal, type GenerationSchemaOptions } from "./generation-schema.js"
+import { dropCodeBoundIdentities, dropCodeBoundIrIdentities, validateGenerationProposal, type IRProposal, type CIProposal, type GenerationSchemaOptions } from "./generation-schema.js"
 
 export interface CompilerModelV2Input {
   generation_stage?: "ir" | "ci"
@@ -504,6 +504,7 @@ export function createCompilerModelV2(
             delete (decoded as { parent_basis?: unknown }).parent_basis
             dropCodeBoundIdentities(decoded, input.assessment_batch === true)
           }
+          if (input.generation_stage === "ir") dropCodeBoundIrIdentities(decoded)
           const schema = validateGenerationProposal(input.generation_stage, decoded, {
             assessment: input.assessment_batch === true, checkRequired: checkTransport !== undefined,
           })

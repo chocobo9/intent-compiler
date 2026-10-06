@@ -1,5 +1,6 @@
 import { projectCompiled } from "./request-projection.js"
-import { digestOf, type Candidate, type LocalSourceEditRecord, type SourceRef, type TaskIntent } from "./intent-contract.js"
+import { atomRef, compiledIntentRef } from "./compiled-intent.js"
+import { digestOf, type Candidate, type CompiledIntent, type LocalSourceEditRecord, type Ref, type SourceRef, type TaskIntent } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
 import { aliasDisplay, decodeIRProposal, expressIRRequest, type SourceAliasEntry, type SourceAliasIndex } from "./source-aliases.js"
 import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "./source-payload.js"
@@ -107,6 +108,71 @@ function irProposalGroups(groups: Candidate["groups"]): IRProposal["groups"] {
     compilation: _compilation, coverage: _coverage,
     execution_decisions: _executionDecisions, assessments: _assessments, checks: _checks, ...group
   }) => group)
+}
+
+/**
+ * The digest of every stored version a Ref can name, keyed `id@revision`: IR
+ * tasks with their content, bindings and outputs, every Atom version a plan
+ * lists, and each compiled intent.  A digest is a function of the version it
+ * names, so code writes it; the answer chooses only the id and revision.
+ */
+function versionDigests(irs: ReadonlyArray<Record<string, TaskIntent>>, compiled: Record<string, CompiledIntent>): Map<string, Set<string>> {
+  const index = new Map<string, Set<string>>()
+  const add = (ref: Ref): void => {
+    const key = `${ref.id}@${ref.revision}`
+    if (!index.has(key)) index.set(key, new Set())
+    index.get(key)!.add(ref.digest)
+  }
+  for (const ir of irs) for (const task of Object.values(ir)) {
+    add({ id: task.task_id, revision: task.revision, digest: digestOf(task) })
+    for (const item of task.content) add({ id: item.item_id, revision: item.revision, digest: digestOf(item) })
+    for (const item of task.bindings) add({ id: item.binding_id, revision: item.revision, digest: digestOf(item) })
+    for (const item of task.outputs) add({ id: item.output_id, revision: item.revision, digest: digestOf(item) })
+  }
+  for (const intent of Object.values(compiled)) {
+    add(compiledIntentRef(intent))
+    for (const atom of intent.atoms) add(atomRef(atom))
+  }
+  return index
+}
+
+/**
+ * Write the stored digest into every Ref of an answer whose id and revision
+ * name exactly one stored version.  A Ref naming no stored version keeps what
+ * the answer wrote, so the gate that reads it still reports it.
+ */
+function bindRefDigests(value: unknown, index: ReadonlyMap<string, ReadonlySet<string>>): void {
+  if (Array.isArray(value)) { for (const entry of value) bindRefDigests(entry, index); return }
+  if (value === null || typeof value !== "object") return
+  const record = value as Record<string, unknown>
+  if (typeof record.id === "string" && Number.isInteger(record.revision) && typeof record.digest === "string" && !("source_id" in record)) {
+    const digests = index.get(`${record.id}@${String(record.revision)}`)
+    if (digests?.size === 1) record.digest = [...digests][0]!
+  }
+  for (const child of Object.values(record)) bindRefDigests(child, index)
+}
+
+/**
+ * The revision a revise, retire or edit expects is the supplied IR's current
+ * one.  A second change to the same object in one batch then fails as such,
+ * with the reason, instead of on a copied number.
+ */
+export function bindExpectedRevisions(group: Candidate["groups"][number], stored: Record<string, TaskIntent>): void {
+  const task = stored[group.task_refs[0] ?? ""]
+  if (task === undefined) return
+  for (const change of group.ir_changes as Array<Record<string, unknown>>) {
+    if (change.action !== "revise" && change.action !== "retire" && change.action !== "edit") continue
+    const current = change.target === "task" || change.target === "current_scope" ? task.revision
+      : change.target === "content" ? task.content.find(item => item.item_id === change.id)?.revision
+        : change.target === "binding" ? task.bindings.find(item => item.binding_id === change.id)?.revision
+          : change.target === "output" ? task.outputs.find(item => item.output_id === change.id)?.revision
+            : undefined
+    if (current !== undefined) change.expected_revision = current
+  }
+}
+
+function unboundMessage(targets: readonly string[]): string {
+  return `assessments.target_ref names no Atom version of this plan: ${targets.join(", ")}; name the assessed Atom by an id and revision listed in atom_refs`
 }
 
 const SOURCE_REPAIR_DRAFT_NOTICE = "generation_repair.ir_proposal is a code-derived repair draft, not raw model output: successfully resolved selectors reuse their exact UTF-16 spans and code-computed digests; failed references retain their original values. You may still revise the proposal's meaning and selections."
@@ -217,6 +283,9 @@ export class ParentGeneration {
         // internal CandidateGroup shape so downstream code sees one type.
         execution_decisions: [], assessments: [], checks: [] })),
     }
+    // Identities code knows: the revision each change expects, and Ref digests.
+    for (const group of candidate.groups) bindExpectedRevisions(group, this.options.input.ir)
+    bindRefDigests(candidate, versionDigests([this.options.input.ir], this.options.input.compiled ?? {}))
     const basis = this.options.validateBasis(candidate, (eventId) => this.display(eventId))
     if (!basis.ok) throw Error(basis.message ?? "IR names the wrong input events")
     if (this.options.input.events.some(event => event.kind === "user_input") && candidate.groups.length === 0) {
@@ -403,14 +472,7 @@ export class ParentGeneration {
       this.invalidate(child.parent_issues)
       return this.reject(`IR needs correction: ${child.parent_issues.join("; ")}`, result)
     }
-    if (derived) {
-      // An assessment answers this batch's events; its refs may cite what it assessed.
-      const expected = this.options.input.events.map(event => event.event_id).sort()
-      const received = [...(child.basis?.event_ids ?? [])].sort()
-      if (child.basis === undefined || digestOf(received) !== digestOf(expected)) {
-        return this.reject(`an execution assessment must name this batch's events in basis.event_ids; expected=${JSON.stringify(expected)}; received=${JSON.stringify(child.basis?.event_ids ?? null)}`, result)
-      }
-    } else {
+    if (!derived) {
       // The ordinary CI answer has one group per parent group, in the parent's
       // order; the basis and each group's task identity and dependencies come
       // from that parent group.
@@ -431,7 +493,10 @@ export class ParentGeneration {
         if (seen.has(taskId)) return this.reject(`assessment names task ${taskId} more than once`, result)
         seen.add(taskId)
         const skeleton = parent.candidate.groups.find(candidate => candidate.task_refs[0] === taskId)
-        groups.push({ ...this.bindCodeIdentities(group, taskId), depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] } as Candidate["groups"][number])
+        const judged = this.bindCodeIdentities(group, taskId)
+        const unbound = this.unboundTargets(judged)
+        if (unbound.length > 0) return this.reject(unboundMessage(unbound), result)
+        groups.push({ ...judged, depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] } as Candidate["groups"][number])
         continue
       }
       // A delegation batch binds each group to the parent group at its position;
@@ -469,6 +534,8 @@ export class ParentGeneration {
         }
       }
       const bound = this.bindCodeIdentities(group, boundTask)
+      const unbound = this.unboundTargets(bound)
+      if (unbound.length > 0) return this.reject(unboundMessage(unbound), result)
       const compilation = bound.compilation.decision === "replace"
         ? { ...bound.compilation, drafts: bound.compilation.drafts.map(draft => ({ ...draft, task_id: boundTask })) }
         : bound.compilation
@@ -486,8 +553,13 @@ export class ParentGeneration {
       } as Candidate["groups"][number])
     }
     this.state.issues = []
-    return { ...result, candidate: { schema_version: 2,
-      basis: derived ? structuredClone(child.basis!) : parent.candidate.basis,
+    // An assessment answers exactly this batch's events, which code knows; its
+    // refs may cite what it assessed.
+    const basis = derived
+      ? { event_ids: this.options.input.events.map(event => event.event_id), refs: structuredClone(child.basis?.refs ?? []) }
+      : parent.candidate.basis
+    if (derived) bindRefDigests(basis, this.versions())
+    return { ...result, candidate: { schema_version: 2, basis,
       source_coverage: derived ? [] : parent.candidate.source_coverage, groups } }
   }
 
@@ -500,7 +572,10 @@ export class ParentGeneration {
    * versions when the plan is built.
    */
   private bindCodeIdentities<G extends CIProposalGroup>(group: G, taskId: string): G {
-    const judged = { ...group, assessments: group.assessments.map(assessment => ({ ...assessment, evidence_refs: this.returnEvidence(assessment.target_ref) })) }
+    const copy = structuredClone(group)
+    for (const assessment of copy.assessments) assessment.target_ref = this.returnedVersion(assessment.target_ref)
+    bindRefDigests(copy, this.versions())
+    const judged = { ...copy, assessments: copy.assessments.map(assessment => ({ ...assessment, evidence_refs: this.returnEvidence(assessment.target_ref) })) }
     const compilation = judged.compilation
     if (compilation.decision !== "replace") return judged
     const task = this.state.parent!.ir[taskId]!
@@ -523,6 +598,37 @@ export class ParentGeneration {
       relations: draft.relations.map(relation => ({ ...relation, basis: [structuredClone(taskRef)] })),
     }))
     return { ...judged, compilation: { ...compilation, drafts } }
+  }
+
+  /** Stored versions an answer's Refs may name: the supplied and the parent IR, and every plan version. */
+  private versions(): Map<string, Set<string>> {
+    return versionDigests([this.options.input.ir, ...(this.state.parent === undefined ? [] : [this.state.parent.ir])], this.options.input.compiled ?? {})
+  }
+
+  /**
+   * An assessment that names an Atom this batch returned judges the version
+   * that execution ran; when the batch returned more than one version of that
+   * Atom, the answer's revision chooses and only its digest is bound.
+   */
+  private returnedVersion(target: Ref): Ref {
+    const versions = new Map<string, Ref>()
+    for (const event of this.options.input.events) {
+      if (event.kind !== "execution_return") continue
+      const ran = (event.payload as { outcome?: { atom_ref?: Ref } } | undefined)?.outcome?.atom_ref
+      if (ran !== undefined && ran.id === target?.id) versions.set(`${ran.revision}`, ran)
+    }
+    return versions.size === 1 ? structuredClone([...versions.values()][0]!) : target
+  }
+
+  /** Assessment targets that name no Atom version of the plan: such a judgement would bind nothing. */
+  private unboundTargets(group: CIProposalGroup): string[] {
+    const atoms = new Set(Object.values(this.options.input.compiled ?? {}).flatMap(intent => intent.atoms).map(atom => {
+      const ref = atomRef(atom)
+      return `${ref.id}@${ref.revision}:${ref.digest}`
+    }))
+    return group.assessments.map(assessment => assessment.target_ref)
+      .filter(ref => !atoms.has(`${ref?.id}@${ref?.revision}:${ref?.digest}`))
+      .map(ref => `${ref?.id}@${ref?.revision}`)
   }
 
   /**

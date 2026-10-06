@@ -33,7 +33,8 @@ export type CIProposalGroup = Omit<CandidateGroup, "ir_changes" | "task_refs" | 
 }
 export type CIProposal = {
   schema_version: 2
-  basis?: Candidate["basis"]
+  /** An assessment's basis; code fills its event_ids with the batch's trigger events. */
+  basis?: { event_ids?: string[]; refs: Candidate["basis"]["refs"] }
   parent_issues?: string[]
   groups: CIProposalGroup[]
 }
@@ -63,10 +64,18 @@ function boundEvidence(rule: string): string {
   return rule.replace(BASE_ASSESSMENT_FIELDS, CI_ASSESSMENT_FIELDS)
 }
 
+const BASE_ATOM_REFS = "Use the exact refs supplied in atom_refs for assessments.target_ref and previous_atom_ref; never invent ids, revisions, or digests."
+const CI_ATOM_REFS = "Name assessments.target_ref and previous_atom_ref by an Atom id and revision supplied in atom_refs; management binds each Ref's digest, and binds an assessment of this batch's return to the Atom version that execution ran. Never invent ids or revisions."
+
 /** The CI stage names Atoms by id and leaves the identities code binds out of the answer. */
 function codeBoundIdentities(atomContract: string): string {
-  return atomContract.replace(BASE_RELATION_SHAPE, CI_RELATION_SHAPE).replace(BASE_AUTHORITY_SHAPE, CI_AUTHORITY_SHAPE)
+  return atomContract.replace(BASE_RELATION_SHAPE, CI_RELATION_SHAPE).replace(BASE_AUTHORITY_SHAPE, CI_AUTHORITY_SHAPE).replace(BASE_ATOM_REFS, CI_ATOM_REFS)
 }
+
+const BASE_EXISTING_IDENTITIES = "For existing objects copy their supplied identities and expected revisions; raise an Atom revision when changing its content. Management assigns compiled identities and computes digests."
+const BOUND_EXISTING_IDENTITIES = "For existing objects copy their supplied ids and revisions; raise an Atom revision when changing its content. Management assigns compiled identities, fills the revision an IR change expects and computes every Ref's digest from the stored object it names."
+const BASE_EXISTING_OBJECTS_RULE = "When existing_objects contains the work being updated, use that exact task_id and task_revision for task_refs, draft.task_id, and expected_revision fields. Use only atom Refs listed under that task when setting previous_atom_ref; management binds and checks these against the current stored objects."
+const BOUND_EXISTING_OBJECTS_RULE = "When existing_objects contains the work being updated, use that exact task_id for task_refs and draft.task_id. Use only Atoms listed under that task when setting previous_atom_ref; management binds the revision an IR change expects and each Ref's digest from the current stored objects."
 
 function assembledAtomContract(atomContract: string): string {
   return atomContract.replace(BASE_ATOM_TASK_SENTENCE, ASSEMBLED_ATOM_TASK_SENTENCE)
@@ -80,7 +89,11 @@ function assembledAtomContract(atomContract: string): string {
  * materialization step) is not told to use an action it cannot use.
  */
 const BASE_REVISE_CLAUSE = '- revise: { action:"revise", target:"task"|"current_scope"|"binding"|"output"|"content", id, expected_revision, value:<complete new value>, sources }'
-const LOCAL_EDIT_CLAUSE = `${BASE_REVISE_CLAUSE} For a local content source edit that keeps the item's other sources, use edit instead of re-declaring the whole item: { action:"edit", target:"content", id, expected_revision, remove:[SourceRef], add:[SourceRef], basis:[SourceRef], reason }. For pure addition use remove: [] and nonempty add; basis and reason remain required. At least one of remove or add must be nonempty. remove addresses fragments inside this item's current sources; code keeps everything else, merges add and materializes the new text. Code writes withdrawal records only for removed fragments, so do not also send a superseded entry for the same removal. basis may cite any source still available to this batch, including earlier delegations, not only this batch's events.`
+const BASE_RETIRE_CLAUSE = '- retire: { action:"retire", target:"binding"|"output"|"content", id, expected_revision, reason, sources }'
+const BOUND_REVISE_CLAUSE = BASE_REVISE_CLAUSE.replace("id, expected_revision, ", "id, ")
+const BOUND_RETIRE_CLAUSE = BASE_RETIRE_CLAUSE.replace("id, expected_revision, ", "id, ")
+const REVISION_BINDING = "Management fills the revision each revise, retire or edit expects from the supplied IR, so name the existing object by id. State each object's change once per batch: a second change to the same object is rejected."
+const LOCAL_EDIT_CLAUSE = `${BOUND_REVISE_CLAUSE} For a local content source edit that keeps the item's other sources, use edit instead of re-declaring the whole item: { action:"edit", target:"content", id, remove:[SourceRef], add:[SourceRef], basis:[SourceRef], reason }. For pure addition use remove: [] and nonempty add; basis and reason remain required. At least one of remove or add must be nonempty. remove addresses fragments inside this item's current sources; code keeps everything else, merges add and materializes the new text. Code writes withdrawal records only for removed fragments, so do not also send a superseded entry for the same removal. basis may cite any source still available to this batch, including earlier delegations, not only this batch's events.`
 const BASE_SUPERSEDED_BASIS = "empty requirements, and basis selecting the current user's change."
 const LOCAL_EDIT_SUPERSEDED_BASIS = "empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry."
 
@@ -96,8 +109,15 @@ function strictSupersededBasis(irChangeContract: string): string {
   return withBasis
 }
 
+/** Both strict stages read revise and retire without the revision code fills. */
+function codeBoundRevisions(irChangeContract: string): string {
+  const bound = irChangeContract.replace(BASE_REVISE_CLAUSE, BOUND_REVISE_CLAUSE).replace(BASE_RETIRE_CLAUSE, `${BOUND_RETIRE_CLAUSE}\n${REVISION_BINDING}`)
+  if (!bound.includes(BOUND_REVISE_CLAUSE) || !bound.includes(REVISION_BINDING)) throw new Error("IR change contract no longer carries the revise/retire clauses; the code-bound revision wording cannot be projected")
+  return bound
+}
+
 function strictLocalSourceEdit(irChangeContract: string): string {
-  const withEdit = irChangeContract.replace(BASE_REVISE_CLAUSE, LOCAL_EDIT_CLAUSE)
+  const withEdit = irChangeContract.replace(BOUND_REVISE_CLAUSE, LOCAL_EDIT_CLAUSE)
   if (withEdit === irChangeContract) throw new Error("IR change contract no longer carries the revise clause; the local source edit wording has nowhere to project")
   return withEdit
 }
@@ -124,6 +144,12 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
   const remove = (object: SchemaNode, keys: string[]) => {
     for (const key of keys) delete object.properties[key]
     object.required = object.required.filter((key: string) => !keys.includes(key))
+  }
+  // The revision a revise, retire or edit expects is the supplied IR's
+  // current one: code fills it, so the answer names the object by id only.
+  const change = schema.definitions.ir_change as SchemaNode
+  for (const variant of change.oneOf ?? change.anyOf ?? []) {
+    if ((variant as SchemaNode).properties?.expected_revision !== undefined) remove(variant as SchemaNode, ["expected_revision"])
   }
   if (stage === "ir") remove(group, ["compilation", "coverage", "execution_decisions", "assessments", "checks"])
   else {
@@ -166,8 +192,11 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
         description: "Select a content item (or the task-level coverage entry) of this group's fixed parent task by local_ref. Code supplies its current revision and digest. Return no version or digest here.",
       }
     }
-    if (schema.properties.basis !== undefined) {
-      schema.properties.basis.description = "Copy generation_repair.ir_proposal.basis exactly, including event_ids and refs. This is the fixed input basis of the parent proposal, not references to the temporary IR. Keep refs empty when the parent basis has refs: []. compilation.intent_basis states the temporary IR relationship."
+    if (options.assessment === true) {
+      // An assessment answers exactly this batch's events; code fills them.
+      const basis = schema.properties.basis as SchemaNode
+      remove(basis, ["event_ids"])
+      basis.description = "refs may cite existing objects you assessed; management fills this batch's trigger events."
     }
     if (options.assessment === true || options.checkRequired !== true) {
       schema.properties.parent_issues = { type: "array", items: { type: "string", minLength: 1 }, description: "Concrete defects in the supplied parent IR. If nonempty, return groups: [] instead of changing or compiling the parent." }
@@ -220,13 +249,15 @@ function atomIdOf(endpoint: unknown): { local_ref: string } {
 /**
  * An answer written to the earlier CI contract still carries identities code
  * now binds: authority.basis, each rule's resource_ref, each Relation's basis,
- * exact Relation endpoint versions, each assessment's evidence_refs and an
- * ordinary group's local_ref.  They are
+ * exact Relation endpoint versions, each assessment's evidence_refs, an
+ * assessment's basis.event_ids and an ordinary group's local_ref.  They are
  * dropped (an endpoint keeps its atom id) before the answer is validated; the
  * recorded text keeps them as returned.
  */
 export function dropCodeBoundIdentities(answer: unknown, assessment: boolean): void {
   if (answer === null || typeof answer !== "object" || !Array.isArray((answer as { groups?: unknown }).groups)) return
+  const basis = (answer as { basis?: unknown }).basis
+  if (assessment && basis !== null && typeof basis === "object") delete (basis as { event_ids?: unknown }).event_ids
   for (const group of (answer as { groups: unknown[] }).groups) {
     if (group === null || typeof group !== "object") continue
     const record = group as Record<string, any>
@@ -250,6 +281,15 @@ export function dropCodeBoundIdentities(answer: unknown, assessment: boolean): v
   }
 }
 
+/** An IR answer written to the earlier contract may still state the expected revisions code now fills. */
+export function dropCodeBoundIrIdentities(answer: unknown): void {
+  if (answer === null || typeof answer !== "object" || !Array.isArray((answer as { groups?: unknown }).groups)) return
+  for (const group of (answer as { groups: unknown[] }).groups) {
+    const changes = group !== null && typeof group === "object" ? (group as { ir_changes?: unknown }).ir_changes : undefined
+    for (const change of Array.isArray(changes) ? changes : []) if (change && typeof change === "object") delete (change as { expected_revision?: unknown }).expected_revision
+  }
+}
+
 /** Project the existing encoding example, without inventing another task. */
 export function buildGenerationExample(stage: GenerationStage, profile?: StrictSchemaProfile, assessment = false, checkRequired = false): IRProposal | CIProposal {
   const example = structuredClone(profile === undefined ? CANDIDATE_EXAMPLE : buildStrictCandidateExample(profile)) as Candidate
@@ -268,7 +308,7 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
   const ordinary = assessment !== true
   // The CI answer leaves out the identities code binds, so it is narrower than the stored draft types.
   return <CIProposal><unknown>{
-    ...rest, ...(ordinary ? {} : { basis }),
+    ...rest, ...(ordinary ? {} : { basis: { refs: basis.refs } }),
     ...(ordinary && checkRequired ? {} : { parent_issues: [] }),
     groups: example.groups.map(({ ir_changes: _irChanges, task_refs, depends_on, local_ref, ...group }) => ({
       ...(ordinary ? {} : { local_ref }),
@@ -311,7 +351,7 @@ function assessmentStageInstruction(): string {
     "An objection to the stored IR's wording, redundancy, evidence phrasing or output description is not grounds to withhold that judgement: assess the work anyway and state the reservation in the assessment explanation.",
     "Report parent_issues only when a stored-IR defect makes the judgement impossible — for example a completion condition that cannot be observed in this host at all. The IR belongs to the whole task and is revised only by user input, so such a defect is recorded as a question for the next delegation, the IR is left unchanged, and this batch still completes.",
     "request.compiled shows each current Atom complete; superseded or legacy versions appear only in compiled[].historical_atoms by identity and lifecycle status. In an Atom task, a requirement block whose body reads (text identical to IR content <id>@<revision> <digest> supplied in this request) stands for the exact text of that IR content item in request.ir.",
-    "basis.event_ids must name exactly this batch's trigger events.",
+    "Management fills basis.event_ids with this batch's trigger events; basis.refs may cite existing objects you assessed.",
     "generation_repair.ir_proposal carries the stored task groups; keep each group's task_refs and depends_on.",
     "Write the assessments and execution_decisions for this batch yourself from its evidence. Management binds each assessment's evidence_refs to this batch's return event, so say in explanation which parts of the return (report text, recorded tool results) the judgement relies on. An execution return is never an IR source, only evidence for those fields.",
     "Compile only what the current IR and this evidence require: reuse the current Compiled Intent when the plan is unchanged, and replace it only where the plan must change. Preserve retained work and real dependencies.",
@@ -332,21 +372,25 @@ export function generationStageInstruction(stage: GenerationStage, assessment = 
 
 /** Retain field semantics while replacing the joint-response shape and example. */
 export function generationContract<T extends { ir_change_contract: string; atom_contract: string; candidate_shape: string; example_candidate: string }>(
-  contract: T & { rules?: readonly string[] }, stage: GenerationStage, profile?: StrictSchemaProfile, assessment = false, checkRequired = false,
+  contract: T & { rules?: readonly string[]; reference_contract?: string }, stage: GenerationStage, profile?: StrictSchemaProfile, assessment = false, checkRequired = false,
 ): T {
   const checkedCI = stage === "ci" && !assessment && checkRequired
+  // Every strict stage reads the identities code binds the same way.
+  const rules = contract.rules?.map(rule => rule === BASE_EXISTING_OBJECTS_RULE ? BOUND_EXISTING_OBJECTS_RULE : rule)
   return {
     ...contract,
+    ...(contract.reference_contract === undefined ? {} : { reference_contract: contract.reference_contract.replace(BASE_EXISTING_IDENTITIES, BOUND_EXISTING_IDENTITIES) }),
+    ...(rules === undefined ? {} : { rules }),
     ir_change_contract: stage === "ir"
-      ? strictLocalSourceEdit(strictSupersededBasis(contract.ir_change_contract))
-      : strictSupersededBasis(contract.ir_change_contract),
+      ? strictLocalSourceEdit(codeBoundRevisions(strictSupersededBasis(contract.ir_change_contract)))
+      : codeBoundRevisions(strictSupersededBasis(contract.ir_change_contract)),
     atom_contract: (stage === "ci" ? codeBoundIdentities : (text: string) => text)(assembledAtomContract(contract.atom_contract)).replace(
       "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
       checkedCI ? "Compile the affected task, input/output, completion condition, Relation and assignment from the fixed parent IR; the independent check judges whether the original update was correctly represented."
         : "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
     ),
-    ...(stage === "ci" && !checkedCI && contract.rules !== undefined ? { rules: contract.rules.map(boundEvidence) } : {}),
-    ...(checkedCI && contract.rules !== undefined ? { rules: contract.rules.map(boundEvidence).map(rule => {
+    ...(stage === "ci" && !checkedCI && rules !== undefined ? { rules: rules.map(boundEvidence) } : {}),
+    ...(checkedCI && rules !== undefined ? { rules: rules.map(boundEvidence).map(rule => {
       if (rule.startsWith("When configured, an independent checker")) return `${CHECKED_PARENT_ROLE} Execution decisions belong in candidate.groups[].execution_decisions. After a user update, an active execution continues only with an explicit continue decision for unchanged authorized work; stop closes its authority, await_result permits only its return, retry dispatches a returned Atom version once more. Unreviewed work remains suspended.`
       if (rule.startsWith("When validation_errors, previous_rejection")) return "On CI repairs, use the fixed parent IR and the reported plan defects to repair the complete plan. Preserve unrelated correct work, restore requirements present in that IR but missing from the plan, and correct assignments and Relations without changing IR or adding requirements absent from it. An independent IR finding returns to the IR stage through repair_target: ir."
       if (rule.startsWith("Before returning, compare the original delegation")) return "Before returning, compare every applicable fixed parent IR requirement with the whole plan's concrete tasks and completion. Fill missing plan behavior and remove unsupported plan restrictions while keeping the parent IR fixed."
@@ -357,7 +401,7 @@ export function generationContract<T extends { ir_change_contract: string; atom_
     candidate_shape: stage === "ir"
       ? "IR stage response = {schema_version:2,basis,source_coverage,groups}. Each group uses the existing CandidateGroup fields except compilation, coverage, execution_decisions, assessments and checks, which are forbidden in this response. The final Candidate is assembled only after CI generation."
       : assessment
-        ? "CI stage (execution assessment) response = {schema_version:2,basis,parent_issues,groups}. Each group uses the existing CandidateGroup fields except ir_changes. source_coverage is forbidden. basis.event_ids must name exactly this batch's trigger events; its refs may cite existing objects you assessed. Keep each group's task_refs and depends_on, and write assessments and execution_decisions from this batch's evidence. Assess the returned work against the Atom's completion criteria and the user's own words; a reservation about the IR's wording, redundancy or evidence phrasing belongs in the assessment explanation, and parent_issues is only for a stored-IR defect that makes the judgement impossible. If parent_issues is nonempty, groups must be empty."
+        ? "CI stage (execution assessment) response = {schema_version:2,basis:{refs},parent_issues,groups}. Each group uses the existing CandidateGroup fields except ir_changes. source_coverage is forbidden. Management fills basis.event_ids with this batch's trigger events; basis.refs may cite existing objects you assessed. Keep each group's task_refs and depends_on, and write assessments and execution_decisions from this batch's evidence. Assess the returned work against the Atom's completion criteria and the user's own words; a reservation about the IR's wording, redundancy or evidence phrasing belongs in the assessment explanation, and parent_issues is only for a stored-IR defect that makes the judgement impossible. If parent_issues is nonempty, groups must be empty."
         : `CI stage response = {schema_version:2,${checkedCI ? "" : "parent_issues,"}groups}. Each group uses the existing CandidateGroup fields except ir_changes, task_refs, depends_on and compilation.drafts[].task_id, which the compiler fills from the parent; source_coverage and basis are forbidden. coverage.requirement is {local_ref: <content item_id or task_id in this group's parent task>}, with no revision or digest; coverage refs keep their destination expression. Bind to a parent group by its local_ref. ${checkedCI ? CHECKED_PARENT_ROLE : "If parent_issues is nonempty, groups must be empty; otherwise"} Supply each parent group's compilation and coverage, and add questions only for concrete compilation uncertainty (the compiler keeps the parent's questions).`,
     example_candidate: JSON.stringify(buildGenerationExample(stage, profile, assessment, checkRequired), null, 2),
   }

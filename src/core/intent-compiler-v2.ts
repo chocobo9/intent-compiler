@@ -778,7 +778,7 @@ async function advance(
       compiled,
       retry: attempts > 1,
     }),
-    assessments: collectAssessments(candidate, acceptedEventIds, mgmtSequence, snapshot.assessments),
+    assessments: collectAssessments(candidate, acceptedEventIds, mgmtSequence),
     checks: collectChecks(candidate, acceptedEventIds, mgmtSequence, snapshot.checks),
     questions: collectQuestions(candidate, acceptedEventIds, mgmtSequence),
     coverage: collectCoverage(candidate, acceptedEventIds, mgmtSequence),
@@ -1924,13 +1924,17 @@ function checkIdentity(record: {
   })
 }
 
+/**
+ * A batch's assessments, with repeats inside the batch dropped.  An earlier
+ * batch's identical judgement is not a repeat: a target's verdict is read from
+ * the latest batch that assessed it, so that batch must hold all of it.
+ */
 function collectAssessments(
   candidate: Candidate,
   eventIds: string[],
   sequence: number,
-  existing: readonly AssessmentRecord[] = [],
 ): AssessmentRecord[] {
-  const seen = new Set(existing.map(assessmentIdentity))
+  const seen = new Set<string>()
   const records: AssessmentRecord[] = []
   for (const group of candidate.groups) {
     for (const assessment of group.assessments) {

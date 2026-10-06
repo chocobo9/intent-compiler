@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { atomRef } from "../src/core/compiled-intent.js"
-import { digestText, type AtomDraft, type Candidate, type SourceRef } from "../src/core/intent-contract.js"
+import { digestOf, digestText, type AtomDraft, type Candidate, type SourceRef } from "../src/core/intent-contract.js"
 import { CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import type { CompilerModelV2CheckInput, CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
 import { assessmentAnswer, ChainHost, chainCandidate, type ExecutorScript, type ReturnJudgement, type RoundRecord } from "./fixtures/chain-harness.js"
@@ -138,15 +138,50 @@ test("scenario 3 (B2): two returns pending at once are both assessed and the suc
   assert.deepEqual(round.pendingEventIds, [])
 })
 
-test("scenario 4 (A1): an assessment whose target_ref digest was copied wrong does not silently stall the chain", { todo: OPEN }, async () => {
+test("scenario 4 (A1, A5): copied-wrong target_ref and criteria_refs digests are bound by code, and the chain runs on", async () => {
+  const wrong = `sha256:${"0".repeat(63)}1`
   const scripted = management(event => chainCandidate(3, event), atomId => atomId === "a-bundle"
-    ? { result: "satisfied", targetRef: ref => ({ ...ref, digest: `sha256:${"0".repeat(63)}1` }) }
+    ? { result: "satisfied", targetRef: ref => ({ ...ref, digest: wrong }), criteriaRefs: refs => refs.map(ref => ({ ...ref, digest: wrong })) }
     : { result: "satisfied" })
   const host = new ChainHost({ propose: scripted.propose })
   const round = await host.round(CANDIDATE_EXAMPLE_INPUT)
   report("scenario 4", round, host)
   assert.deepEqual(chainOrder(host), ["a-bundle@0", "a-inspect@0", "a-step3@0"])
   assert.deepEqual(round.pendingEventIds, [])
+  const snapshot = host.snapshot()
+  const bundle = snapshot.compiled.t1!.atoms.find(atom => atom.atom_id === "a-bundle")!
+  const judged = snapshot.assessments.find(record => record.target_ref.id === "a-bundle")!
+  assert.deepEqual(judged.target_ref, atomRef(bundle), "the target is the version that execution ran")
+  const items = new Map(snapshot.ir.t1!.content.map(item => [item.item_id, digestOf(item)]))
+  assert.ok(judged.criteria_refs.length > 0)
+  for (const ref of judged.criteria_refs) assert.equal("id" in ref ? ref.digest : undefined, "id" in ref ? items.get(ref.id) : undefined, "criteria digests are the stored items'")
+})
+
+test("scenario 4b (A2): a return batch whose basis.event_ids were written wrong is accepted with the batch's events", async () => {
+  const scripted = management(event => chainCandidate(2, event), (_atom, _execution, input) => {
+    const answer = JSON.parse(assessmentAnswer(input, () => ({ result: "satisfied" })))
+    answer.basis.event_ids = ["execution-99:return"]
+    return JSON.stringify(answer)
+  })
+  const host = new ChainHost({ propose: scripted.propose })
+  const round = await host.round(CANDIDATE_EXAMPLE_INPUT)
+  report("scenario 4b", round, host)
+  assert.deepEqual(chainOrder(host), ["a-bundle@0", "a-inspect@0"])
+  assert.deepEqual(round.pendingEventIds, [])
+  const returnBatch = host.snapshot().management_log.find(record => record.trigger_event_ids.some(id => id.endsWith(":return")))!
+  assert.equal(returnBatch.status, "accepted")
+})
+
+test("scenario 4c: an assessment naming no Atom version is rejected with the reason, not committed as a judgement of nothing", async () => {
+  const scripted = management(event => chainCandidate(2, event), atomId => atomId === "a-bundle"
+    ? { result: "satisfied", targetRef: ref => ({ ...ref, id: "a-unknown" }) }
+    : { result: "satisfied" })
+  const host = new ChainHost({ propose: scripted.propose })
+  const round = await host.round(CANDIDATE_EXAMPLE_INPUT)
+  report("scenario 4c", round, host)
+  const failed = host.snapshot().management_log.filter(record => record.status !== "accepted")
+  assert.ok(failed.length > 0)
+  assert.match(failed[0]!.error_message ?? "", /target_ref names no Atom version of this plan: a-unknown@0/)
 })
 
 const UPDATE = "An empty items array produces a bundle file containing [] followed by a newline."
@@ -184,10 +219,10 @@ function revisionPlan(host: ChainHost, edit: { previousDigest?: string; expected
 }
 
 for (const variant of [
-  { name: "scenario 5 control: R1→R2 revision with correct identities", edit: {}, open: false },
-  { name: "scenario 5a (A3): R2 revision whose previous_atom_ref digest was copied wrong", edit: { previousDigest: `sha256:${"0".repeat(63)}2` }, open: true },
-  { name: "scenario 5b (A4): R2 revision whose expected_revision is wrong", edit: { expectedRevision: 3 }, open: true },
-]) test(variant.name, variant.open ? { todo: OPEN } : {}, async () => {
+  { name: "scenario 5 control: R1→R2 revision with correct identities", edit: {} },
+  { name: "scenario 5a (A3): R2 revision whose previous_atom_ref digest was copied wrong", edit: { previousDigest: `sha256:${"0".repeat(63)}2` } },
+  { name: "scenario 5b (A4): R2 revision whose expected_revision is wrong", edit: { expectedRevision: 3 } },
+]) test(variant.name, async () => {
   let plan: (event: string) => Candidate = event => chainCandidate(2, event)
   const scripted = management(event => plan(event), satisfied)
   const host = new ChainHost({ propose: scripted.propose })
@@ -200,6 +235,23 @@ for (const variant of [
   assert.equal(second.user.error, undefined, "the R2 delegation batch is accepted")
   assert.ok(chainOrder(host).includes("a-bundle@1"), "the revised Atom runs in R2")
   assert.deepEqual(second.pendingEventIds, [])
+})
+
+test("scenario 5c (A4): two changes to one IR object in a batch are still rejected, with the reason", async () => {
+  let plan: (event: string) => Candidate = event => chainCandidate(2, event)
+  const scripted = management(event => plan(event), satisfied)
+  const host = new ChainHost({ propose: scripted.propose })
+  await host.round(CANDIDATE_EXAMPLE_INPUT)
+  const revise = revisionPlan(host, {})
+  plan = event => {
+    const candidate = revise(event)
+    const change = candidate.groups[0]!.ir_changes[0]!
+    candidate.groups[0]!.ir_changes.push(structuredClone(change))
+    return candidate
+  }
+  const second = await host.round(UPDATE, { source_category: "update" })
+  report("scenario 5c", second, host)
+  assert.match(second.user.error?.message ?? "", /already changed content r-bundle to revision 1/)
 })
 
 test("scenario 6 (B4): where a delegation batch closes after check rework, under an 8-request batch budget", async () => {
