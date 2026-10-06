@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import type { Candidate } from "../../src/core/intent-contract.js"
 import type { CompilerModelV2Input } from "../../src/model/compiler-model-v2.js"
-import type { IRProposal, CIProposal, GenerationSchemaOptions } from "../../src/model/generation-schema.js"
+import { dropCodeBoundIdentities, type IRProposal, type CIProposal, type GenerationSchemaOptions } from "../../src/model/generation-schema.js"
 
 /** Encoding adapter for fixed lifecycle fixtures; it does not generate or repair meaning. */
 export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate, generation?: Pick<GenerationSchemaOptions, "checkRequired">): IRProposal | CIProposal {
@@ -18,19 +18,21 @@ export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate
     // these decisions: this answer authors the ones the plan is committed from,
     // and owes the stored IR only its task identities and this batch's events.
     assert.ok(input.generation_repair?.ir_proposal, "an assessment batch still receives the stored task groups")
-    return {
+    const assessed = {
       schema_version: 2, basis: copy.basis, parent_issues: [],
       groups: copy.groups.map(({ ir_changes: _changes, ...group }) => group),
     }
+    dropCodeBoundIdentities(assessed, true)
+    return assessed as unknown as CIProposal
   }
   // Provider mocks follow the example actually sent; direct transport stubs
   // receive the same internal checker configuration as the real adapters.
   const example = JSON.parse(input.contract.example_candidate) as Record<string, unknown>
   const checkRequired = generation?.checkRequired ?? (!("source_coverage" in example) && !("parent_issues" in example))
-  return {
+  const answer = {
     schema_version: 2, ...(checkRequired ? {} : { parent_issues: [] }),
-    groups: copy.groups.map(({ ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, ...group }) => {
-      const parent = input.generation_repair?.ir_proposal?.groups.find(item => item.local_ref === group.local_ref)
+    groups: copy.groups.map(({ ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, ...group }, index) => {
+      const parent = input.generation_repair?.ir_proposal?.groups[index]
       assert.ok(parent, "CI must receive the parent groups it must preserve")
       // The compiler fills the parent basis and each group's task identity and
       // dependencies at assembly; an ordinary CI answer states neither.
@@ -40,6 +42,9 @@ export function stageCandidate(input: CompilerModelV2Input, candidate: Candidate
       return { ...group, compilation, execution_decisions: [], assessments: [], checks: [] }
     }),
   }
+  // The CI answer leaves out what code binds: group identity, authority and Relation bases.
+  dropCodeBoundIdentities(answer, false)
+  return answer as unknown as CIProposal
 }
 
 /** Reassemble only the supplied drafts so an existing behavior test can edit its child. */
@@ -52,8 +57,8 @@ export function repairCandidate(input: CompilerModelV2Input): Candidate {
   assert.ok(child)
   return {
     schema_version: 2, basis: structuredClone(parent.basis), source_coverage: structuredClone(parent.source_coverage),
-    groups: child.groups.map(group => {
-      const original = parent.groups.find(item => item.local_ref === group.local_ref)
+    groups: child.groups.map((group, index) => {
+      const original = parent.groups[index]
       assert.ok(original)
       const taskId = original.task_refs[0]
       assert.ok(taskId)
@@ -61,7 +66,7 @@ export function repairCandidate(input: CompilerModelV2Input): Candidate {
         ? { ...group.compilation, drafts: group.compilation.drafts.map(draft => ({ ...draft, task_id: taskId })) }
         : group.compilation
       return {
-        ...structuredClone(group), compilation,
+        ...structuredClone(group), compilation, local_ref: original.local_ref,
         task_refs: [...original.task_refs], depends_on: [...original.depends_on],
         ir_changes: structuredClone(original.ir_changes),
       }

@@ -121,17 +121,31 @@ test("the ordinary CI answer states no parent basis, and assembly restores it fr
     parentGroup.compilation.drafts.map(draft => draft.task_id), "each draft is bound to the parent task by code")
 })
 
-test("a CI group that names no parent group is still rejected", async () => {
+// Full run 856312ae: "CI group does not belong to this parent" refused answers
+// that named the task instead of the parent group's label.
+test("a CI group binds to the parent group at its position; a label it writes is not read", async () => {
+  const { store, compiler } = await setup(async input => {
+    if (input.generation_stage === "ir") return JSON.stringify(parent())
+    const next = child() as ReturnType<typeof child> & { groups: Array<{ local_ref?: string }> }
+    next.groups[0]!.local_ref = "g-not-in-parent"
+    return JSON.stringify(next)
+  })
+  const result = await compiler.advance({ runId: "parent" })
+  assert.equal(result.ok, true, result.message)
+  assert.ok(store.current().compiled.t1, "the plan is committed to the parent group's task")
+})
+
+test("a CI answer with a different number of groups than the parent is still rejected before the check", async () => {
   let checks = 0
   const { store, compiler } = await setup(async input => {
     if (input.generation_stage === "ir") return JSON.stringify(parent())
     const next = child()
-    next.groups[0]!.local_ref = "g-not-in-parent"
+    next.groups.push(structuredClone(next.groups[0]!))
     return JSON.stringify(next)
   }, async () => { checks += 1; return consistent() })
   const result = await compiler.advance({ runId: "parent" })
   assert.equal(result.ok, false)
-  assert.match(result.message!, /does not belong to this parent/)
+  assert.match(result.message!, /return one group for each of the 1 group\(s\)/)
   assert.equal(checks, 0, "an unbound child never spends the check")
   assert.deepEqual(store.current().compiled, {})
 })
@@ -597,7 +611,7 @@ test("the IR-stage contract and example are written in the alias form", async ()
   assert.match(ir.example_candidate, /"source_id": "input-event-id"/)
   const ci = generationContract(V2_COMPILER_CONTRACT, "ci")
   assert.match(ci.reference_contract, /short event aliases/, "the clause covers both forms")
-  assert.match(ci.example_candidate, /input-event-id/, "the CI example keeps full identities where it names parent objects")
+  assert.doesNotMatch(ci.example_candidate, /input-event-id/, "the CI example writes no source refs: code binds Authority and Relation bases")
   assert.equal(JSON.parse(ci.example_candidate).basis, undefined, "the ordinary CI example no longer copies the parent basis")
 })
 

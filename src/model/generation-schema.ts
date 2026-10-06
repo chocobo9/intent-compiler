@@ -22,7 +22,9 @@ export type IRProposal = Omit<Candidate, "groups"> & {
  * own basis events and the task each group assesses, and keeps the fuller
  * shape.
  */
-export type CIProposalGroup = Omit<CandidateGroup, "ir_changes" | "task_refs" | "depends_on" | "compilation"> & {
+export type CIProposalGroup = Omit<CandidateGroup, "ir_changes" | "task_refs" | "depends_on" | "compilation" | "local_ref"> & {
+  /** Assessment groups only; an ordinary CI group binds to its parent group by position. */
+  local_ref?: string
   task_refs?: string[]
   depends_on?: string[]
   compilation:
@@ -47,6 +49,16 @@ type SchemaNode = Record<string, any>
 const BASE_ATOM_TASK_SENTENCE = "For a supplied specification, copy its applicable current rule blocks verbatim into task, including interface-defining examples and explanations; do not replace them with a shorter paraphrase. Within this same string, put the unit's action first, its applicable specification next, and handoff instructions last. These are text sections, not extra schema fields."
 const ASSEMBLED_ATOM_TASK_SENTENCE = "Management code attaches the assigned current requirement texts verbatim to the delivered task after preparation, each block labeled with its IR identity, revision and digest and its passages labeled and ordered by user input, including passages the item once adopted and later withdrew; write atom.task as the unit's action, boundaries and handoff and keep rule blocks, examples and paraphrases of the specification out of the candidate task, because the attached blocks carry the operative specification."
 const ASSEMBLED_TASK_DESCRIPTION = "This unit's work instruction: its action, boundaries and handoff, written after determining current meaning and scope (omit superseded rules, unrelated material and other units' exclusive work). Management code attaches the assigned current requirement texts verbatim to the delivered task, passages labeled and ordered by user input, so this field must not copy or paraphrase rule blocks, examples or the specification; the executor receives the instruction plus those attached blocks. Leave unspecified internal implementation choices open. Keep illustrative values illustrative. This field may be long and multiline."
+
+const BASE_RELATION_SHAPE = 'A Relation is { predecessor: Ref|{local_ref:"new-atom-id"}, successor: Ref|{local_ref:"new-atom-id"}, requires:"exact usable result/ordering reason", conditions:[], basis:[Ref|SourceRef] }. For new Atoms use local_ref; management resolves final content digests after requirement assignment. For existing Atoms copy their exact supplied Ref.'
+const CI_RELATION_SHAPE = 'A Relation is { predecessor:{local_ref:"atom-id"}, successor:{local_ref:"atom-id"}, requires:"exact usable result/ordering reason", conditions:[] }. Name each endpoint by its atom_id, for new and existing Atoms alike; management binds the Atom version in this plan and the Relation\'s basis.'
+const BASE_AUTHORITY_SHAPE = 'authority.lifetime must be \"this_execution\" and delegation must be \"not_supported\".'
+const CI_AUTHORITY_SHAPE = 'authority.lifetime must be \"this_execution\" and delegation must be \"not_supported\". Management fills authority.basis and each rule\'s resource_ref from the task\'s authorization; a rule states operation_id, input_refs, output_refs, conditions and allowed_use.'
+
+/** The CI stage names Atoms by id and leaves the identities code binds out of the answer. */
+function codeBoundIdentities(atomContract: string): string {
+  return atomContract.replace(BASE_RELATION_SHAPE, CI_RELATION_SHAPE).replace(BASE_AUTHORITY_SHAPE, CI_AUTHORITY_SHAPE)
+}
 
 function assembledAtomContract(atomContract: string): string {
   return atomContract.replace(BASE_ATOM_TASK_SENTENCE, ASSEMBLED_ATOM_TASK_SENTENCE)
@@ -109,13 +121,29 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
   else {
     remove(group, ["ir_changes"])
     remove(schema, ["source_coverage"])
+    // Identities code already knows are bound by code: the Atom versions a
+    // Relation joins, and the authorization basis of an Atom, its rules and its
+    // Relations.  The answer names Atoms by id and states only the semantic
+    // choices: which Atoms depend on which, and which operations are granted.
+    for (const name of ["atom", "atom_draft"]) {
+      const authority = (schema.definitions[name] as SchemaNode | undefined)?.properties?.authority as SchemaNode | undefined
+      if (authority !== undefined) remove(authority, ["basis"])
+    }
+    remove(schema.definitions.permission_rule as SchemaNode, ["resource_ref"])
+    const relation = schema.definitions.relation as SchemaNode
+    remove(relation, ["basis"])
+    const endpointRefs = schema.definitions.ref_or_local as SchemaNode
+    const atomId = (endpointRefs.oneOf ?? endpointRefs.anyOf).find((branch: SchemaNode) => branch.properties?.local_ref)
+    for (const end of ["predecessor", "successor"]) {
+      relation.properties[end] = { ...structuredClone(atomId), description: "The Atom by its atom_id, new or existing. Code binds the version in this plan; give no revision or digest." }
+    }
     if (options.assessment !== true) {
       // The parent proposal already fixes these, and assembly takes the parent
       // values: an ordinary CI answer states the basis and each group's task
       // identity and dependencies only to have them checked and replaced.  An
       // assessment batch addresses its own task, so it keeps that shape.
       remove(schema, ["basis"])
-      remove(group, ["task_refs", "depends_on"])
+      remove(group, ["task_refs", "depends_on", "local_ref"])
       remove(schema.definitions.draft as SchemaNode, ["task_id"])
       // Only this field selects current requirements from the fixed parent.
       // Keep the existing identity-only branch; shared and historical Refs,
@@ -169,6 +197,46 @@ export function validateGenerationProposal(stage: GenerationStage, value: unknow
   return { ok: ok && errors.length === 0, errors }
 }
 
+function atomIdOf(endpoint: unknown): { local_ref: string } {
+  if (endpoint !== null && typeof endpoint === "object") {
+    const value = endpoint as { local_ref?: unknown; id?: unknown }
+    if (typeof value.local_ref === "string") return { local_ref: value.local_ref }
+    if (typeof value.id === "string") return { local_ref: value.id }
+  }
+  return endpoint as { local_ref: string }
+}
+
+/**
+ * An answer written to the earlier CI contract still carries identities code
+ * now binds: authority.basis, each rule's resource_ref, each Relation's basis,
+ * exact Relation endpoint versions and an ordinary group's local_ref.  They are
+ * dropped (an endpoint keeps its atom id) before the answer is validated; the
+ * recorded text keeps them as returned.
+ */
+export function dropCodeBoundIdentities(answer: unknown, assessment: boolean): void {
+  if (answer === null || typeof answer !== "object" || !Array.isArray((answer as { groups?: unknown }).groups)) return
+  for (const group of (answer as { groups: unknown[] }).groups) {
+    if (group === null || typeof group !== "object") continue
+    const record = group as Record<string, any>
+    if (!assessment) delete record.local_ref
+    const drafts = record.compilation?.decision === "replace" && Array.isArray(record.compilation.drafts) ? record.compilation.drafts : []
+    for (const draft of drafts) {
+      for (const atom of Array.isArray(draft?.atoms) ? draft.atoms : []) {
+        if (atom?.authority && typeof atom.authority === "object") {
+          delete atom.authority.basis
+          for (const rule of Array.isArray(atom.authority.rules) ? atom.authority.rules : []) if (rule && typeof rule === "object") delete rule.resource_ref
+        }
+      }
+      for (const relation of Array.isArray(draft?.relations) ? draft.relations : []) {
+        if (!relation || typeof relation !== "object") continue
+        delete relation.basis
+        relation.predecessor = atomIdOf(relation.predecessor)
+        relation.successor = atomIdOf(relation.successor)
+      }
+    }
+  }
+}
+
 /** Project the existing encoding example, without inventing another task. */
 export function buildGenerationExample(stage: GenerationStage, profile?: StrictSchemaProfile, assessment = false, checkRequired = false): IRProposal | CIProposal {
   const example = structuredClone(profile === undefined ? CANDIDATE_EXAMPLE : buildStrictCandidateExample(profile)) as Candidate
@@ -185,10 +253,12 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
   }
   const { source_coverage: _sourceCoverage, basis, ...rest } = example
   const ordinary = assessment !== true
-  return {
+  // The CI answer leaves out the identities code binds, so it is narrower than the stored draft types.
+  return <CIProposal><unknown>{
     ...rest, ...(ordinary ? {} : { basis }),
     ...(ordinary && checkRequired ? {} : { parent_issues: [] }),
-    groups: example.groups.map(({ ir_changes: _irChanges, task_refs, depends_on, ...group }) => ({
+    groups: example.groups.map(({ ir_changes: _irChanges, task_refs, depends_on, local_ref, ...group }) => ({
+      ...(ordinary ? {} : { local_ref }),
       ...group,
       coverage: ordinary ? group.coverage.map(entry => ({ ...entry, requirement: {
         local_ref: "local_ref" in entry.requirement ? entry.requirement.local_ref : entry.requirement.id,
@@ -202,7 +272,14 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
             return {
               ...draftRest,
               ...(ordinary ? {} : { task_id }),
-              atoms: draft.atoms.map(atom => ({ ...atom, task: instructionOnlyTask(atom.task) })),
+              atoms: draft.atoms.map(atom => {
+                const { basis: _basis, ...authority } = atom.authority
+                return { ...atom, task: instructionOnlyTask(atom.task),
+                  authority: { ...authority, rules: authority.rules.map(({ resource_ref: _resource, ...rule }) => rule) } }
+              }),
+              relations: draft.relations.map(({ basis: _basis, predecessor, successor, ...relation }) => ({
+                predecessor: atomIdOf(predecessor), successor: atomIdOf(successor), ...relation,
+              })),
             }
           }),
         }
@@ -250,7 +327,7 @@ export function generationContract<T extends { ir_change_contract: string; atom_
     ir_change_contract: stage === "ir"
       ? strictLocalSourceEdit(strictSupersededBasis(contract.ir_change_contract))
       : strictSupersededBasis(contract.ir_change_contract),
-    atom_contract: assembledAtomContract(contract.atom_contract).replace(
+    atom_contract: (stage === "ci" ? codeBoundIdentities : (text: string) => text)(assembledAtomContract(contract.atom_contract)).replace(
       "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",
       checkedCI ? "Compile the affected task, input/output, completion condition, Relation and assignment from the fixed parent IR; the independent check judges whether the original update was correctly represented."
         : "Revise the affected IR items and every affected task, input/output, completion condition, Relation and assignment together.",

@@ -4,7 +4,7 @@ import { IntentStateManager } from "./intent-state-v2.js"
 import { aliasDisplay, decodeIRProposal, expressIRRequest, type SourceAliasEntry, type SourceAliasIndex } from "./source-aliases.js"
 import { materializeSourceContent, recordEditedRemovals, sourceSegments, validateSourceCoverage } from "./source-payload.js"
 import type { CompilerModelV2Input, CompilerModelV2Result } from "../model/compiler-model-v2.js"
-import type { IRProposal, CIProposal } from "../model/generation-schema.js"
+import type { IRProposal, CIProposal, CIProposalGroup } from "../model/generation-schema.js"
 
 /** The CI parent_basis comparison was removed; runs saved before then still name its rejection. */
 export const RETIRED_PARENT_BASIS_REJECTION = "CI names a different parent basis"
@@ -411,10 +411,11 @@ export class ParentGeneration {
         return this.reject(`an execution assessment must name this batch's events in basis.event_ids; expected=${JSON.stringify(expected)}; received=${JSON.stringify(child.basis?.event_ids ?? null)}`, result)
       }
     } else {
-      // The ordinary CI answer binds through group local_ref; the basis and each
-      // group's task identity and dependencies come from the parent it named.
+      // The ordinary CI answer has one group per parent group, in the parent's
+      // order; the basis and each group's task identity and dependencies come
+      // from that parent group.
       if (child.groups.length !== parent.candidate.groups.length) {
-        return this.reject(`CI groups must preserve the parent's task groups; expected local_ref=${JSON.stringify(parent.candidate.groups.map(g => g.local_ref))}; received local_ref=${JSON.stringify(child.groups.map(g => g.local_ref))}`, result)
+        return this.reject(`CI groups must preserve the parent's task groups: return one group for each of the ${parent.candidate.groups.length} group(s) in generation_repair.ir_proposal.groups, in that order; received ${child.groups.length}`, result)
       }
     }
     const seen = new Set<string>()
@@ -430,18 +431,16 @@ export class ParentGeneration {
         if (seen.has(taskId)) return this.reject(`assessment names task ${taskId} more than once`, result)
         seen.add(taskId)
         const skeleton = parent.candidate.groups.find(candidate => candidate.task_refs[0] === taskId)
-        groups.push({ ...group, depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] } as Candidate["groups"][number])
+        groups.push({ ...this.bindCodeIdentities(group, taskId), depends_on: skeleton === undefined ? [] : [...skeleton.depends_on], ir_changes: [] } as Candidate["groups"][number])
         continue
       }
-      // A delegation batch binds by group identity; everything structural (task
-      // identity, dependencies, retained IR changes) is filled by this code, so
-      // the child never reproduces it.
-      const original = parent.candidate.groups.find(candidate => candidate.local_ref === group.local_ref)
-      if (!original || seen.has(group.local_ref)) return this.reject("CI group does not belong to this parent", result)
-      seen.add(group.local_ref)
+      // A delegation batch binds each group to the parent group at its position;
+      // everything structural (group and task identity, dependencies, retained
+      // IR changes) is filled by this code, so the child never reproduces it.
+      const original = parent.candidate.groups[groups.length]!
       const boundTask = original.task_refs[0]
       if (boundTask === undefined || parent.ir[boundTask] === undefined) {
-        return this.reject(`group ${group.local_ref} is not bound to a stored task`, result)
+        return this.reject(`group ${original.local_ref} is not bound to a stored task`, result)
       }
       const task = parent.ir[boundTask]!
       const coverage: Candidate["groups"][number]["coverage"] = []
@@ -469,11 +468,13 @@ export class ParentGeneration {
           }
         }
       }
-      const compilation = group.compilation.decision === "replace"
-        ? { ...group.compilation, drafts: group.compilation.drafts.map(draft => ({ ...draft, task_id: boundTask })) }
-        : group.compilation
+      const bound = this.bindCodeIdentities(group, boundTask)
+      const compilation = bound.compilation.decision === "replace"
+        ? { ...bound.compilation, drafts: bound.compilation.drafts.map(draft => ({ ...draft, task_id: boundTask })) }
+        : bound.compilation
       groups.push({
-        ...group,
+        ...bound,
+        local_ref: original.local_ref,
         coverage,
         compilation,
         task_refs: [...original.task_refs],
@@ -488,6 +489,38 @@ export class ParentGeneration {
     return { ...result, candidate: { schema_version: 2,
       basis: derived ? structuredClone(child.basis!) : parent.candidate.basis,
       source_coverage: derived ? [] : parent.candidate.source_coverage, groups } }
+  }
+
+  /**
+   * The identities a CI answer leaves to code: each Atom's authority basis and
+   * rule resource_ref, and each Relation's basis, all bound to the task's IR
+   * entry - the authorization the plan compiles.  An Atom resubmitted at a
+   * version the plan already holds keeps that version's bound identities, so
+   * an unchanged Atom keeps its content.  Relation endpoints are bound to plan
+   * versions when the plan is built.
+   */
+  private bindCodeIdentities<G extends CIProposalGroup>(group: G, taskId: string): G {
+    if (group.compilation.decision !== "replace") return group
+    const task = this.state.parent!.ir[taskId]!
+    const taskRef = { id: task.task_id, revision: task.revision, digest: digestOf(task) }
+    const held = Object.values(this.options.input.compiled ?? {}).flatMap(intent => intent.atoms)
+    const drafts = group.compilation.drafts.map(draft => ({
+      ...draft,
+      atoms: draft.atoms.map(atom => {
+        const prior = held.find(candidate => candidate.atom_id === atom.atom_id && candidate.revision === atom.revision)
+        const authority = atom.authority as Partial<typeof atom.authority>
+        return { ...atom, authority: {
+          ...authority,
+          basis: prior ? structuredClone(prior.authority.basis) : [structuredClone(taskRef)],
+          rules: (authority.rules ?? []).map((rule, index) => {
+            const kept = prior?.authority.rules[index]
+            return { ...rule, resource_ref: kept && kept.operation_id === rule.operation_id ? structuredClone(kept.resource_ref) : structuredClone(taskRef) }
+          }),
+        } } as typeof atom
+      }),
+      relations: draft.relations.map(relation => ({ ...relation, basis: [structuredClone(taskRef)] })),
+    }))
+    return { ...group, compilation: { ...group.compilation, drafts } }
   }
 
   private reject(message: string, result?: CompilerModelV2Result): CompilerModelV2Result {

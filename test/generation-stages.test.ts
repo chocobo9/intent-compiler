@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import { Ajv } from "ajv"
 import { resolve } from "node:path"
-import { buildGenerationExample, buildGenerationSchema, generationContract, generationStageInstruction, validateGenerationProposal, type CIProposal } from "../src/model/generation-schema.js"
+import { buildGenerationExample, buildGenerationSchema, dropCodeBoundIdentities, generationContract, generationStageInstruction, validateGenerationProposal, type CIProposal } from "../src/model/generation-schema.js"
 import { createOpenCodeModelTransportV2 } from "../src/model/opencode-transport.js"
 import { createStructuredProviderTransport } from "../src/model/structured-provider-transport.js"
 import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
@@ -50,7 +50,7 @@ test("IR generation admits only intent changes, never a hidden compiled plan", (
 })
 
 test("CI generation binds a parent and cannot carry intent edits or compile a disputed parent", () => {
-  const { ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, ...group } = irGroup
+  const { ir_changes: _changes, task_refs: _taskRefs, depends_on: _dependsOn, local_ref: _localRef, ...group } = irGroup
   const proposal = {
     schema_version: 2, parent_issues: [],
     groups: [{
@@ -68,6 +68,8 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", { ...proposal, basis }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], task_refs: ["t1"] }] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], depends_on: [] }] }).ok, false)
+  assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], local_ref: "g1" }] }).ok, false,
+    "an ordinary CI group binds to its parent group by position")
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], compilation: {
     decision: "replace", drafts: [{ local_ref: "d1", task_id: "t1", intent_basis: [], atoms: [], relations: [], attachments: [] }] } }] }).ok, false)
   // Code fixes the parent of a CI call; the answer has no field naming it.
@@ -75,7 +77,7 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."] }).ok, false)
   assert.equal(validateGenerationProposal("ci", { ...proposal, parent_issues: ["The parent omitted a user's requirement."], groups: [] }).ok, true)
   // An assessment batch still names its own basis events and task.
-  const assessment = { ...proposal, basis, groups: [{ ...proposal.groups[0], task_refs: ["t1"], depends_on: [] }] }
+  const assessment = { ...proposal, basis, groups: [{ ...proposal.groups[0], local_ref: "g1", task_refs: ["t1"], depends_on: [] }] }
   assert.equal(validateGenerationProposal("ci", assessment, { assessment: true }).ok, true)
   assert.equal(validateGenerationProposal("ci", assessment).ok, false, "the ordinary CI shape does not admit an assessment's copies")
   const { parent_issues: _issues, ...checked } = proposal
@@ -394,4 +396,41 @@ test("a change's stated unchanged part is carried into completion and judged aga
   const assessing = generationStageInstruction("ci", true, true)
   assert.match(assessing, /The user's own words are the assigned requirement passages in the Atom task, labelled by user input/)
   assert.ok(assessing.includes(contradiction))
+})
+
+test("the CI answer leaves the identities code binds out, and an answer in the earlier shape is reduced to it", () => {
+  for (const profile of [undefined, "openai", "groq"] as const) for (const assessment of [false, true]) {
+    const schema = buildGenerationSchema("ci", profile, { assessment, checkRequired: true }) as { definitions: Record<string, any> }
+    const d = schema.definitions
+    for (const name of ["atom", "atom_draft"]) assert.equal("basis" in d[name].properties.authority.properties, false, `${name}.authority.basis`)
+    assert.equal("resource_ref" in d.permission_rule.properties, false)
+    assert.equal(d.permission_rule.required.includes("resource_ref"), false)
+    assert.equal("basis" in d.relation.properties, false)
+    const validate = new Ajv({ strict: false, allowUnionTypes: true }).compile({ $ref: "#/definitions/relation", definitions: d })
+    assert.equal(validate({ predecessor: { local_ref: "a1" }, successor: { local_ref: "a2" }, requires: "r", conditions: [] }), true)
+    assert.equal(validate({ predecessor: { id: "a1", revision: 0, digest: "sha256:x" }, successor: { local_ref: "a2" }, requires: "r", conditions: [] }), false,
+      "an endpoint names the Atom; code binds its version")
+    assert.equal("local_ref" in d.group.properties, assessment, "only an assessment group keeps its label")
+    const contract = generationContract(V2_COMPILER_CONTRACT, "ci", profile, assessment, true)
+    assert.match(contract.atom_contract, /Name each endpoint by its atom_id, for new and existing Atoms alike/)
+    assert.match(contract.atom_contract, /Management fills authority\.basis and each rule's resource_ref/)
+    assert.doesNotMatch(contract.atom_contract, /For existing Atoms copy their exact supplied Ref/)
+    // A strict example carries the nullable placeholders its own schema requires.
+    const validateExample = new Ajv({ strict: false, allowUnionTypes: true }).compile(buildGenerationSchema("ci", profile, { assessment, checkRequired: true }))
+    assert.equal(validateExample(JSON.parse(contract.example_candidate)), true, `example (${profile}, ${assessment}): ${JSON.stringify(validateExample.errors)}`)
+  }
+  assert.match(V2_COMPILER_CONTRACT.atom_contract, /For existing Atoms copy their exact supplied Ref/, "the legacy contract keeps its shape")
+
+  const old = {
+    schema_version: 2, groups: [{ local_ref: "dpipe-task", compilation: { decision: "replace", drafts: [{
+      atoms: [{ authority: { basis: [{ source_id: "e1", digest: "sha256:x" }], rules: [{ operation_id: "read", resource_ref: { source_id: "e1" } }] } }],
+      relations: [{ predecessor: { id: "a1", revision: 1, digest: "sha256:stale" }, successor: { local_ref: "a2" }, basis: [{ source_id: "e1" }] }],
+    }] } }],
+  }
+  dropCodeBoundIdentities(old, false)
+  const group = old.groups[0] as Record<string, any>
+  assert.equal("local_ref" in group, false)
+  const draft = group.compilation.drafts[0]
+  assert.deepEqual(draft.atoms[0].authority, { rules: [{ operation_id: "read" }] })
+  assert.deepEqual(draft.relations[0], { predecessor: { local_ref: "a1" }, successor: { local_ref: "a2" } })
 })

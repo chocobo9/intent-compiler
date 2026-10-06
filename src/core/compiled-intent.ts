@@ -60,9 +60,15 @@ export function buildCompiledIntents(
   const availableAtoms = [...proposedAtoms, ...Object.values(current).flatMap(intent => intent?.atoms ?? [])]
   const resolveEndpoint = (value: unknown): Ref => {
     if (isRecord(value) && typeof value.local_ref === "string") {
-      const matches = proposedAtoms.filter(atom => atom.atom_id === value.local_ref)
-      if (matches.length !== 1) throw new Error(`relation local endpoint ${value.local_ref} must resolve to exactly one new Atom`)
-      return atomRef(matches[0]!)
+      // An atom id names the Atom's version in this plan: the one this
+      // candidate proposes, otherwise the latest version the plan holds.
+      const proposed = proposedAtoms.filter(atom => atom.atom_id === value.local_ref)
+      if (proposed.length > 1) throw new Error(`relation endpoint ${value.local_ref} names more than one proposed Atom`)
+      if (proposed.length === 1) return atomRef(proposed[0]!)
+      const holders = Object.values(current).filter(intent => intent?.atoms.some(atom => atom.atom_id === value.local_ref))
+      if (holders.length !== 1) throw new Error(`relation endpoint ${value.local_ref} must name exactly one Atom of this plan`)
+      const latest = holders[0]!.atoms.filter(atom => atom.atom_id === value.local_ref).sort((a, b) => b.revision - a.revision)[0]!
+      return atomRef(latest)
     }
     const ref = normalizeRef(value)
     if (!availableAtoms.some(atom => atom.atom_id === ref.id && atom.revision === ref.revision && atomRef(atom).digest === ref.digest)) {

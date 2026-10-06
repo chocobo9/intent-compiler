@@ -366,7 +366,10 @@ test("new dependent Atoms use local identities and only the predecessor is dispa
   assert.match(intent.atoms[0]!.task, /\[assigned requirement r1@0 /)
 })
 
-test("a dependency cannot name a fabricated predecessor digest", async () => {
+// Full run 856312ae: endpoints written with a stale revision or digest
+// ("relation endpoint dpipe-ingest-atom@1 has an unknown identity or digest")
+// refused whole batches.  Code binds the version; the answer names the Atom.
+test("a dependency written with a fabricated version binds to the plan's Atom by id", async () => {
   const proposal = candidate()
   const group = proposal.groups[0]!
   if (group.compilation.decision !== "replace") throw new Error("fixture")
@@ -376,33 +379,50 @@ test("a dependency cannot name a fabricated predecessor digest", async () => {
   draft.atoms.push(successor)
   draft.relations = [{ predecessor: { id: "a1", revision: 0, digest: "fabricated" }, successor: { id: "a2", revision: 0, digest: "fabricated" }, requires: "CSV implementation", conditions: [], basis: [source] }]
   group.coverage[2]!.refs = [{ local_ref: "a2" }]
-  const { result } = await run(proposal)
-  assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /relation.*(unknown|digest|resolve)/i)
+  const { result, store } = await run(proposal)
+  assert.equal(result.ok, true, result.message)
+  const plan = store.current().compiled.t1!
+  const relation = plan.relations[0]!
+  assert.deepEqual(relation.predecessor, atomRef(plan.atoms.find(atom => atom.atom_id === "a1")!))
+  assert.deepEqual(relation.successor, atomRef(plan.atoms.find(atom => atom.atom_id === "a2")!))
 })
 
-test("a Relation with an unresolvable quoted basis rejects the complete candidate", async () => {
+test("a dependency on an Atom the plan does not hold is still refused", async () => {
+  const proposal = candidate()
+  const group = proposal.groups[0]!
+  if (group.compilation.decision !== "replace") throw new Error("fixture")
+  const draft = group.compilation.drafts[0]!
+  draft.relations = [{ predecessor: { local_ref: "a-missing" }, successor: { local_ref: "a1" }, requires: "CSV implementation", conditions: [], basis: [] }]
+  const { result, store } = await run(proposal)
+  assert.equal(result.ok, false)
+  assert.match(result.message ?? "", /relation endpoint a-missing must name exactly one Atom of this plan/)
+  assert.deepEqual(store.current().compiled, {})
+})
+
+// Full run 856312ae: relations[].basis, authority.basis and rules[].resource_ref
+// carried truncated source ids, spans copied onto other events and quotes
+// attached to the wrong input; each refused the batch.  These are the task's
+// authorization, which code already holds.
+test("Relation and Authority bases are bound by code to the task, whatever the answer wrote", async () => {
   const proposal = candidate()
   const group = proposal.groups[0]!
   if (group.compilation.decision !== "replace") throw new Error("fixture")
   const draft = group.compilation.drafts[0]!
   draft.atoms.push({ ...structuredClone(draft.atoms[0]!), atom_id: "a2" })
   draft.relations = [{ predecessor: { local_ref: "a1" }, successor: { local_ref: "a2" }, requires: "Accepted implementation", conditions: [], basis: [{ source_id: "e1", digest: digestText(raw), quote: "words not present in the source" }] }]
+  draft.atoms[0]!.authority.basis = [{ ...source, span: { unit: "utf16", start: 10, end: 5 } }]
+  for (const rule of draft.atoms[0]!.authority.rules) rule.resource_ref = { source_id: "e1-truncated", digest: digestText(raw) }
   group.coverage[2]!.refs = [{ local_ref: "a2" }]
   const { result, store } = await run(proposal)
-  assert.equal(result.ok, false)
-  assert.match(result.message ?? "", /unresolved reference/)
-  assert.deepEqual(store.current().compiled, {})
-})
-
-test("a malformed source span in Authority cannot bypass the requirement source checks", async () => {
-  const proposal = candidate()
-  const group = proposal.groups[0]!
-  if (group.compilation.decision !== "replace") throw new Error("fixture")
-  group.compilation.drafts[0]!.atoms[0]!.authority.basis = [{ ...source, span: { unit: "utf16", start: 10, end: 5 } }]
-  const { result, store } = await run(proposal)
-  assert.equal(result.ok, false)
-  assert.deepEqual(store.current().compiled, {})
+  assert.equal(result.ok, true, result.message)
+  const task = store.current().ir.t1!
+  const taskRef = { id: task.task_id, revision: task.revision, digest: digestOf(task) }
+  const plan = store.current().compiled.t1!
+  assert.deepEqual(plan.relations[0]!.basis, [taskRef])
+  for (const atom of plan.atoms) {
+    assert.deepEqual(atom.authority.basis, [taskRef])
+    assert.ok(atom.authority.rules.every(rule => digestOf(rule.resource_ref) === digestOf(taskRef)))
+  }
 })
 
 test("Atom constraints cannot introduce a second behavioral specification outside assigned IR", async () => {
