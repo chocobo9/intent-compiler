@@ -318,13 +318,23 @@ export interface StrictSchemaOptions {
   idOnlyContentRefs?: boolean
 }
 
+/**
+ * Strict generation lists every property, so an optional Relation kind would
+ * turn every earlier full-Candidate answer invalid.  Legacy generation states no
+ * kind (consumes); the staged CI schema adds kind back as a required field.
+ */
+function withoutKind(relation: SchemaNode): SchemaNode {
+  const { kind: _kind, ...properties } = relation.properties as SchemaNode
+  return { ...relation, properties }
+}
+
 export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq", options: StrictSchemaOptions = {}): Record<string, unknown> {
   const canonical = CANDIDATE_JSON_SCHEMA as unknown as SchemaNode
   // Legacy canonical callers may omit this field; generated candidates may not.
   const source: SchemaNode = { ...canonical, required: [...canonical.required, "source_coverage"] }
   const definitions: Record<string, unknown> = {}
   for (const [name, definition] of Object.entries(source.definitions as Record<string, unknown>)) {
-    definitions[name] = transform(name === "ir_change" ? strictIrChange(profile, options.idOnlyContentRefs === true) : definition, profile) as Record<string, unknown>
+    definitions[name] = transform(name === "ir_change" ? strictIrChange(profile, options.idOnlyContentRefs === true) : name === "relation" ? withoutKind(definition as SchemaNode) : definition, profile) as Record<string, unknown>
   }
   if (options.localSourceEdit === true) {
     ((definitions.ir_change as SchemaNode).anyOf as unknown[]).push(transform(LOCAL_SOURCE_EDIT_IR_CHANGE, profile))

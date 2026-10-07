@@ -209,9 +209,19 @@ export interface Atom {
 
 export type AtomStatus = "ready" | "executing" | "completed" | "legacy" | "failed"
 
+/**
+ * Why a successor waits for its predecessor.  consumes: it calls or reads the
+ * predecessor's result, so that result must be completed and not judged
+ * not_satisfied.  serial_write: both write the same objects, so only the
+ * predecessor's run has to be over.  user_order: the user fixed the order,
+ * likewise.  A Relation without kind is consumes; consumes is never stored.
+ */
+export type RelationKind = "consumes" | "serial_write" | "user_order"
+
 export interface Relation {
   predecessor: Ref
   successor: Ref
+  kind?: RelationKind
   requires: string
   conditions: Condition[]
   basis: Array<Ref | SourceRef>

@@ -358,6 +358,8 @@ function normalizeRelation(value: unknown, resolve: (value: unknown) => Ref): Co
   return {
     predecessor: resolve(value.predecessor),
     successor: resolve(value.successor),
+    // consumes is the default and is not written, so a plan without kinds keeps its digest.
+    ...(value.kind === "serial_write" || value.kind === "user_order" ? { kind: value.kind } : {}),
     requires: typeof value.requires === "string" ? value.requires : "",
     conditions: (Array.isArray(value.conditions) ? value.conditions.filter(isRecord) : []) as Condition[],
     basis: (Array.isArray(value.basis) ? value.basis : []).filter(isRefOrSource),

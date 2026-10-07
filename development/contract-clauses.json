@@ -258,13 +258,13 @@
     {
       "id": "C.atom_contract.7",
       "source": "src/model/compiler-model-v2.ts#V2_COMPILER_CONTRACT",
-      "text": "Start eligibility requires satisfied preconditions AND, for each incoming Relation, the predecessor's completed result, judged satisfied or unknown by the latest batch that assessed it (any not_satisfied in that batch blocks, as does no assessment yet). Preview and later confirmed write-back are separate atoms. Future work whose behavior is known may already be a dependent Atom; record genuinely unknown later work as unresolved coverage instead of an empty Atom.",
+      "text": "Start eligibility requires satisfied preconditions AND, for each incoming Relation, what its kind waits for: consumes waits for the predecessor's completed result, judged satisfied or unknown by the latest batch that assessed it (any not_satisfied in that batch blocks, as does no assessment yet); serial_write and user_order wait until the predecessor version has run and returned and no run of it is open or offered, whatever its result. Preview and later confirmed write-back are separate atoms. Future work whose behavior is known may already be a dependent Atom; record genuinely unknown later work as unresolved coverage instead of an empty Atom.",
       "segment": "atom_contract"
     },
     {
       "id": "C.atom_contract.8",
       "source": "src/model/compiler-model-v2.ts#V2_COMPILER_CONTRACT",
-      "text": "A Relation is { predecessor: Ref|{local_ref:\"new-atom-id\"}, successor: Ref|{local_ref:\"new-atom-id\"}, requires:\"exact usable result/ordering reason\", conditions:[], basis:[Ref|SourceRef] }. For new Atoms use local_ref; management resolves final content digests after requirement assignment. For existing Atoms copy their exact supplied Ref. Relations are operational dependencies: the successor waits for the exact predecessor version to complete and for a management assessment of it that is not not_satisfied. No self/cyclic dependencies. A replacement draft states all still-applicable relations, including retained work; dropping an edge changes execution order.",
+      "text": "A Relation is { predecessor: Ref|{local_ref:\"new-atom-id\"}, successor: Ref|{local_ref:\"new-atom-id\"}, kind:\"consumes\"|\"serial_write\"|\"user_order\", requires:\"exact usable result/ordering reason\", conditions:[], basis:[Ref|SourceRef] }. For new Atoms use local_ref; management resolves final content digests after requirement assignment. Use consumes when the successor actually calls or reads the predecessor's product, one Relation for each predecessor it calls; use serial_write when the two are ordered only because they write the same objects; use user_order when the user fixed the order. A consumes successor waits for the exact predecessor version to complete and for a management assessment of it that is not not_satisfied. No self/cyclic dependencies. A replacement draft states all still-applicable relations, including retained work; dropping an edge changes execution order.",
       "segment": "atom_contract"
     },
     {

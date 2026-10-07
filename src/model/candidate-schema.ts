@@ -300,13 +300,14 @@ export const CANDIDATE_JSON_SCHEMA = {
       properties: ATOM_PROPERTIES,
     },
     relation: {
-      description: "A real operational dependency between exact Atom versions. requires names the accepted result the successor needs, not mere list order or the entire final goal by default.",
+      description: "A real operational dependency between exact Atom versions. kind consumes: the successor actually calls or reads the predecessor's product, one Relation for each predecessor it calls; the successor waits for that completed result and an assessment that is not not_satisfied. kind serial_write: the two only write the same objects and must not run at once; the successor waits until the predecessor's run is over, whatever its result. kind user_order: the user fixed this order; it waits like serial_write. requires names the accepted result or the ordering reason, not mere list order or the entire final goal by default.",
       type: "object",
       additionalProperties: false,
       required: ["predecessor", "successor", "requires", "conditions", "basis"],
       properties: {
         predecessor: { $ref: "#/definitions/ref_or_local" },
         successor: { $ref: "#/definitions/ref_or_local" },
+        kind: { type: "string", enum: ["consumes", "serial_write", "user_order"] },
         requires: { type: "string", minLength: 1 },
         conditions: { type: "array", items: { $ref: "#/definitions/condition" } },
         basis: { type: "array", items: { $ref: "#/definitions/ref_or_source" } },

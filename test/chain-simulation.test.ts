@@ -513,3 +513,91 @@ test("scenario 7: a delegation batch records no assessment, and its request show
 function returnBatchesOf(snapshot: ReturnType<ChainHost["snapshot"]>): Set<number> {
   return new Set(snapshot.management_log.filter(batch => batch.trigger_event_ids.every(id => id.endsWith(":return"))).map(batch => batch.sequence))
 }
+
+/** The chain plan with each Relation's kind set by its successor (unlisted ones keep no kind). */
+function kinds(count: number, bySuccessor: Record<string, "consumes" | "serial_write" | "user_order">) {
+  return (event: string): Candidate => {
+    const candidate = chainCandidate(count, event)
+    const group = candidate.groups[0]!
+    if (group.compilation.decision !== "replace") throw Error("fixture")
+    for (const relation of group.compilation.drafts[0]!.relations) {
+      const successor = "local_ref" in relation.successor ? relation.successor.local_ref : relation.successor.id
+      if (bySuccessor[successor] !== undefined) relation.kind = bySuccessor[successor]
+    }
+    return candidate
+  }
+}
+
+/** Assessments by Atom: each call takes the next judgement for that Atom, the last one repeating. */
+function judgements(byAtom: Record<string, ReturnJudgement[]>): Judge {
+  const seen = new Map<string, number>()
+  return atomId => {
+    const list = byAtom[atomId] ?? [{ result: "satisfied" }]
+    const n = seen.get(atomId) ?? 0
+    seen.set(atomId, n + 1)
+    return list[Math.min(n, list.length - 1)]!
+  }
+}
+
+for (const kind of ["serial_write", "user_order"] as const) {
+  test(`scenario 8 (${kind}): the successor starts once the predecessor's run is over, stopped or judged not_satisfied with stop`, async () => {
+    // Stopped twice: code reruns it once, then the limit closes it; the successor waits for that rerun, then runs.
+    const stopped = new ChainHost({ propose: management(kinds(2, { "a-inspect": kind }), judgements({ "a-bundle": [{ result: "unknown" }] })).propose,
+      executor: offered => offered[0] === "a-bundle@0" ? "stopped" : "completed" })
+    const first = await stopped.round(CANDIDATE_EXAMPLE_INPUT)
+    report(`scenario 8 ${kind} stopped`, first, stopped)
+    assert.deepEqual(chainOrder(stopped), ["a-bundle@0", "a-bundle@0", "a-inspect@0"])
+    assert.deepEqual(first.pendingEventIds, [])
+    assert.deepEqual(stopped.snapshot().compiled["t1"]!.relations.map(relation => relation.kind), [kind], "a non-default kind is stored")
+
+    const rejected = new ChainHost({ propose: management(kinds(2, { "a-inspect": kind }), judgements({ "a-bundle": [{ result: "not_satisfied", decision: "stop" }] })).propose })
+    const second = await rejected.round(CANDIDATE_EXAMPLE_INPUT)
+    report(`scenario 8 ${kind} not_satisfied`, second, rejected)
+    assert.deepEqual(chainOrder(rejected), ["a-bundle@0", "a-inspect@0"], "the B3 stall does not happen for an ordering Relation")
+  })
+
+  test(`scenario 9 (${kind}): a retried predecessor holds the successor until the retry's execution is closed`, async () => {
+    const host = new ChainHost({ propose: management(kinds(2, { "a-inspect": kind }), judgements({ "a-bundle": [{ result: "not_satisfied", decision: "retry" }, { result: "not_satisfied", decision: "stop" }] })).propose })
+    const round = await host.round(CANDIDATE_EXAMPLE_INPUT)
+    report(`scenario 9 ${kind}`, round, host)
+    assert.deepEqual(chainOrder(host), ["a-bundle@0", "a-bundle@0", "a-inspect@0"])
+    const snapshot = host.snapshot()
+    const retry = snapshot.dispatches.find(dispatch => dispatch.retry_of !== undefined)!
+    const inspect = snapshot.dispatches.find(dispatch => dispatch.atom_id === "a-inspect")!
+    assert.ok(Number(inspect.dispatch_id.split("-")[1]) > Number(snapshot.executions.find(e => e.dispatch_id === retry.dispatch_id)!.execution_id.split("-")[1]),
+      "a-inspect is offered only after the retry ran")
+    const batchOfRetry = host.turns.find(turn => turn.offered.includes("a-bundle@0") && turn.text?.includes("management findings"))!
+    assert.deepEqual(batchOfRetry.offered, ["a-bundle@0"], "the retry is offered alone")
+  })
+}
+
+test("scenario 10: consumes keeps the result rule; a mixed chain judges each edge by its own kind", async () => {
+  // consumes (no kind given, read as consumes): not_satisfied with stop blocks the successor, as before.
+  const blocked = new ChainHost({ propose: management(kinds(2, {}), judgements({ "a-bundle": [{ result: "not_satisfied", decision: "stop" }] })).propose })
+  await blocked.round(CANDIDATE_EXAMPLE_INPUT)
+  assert.deepEqual(chainOrder(blocked), ["a-bundle@0"])
+  // a-bundle -> a-inspect serial_write, a-inspect -> a-step3 consumes: a-step3 reads only a-inspect's assessment.
+  const mixed = new ChainHost({ propose: management(kinds(3, { "a-inspect": "serial_write", "a-step3": "consumes" }),
+    judgements({ "a-bundle": [{ result: "not_satisfied", decision: "stop" }], "a-inspect": [{ result: "unknown" }] })).propose })
+  await mixed.round(CANDIDATE_EXAMPLE_INPUT)
+  assert.deepEqual(chainOrder(mixed), ["a-bundle@0", "a-inspect@0", "a-step3@0"])
+  const held = new ChainHost({ propose: management(kinds(3, { "a-inspect": "serial_write", "a-step3": "consumes" }),
+    judgements({ "a-bundle": [{ result: "satisfied" }], "a-inspect": [{ result: "not_satisfied", decision: "stop" }] })).propose })
+  await held.round(CANDIDATE_EXAMPLE_INPUT)
+  assert.deepEqual(chainOrder(held), ["a-bundle@0", "a-inspect@0"], "a-step3 waits on a-inspect's not_satisfied, whatever a-bundle was")
+})
+
+test("scenario 11: an answer without kind is consumes and leaves the Compiled Intent digest unchanged", async () => {
+  const run = async (plan: (event: string) => Candidate) => {
+    const host = new ChainHost({ propose: management(plan, satisfied).propose })
+    await host.round(CANDIDATE_EXAMPLE_INPUT)
+    return host.snapshot().compiled["t1"]!
+  }
+  const without = await run(event => chainCandidate(2, event))
+  const explicit = await run(kinds(2, { "a-inspect": "consumes" }))
+  const ordering = await run(kinds(2, { "a-inspect": "serial_write" }))
+  assert.equal("kind" in without.relations[0]!, false, "consumes is not written")
+  assert.equal(compiledIntentRef(explicit).digest, compiledIntentRef(without).digest)
+  assert.equal(digestOf(explicit.relations), digestOf(without.relations))
+  assert.notEqual(compiledIntentRef(ordering).digest, compiledIntentRef(without).digest)
+})

@@ -70,7 +70,7 @@ IR 保存整个任务的当前要求，包括当前暂停、尚未满足和暂�
 
 **当前实现。** `CompiledIntent` 保存 Atoms、Relations 和 IR 依据；Atom 生命周期在独立台账中维护。Atom 内容变更形成新修订；同 id 的递增 revision 可建立接替关系，不同 id 的语义对应由模型提供。重试执行另分配 `execution_id`。
 
-候选 Relation 可用 Atom `local_ref`。代码在正文绑定后解析为精确 Ref，拒绝未知或歧义端点、自依赖和环。派发及动作授权检查所有传入关系：指定版本的真实 completed 回传、该版本由最近一次评估了它的管理批判为 satisfied 或 unknown（该批对它的评估中有任一 not_satisfied 即为 not_satisfied，否则有任一 unknown 即为 unknown；not_satisfied 或尚无评估则不放行；显式 assessment_supports 也按这一汇总，只认 satisfied），以及关系附加条件。Atom preconditions、关系 conditions 与授权规则中显式写出的 assessment_supports 条件仍只认 satisfied。当前没有另设“只表示先后、无需结果验收”的调度分支。
+候选 Relation 可用 Atom `local_ref`。代码在正文绑定后解析为精确 Ref，拒绝未知或歧义端点、自依赖和环。派发及动作授权检查所有传入关系：指定版本的真实 completed 回传、该版本由最近一次评估了它的管理批判为 satisfied 或 unknown（该批对它的评估中有任一 not_satisfied 即为 not_satisfied，否则有任一 unknown 即为 unknown；not_satisfied 或尚无评估则不放行；显式 assessment_supports 也按这一汇总，只认 satisfied），以及关系附加条件。Atom preconditions、关系 conditions 与授权规则中显式写出的 assessment_supports 条件仍只认 satisfied。以上是 Relation kind 为 consumes（缺省）时的规则：后继实际调用或读取前驱产出，每个被调用的前驱各一条。kind 为 serial_write（只因写同一对象而排队）或 user_order（用户规定的顺序）时，只看前驱版本是否已跑完：至少一次已关闭且有回传的执行，没有未关闭的执行，也没有尚未启动的 dispatch（如等待中的 retry）；不看评估与 completed 状态，从未派发的前驱不放行，conditions 照旧适用。consumes 不写入已存的 Compiled Intent，旧计划的摘要不变。
 
 后继可通过回传后的 `reuse` 批次获得资格。已派发且未变化的工作保留原生命周期。交付包含所需前驱版本、管理证据与回传产物元数据；实际读取这些产物还要经过后继的操作授权。
 

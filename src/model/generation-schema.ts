@@ -55,8 +55,8 @@ const BASE_ATOM_TASK_SENTENCE = "For a supplied specification, copy its applicab
 const ASSEMBLED_ATOM_TASK_SENTENCE = "Management code attaches the assigned current requirement texts verbatim to the delivered task after preparation, each block labeled with its IR identity, revision and digest and its passages labeled and ordered by user input, including passages the item once adopted and later withdrew; write atom.task as the unit's action, boundaries and handoff and keep rule blocks, examples and paraphrases of the specification out of the candidate task, because the attached blocks carry the operative specification."
 const ASSEMBLED_TASK_DESCRIPTION = "This unit's work instruction: its action, boundaries and handoff, written after determining current meaning and scope (omit superseded rules, unrelated material and other units' exclusive work). Management code attaches the assigned current requirement texts verbatim to the delivered task, passages labeled and ordered by user input, so this field must not copy or paraphrase rule blocks, examples or the specification; the executor receives the instruction plus those attached blocks. Leave unspecified internal implementation choices open. Keep illustrative values illustrative. This field may be long and multiline."
 
-const BASE_RELATION_SHAPE = 'A Relation is { predecessor: Ref|{local_ref:"new-atom-id"}, successor: Ref|{local_ref:"new-atom-id"}, requires:"exact usable result/ordering reason", conditions:[], basis:[Ref|SourceRef] }. For new Atoms use local_ref; management resolves final content digests after requirement assignment. For existing Atoms copy their exact supplied Ref.'
-const CI_RELATION_SHAPE = 'A Relation is { predecessor:{local_ref:"atom-id"}, successor:{local_ref:"atom-id"}, requires:"exact usable result/ordering reason", conditions:[] }. Name each endpoint by its atom_id, for new and existing Atoms alike; management binds the Atom version in this plan and the Relation\'s basis.'
+const BASE_RELATION_SHAPE = 'A Relation is { predecessor: Ref|{local_ref:"new-atom-id"}, successor: Ref|{local_ref:"new-atom-id"}, kind:"consumes"|"serial_write"|"user_order", requires:"exact usable result/ordering reason", conditions:[], basis:[Ref|SourceRef] }. For new Atoms use local_ref; management resolves final content digests after requirement assignment.'
+const CI_RELATION_SHAPE = 'A Relation is { predecessor:{local_ref:"atom-id"}, successor:{local_ref:"atom-id"}, kind:"consumes"|"serial_write"|"user_order", requires:"exact usable result/ordering reason", conditions:[] }. Name each endpoint by its atom_id, for new and existing Atoms alike; management binds the Atom version in this plan and the Relation\'s basis.'
 const BASE_AUTHORITY_SHAPE = 'authority.lifetime must be \"this_execution\" and delegation must be \"not_supported\".'
 const CI_AUTHORITY_SHAPE = 'authority.lifetime must be \"this_execution\" and delegation must be \"not_supported\". Management fills authority.basis and each rule\'s resource_ref from the task\'s authorization; a rule states operation_id, input_refs, output_refs, conditions and allowed_use.'
 
@@ -232,6 +232,9 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
     remove(group.properties.assessments.items as SchemaNode, ["evidence_refs"])
     const relation = schema.definitions.relation as SchemaNode
     remove(relation, ["basis"])
+    // A CI answer states each Relation's kind; an answer written before kinds existed is read as consumes.
+    relation.properties.kind = { type: "string", enum: ["consumes", "serial_write", "user_order"] }
+    if (!relation.required.includes("kind")) relation.required.push("kind")
     const endpointRefs = schema.definitions.ref_or_local as SchemaNode
     const atomId = (endpointRefs.oneOf ?? endpointRefs.anyOf).find((branch: SchemaNode) => branch.properties?.local_ref)
     for (const end of ["predecessor", "successor"]) {
@@ -425,6 +428,7 @@ export function dropCodeBoundIdentities(answer: unknown, assessment: boolean, ac
       for (const relation of Array.isArray(draft?.relations) ? draft.relations : []) {
         if (!relation || typeof relation !== "object") continue
         delete relation.basis
+        if (relation.kind === undefined || relation.kind === null) relation.kind = "consumes"
         relation.predecessor = atomIdOf(relation.predecessor)
         relation.successor = atomIdOf(relation.successor)
       }
@@ -492,7 +496,7 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
                   authority: { ...authority, rules: authority.rules.map(({ resource_ref: _resource, ...rule }) => rule) } }
               }),
               relations: draft.relations.map(({ basis: _basis, predecessor, successor, ...relation }) => ({
-                predecessor: atomIdOf(predecessor), successor: atomIdOf(successor), ...relation,
+                predecessor: atomIdOf(predecessor), successor: atomIdOf(successor), ...relation, kind: relation.kind ?? "consumes",
               })),
             }
           }),

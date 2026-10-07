@@ -205,7 +205,8 @@ export function createIntentCompilerV2(options: IntentCompilerV2Options): Intent
       const atoms = new AtomStateLedger(snapshot.atom_states)
       const started = new Set(snapshot.executions.map(record => record.dispatch_id))
       const admission: AtomAdmissionContext = { compiled: snapshot.compiled, ir: snapshot.ir, atoms, capabilities: options.capabilities,
-        execution_outcomes: snapshot.execution_outcomes, assessments: snapshot.assessments }
+        execution_outcomes: snapshot.execution_outcomes, assessments: snapshot.assessments,
+        runs: () => ({ dispatches: snapshot.dispatches, executions: snapshot.executions }) }
       const eligible = snapshot.execution_eligibility?.task_ids
       const seen = new Set<string>()
       return snapshot.dispatches.flatMap(dispatch => {
@@ -1138,14 +1139,31 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     }
   }
 
-  const admission: AtomAdmissionContext = { compiled, ir, atoms, capabilities,
-    execution_outcomes: snapshot.execution_outcomes,
-    assessments: [...snapshot.assessments, ...candidate.groups.flatMap(group => group.assessments)] }
   // Re-evaluate waiting successors after accepted results even with reuse.
   // User updates still clear only tasks explicitly handled by the candidate.
   const dispatchTasks = events.some(event => event.kind === "user_input")
     ? new Set(candidate.groups.flatMap(group => group.task_refs))
     : new Set(Object.keys(compiled).filter(taskId => !snapshot.execution_eligibility || snapshot.execution_eligibility.task_ids.includes(taskId)))
+  // A return that ended without a completion claim runs once more when its
+  // plan stands; a management retry decision on it takes that place.
+  const reruns: RetryTarget[] = []
+  for (const event of events) {
+    if (event.kind !== "execution_return" || event.execution_id === undefined) continue
+    if (retries.some(retry => retry.executionId === event.execution_id)) continue
+    const outcome = [...snapshot.execution_outcomes].reverse().find(record => record.execution_id === event.execution_id && !record.historical)
+    if (outcome === undefined || outcome.state_claim === "completed") continue
+    const target = incompleteRerunTarget(execution.getExecution(event.execution_id), compiled, ir, atoms, execution, changedTasks)
+    if (target !== undefined && dispatchTasks.has(target.taskId)) reruns.push(target)
+  }
+
+  // A version this batch offers again (below the limit) is not over yet for a successor that only waits for its run.
+  const rerunning = new Set([...retries, ...reruns]
+    .filter(target => execution.executionsInWindow(target.taskId, target.atom.atom_id, target.atom.revision, atomRef(target.atom).digest, userInputWindow).length < ATOM_VERSION_EXECUTION_LIMIT)
+    .map(target => refKey(atomRef(target.atom))))
+  const admission: AtomAdmissionContext = { compiled, ir, atoms, capabilities,
+    execution_outcomes: snapshot.execution_outcomes,
+    assessments: [...snapshot.assessments, ...candidate.groups.flatMap(group => group.assessments)],
+    runs: () => ({ dispatches: execution.dispatchesSnapshot(), executions: execution.list() }), rerunning }
   for (const taskId of dispatchTasks) {
     const intent = compiled[taskId]
     if (!intent || ir[taskId]?.current_scope.disposition !== "proceed") continue
@@ -1169,18 +1187,6 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
         })
       }
     }
-  }
-
-  // A return that ended without a completion claim runs once more when its
-  // plan stands; a management retry decision on it takes that place.
-  const reruns: RetryTarget[] = []
-  for (const event of events) {
-    if (event.kind !== "execution_return" || event.execution_id === undefined) continue
-    if (retries.some(retry => retry.executionId === event.execution_id)) continue
-    const outcome = [...snapshot.execution_outcomes].reverse().find(record => record.execution_id === event.execution_id && !record.historical)
-    if (outcome === undefined || outcome.state_claim === "completed") continue
-    const target = incompleteRerunTarget(execution.getExecution(event.execution_id), compiled, ir, atoms, execution, changedTasks)
-    if (target !== undefined && dispatchTasks.has(target.taskId)) reruns.push(target)
   }
 
   // A retry or a rerun offers the same Atom version once more, under a dispatch
@@ -1282,7 +1288,8 @@ function authorize(
     const dispatch = request.kind === "start" ? execution.dispatch(request.dispatch_id) : execution.dispatch(execution.getExecution(request.execution_id)?.dispatch_id ?? "")
     const atom = snapshot.compiled[taskId]?.atoms.find(candidate => candidate.atom_id === dispatch?.atom_id && candidate.revision === dispatch.atom_revision)
     if (atom) {
-      const blocked = atomAdmission(taskId, atom, { compiled: snapshot.compiled, ir: snapshot.ir, atoms, assessments: snapshot.assessments, capabilities, execution_outcomes: snapshot.execution_outcomes })
+      const blocked = atomAdmission(taskId, atom, { compiled: snapshot.compiled, ir: snapshot.ir, atoms, assessments: snapshot.assessments, capabilities, execution_outcomes: snapshot.execution_outcomes,
+        runs: () => ({ dispatches: execution.dispatchesSnapshot(), executions: execution.list() }) })
       if (blocked) refusal = deny(request.run_id, "execution_inactive", blocked)
     }
   }
