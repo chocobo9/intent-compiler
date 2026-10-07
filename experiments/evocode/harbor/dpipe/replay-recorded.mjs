@@ -90,23 +90,26 @@ function queuesOf(batch, keep = () => true) {
   const queues = {}
   batch.attempts.forEach((attempt, index) => {
     if (!keep(stageOf(attempt), index)) return
-    ;(queues[stageOf(attempt)] ??= []).push({ index, text: attempt.text, transport: !attempt.text && attempt.failure_diagnostic !== undefined })
+    ;(queues[stageOf(attempt)] ??= []).push({ index, text: attempt.text, then_size: sizesOf(attempt.request), transport: !attempt.text && attempt.failure_diagnostic !== undefined })
   })
   return queues
 }
 
+/** Characters of a request and of its assessments field: what the model is sent. */
+const sizesOf = request => request === undefined ? undefined : { request_chars: JSON.stringify(request).length, assessments_chars: request.assessments === undefined ? 0 : JSON.stringify(request.assessments).length }
+
 function recordedModel(queues, calls, rewrite) {
-  const next = stage => {
+  const next = (stage, request) => {
     const entry = (queues[stage] ?? []).shift()
-    calls.push({ stage, recorded: entry?.index ?? "exhausted" })
+    calls.push({ stage, recorded: entry?.index ?? "exhausted", size_then: entry?.then_size, size_now: sizesOf(request) })
     // An answer that fails the schema at once: no transport backoff, just a rejection.
     if (entry === undefined) return "{}"
     if (entry.transport) throw new Error("recorded transport failure")
     return rewrite(entry.text)
   }
   return createCompilerModelV2(
-    async request => next(request.generation_stage ?? "single"),
-    async request => { const text = next("check"); calls.at(-1).prepared_now = request.prepared?.digest; return text },
+    async request => next(request.generation_stage ?? "single", request),
+    async request => { const text = next("check", request); calls.at(-1).prepared_now = request.prepared?.digest; return text },
   )
 }
 
