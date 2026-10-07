@@ -389,7 +389,11 @@ test("actual CI and assessment requests separate completion from its evidence an
 
 test("a change's stated unchanged part is carried into completion and judged against the assigned requirement text", () => {
   const boundary = "that boundary belongs to the changed behavior: write it into completion"
-  const contradiction = "evidence that contradicts an explicit statement in that text, including a statement of what a change leaves as it was, is not_satisfied even when no completion entry names it"
+  const contradiction = "evidence is not_satisfied only when it contradicts every reasonable reading, even when no completion entry names the behavior; evidence that contradicts only one reasonable reading is unknown, and its explanation names both readings and the one the executor followed"
+  const readings = "A reasonable reading of that text agrees with all of its explicit statements, and an example yields to an explicit statement"
+  assert.ok(ASSESSMENT_RESULTS.includes(readings))
+  assert.ok(ASSESSMENT_RESULTS.includes("including a statement of what a change leaves as it was"))
+  assert.equal(ASSESSMENT_RESULTS.includes("evidence that contradicts an explicit statement in that text"), false, "the one-reading rule is gone")
   for (const assessment of [false, true]) for (const profile of [undefined, "openai", "groq"] as const) {
     const contract = generationContract(V2_COMPILER_CONTRACT, "ci", profile, assessment, true)
     assert.ok(contract.atom_output_contract.includes(boundary), "CI contract: completion carries the stated unchanged part")
