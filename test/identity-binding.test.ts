@@ -87,7 +87,7 @@ test("strict stages no longer ask the answer for the versions code binds", () =>
   const needsVersion = /revision|digest/i
   for (const profile of [undefined, "openai", "groq"] as const) for (const assessment of [false, true]) {
     const label = `${profile ?? "canonical"}, assessment=${assessment}`
-    const schema = buildGenerationSchema("ci", profile, { assessment }) as { definitions: Record<string, { properties: Record<string, unknown>; required: string[] }>; properties: Record<string, unknown> }
+    const schema = buildGenerationSchema("ci", profile, { assessment, activeExecutions: true }) as { definitions: Record<string, { properties: Record<string, unknown>; required: string[] }>; properties: Record<string, unknown> }
     const group = schema.definitions.group as unknown as { properties: Record<string, { items?: { properties: Record<string, unknown> }; oneOf?: unknown[]; anyOf?: unknown[] }> }
     assert.equal("revision" in schema.definitions.atom_draft!.properties, false, `Atom revision is code's (${label})`)
     assert.equal("revision" in schema.definitions.atom!.properties, false, label)
@@ -97,7 +97,8 @@ test("strict stages no longer ask the answer for the versions code binds", () =>
     assert.equal("current" in reuse.properties, false, `reuse.current is code's (${label})`)
     const idOnly = (node: unknown) => { const text = JSON.stringify(node, (key, value) => key === "description" ? undefined : value); assert.doesNotMatch(text, needsVersion, `${label}: ${text}`) }
     idOnly(schema.definitions.atom_draft!.properties.previous_atom_ref)
-    idOnly(group.properties.assessments!.items!.properties.criteria_refs)
+    if (assessment) idOnly(group.properties.assessments!.items!.properties.criteria_refs)
+    else assert.equal("assessments" in group.properties, false, `a delegation batch writes no assessments (${label})`)
     idOnly(schema.definitions.draft!.properties.intent_basis)
     idOnly(schema.definitions.coverage!.properties.refs)
     idOnly(schema.definitions.coverage!.properties.requirement)

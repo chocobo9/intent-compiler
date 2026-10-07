@@ -443,3 +443,61 @@ test("scenario 5g: an about naming neither a supplied object nor one created in 
   const second = await host.round(UPDATE, { source_category: "update" })
   assert.match(second.user.error?.message ?? "", /about names r-nowhere, which is neither an object of the supplied IR nor created in this batch/)
 })
+
+/** Management wrapped to keep every request and to make each delegation batch's answer carry an assessment, as an earlier-shape model would. */
+function recording(scripted: ReturnType<typeof management>) {
+  const requests: CompilerModelV2Input[] = []
+  const propose = async (input: CompilerModelV2Input, generation?: { checkRequired?: boolean }) => {
+    requests.push(structuredClone(input))
+    const raw = await scripted.propose(input, generation)
+    if (input.generation_stage !== "ci" || input.assessment_batch === true) return raw
+    const answer = JSON.parse(raw)
+    const target = Object.values(input.compiled ?? {})[0]?.atoms[0]
+    for (const group of answer.groups) {
+      group.assessments = target === undefined ? [] : [{ target_ref: atomRef(target), criteria_refs: [], result: "satisfied", explanation: "judged in a delegation batch", method: "model" }]
+    }
+    return JSON.stringify(answer)
+  }
+  return { requests, propose }
+}
+
+test("scenario 7: a delegation batch records no assessment, and its request shows only the latest batch for each current version", async () => {
+  // a-bundle is not_satisfied twice (retry, then stop), so its successor never runs and the version stays current.
+  const seen = new Map<string, number>()
+  let plan: (event: string) => Candidate = event => chainCandidate(2, event)
+  const planned = management(event => plan(event), atomId => {
+    const n = (seen.get(atomId) ?? 0) + 1
+    seen.set(atomId, n)
+    return n === 1 ? { result: "not_satisfied", decision: "retry" } : { result: "not_satisfied", decision: "stop" }
+  })
+  const wrapped = recording(planned)
+  const host = new ChainHost({ propose: wrapped.propose })
+  const first = await host.round(CANDIDATE_EXAMPLE_INPUT)
+  assert.deepEqual(chainOrder(host), ["a-bundle@0", "a-bundle@0"], "retry still runs the version once more, in the return batch")
+  assert.deepEqual(first.pendingEventIds, [])
+  const afterR1 = host.snapshot()
+  const bundleRecords = afterR1.assessments.filter(record => record.target_ref.id === "a-bundle")
+  assert.equal(bundleRecords.length, 2, "one record per return batch; the delegation batch's own is dropped")
+  const returnBatches = new Set(afterR1.management_log.filter(batch => batch.trigger_event_ids.every(id => id.endsWith(":return"))).map(batch => batch.sequence))
+  assert.ok(afterR1.assessments.every(record => returnBatches.has(record.sequence)), "every recorded assessment comes from a return batch")
+  assert.notEqual(afterR1.atom_states.find(state => state.atom_id === "a-bundle")?.status, "legacy", "the dropped satisfied assessment did not retire the Atom")
+
+  plan = revisionPlan(host, {})
+  const before = wrapped.requests.length
+  await host.round(UPDATE, { source_category: "update" })
+  const afterR2 = host.snapshot()
+  const delegation = wrapped.requests.slice(before).filter(request => request.generation_stage === "ci" && request.assessment_batch !== true)
+  assert.ok(delegation.length > 0, "the update's CI request was captured")
+  const latest = Math.max(...bundleRecords.map(record => record.sequence))
+  for (const request of delegation) {
+    assert.deepEqual(request.assessments, bundleRecords.filter(record => record.sequence === latest),
+      "only the latest batch's records for the current version, verbatim")
+  }
+  assert.ok(afterR2.management_log.some(batch => batch.status === "accepted" && batch.trigger_event_ids.includes(host.events().filter(e => e.kind === "user_input").at(-1)!.event_id)),
+    "the update batch is accepted without any assessment")
+  assert.deepEqual(afterR2.assessments.filter(record => !returnBatchesOf(afterR2).has(record.sequence)), [], "still no assessment from a delegation batch")
+})
+
+function returnBatchesOf(snapshot: ReturnType<ChainHost["snapshot"]>): Set<number> {
+  return new Set(snapshot.management_log.filter(batch => batch.trigger_event_ids.every(id => id.endsWith(":return"))).map(batch => batch.sequence))
+}

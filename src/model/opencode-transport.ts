@@ -13,7 +13,7 @@ import type {
 import { buildStrictCandidateExample, buildStrictCandidateSchema } from "./candidate-schema-strict.js"
 import { buildStrictCandidateCheckSchema } from "./candidate-check-schema-strict.js"
 import { MANAGEMENT_SYSTEM_PROMPT } from "./management-instructions.js"
-import { buildGenerationSchema, generationContract, generationStageInstruction, type GenerationSchemaOptions } from "./generation-schema.js"
+import { buildGenerationSchema, generationContract, generationStageInstruction, hasActiveExecution, type GenerationSchemaOptions } from "./generation-schema.js"
 
 /**
  * The OpenCode surface used by this Adapter is intentionally narrow.  The
@@ -191,11 +191,12 @@ export function createOpenCodeModelTransportV2(
     const stage = "generation_stage" in request ? request.generation_stage : undefined
     if (stage !== "ir" && stage !== "ci") return legacy(request)
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
+    const active = stage === "ci" && !assessing && hasActiveExecution(request)
     const transport = createOpenCodeV2Transport(
       options,
-      `${generationStageInstruction(stage, assessing, generation.checkRequired)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
-      buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing }),
-      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", assessing, generation.checkRequired) }),
+      `${generationStageInstruction(stage, assessing, generation.checkRequired, active)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
+      buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing, activeExecutions: active }),
+      () => ({ ...request, contract: generationContract(request.contract, stage, "openai", assessing, generation.checkRequired, active) }),
     )
     return transport(request)
   }
