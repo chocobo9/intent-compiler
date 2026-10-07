@@ -1,3 +1,4 @@
+import { collectProblem, throwProblems } from "./admission-problems.js"
 import { digestOf, digestText, type Candidate, type CandidateGroup, type CompilerEvent, type ContentItem, type IrChange, type LocalSourceEditRecord, type SourceDisposition, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
 
 export function userText(event: CompilerEvent): string | undefined {
@@ -254,7 +255,9 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   const selectedSources = items.filter(item => item.text_origin === "source").flatMap(item => item.sources)
   for (const item of items) if (item.text_origin === "source") adoptedByItem.set(item, item.sources)
 
-  for (const [index, entry] of entries.entries()) {
+  // Each entry is judged on its own; every failing entry is reported together.
+  const problems: string[] = []
+  for (const [index, entry] of entries.entries()) collectProblem(problems, () => {
     const span = validSpan(entry.source, texts, display), text = texts.get(entry.source.source_id)!
     if (!entry.reason.trim()) throw new Error(`source_coverage[${index}] needs a role/revision explanation`)
     if (entry.disposition === "normative") {
@@ -299,22 +302,27 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
         superseded.push(entry.source)
       }
     }
-  }
+  })
+  throwProblems(problems)
   // A carried delegation is an unresolved task from an earlier turn, not
   // background for this one.  It may be adopted, or explicitly deferred with a
   // reason, but it cannot be passed over in silence.
+  const unnamed: string[] = []
   for (const eventId of options.carriedEventIds ?? []) {
     const named = selectedSources.some(source => source.source_id === eventId)
       || entries.some(entry => entry.source.source_id === eventId)
     if (!named) {
-      throw new Error(`carried delegation ${display(eventId)} has no disposition: select its operative text into IR content, or write a source_coverage entry naming its passage (and a question when it still cannot be compiled)`)
+      unnamed.push(`carried delegation ${display(eventId)} has no disposition: select its operative text into IR content, or write a source_coverage entry naming its passage (and a question when it still cannot be compiled)`)
     }
   }
-  for (const item of items) for (const source of item.sources) {
+  throwProblems(unnamed)
+  const unassigned: string[] = []
+  for (const item of items) for (const source of item.sources) collectProblem(unassigned, () => {
     const span = validSpan(source, texts, display), text = texts.get(source.source_id)!
     const retained = oldItems.filter(old => old.item_id === item.item_id).flatMap(old => old.sources).filter(old => !currentIds.has(old.source_id))
     if (!covered(text, span.start, span.end, spansFor([...(adoptedByItem.get(item) ?? []), ...retained], source.source_id))) throw new Error(`new normative selection ${display(source.source_id)} in ${item.item_id} has no matching source_coverage assignment`)
-  }
+  })
+  throwProblems(unassigned)
   // The first failing source decides the batch, as before; the message also
   // lists the other prior selections left without a destination.
   const dropped: Array<{ source_id: string; detail: string }> = []

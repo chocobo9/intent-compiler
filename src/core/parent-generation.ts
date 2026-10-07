@@ -1,3 +1,4 @@
+import { PROBLEM_SEPARATOR, throwProblems } from "./admission-problems.js"
 import { RETRY_IN_DELEGATION_BATCH } from "../model/generation-schema.js"
 import { projectAssessments, projectCompiled } from "./request-projection.js"
 import { atomRef, compiledIntentRef } from "./compiled-intent.js"
@@ -186,6 +187,7 @@ export function bindContentRefs(candidate: Candidate, supplied: Record<string, T
   for (const group of candidate.groups) for (const change of group.ir_changes) {
     if (change.action === "create") created.add(change.local_ref)
   }
+  const problems: string[] = []
   const bind = (value: unknown, where: string): unknown => {
     const id = namedId(value)
     if (id === undefined) return value
@@ -194,7 +196,8 @@ export function bindContentRefs(candidate: Candidate, supplied: Record<string, T
       if (version !== undefined) return version
     }
     if (created.has(id)) return { id, revision: 0, digest: "pending" }
-    throw new Error(`${where} names ${id}, which is neither an object of the supplied IR nor created in this batch; name an existing object by its id`)
+    problems.push(`${where} names ${id}, which is neither an object of the supplied IR nor created in this batch; name an existing object by its id`)
+    return value
   }
   for (const group of candidate.groups) for (const change of group.ir_changes) {
     if (change.action !== "create" && change.action !== "revise") continue
@@ -208,6 +211,7 @@ export function bindContentRefs(candidate: Candidate, supplied: Record<string, T
       }
     }
   }
+  throwProblems(problems)
 }
 
 /** Write the digests of objects this batch created into the refs that named them; a few passes settle refs between requirements. */
@@ -586,7 +590,7 @@ export class ParentGeneration {
       }
       const task = parent.ir[boundTask]!
       const requirements = this.bindRequirements(group.coverage, task)
-      if ("message" in requirements) return this.reject(requirements.message.replace("CI coverage.requirement", "Ordinary CI coverage.requirement"), result)
+      if ("message" in requirements) return this.reject(requirements.message.replaceAll("CI coverage.requirement", "Ordinary CI coverage.requirement"), result)
       const coverage = requirements.bound
       if (group.compilation.decision === "replace") for (const draft of group.compilation.drafts) {
         for (const atom of draft.atoms) {
@@ -644,6 +648,14 @@ export class ParentGeneration {
    * versions when the plan is built.
    */
   private bindCodeIdentities<G extends CIProposalGroup>(group: G, taskId: string): G {
+    // Each name that binds to nothing is reported, not only the first.
+    const problems: string[] = []
+    const bound = this.bindIdentities(group, taskId, problems)
+    throwProblems(problems)
+    return bound
+  }
+
+  private bindIdentities<G extends CIProposalGroup>(group: G, taskId: string, problems: string[]): G {
     const copy = structuredClone(group)
     const task = this.state.parent!.ir[taskId]!
     // A delegation batch's answer carries no assessments (the assessment batch's does).
@@ -654,8 +666,8 @@ export class ParentGeneration {
       assessment.criteria_refs = (assessment.criteria_refs as unknown[]).map(criterion => {
         const id = namedId(criterion)
         const bound = id === undefined ? undefined : irVersion(task, id)
-        if (bound === undefined) throw new Error(`assessments.criteria_refs names ${id ?? "no id"}, which is no IR item of task ${taskId}; name an IR requirement by its id`)
-        return bound
+        if (bound === undefined) problems.push(`assessments.criteria_refs names ${id ?? "no id"}, which is no IR item of task ${taskId}; name an IR requirement by its id`)
+        return bound ?? criterion as Ref
       })
     }
     // A decision's basis is the Atom version its execution ran.
@@ -676,12 +688,12 @@ export class ParentGeneration {
     const latest = (atomId: string) => held.filter(atom => atom.atom_id === atomId).sort((a, b) => b.revision - a.revision)[0]
     const drafts = compilation.drafts.map(draft => ({
       ...draft,
-      intent_basis: this.intentBasis(draft.intent_basis as unknown[], task),
+      intent_basis: this.intentBasis(draft.intent_basis as unknown[], task, problems),
       atoms: draft.atoms.map(atom => {
         const prior = latest(atom.atom_id)
         const replaced = namedId((atom as { previous_atom_ref?: unknown }).previous_atom_ref)
         const target = replaced === undefined ? undefined : latest(replaced)
-        if (replaced !== undefined && target === undefined) throw new Error(`previous_atom_ref names ${replaced}, which is no Atom of task ${taskId}'s plan; name the replaced Atom by an atom_id the plan lists`)
+        if (replaced !== undefined && target === undefined) problems.push(`previous_atom_ref names ${replaced}, which is no Atom of task ${taskId}'s plan; name the replaced Atom by an atom_id the plan lists`)
         const authority = atom.authority as Partial<typeof atom.authority>
         // The revision is provisional: whether the content changed is known only
         // once the requirement texts are attached, and the preparation settles it.
@@ -706,13 +718,16 @@ export class ParentGeneration {
   }
 
   /** The plan's basis names the task or content it uses by id; the version is the parent's. */
-  private intentBasis(entries: unknown[], task: TaskIntent): Ref[] {
+  private intentBasis(entries: unknown[], task: TaskIntent, problems: string[]): Ref[] {
     const bound = new Map<string, Ref>()
     for (const entry of entries) {
       const id = namedId(entry)
       const isContent = id !== undefined && task.content.some(item => item.item_id === id)
       const version = id !== undefined && (id === task.task_id || isContent) ? irVersion(task, id) : undefined
-      if (id === undefined || version === undefined) throw new Error(`compilation.intent_basis names ${id ?? "no id"}, which is no task or content item of parent task ${task.task_id}; name one by task_id or content item_id`)
+      if (id === undefined || version === undefined) {
+        problems.push(`compilation.intent_basis names ${id ?? "no id"}, which is no task or content item of parent task ${task.task_id}; name one by task_id or content item_id`)
+        continue
+      }
       bound.set(id, version)
     }
     return [...bound.values()]
@@ -721,17 +736,18 @@ export class ParentGeneration {
   /** Coverage requirements select the fixed parent by id; the version is the parent's. */
   private bindRequirements(coverage: CIProposalGroup["coverage"], task: TaskIntent): { bound: Candidate["groups"][number]["coverage"] } | { message: string } {
     const bound: Candidate["groups"][number]["coverage"] = []
+    const problems: string[] = []
     for (const entry of coverage) {
-      if (!("local_ref" in entry.requirement)) return { message: "CI coverage.requirement must select the fixed parent by local_ref, without revision or digest" }
+      if (!("local_ref" in entry.requirement)) { problems.push("CI coverage.requirement must select the fixed parent by local_ref, without revision or digest"); continue }
       const id = entry.requirement.local_ref
       const matches = [
         ...(id === task.task_id ? [{ id, revision: task.revision, digest: digestOf(task) }] : []),
         ...task.content.filter(item => item.item_id === id).map(item => ({ id, revision: item.revision, digest: digestOf(item) })),
       ]
-      if (matches.length !== 1) return { message: `CI coverage requirement ${id} is unknown or ambiguous in parent task ${task.task_id}` }
+      if (matches.length !== 1) { problems.push(`CI coverage requirement ${id} is unknown or ambiguous in parent task ${task.task_id}`); continue }
       bound.push({ ...entry, requirement: matches[0]! } as Candidate["groups"][number]["coverage"][number])
     }
-    return { bound }
+    return problems.length > 0 ? { message: [...new Set(problems)].join(PROBLEM_SEPARATOR) } : { bound }
   }
 
   /** Stored versions an answer's Refs may name: the supplied and the parent IR, and every plan version. */

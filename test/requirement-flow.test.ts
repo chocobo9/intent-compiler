@@ -885,3 +885,36 @@ test("a predecessor is judged by every assessment of its latest assessing batch"
   assert.equal(admit([at(2, "not_satisfied"), at(undefined, "unknown"), at(undefined, "satisfied")]), undefined)
   assert.match(admit([at(2, "satisfied"), at(undefined, "satisfied"), at(undefined, "not_satisfied")]) ?? "", /was assessed not_satisfied/)
 })
+
+/** The fixture's group applied to a stored IR, ready for bindCurrentRequirements. */
+function boundFixture(edit: (group: Candidate["groups"][number]) => void) {
+  const proposal = candidate()
+  const group = proposal.groups[0]!
+  edit(group)
+  const applied = new IntentStateManager({}).apply(group.ir_changes, ["t1"])
+  assert.equal(applied.ok, true)
+  const event: CompilerEvent = { schema_version: 2, run_id: "run1", event_id: "e1", kind: "user_input", source: { producer_id: "user", channel: "user" }, payload: { text: raw } }
+  return () => bindCurrentRequirements(group, applied.tasks.t1!, undefined, [event], [])
+}
+
+test("every coverage entry pointing at an unknown Atom is reported in one rejection", () => {
+  const prepare = boundFixture(group => {
+    for (const entry of group.coverage.slice(1)) entry.refs = [{ local_ref: `missing-${(entry.requirement as { local_ref: string }).local_ref}` }]
+  })
+  assert.throws(prepare, (error: Error) => /IR content r1 points to unknown Atom missing-r1/.test(error.message)
+    && /IR content r2 points to unknown Atom missing-r2/.test(error.message) && error.message.split(" | ").length === 2)
+})
+
+test("every requirement without a coverage destination, and the Atom left without one, are reported together", () => {
+  const prepare = boundFixture(group => { group.coverage = group.coverage.slice(0, 1) })
+  assert.throws(prepare, (error: Error) => {
+    const parts = error.message.split(" | ")
+    return parts.includes("IR content r1 has no coverage destination") && parts.includes("IR content r2 has no coverage destination")
+      && parts.includes("Atom a1 has no assigned current IR requirement") && parts.length === 3
+  })
+})
+
+test("a single problem keeps its own message", () => {
+  const prepare = boundFixture(group => { group.coverage = group.coverage.slice(0, 2); group.coverage[1]!.refs = [{ local_ref: "a1" }] })
+  assert.throws(prepare, (error: Error) => error.message === "IR content r2 has no coverage destination")
+})

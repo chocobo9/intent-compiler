@@ -53,6 +53,7 @@ import { V2_CHECK_CONTRACT, V2_CHECK_CONTRACT_FOR_ASSEMBLED_TASKS, V2_COMPILER_C
 import { RETRY_IN_DELEGATION_BATCH } from "../model/generation-schema.js"
 import { bindCurrentRequirements, selectSourceEvents, userInputOrder, type RequirementAssembly } from "./requirement-flow.js"
 import { atomAdmission, type AtomAdmissionContext } from "./atom-admission.js"
+import { PROBLEM_SEPARATOR, throwProblems } from "./admission-problems.js"
 import { locateQuote, materializeSourceContent, recordedDispositions, recordEditedRemovals, selectedSourceHistory, sourceDispositionView, SourceLedger, sourceSegments, userText, validateSourceCoverage, withdrawnPassages } from "./source-payload.js"
 import { ParentGeneration, withoutRetiredRejection, type ParentGenerationState } from "./parent-generation.js"
 
@@ -980,12 +981,14 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
         ? bound.map(draft => ({ ...draft, atoms: settleAtomRevisions(compiled[draft.task_id]?.atoms ?? [], draft.atoms) }))
         : bound
       if (strictRequirements) writeBackSettledAtoms(group, drafts)
+      const changedAtoms: string[] = []
       if (strictRequirements) for (const draft of drafts) for (const atom of draft.atoms) {
         const prior = compiled[draft.task_id]?.atoms.find(existing => existing.atom_id === atom.atom_id && existing.revision === atom.revision)
         if (prior && atomRef(prior).digest !== atomRef(atom).digest) {
-          throw new Error(`Atom ${atom.atom_id}@${atom.revision} changes content after requirement binding; raise its revision`)
+          changedAtoms.push(`Atom ${atom.atom_id}@${atom.revision} changes content after requirement binding; raise its revision`)
         }
       }
+      throwProblems(changedAtoms)
       for (const draft of drafts) {
         if (!ir[draft.task_id]) {
           throw new Error(`compiled draft references unknown task ${draft.task_id}`)
@@ -2611,7 +2614,13 @@ export function resolveSourceRefs(
   return stats
 }
 
+/** A message may report several problems; each kind says its repair once. */
 function applicationHint(message: string): string {
+  const hints = new Set(message.split(PROBLEM_SEPARATOR).map(problemHint).filter(hint => hint !== ""))
+  return [...hints].join("")
+}
+
+function problemHint(message: string): string {
   if (/unknown task/u.test(message)) {
     return " (a create for binding, output, or content applies to the group's first task_ref; emit the create for that task in the same group, and use the same id everywhere)"
   }
@@ -2634,7 +2643,7 @@ function applicationHint(message: string): string {
   // cannot close these by moving a span by a few bytes; it has to change the
   // requirement or drop the entry.
   if (/classifies actively adopted text as/u.test(message)) {
-    return " (two consistent ways: keep the text adopted and leave it out of this entry; or withdraw it by removing it from that item's sources and keeping a superseded entry that covers it, with the current change as basis)"
+    return " (two consistent ways, for each entry listed: keep the text adopted and leave it out of this entry; or withdraw it by removing it from that item's sources and keeping a superseded entry that covers it, with the current change as basis)"
   }
   if (/was dropped without an explicit superseded disposition/u.test(message)) {
     return " (two consistent ways: restore that text to the item's sources; or write a superseded source_coverage entry that covers it, with the current change as basis)"

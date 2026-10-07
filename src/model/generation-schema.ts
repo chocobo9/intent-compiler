@@ -181,8 +181,18 @@ export interface GenerationSchemaOptions {
 
 /** Whether a request's executions include one that is running; the schema is built per request from this. */
 export function hasActiveExecution(request: unknown): boolean {
+  return activeExecutionIds(request).size > 0
+}
+
+/** The ids of the executions a request shows as running. */
+export function activeExecutionIds(request: unknown): Set<string> {
   const executions = request !== null && typeof request === "object" ? (request as { executions?: unknown }).executions : undefined
-  return Array.isArray(executions) && executions.some(entry => entry !== null && typeof entry === "object" && (entry as { status?: unknown }).status === "active")
+  const ids = new Set<string>()
+  for (const entry of Array.isArray(executions) ? executions : []) {
+    const record = entry as { status?: unknown; execution_id?: unknown } | null
+    if (record !== null && typeof record === "object" && record.status === "active" && typeof record.execution_id === "string") ids.add(record.execution_id)
+  }
+  return ids
 }
 
 export const RETRY_IN_DELEGATION_BATCH = "retry is decided only in the batch that carries the execution return, which assesses that Atom version not_satisfied; a delegation batch may continue, stop or await_result an active execution"
@@ -315,9 +325,14 @@ function withLocalSourceEditBranch(include: boolean): Record<string, unknown> {
 export function validateGenerationProposal(stage: GenerationStage, value: unknown, options: GenerationSchemaOptions = {}): CandidateSchemaResult {
   const validate = new Ajv({ allErrors: true, strict: false, allowUnionTypes: true }).compile(buildGenerationSchema(stage, undefined, options))
   const ok = validate(value)
-  const errors = (validate.errors ?? []).map(error => `${error.instancePath || "/"}: ${error.message ?? "invalid"}`)
-  if (stage === "ci" && options.assessment !== true && Array.isArray((value as CIProposal | undefined)?.groups)
-    && (value as CIProposal).groups.some(group => Array.isArray(group?.execution_decisions) && group.execution_decisions.some(decision => decision?.decision === "retry"))) errors.push(`/groups: ${RETRY_IN_DELEGATION_BATCH}`)
+  const retried = stage === "ci" && options.assessment !== true && Array.isArray((value as CIProposal | undefined)?.groups)
+    && (value as CIProposal).groups.some(group => Array.isArray(group?.execution_decisions) && group.execution_decisions.some(decision => decision?.decision === "retry"))
+  // A retry a delegation batch cannot decide is refused with its reason, not
+  // with the schema's enum or additional-properties complaint about it.
+  const errors = (validate.errors ?? [])
+    .filter(error => !retried || !(error.instancePath.includes("/execution_decisions") || (error.keyword === "additionalProperties" && (error.params as { additionalProperty?: string }).additionalProperty === "execution_decisions")))
+    .map(error => `${error.instancePath || "/"}: ${error.message ?? "invalid"}`)
+  if (retried) errors.unshift(`/groups: ${RETRY_IN_DELEGATION_BATCH}`)
   if (ok && stage === "ci") {
     const proposal = value as CIProposal
     if (proposal.parent_issues?.length && proposal.groups.length > 0) errors.push("/groups: must be empty when parent_issues is nonempty")
@@ -354,7 +369,9 @@ function atomIdOf(endpoint: unknown): { local_ref: string } {
  * decision's basis are dropped.  They are dropped or reduced to the id
  * before the answer is validated; the recorded text keeps them as returned.
  */
-export function dropCodeBoundIdentities(answer: unknown, assessment: boolean, activeExecutions = false): void {
+export function dropCodeBoundIdentities(answer: unknown, assessment: boolean, activeExecutions: boolean | ReadonlySet<string> = false): void {
+  const activeIds = typeof activeExecutions === "boolean" ? undefined : activeExecutions
+  const anyActive = activeIds === undefined ? activeExecutions === true : activeIds.size > 0
   if (answer === null || typeof answer !== "object" || !Array.isArray((answer as { groups?: unknown }).groups)) return
   const basis = (answer as { basis?: unknown }).basis
   if (assessment && basis !== null && typeof basis === "object") delete (basis as { event_ids?: unknown }).event_ids
@@ -366,7 +383,16 @@ export function dropCodeBoundIdentities(answer: unknown, assessment: boolean, ac
       // A delegation batch carries no assessments, and an empty decision list
       // is no decision when no execution is active.
       delete record.assessments
-      if (!activeExecutions && Array.isArray(record.execution_decisions) && record.execution_decisions.length === 0) delete record.execution_decisions
+      // A decision about an execution that is not running changes nothing; code
+      // drops it, with the others of its batch kept.  A retry is not dropped: it is
+      // not a delegation batch's decision and is refused with its reason.
+      if (activeIds !== undefined && Array.isArray(record.execution_decisions)) {
+        record.execution_decisions = record.execution_decisions.filter((decision: unknown) => {
+          const entry = decision as { decision?: unknown; execution_id?: unknown } | null
+          return entry === null || typeof entry !== "object" || entry.decision === "retry" || (typeof entry.execution_id === "string" && activeIds.has(entry.execution_id))
+        })
+      }
+      if (Array.isArray(record.execution_decisions) && record.execution_decisions.length === 0 && !anyActive) delete record.execution_decisions
     }
     for (const judged of Array.isArray(record.assessments) ? record.assessments : []) {
       if (!judged || typeof judged !== "object") continue

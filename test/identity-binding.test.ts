@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { IntentStoreV2 } from "../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 } from "../src/core/intent-compiler-v2.js"
+import { bindContentRefs } from "../src/core/parent-generation.js"
 import { createCompilerModelV2, V2_COMPILER_CONTRACT } from "../src/model/compiler-model-v2.js"
 import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
 import { atomRef, settleAtomRevisions } from "../src/core/compiled-intent.js"
@@ -121,4 +122,13 @@ test("strict stages no longer ask the answer for the versions code binds", () =>
     }
   }
   assert.match(V2_COMPILER_CONTRACT.atom_contract, /requires a new revision/, "the base contract is untouched")
+})
+
+test("every unknown name a content value cites is reported in one rejection", () => {
+  const change = (local_ref: string, about: string) => ({ action: "create", target: "content", local_ref, value: { text: "x", about: [{ id: about }], scope: [], support: [] }, sources: [] })
+  const candidate = { schema_version: 2, basis: { event_ids: [], refs: [] }, source_coverage: [], groups: [{ ir_changes: [change("r1", "nowhere-1"), change("r2", "nowhere-2")] }] } as never
+  assert.throws(() => bindContentRefs(candidate, {}), (error: Error) => {
+    const parts = error.message.split(" | ")
+    return parts.length === 2 && parts[0]!.includes("content r1 about names nowhere-1") && parts[1]!.includes("content r2 about names nowhere-2")
+  })
 })

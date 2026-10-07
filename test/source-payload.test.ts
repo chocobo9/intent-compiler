@@ -494,3 +494,27 @@ test("a dropped selection with many uncovered ranges lists three and counts the 
     return true
   })
 })
+
+test("every entry that classes adopted text is named in one rejection, in entry order", () => {
+  const e = event("e", "Heading A\n\nBody A.\n\nHeading B\n\nBody B.\n\nHeading C\n\nBody C.")
+  const c = candidate()
+  const headings = ["Heading A", "Heading B", "Heading C"]
+  const bodies = ["Body A.", "Body B.", "Body C."]
+  adopt(c, ref(e, "Body A."), "r-a"); adopt(c, ref(e, "Body B."), "r-b"); adopt(c, ref(e, "Body C."), "r-c")
+  for (const heading of headings) c.source_coverage!.push({ source: ref(e, heading), disposition: "context", requirements: [], reason: "Heading", basis: [] })
+  const current = { t: task(...headings.map((heading, index) => item(`r-${"abc"[index]}`, [ref(e, heading), ref(e, bodies[index]!)]))) }
+  assert.throws(() => validateSourceCoverage(c, [e], [e], {}, current), (error: Error) => {
+    const parts = error.message.split(" | ")
+    return parts.length === 3 && parts.every((part, index) => part.startsWith(`source_coverage[${index + 3}] classifies actively adopted text as context`) && part.includes(headings[index]!))
+  })
+})
+
+test("every carried delegation and every unassigned selection is reported together", () => {
+  const first = event("c1", "First carried work."), second = event("c2", "Second carried work."), extra = event("x", "Extra text one.\n\nExtra text two.")
+  const c = candidate()
+  assert.throws(() => validateSourceCoverage(c, [], [first, second], {}, { t: task() }, { carriedEventIds: new Set(["c1", "c2"]) }),
+    (error: Error) => error.message.split(" | ").length === 2 && /carried delegation c1 has no disposition/.test(error.message) && /carried delegation c2 has no disposition/.test(error.message))
+  const adopted = { t: task(item("r1", [ref(extra, "Extra text one.")]), item("r2", [ref(extra, "Extra text two.")])) }
+  assert.throws(() => validateSourceCoverage(candidate(), [extra], [extra], {}, adopted),
+    (error: Error) => /r1 has no matching/.test(error.message) && /r2 has no matching/.test(error.message) && error.message.split(" | ").length === 2)
+})

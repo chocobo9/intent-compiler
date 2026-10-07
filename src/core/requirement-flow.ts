@@ -1,3 +1,4 @@
+import { collectProblem, throwProblems } from "./admission-problems.js"
 import {
   digestOf,
   digestText,
@@ -177,7 +178,10 @@ export function bindCurrentRequirements(
     ])),
   ])
   const items = new Map<string, ContentItem>()
-  for (const item of task.content) {
+  // Every item, coverage entry and Atom is judged on its own, and each failing
+  // one is reported together with the others of its kind.
+  const itemProblems: string[] = []
+  for (const item of task.content) collectProblem(itemProblems, () => {
     if (items.has(item.item_id)) throw new Error(`task ${task.task_id}: duplicate IR content id ${item.item_id}`)
     items.set(item.item_id, item)
     if (!item.text.trim()) throw new Error(`IR content ${item.item_id} has empty requirement text`)
@@ -191,21 +195,25 @@ export function bindCurrentRequirements(
         throw new Error(`IR content ${item.item_id} must cite a resolvable user text span`)
       }
     }
-  }
+  })
+  throwProblems(itemProblems)
 
   const drafts = group.compilation.drafts.filter(draft => draft.task_id === task.task_id)
   const atoms = new Map<string, Atom>()
+  const atomProblems: string[] = []
   for (const draft of drafts) for (const atom of draft.atoms) {
-    if (atoms.has(atom.atom_id)) throw new Error(`task ${task.task_id}: duplicate atom id ${atom.atom_id}`)
+    if (atoms.has(atom.atom_id)) atomProblems.push(`task ${task.task_id}: duplicate atom id ${atom.atom_id}`)
     atoms.set(atom.atom_id, atom)
   }
+  throwProblems(atomProblems)
   const retained = new Map(retainedAtoms.map(atom => [atom.atom_id, atom]))
   const assigned = new Map<string, Ref[]>()
   const covered = new Set<string>()
-  for (const entry of group.coverage) {
+  const coverageProblems: string[] = []
+  for (const entry of group.coverage) collectProblem(coverageProblems, () => {
     const id = "local_ref" in entry.requirement ? entry.requirement.local_ref : entry.requirement.id
     const item = items.get(id)
-    if (!item) continue // A task-level coverage entry remains legal, but cannot cover an IR requirement.
+    if (!item) return // A task-level coverage entry remains legal, but cannot cover an IR requirement.
     if (covered.has(id)) throw new Error(`IR content ${id} has duplicate coverage entries`)
     covered.add(id)
     if ("revision" in entry.requirement) {
@@ -234,11 +242,13 @@ export function bindCurrentRequirements(
     } else if (entry.refs.length > 0) {
       throw new Error(`IR content ${id} is ${entry.disposition} but also names an Atom`)
     }
-  }
+  })
+  throwProblems(coverageProblems)
+  const planProblems: string[] = []
   for (const item of task.content) {
-    if (!covered.has(item.item_id)) throw new Error(`IR content ${item.item_id} has no coverage destination`)
+    if (!covered.has(item.item_id)) planProblems.push(`IR content ${item.item_id} has no coverage destination`)
   }
-  for (const atom of atoms.values()) {
+  for (const atom of atoms.values()) collectProblem(planProblems, () => {
     if ((assigned.get(atom.atom_id) ?? []).length === 0) {
       throw new Error(`Atom ${atom.atom_id} has no assigned current IR requirement`)
     }
@@ -246,23 +256,24 @@ export function bindCurrentRequirements(
       const matching = task.content.find(item => (assigned.get(atom.atom_id) ?? []).some(ref => ref.id === item.item_id) && item.text === constraint.text && canonicalJson(item.scope) === canonicalJson(constraint.scope))
       if (!matching) throw new Error(`Atom ${atom.atom_id} constraints must repeat an assigned IR requirement verbatim with the same scope; put behavioral rules in IR.content and leave constraints empty`)
     }
-  }
-  for (const prior of retainedAtoms) {
+  })
+  for (const prior of retainedAtoms) collectProblem(planProblems, () => {
     const same = atoms.get(prior.atom_id)
-    if (same && same.revision === prior.revision) continue
+    if (same && same.revision === prior.revision) return
     const superseded = (same !== undefined && same.revision > prior.revision) || drafts.some(draft => draft.atoms.some(atom =>
       atom.previous_atom_ref?.id === prior.atom_id && atom.previous_atom_ref.revision === prior.revision,
     ))
     if (superseded) {
       if (assigned.has(prior.atom_id) && !same) throw new Error(`superseded Atom ${prior.atom_id} still receives requirements`)
-      continue
+      return
     }
     const expected = prior.goal_refs.filter(ref => ref.id !== task.task_id).map(ref => `${ref.id}@${ref.revision}:${ref.digest}`).sort()
     const actual = (assigned.get(prior.atom_id) ?? []).map(ref => `${ref.id}@${ref.revision}:${ref.digest}`).sort()
     if (JSON.stringify(actual) !== JSON.stringify(expected)) {
       throw new Error(`retained Atom ${prior.atom_id} has changed requirement assignments; replace or supersede it`)
     }
-  }
+  })
+  throwProblems(planProblems)
   const contentIds = new Set([...(previous?.content ?? []), ...task.content].map(item => item.item_id))
   return drafts.map(draft => ({
     ...draft,
