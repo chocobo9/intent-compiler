@@ -35,7 +35,7 @@ import {
   type TaskIntent,
 } from "./intent-contract.js"
 import { IntentStateManager } from "./intent-state-v2.js"
-import { AtomStateLedger, atomRef, buildCompiledIntents, compiledIntentRef, type BuildCompiledIntentOptions } from "./compiled-intent.js"
+import { AtomStateLedger, atomRef, buildCompiledIntents, compiledIntentRef, settleAtomRevisions, type BuildCompiledIntentOptions } from "./compiled-intent.js"
 import { buildSourceAliasIndex, type SourceAliasEntry, type SourceAliasIndex } from "./source-aliases.js"
 import { ExecutionStateManager } from "./execution-state.js"
 import { candidateChanges, candidateRepairContext, type CandidateRepairContext } from "./candidate-repair.js"
@@ -428,6 +428,14 @@ async function advance(
     call: callPropose, aliases: sourceAliases, resolve: candidate => resolveSourceRefs(candidate, resolvableSources),
     validateBasis: (candidate, display) => validateCandidateBasis(candidate, events, display),
     directory: ir => buildExistingObjectDirectory(ir, snapshot.compiled),
+    // A decision's basis is the Atom version its execution was dispatched with.
+    executionAtom: (executionId) => {
+      const running = execution.getExecution(executionId)
+      const dispatch = running === undefined ? undefined : execution.dispatch(running.dispatch_id)
+      const atom = running === undefined || dispatch === undefined ? undefined
+        : snapshot.compiled[running.task_id]?.atoms.find(candidate => candidate.atom_id === dispatch.atom_id && candidate.revision === dispatch.atom_revision)
+      return atom === undefined ? undefined : atomRef(atom)
+    },
   }) : undefined
   const proposeTimed = (request: CompilerModelV2Input) => generation ? generation.propose(request) : callPropose(request)
   /** Attach the issues an attempt produced to that attempt's own record. */
@@ -869,6 +877,38 @@ function retryTarget(
   return { executionId: id, taskId: existing.task_id, atom }
 }
 
+/**
+ * What settling decided (revision, bound authority, supersession) is written
+ * onto the candidate's own draft atoms, so the recorded candidate names the
+ * versions that were stored.  The attached requirement texts stay out of it.
+ */
+function writeBackSettledAtoms(group: Candidate["groups"][number], settled: readonly CompiledIntentDraft[]): void {
+  if (group.compilation.decision !== "replace") return
+  for (const draft of group.compilation.drafts) {
+    const final = settled.find(candidate => candidate.task_id === draft.task_id)
+    for (const atom of draft.atoms) {
+      const decided = final?.atoms.find(candidate => candidate.atom_id === atom.atom_id)
+      if (decided === undefined) continue
+      atom.revision = decided.revision
+      atom.authority = structuredClone(decided.authority)
+      if (decided.previous_atom_ref === undefined) delete atom.previous_atom_ref
+      else atom.previous_atom_ref = structuredClone(decided.previous_atom_ref)
+    }
+  }
+}
+
+/** A coverage destination names an Atom by id; the stored record binds the version this plan holds. */
+function bindCoverageDestinations(group: Candidate["groups"][number], intent: CompiledIntent | undefined): void {
+  if (intent === undefined) return
+  for (const entry of group.coverage) {
+    entry.refs = entry.refs.map(destination => {
+      if (!("local_ref" in destination)) return destination
+      const latest = intent.atoms.filter(atom => atom.atom_id === destination.local_ref).sort((a, b) => b.revision - a.revision)[0]
+      return latest === undefined ? destination : atomRef(latest)
+    })
+  }
+}
+
 function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events: readonly CompilerEvent[], availableSources: readonly CompilerEvent[], strictRequirements: boolean, capabilities?: CapabilitySource, assembly?: RequirementAssembly, ownEventIds: ReadonlySet<string> = new Set(), userInputWindow?: number) {
   const execution = hydrateExecutionManager(snapshot)
   const atoms = new AtomStateLedger(snapshot.atom_states)
@@ -926,13 +966,18 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
     }
 
     if (group.compilation.decision === "replace") {
-      const drafts = strictRequirements
+      const bound = strictRequirements
         ? bindCurrentRequirements(
           group, ir[taskRefs[0] as string] as TaskIntent, snapshot.ir[taskRefs[0] as string], availableSources,
           (compiled[taskRefs[0] as string]?.atoms ?? []).filter(atom => ["ready", "executing"].includes(atoms.status(taskRefs[0] as string, atom))),
           assembly,
         )
         : group.compilation.drafts
+      // Each Atom's revision is settled on the stored content, with the requirement texts attached.
+      const drafts = strictRequirements
+        ? bound.map(draft => ({ ...draft, atoms: settleAtomRevisions(compiled[draft.task_id]?.atoms ?? [], draft.atoms) }))
+        : bound
+      if (strictRequirements) writeBackSettledAtoms(group, drafts)
       if (strictRequirements) for (const draft of drafts) for (const atom of draft.atoms) {
         const prior = compiled[draft.task_id]?.atoms.find(existing => existing.atom_id === atom.atom_id && existing.revision === atom.revision)
         if (prior && atomRef(prior).digest !== atomRef(atom).digest) {
@@ -987,11 +1032,13 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
         compiled[taskId] = intent
         changedTasks.add(taskId)
       }
+      if (strictRequirements) bindCoverageDestinations(group, build.intents[taskRefs[0] as string])
     } else if (strictRequirements) {
       bindCurrentRequirements(
         group, ir[taskRefs[0] as string] as TaskIntent, snapshot.ir[taskRefs[0] as string], availableSources,
         (compiled[taskRefs[0] as string]?.atoms ?? []).filter(atom => ["ready", "executing"].includes(atoms.status(taskRefs[0] as string, atom))),
       )
+      bindCoverageDestinations(group, compiled[taskRefs[0] as string])
     }
 
     for (const question of group.questions) questions.push(question.text)
@@ -2570,15 +2617,16 @@ function applicationHint(message: string): string {
     return " (revise the existing task instead of creating it again, or use a new unique local_ref)"
   }
   // A batch applies its changes in order and each one advances the object's
-  // revision, so a second change to the same object cannot match either number.
+  // revision.  Code fills the revision a change expects, so a second change to
+  // the same object is the defect, never a number the answer wrote.
   if (/already changed task \S+ to revision/u.test(message)) {
-    return " (state the task change once: put goal and current_scope in one revise task with the revision recorded in the supplied IR, or drop the redundant change)"
+    return " (each object changes once per batch and code fills the revision: put goal and current_scope in one revise task, or drop the redundant change)"
   }
   if (/already changed \S+ \S+ to revision/u.test(message)) {
-    return " (state the change to this object once: one revise with the complete new value and the revision recorded in the supplied IR, or drop the redundant change)"
+    return " (each object changes once per batch and code fills the revision: one revise with the complete new value, or drop the redundant change)"
   }
   if (/expected_revision/u.test(message)) {
-    return " (use the revision currently recorded in the supplied IR)"
+    return " (each object changes once per batch and code fills the revision: name the object by id and state its change once)"
   }
   // Source accounting: say the repair, not just the contradiction.  The model
   // cannot close these by moving a span by a few bytes; it has to change the

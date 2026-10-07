@@ -28,7 +28,7 @@ export type CIProposalGroup = Omit<CandidateGroup, "ir_changes" | "task_refs" | 
   task_refs?: string[]
   depends_on?: string[]
   compilation:
-    | { decision: "reuse"; current: Ref[]; reason: string }
+    | { decision: "reuse"; /** Code fills the group's current Compiled Intent; an answer states none. */ current?: Ref[]; reason: string }
     | { decision: "replace"; drafts: Array<Omit<CompiledIntentDraft, "task_id"> & { task_id?: string }> }
 }
 export type CIProposal = {
@@ -57,7 +57,7 @@ const BASE_AUTHORITY_SHAPE = 'authority.lifetime must be \"this_execution\" and 
 const CI_AUTHORITY_SHAPE = 'authority.lifetime must be \"this_execution\" and delegation must be \"not_supported\". Management fills authority.basis and each rule\'s resource_ref from the task\'s authorization; a rule states operation_id, input_refs, output_refs, conditions and allowed_use.'
 
 const BASE_ASSESSMENT_FIELDS = "Fill assessments.target_ref, criteria_refs, evidence_refs, result and explanation from that comparison."
-const CI_ASSESSMENT_FIELDS = "Fill assessments.target_ref, criteria_refs, result and explanation from that comparison; management binds evidence_refs to this batch's return event, so say in explanation which parts of the return the judgement relies on."
+const CI_ASSESSMENT_FIELDS = "Fill assessments.target_ref, criteria_refs, result and explanation from that comparison; criteria_refs name only IR requirement ids ({id}) and management binds their current version; management binds evidence_refs to this batch's return event, so say in explanation which parts of the return the judgement relies on."
 
 /** A CI answer leaves an assessment's evidence reference to code. */
 function boundEvidence(rule: string): string {
@@ -65,17 +65,50 @@ function boundEvidence(rule: string): string {
 }
 
 const BASE_ATOM_REFS = "Use the exact refs supplied in atom_refs for assessments.target_ref and previous_atom_ref; never invent ids, revisions, or digests."
-const CI_ATOM_REFS = "Name assessments.target_ref and previous_atom_ref by an Atom id and revision supplied in atom_refs; management binds each Ref's digest, and binds an assessment of this batch's return to the Atom version that execution ran. Never invent ids or revisions."
+const CI_ATOM_REFS = "Name assessments.target_ref by an Atom id and revision supplied in atom_refs and previous_atom_ref by the replaced Atom's id alone; management binds each Ref's digest, binds an assessment of this batch's return to the Atom version that execution ran, and binds previous_atom_ref to that Atom's latest version in this plan. Never invent ids or revisions."
+
+/**
+ * Replace one clause of the base contract.  A clause that is not there means
+ * the base wording moved and this projection would silently stop applying, so
+ * it fails loudly instead.
+ */
+function swap(text: string, from: string, to: string, what: string): string {
+  if (!text.includes(from)) throw new Error(`${what} no longer carries the clause the code-bound wording replaces; the projection cannot be applied`)
+  return text.replace(from, to)
+}
+
+const BASE_ATOM_FIELDS = "Each Atom needs atom_id, revision, goal_refs,"
+const CI_ATOM_FIELDS = "Each Atom needs atom_id, goal_refs,"
+const BASE_ATOM_REVISION = "atom_id plus revision identifies one content: changing any content field, including completion, return_when or preconditions, requires a new revision and its own lifecycle record."
+const CI_ATOM_REVISION = "atom_id plus revision identifies one content. Management assigns the revision, so an Atom states none: a new atom_id starts at 0, an existing atom_id whose content is unchanged keeps the revision the plan holds, and changed content (any content field, including completion, return_when or preconditions) becomes that id's latest revision plus 1 with its own lifecycle record."
+const BASE_REPLACE_FAILED = "set its previous_atom_ref to the exact ref supplied in atom_refs; management records the supersession and keeps the failed record."
+const CI_REPLACE_FAILED = "set its previous_atom_ref to {id} of the Atom it replaces (another Atom's id when work is split or merged); management binds that Atom's latest version in this plan, records the supersession and keeps the failed record."
+const BASE_SUPERSESSION = "use the exact previous_atom_ref for supersession."
+const CI_SUPERSESSION = "use previous_atom_ref ({id} of the replaced Atom) for supersession."
 
 /** The CI stage names Atoms by id and leaves the identities code binds out of the answer. */
 function codeBoundIdentities(atomContract: string): string {
-  return atomContract.replace(BASE_RELATION_SHAPE, CI_RELATION_SHAPE).replace(BASE_AUTHORITY_SHAPE, CI_AUTHORITY_SHAPE).replace(BASE_ATOM_REFS, CI_ATOM_REFS)
+  const what = "the Atom contract"
+  let text = atomContract.replace(BASE_RELATION_SHAPE, CI_RELATION_SHAPE).replace(BASE_AUTHORITY_SHAPE, CI_AUTHORITY_SHAPE).replace(BASE_ATOM_REFS, CI_ATOM_REFS)
+  text = swap(text, BASE_ATOM_FIELDS, CI_ATOM_FIELDS, what)
+  text = swap(text, BASE_ATOM_REVISION, CI_ATOM_REVISION, what)
+  text = swap(text, BASE_REPLACE_FAILED, CI_REPLACE_FAILED, what)
+  return swap(text, BASE_SUPERSESSION, CI_SUPERSESSION, what)
 }
 
+const BASE_REUSE_SHAPE = '  reuse: { "decision":"reuse", "current": [Ref], "reason": "..." }'
+const CI_REUSE_SHAPE = '  reuse: { "decision":"reuse", "reason": "..." }  (management records the current Compiled Intent of the group)'
+const BASE_DRAFT_SHAPE = '"intent_basis":[Ref]'
+const CI_DRAFT_SHAPE = '"intent_basis":[{"local_ref":"<task_id or content item_id>"}]'
+const BASE_COVERAGE_SHAPE = '{ "requirement": <Ref|{local_ref}>, "disposition": "assigned"|"supported"|"paused"|"unresolved", "refs": [<Ref|{local_ref}>], "explanation": "<why>" }'
+const CI_COVERAGE_SHAPE = '{ "requirement": {local_ref}, "disposition": "assigned"|"supported"|"paused"|"unresolved", "refs": [{local_ref: <atom_id>}], "explanation": "<why>" }'
+const BASE_INTENT_BASIS_RULE = "intent_basis and atom.goal_refs accept only supplied exact Refs; new requirements are assigned through coverage local_refs and management fills their canonical references. For brand-new work use empty arrays for intent_basis and goal_refs. References establish provenance, not semantic correctness."
+const CI_INTENT_BASIS_RULE = "intent_basis names the task or content items the plan uses as {local_ref}, and atom.goal_refs accept only supplied exact Refs; new requirements are assigned through coverage local_refs and management fills their canonical references with the current versions. For brand-new work use empty arrays for intent_basis and goal_refs. References establish provenance, not semantic correctness."
+
 const BASE_EXISTING_IDENTITIES = "For existing objects copy their supplied identities and expected revisions; raise an Atom revision when changing its content. Management assigns compiled identities and computes digests."
-const BOUND_EXISTING_IDENTITIES = "For existing objects copy their supplied ids and revisions; raise an Atom revision when changing its content. Management assigns compiled identities, fills the revision an IR change expects and computes every Ref's digest from the stored object it names."
+const BOUND_EXISTING_IDENTITIES = "For existing objects copy their supplied ids; where a Ref names one, copy its supplied revision. Management assigns compiled identities and each Atom's revision, fills the revision an IR change expects and computes every Ref's digest from the stored object it names."
 const BASE_EXISTING_OBJECTS_RULE = "When existing_objects contains the work being updated, use that exact task_id and task_revision for task_refs, draft.task_id, and expected_revision fields. Use only atom Refs listed under that task when setting previous_atom_ref; management binds and checks these against the current stored objects."
-const BOUND_EXISTING_OBJECTS_RULE = "When existing_objects contains the work being updated, use that exact task_id for task_refs and draft.task_id. Use only Atoms listed under that task when setting previous_atom_ref; management binds the revision an IR change expects and each Ref's digest from the current stored objects."
+const BOUND_EXISTING_OBJECTS_RULE = "When existing_objects contains the work being updated, use that exact task_id for task_refs and draft.task_id. Use only Atoms listed under that task when setting previous_atom_ref, naming each by its id; management binds the revision an IR change expects, the Atom versions and each Ref's digest from the current stored objects."
 
 function assembledAtomContract(atomContract: string): string {
   return atomContract.replace(BASE_ATOM_TASK_SENTENCE, ASSEMBLED_ATOM_TASK_SENTENCE)
@@ -92,7 +125,7 @@ const BASE_REVISE_CLAUSE = '- revise: { action:"revise", target:"task"|"current_
 const BASE_RETIRE_CLAUSE = '- retire: { action:"retire", target:"binding"|"output"|"content", id, expected_revision, reason, sources }'
 const BOUND_REVISE_CLAUSE = BASE_REVISE_CLAUSE.replace("id, expected_revision, ", "id, ")
 const BOUND_RETIRE_CLAUSE = BASE_RETIRE_CLAUSE.replace("id, expected_revision, ", "id, ")
-const REVISION_BINDING = "Management fills the revision each revise, retire or edit expects from the supplied IR, so name the existing object by id. State each object's change once per batch: a second change to the same object is rejected."
+const REVISION_BINDING = "Management fills the revision each revise, retire or edit expects from the supplied IR, so name the existing object by id. State each object's change once per batch: a second change to the same object is rejected. A content value's about and support refs name an object of the supplied IR, or one created in this batch, by {id}; management binds its version and digest."
 const LOCAL_EDIT_CLAUSE = `${BOUND_REVISE_CLAUSE} For a local content source edit that keeps the item's other sources, use edit instead of re-declaring the whole item: { action:"edit", target:"content", id, remove:[SourceRef], add:[SourceRef], basis:[SourceRef], reason }. For pure addition use remove: [] and nonempty add; basis and reason remain required. At least one of remove or add must be nonempty. remove addresses fragments inside this item's current sources; code keeps everything else, merges add and materializes the new text. Code writes withdrawal records only for removed fragments, so do not also send a superseded entry for the same removal. basis may cite any source still available to this batch, including earlier delegations, not only this batch's events.`
 const BASE_SUPERSEDED_BASIS = "empty requirements, and basis selecting the current user's change."
 const LOCAL_EDIT_SUPERSEDED_BASIS = "empty requirements, and basis selecting the text available to this batch that mandates the change; an edit change records its own removal, so do not duplicate that one as a superseded entry."
@@ -139,7 +172,7 @@ export interface GenerationSchemaOptions {
 export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSchemaProfile, options: GenerationSchemaOptions = {}): Record<string, unknown> {
   const schema = structuredClone(profile === undefined
     ? withLocalSourceEditBranch(stage === "ir")
-    : buildStrictCandidateSchema(profile, { localSourceEdit: stage === "ir" })) as SchemaNode
+    : buildStrictCandidateSchema(profile, { localSourceEdit: stage === "ir", idOnlyContentRefs: true })) as SchemaNode
   const group = schema.definitions.group as SchemaNode
   const remove = (object: SchemaNode, keys: string[]) => {
     for (const key of keys) delete object.properties[key]
@@ -174,6 +207,40 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
     for (const end of ["predecessor", "successor"]) {
       relation.properties[end] = { ...structuredClone(atomId), description: "The Atom by its atom_id, new or existing. Code binds the version in this plan; give no revision or digest." }
     }
+    // Versions code knows are bound by code: the answer names Atoms, tasks and
+    // requirements by id.  An id-only Ref cannot carry a revision or digest, so
+    // a copied or stale number can no longer reject or misdirect a batch.
+    const references = schema.definitions.ref_or_local as SchemaNode
+    const local = (references.oneOf ?? references.anyOf).find((branch: SchemaNode) => branch.properties?.local_ref)
+    const idOnly = (description: string): SchemaNode => ({
+      type: "object", additionalProperties: false, required: ["id"], description,
+      properties: { id: { type: "string", minLength: 1 } },
+    })
+    const narrowed = (property: SchemaNode, replacement: SchemaNode): SchemaNode => Array.isArray(property.anyOf)
+      ? { ...property, anyOf: property.anyOf.map((branch: SchemaNode) => branch.type === "null" ? branch : replacement) } : replacement
+    // The revision of an Atom is code's: new id 0, unchanged content keeps the held one, changed content takes the latest plus one.
+    for (const name of ["atom", "atom_draft"]) {
+      const definition = schema.definitions[name] as SchemaNode | undefined
+      if (definition?.properties?.revision !== undefined) remove(definition, ["revision"])
+    }
+    const draftProperties = (schema.definitions.atom_draft as SchemaNode).properties
+    draftProperties.previous_atom_ref = narrowed(draftProperties.previous_atom_ref, {
+      ...idOnly("The Atom this one replaces, by atom_id: the same id, or another Atom's id when work is split or merged. Code binds that Atom's latest version in this plan."),
+    })
+    const coverage = schema.definitions.coverage as SchemaNode
+    coverage.properties.refs.items = { ...structuredClone(local), description: "The Atom that carries the requirement, by atom_id. Code binds the version in this plan." }
+    ;(schema.definitions.draft as SchemaNode).properties.intent_basis.items = { ...structuredClone(local), description: "A task_id or content item_id of this group's parent task. Code binds its current revision and digest." }
+    const reuse = ((group.properties.compilation as SchemaNode).oneOf ?? (group.properties.compilation as SchemaNode).anyOf)
+      .find((branch: SchemaNode) => (branch.properties?.decision?.const ?? branch.properties?.decision?.enum?.[0]) === "reuse")
+    if (reuse !== undefined) remove(reuse, ["current"])
+    // A decision's basis is the Atom version its execution ran; code derives it from execution_id.
+    remove(group.properties.execution_decisions.items as SchemaNode, ["basis"])
+    ;(group.properties.assessments.items as SchemaNode).properties.criteria_refs.items = idOnly("An IR requirement the judgement applied, by id. Code binds its current version; a return text is never a criterion.")
+    // Coverage selects requirements of the fixed parent by id in every CI batch.
+    coverage.properties.requirement = {
+      ...structuredClone(local),
+      description: "Select a content item (or the task-level coverage entry) of this group's fixed parent task by local_ref. Code supplies its current revision and digest. Return no version or digest here.",
+    }
     if (options.assessment !== true) {
       // The parent proposal already fixes these, and assembly takes the parent
       // values: an ordinary CI answer states the basis and each group's task
@@ -182,15 +249,6 @@ export function buildGenerationSchema(stage: GenerationStage, profile?: StrictSc
       remove(schema, ["basis"])
       remove(group, ["task_refs", "depends_on", "local_ref"])
       remove(schema.definitions.draft as SchemaNode, ["task_id"])
-      // Only this field selects current requirements from the fixed parent.
-      // Keep the existing identity-only branch; shared and historical Refs,
-      // coverage destinations and assessment responses retain their shape.
-      const references = schema.definitions.ref_or_local as SchemaNode
-      const local = (references.oneOf ?? references.anyOf).find((branch: SchemaNode) => branch.properties?.local_ref)
-      schema.definitions.coverage.properties.requirement = {
-        ...structuredClone(local),
-        description: "Select a content item (or the task-level coverage entry) of this group's fixed parent task by local_ref. Code supplies its current revision and digest. Return no version or digest here.",
-      }
     }
     if (options.assessment === true) {
       // An assessment answers exactly this batch's events; code fills them.
@@ -237,6 +295,14 @@ export function validateGenerationProposal(stage: GenerationStage, value: unknow
   return { ok: ok && errors.length === 0, errors }
 }
 
+/** The id a Ref or {local_ref} names; anything else is left for the schema to report. */
+function idOf(value: unknown): string | undefined {
+  if (value === null || typeof value !== "object") return undefined
+  const named = value as { local_ref?: unknown; id?: unknown; source_id?: unknown }
+  if (typeof named.source_id === "string") return undefined
+  return typeof named.local_ref === "string" ? named.local_ref : typeof named.id === "string" ? named.id : undefined
+}
+
 function atomIdOf(endpoint: unknown): { local_ref: string } {
   if (endpoint !== null && typeof endpoint === "object") {
     const value = endpoint as { local_ref?: unknown; id?: unknown }
@@ -250,9 +316,12 @@ function atomIdOf(endpoint: unknown): { local_ref: string } {
  * An answer written to the earlier CI contract still carries identities code
  * now binds: authority.basis, each rule's resource_ref, each Relation's basis,
  * exact Relation endpoint versions, each assessment's evidence_refs, an
- * assessment's basis.event_ids and an ordinary group's local_ref.  They are
- * dropped (an endpoint keeps its atom id) before the answer is validated; the
- * recorded text keeps them as returned.
+ * assessment's basis.event_ids and an ordinary group's local_ref, and the
+ * versions code now binds: coverage destinations, intent_basis and
+ * previous_atom_ref name an id only, criteria_refs keep only their IR
+ * requirement ids, and reuse.current, an Atom's revision and an execution
+ * decision's basis are dropped.  They are dropped or reduced to the id
+ * before the answer is validated; the recorded text keeps them as returned.
  */
 export function dropCodeBoundIdentities(answer: unknown, assessment: boolean): void {
   if (answer === null || typeof answer !== "object" || !Array.isArray((answer as { groups?: unknown }).groups)) return
@@ -262,10 +331,29 @@ export function dropCodeBoundIdentities(answer: unknown, assessment: boolean): v
     if (group === null || typeof group !== "object") continue
     const record = group as Record<string, any>
     if (!assessment) delete record.local_ref
-    for (const judged of Array.isArray(record.assessments) ? record.assessments : []) if (judged && typeof judged === "object") delete judged.evidence_refs
+    for (const judged of Array.isArray(record.assessments) ? record.assessments : []) {
+      if (!judged || typeof judged !== "object") continue
+      delete judged.evidence_refs
+      // A criterion is an IR requirement by id; a return text is not one.
+      if (Array.isArray(judged.criteria_refs)) judged.criteria_refs = judged.criteria_refs
+        .filter((criterion: unknown) => !(criterion !== null && typeof criterion === "object" && typeof (criterion as { source_id?: unknown }).source_id === "string"))
+        .map((criterion: unknown) => idOf(criterion) === undefined ? criterion : { id: idOf(criterion) })
+    }
+    for (const decision of Array.isArray(record.execution_decisions) ? record.execution_decisions : []) if (decision && typeof decision === "object") delete decision.basis
+    for (const entry of Array.isArray(record.coverage) ? record.coverage : []) {
+      if (!entry || typeof entry !== "object") continue
+      if (assessment && idOf(entry.requirement) !== undefined) entry.requirement = { local_ref: idOf(entry.requirement) }
+      if (Array.isArray(entry.refs)) entry.refs = entry.refs.map((destination: unknown) => idOf(destination) === undefined ? destination : { local_ref: idOf(destination) })
+    }
+    if (record.compilation?.decision === "reuse" && typeof record.compilation === "object") delete record.compilation.current
     const drafts = record.compilation?.decision === "replace" && Array.isArray(record.compilation.drafts) ? record.compilation.drafts : []
     for (const draft of drafts) {
+      if (draft && Array.isArray(draft.intent_basis)) draft.intent_basis = draft.intent_basis.map((basis: unknown) => idOf(basis) === undefined ? basis : { local_ref: idOf(basis) })
       for (const atom of Array.isArray(draft?.atoms) ? draft.atoms : []) {
+        if (atom && typeof atom === "object") {
+          delete atom.revision
+          if (idOf(atom.previous_atom_ref) !== undefined) atom.previous_atom_ref = { id: idOf(atom.previous_atom_ref) }
+        }
         if (atom?.authority && typeof atom.authority === "object") {
           delete atom.authority.basis
           for (const rule of Array.isArray(atom.authority.rules) ? atom.authority.rules : []) if (rule && typeof rule === "object") delete rule.resource_ref
@@ -313,9 +401,15 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
     groups: example.groups.map(({ ir_changes: _irChanges, task_refs, depends_on, local_ref, ...group }) => ({
       ...(ordinary ? {} : { local_ref }),
       ...group,
-      coverage: ordinary ? group.coverage.map(entry => ({ ...entry, requirement: {
-        local_ref: "local_ref" in entry.requirement ? entry.requirement.local_ref : entry.requirement.id,
-      } })) : group.coverage,
+      // Requirements, coverage destinations, the plan's basis and replaced Atoms are named by id; code binds their versions.
+      coverage: group.coverage.map(entry => ({ ...entry,
+        requirement: { local_ref: "local_ref" in entry.requirement ? entry.requirement.local_ref : entry.requirement.id },
+        refs: entry.refs.map(destination => ({ local_ref: "local_ref" in destination ? destination.local_ref : destination.id })),
+      })),
+      execution_decisions: group.execution_decisions.map(({ basis: _basis, ...decision }) => decision),
+      assessments: group.assessments.map(assessment => ({ ...assessment,
+        criteria_refs: assessment.criteria_refs.filter(isIrRef).map(criterion => ({ id: criterion.id })),
+      })),
       ...(ordinary ? {} : { task_refs, depends_on }),
       compilation: group.compilation.decision === "replace"
         ? {
@@ -325,9 +419,12 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
             return {
               ...draftRest,
               ...(ordinary ? {} : { task_id }),
+              intent_basis: draft.intent_basis.map(basis => ({ local_ref: basis.id })),
               atoms: draft.atoms.map(atom => {
                 const { basis: _basis, ...authority } = atom.authority
-                return { ...atom, task: instructionOnlyTask(atom.task),
+                const { revision: _revision, previous_atom_ref: replaced, ...content } = atom
+                return { ...content, task: instructionOnlyTask(atom.task),
+                  ...(replaced === undefined ? {} : { previous_atom_ref: replaced === null ? null : { id: replaced.id } }),
                   authority: { ...authority, rules: authority.rules.map(({ resource_ref: _resource, ...rule }) => rule) } }
               }),
               relations: draft.relations.map(({ basis: _basis, predecessor, successor, ...relation }) => ({
@@ -336,9 +433,13 @@ export function buildGenerationExample(stage: GenerationStage, profile?: StrictS
             }
           }),
         }
-        : group.compilation,
+        : { decision: "reuse", reason: group.compilation.reason },
     })),
   }
+}
+
+function isIrRef(value: unknown): value is Ref {
+  return value !== null && typeof value === "object" && typeof (value as { id?: unknown }).id === "string"
 }
 
 /** CI wording when this batch carries no user delegation and assesses an execution. */
@@ -356,6 +457,7 @@ function assessmentStageInstruction(): string {
     "Write the assessments and execution_decisions for this batch yourself from its evidence. Management binds each assessment's evidence_refs to this batch's return event, so say in explanation which parts of the return (report text, recorded tool results) the judgement relies on. An execution return is never an IR source, only evidence for those fields.",
     "Compile only what the current IR and this evidence require: reuse the current Compiled Intent when the plan is unchanged, and replace it only where the plan must change. Preserve retained work and real dependencies.",
     "For each returned execution, decide stop or retry. retry asks management to run the same Atom version once more as a new execution; it applies when this batch assesses that version not_satisfied and the plan is reused. A return without a completion claim is run once more by management when the plan stands. Each Atom version runs at most twice between two user inputs, however it is offered, so a retry past that limit closes the execution like stop. With reuse and stop the returned Atom version does not run again until a user update changes the plan.",
+    "Name Atoms, requirements and criteria by id only: coverage.requirement and coverage refs are {local_ref}, criteria_refs are {id} of IR requirements, and a replaced Atom is previous_atom_ref {id}. Management binds each version, each execution decision's basis and, for reuse, the current Compiled Intent.",
     "Otherwise parent_issues is [].",
   ].join(" ")
 }
@@ -367,7 +469,7 @@ export function generationStageInstruction(stage: GenerationStage, assessment = 
   const shared = `You are the read-only management model for Intent Compiler v2. One Intent IR maintains the whole user task; its Compiled Intent is the complete plan containing Atoms and Relations. Do not execute business work, use business tools, inspect or modify files, invent execution facts, or answer the business task. Return only the current generation stage's schema-constrained projection. The field contracts describe the final Candidate; fields excluded by this stage belong to the other stage and must not be returned. Original sources remain evidence for understanding, never permission to bypass the supplied stage boundary. Preserve user requirements, their real role and scope, and distinguish success from a blocker. ${LATER_STATEMENT_SETTLES}`
   return `${shared}\n${stage === "ir"
     ? "IR stage: interpret current delegation and updates against prior state, select every effective requirement and its source, role and scope, and return the IR changes and any explicit source dispositions. Return no compilation, coverage, execution decisions, assessments or checks. Do not write Atoms. Preserve existing identities and unchanged requirements. Declare required input/output identities when field scopes depend on them. The compiler will materialize this IR before asking for the execution plan."
-    : `CI stage: request.ir is the actual temporary parent IR to compile. It is fixed for this response. The compiler already holds the parent proposal's basis and each parent group's task identity and dependencies, and fills them at assembly, so this response carries no basis, task_refs, depends_on or compilation.drafts[].task_id: bind to a parent group by its local_ref only. In coverage.requirement use only {local_ref: <content item_id or task_id in this group's parent task>}; code binds the current parent revision and digest. Coverage refs still express the actual destinations. compilation.intent_basis identifies the task/content used by the plan. generation_repair.ir_proposal identifies the parent groups and their open questions, not a substitute for the actual IR text. Compile each group's compilation and coverage, author the execution_decisions, assessments and checks the executions require, and add questions only for concrete compilation uncertainty; the compiler keeps the parent's questions. ${checkRequired ? CHECKED_PARENT_ROLE : "If the parent IR itself needs correction, report parent_issues instead of changing it."} Return no ir_changes or source_coverage. Write each Atom's work instruction — action, boundaries, ordering and handoff — from the complete applicable IR requirements, including definitions, public interfaces, shared rules, conditions and exceptions; management code attaches the assigned requirement texts verbatim to the delivered task after preparation, including passages an assigned item once adopted and later withdrew, all labelled and ordered by user input, so do not copy or paraphrase rule blocks into the candidate task. request.compiled shows each current Atom complete; superseded or legacy versions appear only in compiled[].historical_atoms by identity and lifecycle status. In an existing Atom task, a requirement block whose body reads (text identical to IR content <id>@<revision> <digest> supplied in this request) stands for the exact text of that IR content item, which the same request supplies in request.ir. Coverage selects what the attached text will contain; references and coverage cannot replace executable behavior. Preserve retained work and real dependencies. ${checkRequired ? "" : "Original input may reveal an IR omission or wrong role/scope: report concrete parent_issues and groups: [] so management returns to the IR stage; never silently repair the parent or add an unsupported requirement in the plan. Otherwise parent_issues is []."}`}`
+    : `CI stage: request.ir is the actual temporary parent IR to compile. It is fixed for this response. The compiler already holds the parent proposal's basis and each parent group's task identity and dependencies, and fills them at assembly, so this response carries no basis, task_refs, depends_on or compilation.drafts[].task_id: bind to a parent group by its local_ref only. In coverage.requirement use only {local_ref: <content item_id or task_id in this group's parent task>}; code binds the current parent revision and digest. Coverage refs are {local_ref: <atom_id>} naming the actual destinations; code binds the Atom version in this plan. compilation.intent_basis identifies the task/content used by the plan as {local_ref}, a reuse states only its reason, and code binds every version. generation_repair.ir_proposal identifies the parent groups and their open questions, not a substitute for the actual IR text. Compile each group's compilation and coverage, author the execution_decisions, assessments and checks the executions require, and add questions only for concrete compilation uncertainty; the compiler keeps the parent's questions. ${checkRequired ? CHECKED_PARENT_ROLE : "If the parent IR itself needs correction, report parent_issues instead of changing it."} Return no ir_changes or source_coverage. Write each Atom's work instruction — action, boundaries, ordering and handoff — from the complete applicable IR requirements, including definitions, public interfaces, shared rules, conditions and exceptions; management code attaches the assigned requirement texts verbatim to the delivered task after preparation, including passages an assigned item once adopted and later withdrew, all labelled and ordered by user input, so do not copy or paraphrase rule blocks into the candidate task. request.compiled shows each current Atom complete; superseded or legacy versions appear only in compiled[].historical_atoms by identity and lifecycle status. In an existing Atom task, a requirement block whose body reads (text identical to IR content <id>@<revision> <digest> supplied in this request) stands for the exact text of that IR content item, which the same request supplies in request.ir. Coverage selects what the attached text will contain; references and coverage cannot replace executable behavior. Preserve retained work and real dependencies. ${checkRequired ? "" : "Original input may reveal an IR omission or wrong role/scope: report concrete parent_issues and groups: [] so management returns to the IR stage; never silently repair the parent or add an unsupported requirement in the plan. Otherwise parent_issues is []."}`}`
 }
 
 /** Retain field semantics while replacing the joint-response shape and example. */
@@ -376,10 +478,15 @@ export function generationContract<T extends { ir_change_contract: string; atom_
 ): T {
   const checkedCI = stage === "ci" && !assessment && checkRequired
   // Every strict stage reads the identities code binds the same way.
-  const rules = contract.rules?.map(rule => rule === BASE_EXISTING_OBJECTS_RULE ? BOUND_EXISTING_OBJECTS_RULE : rule)
+  const rules = contract.rules?.map(rule => rule === BASE_EXISTING_OBJECTS_RULE ? BOUND_EXISTING_OBJECTS_RULE
+    : stage === "ci" && rule === BASE_INTENT_BASIS_RULE ? CI_INTENT_BASIS_RULE : rule)
+  if (rules !== undefined && stage === "ci" && !rules.includes(CI_INTENT_BASIS_RULE)) throw new Error("the contract rules no longer carry the intent_basis clause; the code-bound wording cannot be projected")
+  const { compilation_contract: compilation, coverage_contract: coverage } = contract as { compilation_contract?: string; coverage_contract?: string }
   return {
     ...contract,
-    ...(contract.reference_contract === undefined ? {} : { reference_contract: contract.reference_contract.replace(BASE_EXISTING_IDENTITIES, BOUND_EXISTING_IDENTITIES) }),
+    ...(contract.reference_contract === undefined ? {} : { reference_contract: swap(contract.reference_contract, BASE_EXISTING_IDENTITIES, BOUND_EXISTING_IDENTITIES, "the reference contract") }),
+    ...(stage === "ci" && compilation !== undefined ? { compilation_contract: swap(swap(compilation, BASE_REUSE_SHAPE, CI_REUSE_SHAPE, "the compilation contract"), BASE_DRAFT_SHAPE, CI_DRAFT_SHAPE, "the compilation contract") } : {}),
+    ...(stage === "ci" && coverage !== undefined ? { coverage_contract: swap(coverage, BASE_COVERAGE_SHAPE, CI_COVERAGE_SHAPE, "the coverage contract") } : {}),
     ...(rules === undefined ? {} : { rules }),
     ir_change_contract: stage === "ir"
       ? strictLocalSourceEdit(codeBoundRevisions(strictSupersededBasis(contract.ir_change_contract)))
@@ -402,7 +509,7 @@ export function generationContract<T extends { ir_change_contract: string; atom_
       ? "IR stage response = {schema_version:2,basis,source_coverage,groups}. Each group uses the existing CandidateGroup fields except compilation, coverage, execution_decisions, assessments and checks, which are forbidden in this response. The final Candidate is assembled only after CI generation."
       : assessment
         ? "CI stage (execution assessment) response = {schema_version:2,basis:{refs},parent_issues,groups}. Each group uses the existing CandidateGroup fields except ir_changes. source_coverage is forbidden. Management fills basis.event_ids with this batch's trigger events; basis.refs may cite existing objects you assessed. Keep each group's task_refs and depends_on, and write assessments and execution_decisions from this batch's evidence. Assess the returned work against the Atom's completion criteria and the user's own words; a reservation about the IR's wording, redundancy or evidence phrasing belongs in the assessment explanation, and parent_issues is only for a stored-IR defect that makes the judgement impossible. If parent_issues is nonempty, groups must be empty."
-        : `CI stage response = {schema_version:2,${checkedCI ? "" : "parent_issues,"}groups}. Each group uses the existing CandidateGroup fields except ir_changes, task_refs, depends_on and compilation.drafts[].task_id, which the compiler fills from the parent; source_coverage and basis are forbidden. coverage.requirement is {local_ref: <content item_id or task_id in this group's parent task>}, with no revision or digest; coverage refs keep their destination expression. Bind to a parent group by its local_ref. ${checkedCI ? CHECKED_PARENT_ROLE : "If parent_issues is nonempty, groups must be empty; otherwise"} Supply each parent group's compilation and coverage, and add questions only for concrete compilation uncertainty (the compiler keeps the parent's questions).`,
+        : `CI stage response = {schema_version:2,${checkedCI ? "" : "parent_issues,"}groups}. Each group uses the existing CandidateGroup fields except ir_changes, task_refs, depends_on and compilation.drafts[].task_id, which the compiler fills from the parent; source_coverage and basis are forbidden. coverage.requirement is {local_ref: <content item_id or task_id in this group's parent task>}, with no revision or digest; coverage refs are {local_ref: <atom_id>} naming their destination. Bind to a parent group by its local_ref. ${checkedCI ? CHECKED_PARENT_ROLE : "If parent_issues is nonempty, groups must be empty; otherwise"} Supply each parent group's compilation and coverage, and add questions only for concrete compilation uncertainty (the compiler keeps the parent's questions).`,
     example_candidate: JSON.stringify(buildGenerationExample(stage, profile, assessment, checkRequired), null, 2),
   }
 }

@@ -382,14 +382,15 @@ test("a second change to the task in one batch names the earlier change instead 
   assert.equal(issues.length, 1)
   assert.match(issues[0]!, /^groups\[0\]\.ir_changes\[1\]: expected_revision 0 does not match current 1: ir_changes\[0\] \(revise task\) earlier in this group already changed task t1 to revision 1 before this revise current_scope/)
   assert.match(issues[0]!, /put goal and current_scope in one revise task/)
-  assert.doesNotMatch(issues[0]!, /use the revision currently recorded in the supplied IR\)/)
+  assert.doesNotMatch(issues[0]!, /recorded in the supplied IR/, "code fills the revision, so the hint no longer sends the answer to copy one")
+  assert.match(issues[0]!, /each object changes once per batch and code fills the revision/)
 })
 
-test("a single stale expected_revision keeps the supplied-IR hint", async () => {
+test("a single stale expected_revision says each object changes once per batch and code fills the revision", async () => {
   const issues = await revisionIssues(i => [
     { action: "revise", target: "current_scope", id: "t1", expected_revision: i.ir.t1!.revision + 1, value: { text: "Paused.", disposition: "paused" }, sources: [{ source_id: "e2", digest: digestText(TEXT) }] },
   ])
-  assert.deepEqual(issues, ["groups[0].ir_changes[0]: expected_revision 1 does not match current 0 (use the revision currently recorded in the supplied IR)"])
+  assert.deepEqual(issues, ["groups[0].ir_changes[0]: expected_revision 1 does not match current 0 (each object changes once per batch and code fills the revision: name the object by id and state its change once)"])
 })
 
 test("changes to different objects in one batch each use their supplied revision", () => {

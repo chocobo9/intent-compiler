@@ -55,8 +55,8 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
     schema_version: 2, parent_issues: [],
     groups: [{
       ...group, compilation: { decision: "replace", drafts: [] }, coverage: [],
-      execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "x", basis: [] }],
-      assessments: [{ target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [], result: "unknown", explanation: "x", method: "model" }],
+      execution_decisions: [{ execution_id: "exec-1", decision: "stop", reason: "x" }],
+      assessments: [{ target_ref: { id: "a1", revision: 0, digest: "sha256:x" }, criteria_refs: [{ id: "c1" }], result: "unknown", explanation: "x", method: "model" }],
       checks: [{ scenario: "s", expected: "e", observed_in_candidate: "o", sources: [], unresolved: false }],
     }],
   }
@@ -72,6 +72,12 @@ test("CI generation binds a parent and cannot carry intent edits or compile a di
     "an assessment's evidence is bound by code to the batch's return")
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], local_ref: "g1" }] }).ok, false,
     "an ordinary CI group binds to its parent group by position")
+  assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], execution_decisions: [{ ...proposal.groups[0]!.execution_decisions[0]!, basis: [] }] }] }).ok, false,
+    "a decision's basis is the Atom version its execution ran, derived by code")
+  for (const criterion of [{ id: "c1", revision: 0, digest: "sha256:x" }, { source_id: "return-1", digest: "sha256:r", segment_id: "s1" }]) {
+    assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], assessments: [{ ...proposal.groups[0]!.assessments[0]!, criteria_refs: [criterion] }] }] }).ok, false,
+      "a criterion is an IR requirement named by id: no version, and never a return text")
+  }
   assert.equal(validateGenerationProposal("ci", { ...proposal, groups: [{ ...proposal.groups[0], compilation: {
     decision: "replace", drafts: [{ local_ref: "d1", task_id: "t1", intent_basis: [], atoms: [], relations: [], attachments: [] }] } }] }).ok, false)
   // Code fixes the parent of a CI call; the answer has no field naming it.
@@ -143,33 +149,25 @@ test("the CI projection drops only the parent copies the compiler fills", () => 
   }
 })
 
-test("ordinary CI coverage selects parent identities while assessment and other references keep versions", () => {
+test("CI names requirements and Atoms by id in every batch, and other references keep their shape", () => {
   const canonical = structuredClone(CANDIDATE_JSON_SCHEMA)
-  for (const profile of [undefined, "openai", "groq"] as const) {
-    const schema = buildGenerationSchema("ci", profile) as { definitions: { ref_or_local: unknown; coverage: { properties: { refs: unknown } } } }
+  for (const profile of [undefined, "openai", "groq"] as const) for (const assessmentBatch of [false, true]) {
+    const schema = buildGenerationSchema("ci", profile, { assessment: assessmentBatch }) as { definitions: { ref_or_local: unknown; coverage: unknown } }
     const baseline = (profile === undefined ? canonical : buildStrictCandidateSchema(profile)) as typeof schema
-    assert.deepEqual(schema.definitions.ref_or_local, baseline.definitions.ref_or_local)
-    assert.deepEqual(schema.definitions.coverage.properties.refs, baseline.definitions.coverage.properties.refs)
-    const assessmentSchema = buildGenerationSchema("ci", profile, { assessment: true }) as typeof schema
-    assert.deepEqual(assessmentSchema.definitions.coverage, baseline.definitions.coverage)
-    const example = buildGenerationExample("ci", profile) as CIProposal
+    assert.deepEqual(schema.definitions.ref_or_local, baseline.definitions.ref_or_local, "the shared reference shapes are untouched")
     const validate = new Ajv({ strict: false, allowUnionTypes: true }).compile({ $ref: "#/definitions/coverage", definitions: schema.definitions })
-    const entry = example.groups[0]!.coverage[1]!
+    const entry = (buildGenerationExample("ci", profile, assessmentBatch) as CIProposal).groups[0]!.coverage[1]!
     assert.equal(validate(entry), true)
     assert.deepEqual(entry.requirement, { local_ref: "r-common" })
-    entry.requirement = { id: "r-common", revision: 0, digest: "sha256:old" }
-    assert.equal(validate(entry), false, "a versioned requirement is refused, not overwritten")
-    entry.requirement = { local_ref: "r-common", revision: 0 } as never
-    assert.equal(validate(entry), false, "the identity selector accepts no extra version field")
+    assert.deepEqual(entry.refs, [{ local_ref: "a-bundle" }, { local_ref: "a-inspect" }])
+    const label = `${profile ?? "canonical"}, assessment=${assessmentBatch}`
+    for (const requirement of [{ id: "r-common", revision: 0, digest: "sha256:old" }, { local_ref: "r-common", revision: 0 }]) {
+      assert.equal(validate({ ...entry, requirement }), false, `a versioned requirement is refused, not overwritten (${label})`)
+    }
+    for (const destination of [{ id: "a-bundle", revision: 1, digest: "sha256:destination" }, { local_ref: "a-bundle", revision: 1 }]) {
+      assert.equal(validate({ ...entry, refs: [destination] }), false, `a destination names its Atom by id; code binds the version (${label})`)
+    }
   }
-  const entry = (buildGenerationExample("ci") as CIProposal).groups[0]!.coverage[1]!
-  entry.refs[0] = { id: "a-bundle", revision: 1, digest: "sha256:destination" }
-  const validate = new Ajv({ strict: false }).compile({ $ref: "#/definitions/coverage", definitions: buildGenerationSchema("ci").definitions })
-  assert.equal(validate(entry), true, "destination references retain their versioned expression")
-  const assessment = (buildGenerationExample("ci", undefined, true) as CIProposal).groups[0]!.coverage[1]!
-  assessment.requirement = { id: "r-common", revision: 3, digest: "sha256:assessment" }
-  const validateAssessment = new Ajv({ strict: false }).compile({ $ref: "#/definitions/coverage", definitions: buildGenerationSchema("ci", undefined, { assessment: true }).definitions })
-  assert.equal(validateAssessment(assessment), true, "assessment requirements retain their versioned expression")
   assert.deepEqual(CANDIDATE_JSON_SCHEMA, canonical, "the shared legacy schema is unchanged")
 })
 

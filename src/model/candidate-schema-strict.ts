@@ -86,15 +86,28 @@ const scopeItem = {
   },
 } as const
 
-const supportItem = {
+/**
+ * A requirement's about and support point at stored objects.  The staged flow
+ * names them by id: code binds the version the supplied IR holds, or the one a
+ * create of this batch gives, so no revision or digest is copied.
+ */
+const idRef = {
+  type: "object",
+  description: "An object of the supplied IR, or one created in this batch, by id. Code binds its version and digest.",
+  additionalProperties: false,
+  required: ["id"],
+  properties: { id: { type: "string", minLength: 1 } },
+} as const
+
+const supportItemOf = (idOnly: boolean) => ({
   type: "object",
   additionalProperties: false,
   required: ["refs", "explanation"],
   properties: {
-    refs: { type: "array", items: ref },
+    refs: { type: "array", items: idOnly ? idRef : ref },
     explanation: { type: "string", minLength: 1 },
   },
-} as const
+}) as const
 
 const nullish = (value: SchemaNode): SchemaNode => {
   const { type, ...rest } = value
@@ -112,7 +125,7 @@ const nullish = (value: SchemaNode): SchemaNode => {
  */
 type ValueTarget = "task" | "current_scope" | "binding" | "output" | "content"
 
-function valueFor(profile: StrictSchemaProfile, target: ValueTarget): SchemaNode {
+function valueFor(profile: StrictSchemaProfile, target: ValueTarget, idOnly = false): SchemaNode {
   const nullableOf = (value: SchemaNode): SchemaNode => profile === "gemini" ? nullish(value) : nullable(value, profile)
   const stringOrNull = (): SchemaNode => profile === "gemini" ? { type: ["string", "null"] } : nullable(text, profile)
   const enumOrNull = (values: readonly string[]): SchemaNode => profile === "gemini"
@@ -174,9 +187,9 @@ function valueFor(profile: StrictSchemaProfile, target: ValueTarget): SchemaNode
     required: ["text", "about", "scope", "support"],
     properties: {
       text: { ...stringOrNull(), description: "A short interpretation label. Management separately stores the selected original text; this label does not replace that specification or the Atom's executable instructions." },
-      about: arrayOrNull(ref),
+      about: arrayOrNull(idOnly ? idRef : ref),
       scope: arrayOrNull(scopeItem),
-      support: arrayOrNull(supportItem),
+      support: arrayOrNull(supportItemOf(idOnly)),
     },
   }
 }
@@ -196,7 +209,7 @@ function branch(action: string, target: string[], value: SchemaNode, extra: Sche
   }
 }
 
-function strictIrChange(profile: StrictSchemaProfile): SchemaNode {
+function strictIrChange(profile: StrictSchemaProfile, idOnly = false): SchemaNode {
   const withId = {
     required: ["id", "expected_revision"],
     properties: {
@@ -205,13 +218,13 @@ function strictIrChange(profile: StrictSchemaProfile): SchemaNode {
     },
   } as const
   const createBranches = (["task", "binding", "output", "content"] as const).map((target) =>
-    branch("create", [target], valueFor(profile, target), {
+    branch("create", [target], valueFor(profile, target, idOnly), {
       required: ["local_ref"],
       properties: { local_ref: { type: "string", minLength: 1 } },
     }, target === "content" ? sourceWithQuote : undefined),
   )
   const reviseBranches = (["task", "current_scope", "binding", "output", "content"] as const).map((target) =>
-    branch("revise", [target], valueFor(profile, target), withId, target === "content" ? sourceWithQuote : undefined),
+    branch("revise", [target], valueFor(profile, target, idOnly), withId, target === "content" ? sourceWithQuote : undefined),
   )
   return {
     anyOf: [
@@ -301,6 +314,8 @@ function transformUnionVariant(variant: unknown, profile: StrictSchemaProfile): 
  */
 export interface StrictSchemaOptions {
   localSourceEdit?: boolean
+  /** A requirement's about and support name objects by id only (the staged flow); code binds the versions. */
+  idOnlyContentRefs?: boolean
 }
 
 export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq", options: StrictSchemaOptions = {}): Record<string, unknown> {
@@ -309,7 +324,7 @@ export function buildStrictCandidateSchema(profile: StrictSchemaProfile = "groq"
   const source: SchemaNode = { ...canonical, required: [...canonical.required, "source_coverage"] }
   const definitions: Record<string, unknown> = {}
   for (const [name, definition] of Object.entries(source.definitions as Record<string, unknown>)) {
-    definitions[name] = transform(name === "ir_change" ? strictIrChange(profile) : definition, profile) as Record<string, unknown>
+    definitions[name] = transform(name === "ir_change" ? strictIrChange(profile, options.idOnlyContentRefs === true) : definition, profile) as Record<string, unknown>
   }
   if (options.localSourceEdit === true) {
     ((definitions.ir_change as SchemaNode).anyOf as unknown[]).push(transform(LOCAL_SOURCE_EDIT_IR_CHANGE, profile))
