@@ -23,6 +23,7 @@ import type {
   ExecutionOutcome,
   OperationRequest,
   Ref,
+  RetryFindings,
   SourceRef,
 } from "../core/intent-contract.js"
 import type { CommitReference } from "../core/compiler-store.js"
@@ -101,6 +102,31 @@ export interface OpenCodeV2Delivery {
   compiled_revision: number
   /** The compiled work sent to the executor, with dispatch identity kept by the host. */
   atom: Atom
+  /** A retry decision's findings, rendered after the Atoms; the Atom itself is unchanged. */
+  retry_findings?: RetryFindings
+}
+
+const RETRY_FINDINGS_HEADING = "[management findings for this retry]"
+
+/**
+ * The text one delivery message carries: the Atoms as JSON, then, for each
+ * Atom a retry decision offers again, what that batch found wrong with its last
+ * execution.  Without findings the text is the Atom JSON alone.
+ */
+export function renderDeliveryText(deliveries: readonly Pick<OpenCodeV2Delivery, "atom" | "retry_findings">[]): string {
+  const notes = deliveries.flatMap(({ atom, retry_findings: findings }) => findings === undefined ? [] : [[
+    `${RETRY_FINDINGS_HEADING} ${atom.atom_id}@${atom.revision}`,
+    `Execution ${findings.execution_id} of this same Atom version was assessed not_satisfied:`,
+    ...findings.not_satisfied.map(explanation => `- ${explanation}`),
+    `Reason for running it again: ${findings.reason}`,
+  ].join("\n")])
+  return [stableJson(deliveries.map(delivery => delivery.atom)), ...notes].join("\n\n")
+}
+
+/** The Atoms a delivery message carries, read back from its text. */
+export function deliveredAtoms(text: string): unknown {
+  const end = text.indexOf(`\n\n${RETRY_FINDINGS_HEADING}`)
+  return JSON.parse(end < 0 ? text : text.slice(0, end))
 }
 
 export interface OpenCodeAdapterHooks {
@@ -627,6 +653,7 @@ async function onV2ChatMessage(
       digest: delivery.digest,
       compiled_revision: delivery.compiled_revision,
       atom: delivery.atom,
+      ...(delivery.retry_findings === undefined ? {} : { retry_findings: delivery.retry_findings }),
     }
   })
   if (deliveries.length === 0) {
@@ -641,7 +668,7 @@ async function onV2ChatMessage(
     blocked.managementOutcome = structuredClone(advanced)
     throw blocked
   }
-  mutateTextPartsInPlace(output.parts, stableJson(deliveries.map((delivery) => delivery.atom)))
+  mutateTextPartsInPlace(output.parts, renderDeliveryText(deliveries))
 
   const expectedParts = expectedPartsOf(textPartsOf(output.parts))
   const delivery: PendingDelivery = {
@@ -815,7 +842,7 @@ async function confirmV2Delivery(
   }
   let actualDeliveries: unknown
   try {
-    actualDeliveries = JSON.parse(actualRenderedText)
+    actualDeliveries = deliveredAtoms(actualRenderedText)
   } catch (error: unknown) {
     delivery.rejected = true
     throw new OpenCodeAdapterError(
@@ -824,7 +851,8 @@ async function confirmV2Delivery(
     )
   }
   const expectedPayload = delivery.v2Deliveries.map((item) => item.atom)
-  if (stableJson(actualDeliveries) !== stableJson(expectedPayload)) {
+  // The findings beside the Atoms are part of what was delivered and are read back too.
+  if (stableJson(actualDeliveries) !== stableJson(expectedPayload) || actualRenderedText !== renderDeliveryText(delivery.v2Deliveries)) {
     delivery.rejected = true
     throw new OpenCodeAdapterError("DELIVERY_GUARD_PART_MISMATCH", "SDK readback v2 dispatch payload differs from expected delivery")
   }

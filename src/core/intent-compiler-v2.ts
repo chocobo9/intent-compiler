@@ -26,6 +26,7 @@ import {
   type MaterialFact,
   type OperationRequest,
   type Ref,
+  type RetryFindings,
   type RunView,
   type SemanticCheckFinding,
   type SemanticCheckRecord,
@@ -218,8 +219,10 @@ export function createIntentCompilerV2(options: IntentCompilerV2Options): Intent
         const version = `${dispatch.task_id}\0${atomRef(atom).id}\0${atom.revision}`
         if (seen.has(version)) return []
         seen.add(version)
+        const findings = storedRetryFindings(snapshot, dispatch, atom)
         return [{ dispatch_id: dispatch.dispatch_id, task_id: dispatch.task_id, atom_id: dispatch.atom_id,
-          digest: dispatch.digest, compiled_revision: dispatch.compiled_revision, atom: structuredClone(atom) }]
+          digest: dispatch.digest, compiled_revision: dispatch.compiled_revision, atom: structuredClone(atom),
+          ...(findings === undefined ? {} : { retry_findings: findings }) }]
       })
     },
   })
@@ -814,7 +817,7 @@ async function advance(
  * offered: first dispatch, retry decision, rerun after an incomplete return or
  * re-offer on recompilation.
  */
-const ATOM_VERSION_EXECUTION_LIMIT = 2
+export const ATOM_VERSION_EXECUTION_LIMIT = 2
 
 /** Journal sequence of the latest user input: the window executions are counted in. */
 function latestUserInput(rows: ReadonlyArray<{ sequence: number; event: CompilerEvent }>): number | undefined {
@@ -845,7 +848,37 @@ function incompleteRerunTarget(
   return { executionId: existing.execution_id, taskId: existing.task_id, atom }
 }
 
-interface RetryTarget { executionId: string; taskId: string; atom: Atom }
+interface RetryTarget { executionId: string; taskId: string; atom: Atom; findings?: RetryFindings }
+
+/**
+ * What the group that decided to retry an execution found wrong with the Atom
+ * version it offers again.  The live batch and a later offer read the same
+ * group (the latter from the accepted record), so both deliver the same text.
+ */
+export function retryFindings(atom: Atom, executionId: string, group: Pick<Candidate["groups"][number], "assessments" | "execution_decisions">): RetryFindings | undefined {
+  const decision = group.execution_decisions.find(entry => entry.execution_id === executionId && entry.decision === "retry")
+  if (decision === undefined) return undefined
+  const ref = atomRef(atom)
+  const notSatisfied = group.assessments.filter(assessment => assessment.result === "not_satisfied" && isRef(assessment.target_ref)
+    && assessment.target_ref.id === ref.id && assessment.target_ref.revision === ref.revision && assessment.target_ref.digest === ref.digest)
+  return { execution_id: executionId, not_satisfied: notSatisfied.map(assessment => assessment.explanation), reason: decision.reason }
+}
+
+/** The findings a stored retry dispatch carries: read from the accepted batch that decided the retry. */
+export function storedRetryFindings(snapshot: V2RunSnapshot, dispatch: V2RunSnapshot["dispatches"][number], atom: Atom): RetryFindings | undefined {
+  if (dispatch.retry_of === undefined) return undefined
+  const retry = snapshot.executions.find(record => record.execution_id === dispatch.retry_of)?.retry
+  // Older records carry no cause; those came from a retry decision.
+  if (retry?.outcome !== "dispatched" || retry.dispatch_id !== dispatch.dispatch_id || (retry.cause !== undefined && retry.cause !== "retry_decision")) return undefined
+  for (const record of [...snapshot.management_log].reverse()) {
+    if (record.status !== "accepted" || record.candidate === undefined) continue
+    for (const group of record.candidate.groups) {
+      const findings = retryFindings(atom, dispatch.retry_of, group)
+      if (findings !== undefined) return findings
+    }
+  }
+  return undefined
+}
 
 /**
  * A retry repeats returned work whose plan stands: the execution has returned,
@@ -876,7 +909,7 @@ function retryTarget(
   const status = atoms.status(existing.task_id, atom)
   if (!["ready", "completed", "failed"].includes(status)) throw new Error(`retry of ${id}: ${ref.id}@${ref.revision} is ${status}`)
   if (ir[existing.task_id]?.current_scope.disposition !== "proceed") throw new Error(`retry of ${id}: task ${existing.task_id} does not proceed`)
-  return { executionId: id, taskId: existing.task_id, atom }
+  return { executionId: id, taskId: existing.task_id, atom, findings: retryFindings(atom, id, group) }
 }
 
 /**
@@ -1174,6 +1207,8 @@ function prepareCandidate(snapshot: V2RunSnapshot, candidate: Candidate, events:
       digest: dispatch.digest,
       compiled_revision: dispatch.compiled_revision,
       atom: retry.atom,
+      // A rerun of an incomplete return carries nothing beside the Atom.
+      ...(cause === "retry_decision" && retry.findings !== undefined ? { retry_findings: retry.findings } : {}),
     })
   }
 

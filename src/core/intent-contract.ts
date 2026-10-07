@@ -519,6 +519,8 @@ export interface AdvanceResult {
     digest: string
     compiled_revision: number
     atom: Atom
+    /** Present on a retry decision's offer only: what that batch found, delivered beside the unchanged Atom. */
+    retry_findings?: RetryFindings
   }>
   questions?: string[]
   code?: string
@@ -584,6 +586,19 @@ export type ExecutionRetry =
  * carry none and came from a retry decision.
  */
 export type RerunCause = "retry_decision" | "incomplete_return" | "redelivery"
+
+/**
+ * What the batch that decided a retry found wrong with the Atom version it
+ * offers again: the explanations of its not_satisfied assessments of that
+ * exact version, in record order, and the retry decision's reason.  Derived
+ * from that batch's recorded candidate, never stored on the Atom.
+ */
+export interface RetryFindings {
+  /** The returned execution the retry decision was about. */
+  execution_id: string
+  not_satisfied: string[]
+  reason: string
+}
 
 export class IntentContractError extends Error {
   readonly code: string

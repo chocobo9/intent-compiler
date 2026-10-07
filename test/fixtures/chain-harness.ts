@@ -1,7 +1,7 @@
 import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createOpenCodeAdapter, HOST_DISPATCH_SOURCE_CATEGORY, type OpenCodeObserver } from "../../src/adapters/opencode.js"
+import { createOpenCodeAdapter, deliveredAtoms, HOST_DISPATCH_SOURCE_CATEGORY, type OpenCodeObserver } from "../../src/adapters/opencode.js"
 import { IntentStoreV2, type V2RunSnapshot } from "../../src/core/compiler-store-v2.js"
 import { createIntentCompilerV2 } from "../../src/core/intent-compiler-v2.js"
 import { compiledIntentRef } from "../../src/core/compiled-intent.js"
@@ -52,6 +52,8 @@ export interface TurnRecord {
   session: string
   /** Atom versions the turn delivered to the executor. */
   offered: string[]
+  /** The delivered message text: the Atom JSON and any retry findings after it. */
+  text?: string
   executions: string[]
   script?: ExecutorScript
   /** The command's failure, as the CLI would exit 1 with it. */
@@ -172,7 +174,8 @@ export class ChainHost {
     }).hooks()
     try {
       await hooks["chat.message"]({ sessionID, messageID }, output)
-      const delivered = JSON.parse(output.parts[0]!.text) as Array<{ atom_id: string; revision: number }>
+      record.text = output.parts[0]!.text
+      const delivered = deliveredAtoms(record.text) as Array<{ atom_id: string; revision: number }>
       record.offered = delivered.map(atom => `${atom.atom_id}@${atom.revision}`)
       await hooks["chat.params"]({ sessionID, message: { id: messageID } }, {})
       script = this.options.executor?.(record.offered) ?? "completed"

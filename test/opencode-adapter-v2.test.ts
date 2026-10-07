@@ -1,6 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { createOpenCodeAdapter, HOST_DISPATCH_SOURCE_CATEGORY, turnClaimsCompletion, type OpenCodeObserver } from "../src/adapters/opencode.js"
+import { createOpenCodeAdapter, deliveredAtoms, HOST_DISPATCH_SOURCE_CATEGORY, renderDeliveryText, turnClaimsCompletion, type OpenCodeObserver } from "../src/adapters/opencode.js"
+import { stableJson } from "../src/observer/codec.js"
 import type { IntentCompilerV2, IntentCompilerV2Options } from "../src/core/intent-compiler-v2.js"
 import type {
   AdvanceResult,
@@ -144,8 +145,9 @@ test("v2 compiler arm routes acceptEvent/advance, confirms readback, starts, and
 
   await hooks["chat.message"]({ sessionID: "session-1", messageID: "message-1" }, output)
   assert.equal(compiler.events[0]?.kind, "user_input")
-  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [ATOM])
-  const injected = JSON.parse(output.parts[0]?.text ?? "[]") as unknown[]
+  assert.deepEqual(deliveredAtoms(output.parts[0]?.text ?? "[]"), [ATOM])
+  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? ""), [ATOM], "without findings the text is the Atom JSON alone")
+  const injected = deliveredAtoms(output.parts[0]?.text ?? "[]") as unknown[]
   assert.equal("authority" in (injected[0] as Record<string, unknown>), true)
   assert.equal("intent_judgments" in (injected[0] as Record<string, unknown>), true)
 
@@ -236,10 +238,38 @@ test("a host-dispatch turn runs the pending retry without recording a user input
   await hooks["chat.message"]({ sessionID: "session-2", messageID: "message-2" }, output)
   assert.deepEqual(compiler.retryLookups, ["run-1"])
   assert.equal(compiler.events.length, 0, "no user_input event and no advance for a host turn")
-  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [ATOM])
+  assert.deepEqual(deliveredAtoms(output.parts[0]?.text ?? "[]"), [ATOM])
   await hooks["chat.params"]({ sessionID: "session-2", message: { id: "message-2" } }, {})
   assert.deepEqual(compiler.started, ["dispatch-retry"], "the retry dispatch is started like any delivery")
   assert.equal(compiler.events[0]?.kind, "delivery_ack")
+})
+
+test("a retry decision's findings are delivered after the unchanged Atom and read back with it", async () => {
+  const findings = { execution_id: "execution-355", not_satisfied: ["The header keeps its trailing carriage return."], reason: "Retry once to correct it." }
+  const run = async (readback: (parts: Array<{ id: string; type: "text"; text: string }>) => Array<{ id: string; type: "text"; text: string }>) => {
+    const compiler = fakeCompiler()
+    compiler.pendingDeliveries = async () => [{ ...DELIVERY, dispatch_id: "dispatch-retry", retry_findings: findings }]
+    const output = { message: { id: "message-3" }, parts: [{ id: "part-3", type: "text" as const, text: "Run the work the Intent Compiler has pending for this task." }] }
+    const hooks = createOpenCodeAdapter({
+      arm: "compiler",
+      client: { session: { messages: async () => ({ data: [{ info: { id: "message-3" }, parts: readback(output.parts) }] }) } },
+      observer: observer(),
+      compiler,
+      resolveTurn: async () => ({ runId: "run-1", inputIdentity: "input-3", taskIds: ["t-fix"], source: { source_category: HOST_DISPATCH_SOURCE_CATEGORY } }),
+    }).hooks()
+    await hooks["chat.message"]({ sessionID: "session-3", messageID: "message-3" }, output)
+    const error = await hooks["chat.params"]({ sessionID: "session-3", message: { id: "message-3" } }, {}).then(() => undefined, (failure: Error) => failure)
+    return { compiler, text: output.parts[0]!.text, error }
+  }
+  const delivered = await run(parts => parts)
+  assert.equal(delivered.error, undefined)
+  assert.deepEqual(deliveredAtoms(delivered.text), [ATOM], "the Atom itself is unchanged")
+  assert.equal(delivered.text, `${stableJson([ATOM])}\n\n[management findings for this retry] a-preview@0\nExecution execution-355 of this same Atom version was assessed not_satisfied:\n- The header keeps its trailing carriage return.\nReason for running it again: Retry once to correct it.`)
+  assert.deepEqual(delivered.compiler.started, ["dispatch-retry"])
+  // A readback that lost the findings is not the delivery that was prepared.
+  const lost = await run(parts => parts.map(part => ({ ...part, text: renderDeliveryText([{ atom: ATOM }]) })))
+  assert.match(String(lost.error?.message), /differ/)
+  assert.deepEqual(lost.compiler.started, [])
 })
 
 test("CLI drain waits for other in-flight hooks even when terminal processing fails", async () => {
@@ -365,7 +395,7 @@ test("v2 compiler arm retries a transport-level advance failure once before reje
 
   await hooks["chat.message"]({ sessionID: "session-1", messageID: "message-1" }, output)
   assert.equal(calls, 2)
-  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [ATOM])
+  assert.deepEqual(deliveredAtoms(output.parts[0]?.text ?? "[]"), [ATOM])
 })
 
 test("v2 compiler arm reports the clarify outcome with its questions", async () => {
@@ -435,5 +465,5 @@ test("a host-dispatch turn with nothing offered runs management once more and de
   await hooks["chat.message"]({ sessionID: "session-3", messageID: "message-3" }, output)
   assert.equal(advances, 1)
   assert.equal(compiler.events.length, 0, "no user_input event for a host turn")
-  assert.deepEqual(JSON.parse(output.parts[0]?.text ?? "[]"), [ATOM])
+  assert.deepEqual(deliveredAtoms(output.parts[0]?.text ?? "[]"), [ATOM])
 })

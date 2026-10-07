@@ -1,5 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
+import { deliveredAtoms } from "../src/adapters/opencode.js"
 import { atomRef, compiledIntentRef } from "../src/core/compiled-intent.js"
 import { digestOf, digestText, type AtomDraft, type Candidate, type SourceRef } from "../src/core/intent-contract.js"
 import { CANDIDATE_EXAMPLE_INPUT } from "../src/model/candidate-example.js"
@@ -95,6 +96,8 @@ test("scenario 1b: executor variants (recovered tool error, stop, timeout) still
   report("scenario 1b", round, host)
   assert.deepEqual(chainOrder(host), ["a-bundle@0", "a-inspect@0", "a-inspect@0", "a-step3@0", "a-step3@0"])
   assert.deepEqual(round.pendingEventIds, [])
+  // A rerun of an incomplete return carries nothing beside the Atom.
+  for (const turn of host.turns.filter(turn => turn.text !== undefined)) assert.deepEqual(JSON.parse(turn.text!), deliveredAtoms(turn.text!), turn.session)
 })
 
 test("scenario 2 (B1): a return batch that fails once is recovered within the same round", async () => {
@@ -476,6 +479,15 @@ test("scenario 7: a delegation batch records no assessment, and its request show
   assert.deepEqual(chainOrder(host), ["a-bundle@0", "a-bundle@0"], "retry still runs the version once more, in the return batch")
   assert.deepEqual(first.pendingEventIds, [])
   const afterR1 = host.snapshot()
+  // The retry delivers the same Atom with the retry batch's findings after it.
+  const runs = host.turns.filter(turn => turn.offered.includes("a-bundle@0"))
+  assert.equal(runs.length, 2)
+  assert.deepEqual(deliveredAtoms(runs[1]!.text!), deliveredAtoms(runs[0]!.text!), "the Atom itself is unchanged")
+  assert.doesNotMatch(runs[0]!.text!, /management findings/, "a first dispatch carries no findings")
+  const firstExecution = afterR1.executions.find(record => record.retry?.outcome === "dispatched")!
+  assert.ok(runs[1]!.text!.endsWith(`\n\n[management findings for this retry] a-bundle@0\nExecution ${firstExecution.execution_id} of this same Atom version was assessed not_satisfied:\n- the returned work is not_satisfied\nReason for running it again: retry after not_satisfied`), runs[1]!.text)
+  const bundleDispatches = afterR1.dispatches.filter(dispatch => dispatch.atom_id === "a-bundle")
+  assert.equal(new Set(bundleDispatches.map(dispatch => dispatch.digest)).size, 1, "both dispatches carry one Atom digest")
   const bundleRecords = afterR1.assessments.filter(record => record.target_ref.id === "a-bundle")
   assert.equal(bundleRecords.length, 2, "one record per return batch; the delegation batch's own is dropped")
   const returnBatches = new Set(afterR1.management_log.filter(batch => batch.trigger_event_ids.every(id => id.endsWith(":return"))).map(batch => batch.sequence))
