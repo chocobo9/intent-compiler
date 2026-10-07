@@ -238,8 +238,15 @@ export interface SourceCoverageOptions {
 export function validateSourceCoverage(candidate: Candidate, currentEvents: readonly CompilerEvent[], sources: readonly CompilerEvent[], previous: Record<string, TaskIntent>, current: Record<string, TaskIntent>, options: SourceCoverageOptions = {}): void {
   if (!Array.isArray(candidate.source_coverage)) throw new Error("source_coverage must explicitly list source dispositions (or [])")
   const display = options.display ?? identityDisplay
-  const entries = candidate.source_coverage
   const texts = sourceTexts(sources)
+  // Headings are layout: a non-normative entry that names nothing but heading
+  // lines states no decision, so code drops it rather than judging it.
+  candidate.source_coverage = candidate.source_coverage.filter(entry => {
+    if (entry.disposition === "normative") return true
+    const text = texts.get(entry.source.source_id)
+    try { const span = validSpan(entry.source, texts, display); return !headingOnly(text!, span.start, span.end) } catch { return true }
+  })
+  const entries = candidate.source_coverage
   const currentIds = new Set(currentEvents.filter(event => userText(event) !== undefined).map(event => event.event_id))
   const taskIds = new Set(candidate.groups.flatMap(group => group.task_refs))
   const items = Object.entries(current).filter(([id]) => taskIds.has(id)).flatMap(([, task]) => task.content)
@@ -275,16 +282,19 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
         }
         return item
       })
-      if (!covered(text, span.start, span.end, spansFor(recipients.flatMap(item => item.sources), entry.source.source_id))) throw new Error(`normative source_coverage[${index}] omits source text from its IR destinations`)
+      if (!covered(text, span.start, span.end, [...spansFor(recipients.flatMap(item => item.sources), entry.source.source_id), ...markdownHeadings(text)])) throw new Error(`normative source_coverage[${index}] omits source text from its IR destinations`)
       for (const item of recipients) adoptedByItem.set(item, [...(adoptedByItem.get(item) ?? []), entry.source])
     } else {
       if (entry.requirements.length > 0) throw new Error(`non-normative source_coverage[${index}] cannot assign an IR requirement`)
-      const overlapping = spansFor(activeSources, entry.source.source_id).some(active => text.slice(Math.max(active.start, span.start), Math.min(active.end, span.end)).trim() && active.start < span.end && span.start < active.end)
+      // Heading lines inside the overlap are layout and do not count.
+      const headings = markdownHeadings(text)
+      const substantive = (from: number, to: number) => from < to && residualRanges(text, from, to, headings).length > 0
+      const overlapping = spansFor(activeSources, entry.source.source_id).some(active => substantive(Math.max(active.start, span.start), Math.min(active.end, span.end)))
       if (overlapping) {
         const adopted = items.flatMap(item => item.sources.filter(source => source.source_id === entry.source.source_id).flatMap(source => {
           const active = validSpan(source, texts, display)
           const range = { start: Math.max(active.start, span.start), end: Math.min(active.end, span.end) }
-          return range.start < range.end && text.slice(range.start, range.end).trim() ? [{ item: item.item_id, range }] : []
+          return substantive(range.start, range.end) ? [{ item: item.item_id, range }] : []
         }))
         const where = listed(adopted, LISTED_RANGES, overlap => `${rangeView(text, overlap.range)} is a current source of IR ${overlap.item}`, "; ")
         throw new Error(`source_coverage[${index}] classifies actively adopted text as ${entry.disposition}: in ${display(entry.source.source_id)} ${where}`)
@@ -331,7 +341,7 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     let span: NonNullable<SourceRef["span"]>
     try { span = validSpan(source, texts, display) } catch (error) { if (dropped.length > 0) throw droppedError(); throw error }
     const text = texts.get(source.source_id)!
-    const residual = residualRanges(text, span.start, span.end, spansFor([...activeSources, ...superseded], source.source_id))
+    const residual = residualRanges(text, span.start, span.end, [...spansFor([...activeSources, ...superseded], source.source_id), ...markdownHeadings(text)])
     if (residual.length === 0) continue
     dropped.push({ source_id: source.source_id, detail: `IR ${old.item_id} selected ${display(source.source_id)} utf16 ${span.start}-${span.end}; no current source or superseded entry covers ${listed(residual, LISTED_RANGES, range => rangeView(text, range), "; ")}` })
   }
@@ -550,7 +560,7 @@ export class SourceLedger {
       if (source.span === undefined || text === undefined || source.digest !== digestText(text) || source.span.end > text.length) return []
       const covering = active.filter(entry => entry.source_id === source.source_id && entry.span !== undefined).map(entry => entry.span!)
       return uncoveredRanges(source.span.start, source.span.end, covering)
-        .filter(range => text.slice(range.start, range.end).trim())
+        .filter(range => text.slice(range.start, range.end).trim() && !headingOnly(text, range.start, range.end))
         .map(range => ({ source_id: source.source_id, ...range }))
     })
   }
@@ -610,7 +620,24 @@ export function unplacedByInput(
   return Object.fromEntries([...texts.keys()].map(eventId => [eventId, ledger.unplaced(eventId, snapshot.ir)]).filter(([, passages]) => passages.length > 0))
 }
 
+/**
+ * Markdown heading lines.  The first line may start with the host's opening
+ * quote (`"# Title`): that quote is transport, the rest is still a heading.
+ */
+function markdownHeadings(text: string): Array<{ start: number; end: number }> {
+  return [...text.matchAll(/^("?)[ \t]{0,3}#{1,6}(?:[ \t][^\n]*)?$/gmu)]
+    .filter(match => match[1] === "" || match.index === 0)
+    .map(match => ({ start: match.index!, end: match.index! + match[0].length }))
+}
+
 /** Markdown heading lines and code fence lines are layout, not requirement text. */
 function headingLines(text: string): Array<{ start: number; end: number }> {
-  return [...text.matchAll(/^[ \t]{0,3}(?:#{1,6}(?:[ \t][^\n]*)?|```[\w-]*[ \t]*\r?)$/gmu)].map(match => ({ start: match.index!, end: match.index! + match[0].length }))
+  const fences = [...text.matchAll(/^[ \t]{0,3}```[\w-]*[ \t]*\r?$/gmu)].map(match => ({ start: match.index!, end: match.index! + match[0].length }))
+  return [...markdownHeadings(text), ...fences]
+}
+
+/** A range that holds nothing but Markdown heading lines, whitespace and host quoting. */
+function headingOnly(text: string, start: number, end: number): boolean {
+  const headings = markdownHeadings(text)
+  return headings.some(heading => heading.start < end && start < heading.end) && residualRanges(text, start, end, headings).length === 0
 }

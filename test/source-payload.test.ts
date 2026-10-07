@@ -1,7 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { digestText, type Candidate, type CompilerEvent, type ContentItem, type SourceRef, type TaskIntent } from "../src/core/intent-contract.js"
-import { locateQuote, materializeSourceContent, recordedDispositions, selectedSourceHistory, SourceLedger, sourceSegments, unplacedByInput, validateSourceCoverage, withdrawnPassages } from "../src/core/source-payload.js"
+import { contentKey, locateQuote, materializeSourceContent, recordedDispositions, selectedSourceHistory, SourceLedger, sourceSegments, unplacedByInput, validateSourceCoverage, withdrawnPassages } from "../src/core/source-payload.js"
 import { resolveSourceRefs } from "../src/core/intent-compiler-v2.js"
 
 const event = (id: string, text: string): CompilerEvent => ({ schema_version: 2, run_id: "run", event_id: id, kind: "user_input", source: { channel: "user", producer_id: "user" }, payload: { text } })
@@ -507,6 +507,52 @@ test("every entry that classes adopted text is named in one rejection, in entry 
     const parts = error.message.split(" | ")
     return parts.length === 3 && parts.every((part, index) => part.startsWith(`source_coverage[${index + 3}] classifies actively adopted text as context`) && part.includes(headings[index]!))
   })
+})
+
+// 53ca6c06 mgmt-19 and mgmt-32: answers wrote context entries for section headings
+// that IR items also adopted, and were refused for it.
+test("a non-normative entry naming only heading lines is dropped, and heading lines never count as overlap", () => {
+  const e = event("e", "## Fill\n\nFill gaps linearly.\n\n## Notes\n\nThanks for the work.")
+  const ir = { t: task(adopted("r", [ref(e, "## Fill\n\nFill gaps linearly.\n\n## Notes")])) }
+  const context = (c: Candidate, part: string) => c.source_coverage!.push({ source: ref(e, part), disposition: "context", requirements: [], reason: "Not a rule", basis: [] })
+  const c = candidate()
+  context(c, "## Fill"); context(c, "## Notes"); context(c, "## Notes\n\nThanks for the work.")
+  assert.doesNotThrow(() => validateSourceCoverage(c, [e], [e], {}, ir, { ownEventIds: new Set(["e"]) }))
+  assert.deepEqual(c.source_coverage!.map(entry => entry.source.span), [ref(e, "## Notes\n\nThanks for the work.").span], "only the heading-only entries are dropped")
+  const body = candidate()
+  context(body, "## Fill\n\nFill gaps linearly.")
+  assert.throws(() => validateSourceCoverage(body, [e], [e], {}, ir), /classifies actively adopted text as context: in e utf16 0-28 \(segments s1-s2\) "## Fill Fill gaps linearly\."/)
+})
+
+// 53ca6c06 mgmt-30: R12-R15 inputs open with the host's quote directly before the first heading.
+test("a first heading behind the host's opening quote needs no destination", () => {
+  const e = event("turn", "\"# Changelog command\n\nWrite the changelog with \\\"quoted\\\" names.\"")
+  const ir = task(adopted("r", [ref(e, "Write the changelog with \\\"quoted\\\" names.")]))
+  assert.doesNotThrow(() => validateSourceCoverage(changing(candidate()), [e], [e], {}, { t: ir }, { ownEventIds: new Set(["turn"]) }))
+  const plain = event("turn", "\"Intro line\n\nWrite the changelog with \\\"quoted\\\" names.\"")
+  const plainIr = task(adopted("r", [ref(plain, "Write the changelog with \\\"quoted\\\" names.")]))
+  assert.throws(() => validateSourceCoverage(changing(candidate()), [plain], [plain], {}, { t: plainIr }, { ownEventIds: new Set(["turn"]) }), /turn\/s1 "\\"Intro line"/)
+})
+
+test("a prior selection whose uncovered remainder is only heading lines is not dropped", () => {
+  const old = event("old", "\"# Tool\n\n## Fill\n\nFill gaps linearly.\n\n## Clip\n\nClip to bounds.")
+  const previous = { t: task(item("r", [ref(old)])) }
+  const kept = { t: task(item("r", [ref(old, "Fill gaps linearly."), ref(old, "Clip to bounds.")])) }
+  assert.doesNotThrow(() => validateSourceCoverage(candidate(), [], [old], previous, kept))
+  const lost = { t: task(item("r", [ref(old, "Fill gaps linearly.")])) }
+  assert.throws(() => validateSourceCoverage(candidate(), [], [old], previous, lost), /dropped without[^|]*"Clip to bounds\."/)
+})
+
+test("a withdrawn remainder holding only headings is not delivered as a withdrawal", () => {
+  const e = event("e", "## Old\n\nOld rule.\n\n## Fill\n\nFill rule.")
+  const text = (e.payload as { text: string }).text
+  const current = task(item("r", [ref(e, "Fill rule.")]), item("gone", []))
+  const ledger = new SourceLedger({ texts: new Map([["e", text]]), dispositions: [], selected: new Map([
+    [contentKey("t", "r"), [ref(e, "## Fill\n\nFill rule.")]],
+    [contentKey("t", "gone"), [ref(e, "## Old\n\nOld rule.")]],
+  ]) })
+  assert.deepEqual(ledger.withdrawnFor(current, "r"), [], "the uncovered heading alone is layout")
+  assert.deepEqual(ledger.withdrawnFor(current, "gone").map(range => text.slice(range.start, range.end)), ["## Old\n\nOld rule."], "a heading withdrawn with its rule stays with it")
 })
 
 test("every carried delegation and every unassigned selection is reported together", () => {

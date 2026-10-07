@@ -215,7 +215,7 @@ export function bindContentRefs(candidate: Candidate, supplied: Record<string, T
 }
 
 /** Write the digests of objects this batch created into the refs that named them; a few passes settle refs between requirements. */
-function settleContentRefs(ir: Record<string, TaskIntent>): void {
+export function settleContentRefs(ir: Record<string, TaskIntent>): void {
   for (let pass = 0; pass < 4; pass += 1) {
     let changed = false
     for (const task of Object.values(ir)) for (const item of task.content) {
