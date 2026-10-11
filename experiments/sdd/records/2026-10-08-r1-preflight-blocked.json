@@ -1,0 +1,42 @@
+{
+  "status": "corrected_trial_completed_failed",
+  "branch": "integration/sdd",
+  "scope": {
+    "arm": "sdd-only",
+    "task": "dpipe",
+    "round": 1,
+    "attempts": 1,
+    "model": "openai/gpt-6-luna-fast",
+    "variant": "high-fast",
+    "reasoning_effort": "high",
+    "service_tier": "priority",
+    "wall_clock_limit_seconds": 3600,
+    "automatic_round_2": false,
+    "authorization": "User authorized start with GPT 6 Luna high fast; authorization persists after infrastructure recovery."
+  },
+  "model_calls_started": true,
+  "sdd_workflow_started": true,
+  "official_verifier_started": true,
+  "observations": [
+    "Docker Desktop 4.91.0 failed initializing Ingest at sailor-ingest.sock; native fsutil query returned error 1920.",
+    "After stopping Docker and preserving the runtime directory by renaming, startup progressed to Secrets Engine but failed renaming engine.sock.",
+    "Preserving the secrets-engine directory (containing only engine.sock and engine.sock.stale) and the new Docker run directory did not recover startup.",
+    "With Docker stopped, a new .NET AF_UNIX socket in an independent TEMP directory could bind/listen, but Rename-Item after Dispose failed with the same file-inaccessible message.",
+    "Docker was left stopped. No factory reset, prune, VHDX modification, image removal, volume removal or credential reset was performed.",
+    "Windows reboot alone did not resolve the socket rename error.",
+    "After Docker was stopped, BOTH endpoint directories were renamed and explicitly recreated and verified empty before launch. Docker engine 29.8.0 and an isolated container probe passed.",
+    "The first SDD invocation inherited openai/gpt-5.6-luna/max because the launcher omitted pre-existing environment keys. It was terminated after 4 completed steps and a fifth step_start. It is invalid for the authorized model profile; official verifier was not started.",
+    "The launcher now saves explicit model/variant keys and rejects mismatching CLI calls before OpenCode starts. Offline workflow resolution checked 5 commands, all gpt-6-luna-fast/high-fast.",
+    "User separately authorized corrected launch. Completed in 1811.187 seconds; coding gate failed; official test result 23/219, reward 0.0."
+  ],
+  "preserved_paths": [
+    "C:/Users/HuaWeiClient/AppData/Local/Docker/run.pre-sdd-20261008-130747",
+    "C:/Users/HuaWeiClient/AppData/Local/Docker/run.pre-sdd-20261008-130845",
+    "C:/Users/HuaWeiClient/AppData/Local/docker-secrets-engine.pre-sdd-20261008-130845",
+    "C:/Users/HuaWeiClient/AppData/Local/Temp/sdd-docker-socket-probe-d470bf212bf74a96af7632ca2b6d8912"
+  ],
+  "next_step": "Review IC/Go adapter dependency boundary and requirement-to-CLI contract preservation before authorizing another independent trial; do not change SDD core or official tests.",
+  "aborted_trial": "D:/huawei/EvoCodeBench/harbor_runs/sdd-luna-dpipe-r1-20261008-172111z-b0568c57/aborted.json",
+  "corrected_prepared_trial": "D:/huawei/EvoCodeBench/harbor_runs/sdd-luna-dpipe-r1-20261008-172442z-6b8ea38d",
+  "result_record": "D:/huawei/intent_compiler/project/experiments/sdd/records/2026-10-08-r1-result.json"
+}

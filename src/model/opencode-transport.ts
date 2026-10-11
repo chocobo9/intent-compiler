@@ -171,7 +171,7 @@ export function createOpenCodeModelTransport(options: OpenCodeModelTransportOpti
 export function createOpenCodeModelTransportV2(
   options: OpenCodeModelTransportV2Options,
 ): OpenCodeModelTransportV2 {
-  const legacy = createOpenCodeV2Transport(
+  const legacy = createOpenCodeStructuredTransport<CompilerModelV2Input | CompilerModelV2CheckInput>(
     options,
     MODEL_SYSTEM_PROMPT_V2,
     buildStrictCandidateSchema("openai"),
@@ -192,7 +192,7 @@ export function createOpenCodeModelTransportV2(
     if (stage !== "ir" && stage !== "ci") return legacy(request)
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
     const active = stage === "ci" && !assessing && hasActiveExecution(request)
-    const transport = createOpenCodeV2Transport(
+    const transport = createOpenCodeStructuredTransport<CompilerModelV2Input | CompilerModelV2CheckInput>(
       options,
       `${generationStageInstruction(stage, assessing, generation.checkRequired, active)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
       buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing, activeExecutions: active }),
@@ -209,19 +209,19 @@ export function createOpenCodeModelTransportV2(
 export function createOpenCodeCheckTransportV2(
   options: OpenCodeModelTransportV2Options,
 ): OpenCodeModelCheckTransportV2 {
-  return createOpenCodeV2Transport(options, CHECK_SYSTEM_PROMPT, buildStrictCandidateCheckSchema("openai"))
+  return createOpenCodeStructuredTransport<CompilerModelV2Input | CompilerModelV2CheckInput>(options, CHECK_SYSTEM_PROMPT, buildStrictCandidateCheckSchema("openai"))
 }
 
-function createOpenCodeV2Transport(
+export function createOpenCodeStructuredTransport<Request>(
   options: OpenCodeModelTransportV2Options,
   system: string,
   schema: unknown,
-  prepareRequest: (request: CompilerModelV2Input | CompilerModelV2CheckInput) => CompilerModelV2Input | CompilerModelV2CheckInput = (request) => request,
-): (request: CompilerModelV2Input | CompilerModelV2CheckInput) => Promise<CompilerModelV2Call> {
+  prepareRequest: (request: Request) => Request = (request) => request,
+): (request: Request) => Promise<CompilerModelV2Call> {
   validateOptions(options)
   const agent = options.agent ?? "build"
 
-  return async (request: CompilerModelV2Input | CompilerModelV2CheckInput): Promise<CompilerModelV2Call> => {
+  return async (request: Request): Promise<CompilerModelV2Call> => {
     let serializedRequest: string
     try {
       serializedRequest = stableJson(prepareRequest(request))

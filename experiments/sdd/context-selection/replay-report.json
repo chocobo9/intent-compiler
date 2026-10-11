@@ -1,0 +1,2666 @@
+{
+  "source_store": "D:\\huawei\\EvoCodeBench\\harbor_checkpoints\\intent-luna-dpipe-online-r11r15-20261005-174552z-536c06a9\\round-15\\compiler-store\\v2-runs\\intent-luna-dpipe-full-r1r5-20261002-053740-e6308341",
+  "rounds": 15,
+  "ir_mismatch_rounds": [
+    {
+      "round": 2,
+      "fields": [
+        "t-dpipe.current_scope",
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 3,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 4,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 5,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 6,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 7,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 8,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 9,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 10,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 11,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 12,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 13,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 14,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    },
+    {
+      "round": 15,
+      "fields": [
+        "t-dpipe.outputs"
+      ]
+    }
+  ],
+  "replay_added_dispositions": [
+    {
+      "round": 2,
+      "segment_id": "s1",
+      "chars": 43,
+      "text": "\"Add the following capabilities to `dpipe`."
+    }
+  ],
+  "synthesized": [
+    "CI draft",
+    "check verdict",
+    "SDD result",
+    "item-level assessment"
+  ],
+  "totals": {
+    "ir": {
+      "calls": 15,
+      "chars": 2737169,
+      "legacy_chars": 5657374
+    },
+    "ci": {
+      "calls": 15,
+      "chars": 2188323,
+      "legacy_chars": 9819128
+    },
+    "check": {
+      "calls": 15,
+      "chars": 2968351,
+      "legacy_chars": 12354784
+    },
+    "assess": {
+      "calls": 15,
+      "chars": 2065416,
+      "legacy_chars": 2682583
+    }
+  },
+  "calls": [
+    {
+      "round": 1,
+      "stage": "ir",
+      "chars": 90423,
+      "legacy_chars": 109860,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 90423,
+        "counts": {
+          "segments_with_text": 48
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 1,
+      "stage": "ci",
+      "chars": 28206,
+      "legacy_chars": 46601,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 28206,
+        "counts": {
+          "segments_pointed": 46,
+          "segment_chars_pointed": 19218,
+          "segments_with_text": 2,
+          "requirements_never_in_a_delivery": 7,
+          "deliveries_referenced": 0
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 1,
+      "stage": "check",
+      "chars": 47873,
+      "legacy_chars": 69728,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 47873,
+        "counts": {
+          "segments_pointed": 46,
+          "segment_chars_pointed": 19218,
+          "segments_with_text": 2,
+          "requirements_never_in_a_delivery": 7,
+          "deliveries_referenced": 0,
+          "ir_texts_pointed_at_delivery": 7,
+          "ir_text_chars_pointed": 19290
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 1,
+      "stage": "assess",
+      "chars": 31102,
+      "legacy_chars": 48837,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 31102,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 7,
+          "ir_text_chars_pointed": 19290
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 2,
+      "stage": "ir",
+      "chars": 143203,
+      "legacy_chars": 219067,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 143203,
+        "counts": {
+          "segments_pointed": 46,
+          "segment_chars_pointed": 19218,
+          "segments_with_text": 142
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 2,
+      "stage": "ci",
+      "chars": 69887,
+      "legacy_chars": 128316,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 69887,
+        "counts": {
+          "segments_pointed": 182,
+          "segment_chars_pointed": 44207,
+          "segments_with_text": 6,
+          "requirements_never_in_a_delivery": 7,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 2,
+      "stage": "check",
+      "chars": 118224,
+      "legacy_chars": 204826,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 118224,
+        "counts": {
+          "segments_pointed": 182,
+          "segment_chars_pointed": 44207,
+          "segments_with_text": 6,
+          "requirements_never_in_a_delivery": 7,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 7,
+          "ir_texts_pointed_at_delivery": 14,
+          "ir_text_chars_pointed": 44281
+        },
+        "omitted": [
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 2,
+      "stage": "assess",
+      "chars": 65440,
+      "legacy_chars": 107740,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 65440,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 14,
+          "ir_text_chars_pointed": 44281
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 3,
+      "stage": "ir",
+      "chars": 142399,
+      "legacy_chars": 283342,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 142399,
+        "counts": {
+          "segments_pointed": 182,
+          "segment_chars_pointed": 44207,
+          "segments_with_text": 65
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 3,
+      "stage": "ci",
+      "chars": 109784,
+      "legacy_chars": 204588,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 109784,
+        "counts": {
+          "segments_pointed": 239,
+          "segment_chars_pointed": 53580,
+          "segments_with_text": 8,
+          "requirements_never_in_a_delivery": 2,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 10,
+          "feedback_earlier_latest_returned_code": 4,
+          "assessments_superseded_or_retired": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 3,
+      "stage": "check",
+      "chars": 150880,
+      "legacy_chars": 322808,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 150880,
+        "counts": {
+          "segments_pointed": 239,
+          "segment_chars_pointed": 53580,
+          "segments_with_text": 8,
+          "requirements_never_in_a_delivery": 2,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 10,
+          "feedback_earlier_latest_returned_code": 4,
+          "assessments_superseded_or_retired": 7,
+          "ir_texts_pointed_at_delivery": 14,
+          "ir_text_chars_pointed": 46222,
+          "ir_texts_kept_beside_delivery": 2
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 3,
+      "stage": "assess",
+      "chars": 87954,
+      "legacy_chars": 132300,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 87954,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 14,
+          "ir_text_chars_pointed": 46222,
+          "ir_texts_kept_beside_delivery": 2
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 4,
+      "stage": "ir",
+      "chars": 150425,
+      "legacy_chars": 316634,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 150425,
+        "counts": {
+          "segments_pointed": 237,
+          "segment_chars_pointed": 52527,
+          "segments_with_text": 48
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 4,
+      "stage": "ci",
+      "chars": 107726,
+      "legacy_chars": 281779,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 107726,
+        "counts": {
+          "segments_pointed": 273,
+          "segment_chars_pointed": 57406,
+          "segments_with_text": 12,
+          "requirements_never_in_a_delivery": 2,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 15,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 21
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 4,
+      "stage": "check",
+      "chars": 140930,
+      "legacy_chars": 419467,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 140930,
+        "counts": {
+          "segments_pointed": 273,
+          "segment_chars_pointed": 57406,
+          "segments_with_text": 12,
+          "requirements_never_in_a_delivery": 2,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 15,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 21,
+          "ir_texts_pointed_at_delivery": 16,
+          "ir_text_chars_pointed": 51128,
+          "ir_texts_kept_beside_delivery": 2
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 4,
+      "stage": "assess",
+      "chars": 97161,
+      "legacy_chars": 146363,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 97161,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 16,
+          "ir_text_chars_pointed": 51128,
+          "ir_texts_kept_beside_delivery": 2
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 5,
+      "stage": "ir",
+      "chars": 157382,
+      "legacy_chars": 341262,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 157382,
+        "counts": {
+          "segments_pointed": 273,
+          "segment_chars_pointed": 57406,
+          "segments_with_text": 41
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 5,
+      "stage": "ci",
+      "chars": 149626,
+      "legacy_chars": 371843,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 149626,
+        "counts": {
+          "segments_pointed": 290,
+          "segment_chars_pointed": 59910,
+          "segments_with_text": 24,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 14,
+          "feedback_earlier_latest_returned_code": 4,
+          "assessments_superseded_or_retired": 37
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 5,
+      "stage": "check",
+      "chars": 208049,
+      "legacy_chars": 523387,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 208049,
+        "counts": {
+          "segments_pointed": 290,
+          "segment_chars_pointed": 59910,
+          "segments_with_text": 24,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 14,
+          "feedback_earlier_latest_returned_code": 4,
+          "assessments_superseded_or_retired": 37,
+          "ir_texts_pointed_at_delivery": 13,
+          "ir_text_chars_pointed": 36943,
+          "ir_texts_kept_beside_delivery": 6
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 5,
+      "stage": "assess",
+      "chars": 132843,
+      "legacy_chars": 167856,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 132843,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 13,
+          "ir_text_chars_pointed": 36943,
+          "ir_texts_kept_beside_delivery": 6
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 6,
+      "stage": "ir",
+      "chars": 178905,
+      "legacy_chars": 369692,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 178905,
+        "counts": {
+          "segments_pointed": 286,
+          "segment_chars_pointed": 58492,
+          "segments_with_text": 50
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 6,
+      "stage": "ci",
+      "chars": 153530,
+      "legacy_chars": 451144,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 153530,
+        "counts": {
+          "segments_pointed": 305,
+          "segment_chars_pointed": 61485,
+          "segments_with_text": 31,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 18,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 55
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 6,
+      "stage": "check",
+      "chars": 204260,
+      "legacy_chars": 621848,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 204260,
+        "counts": {
+          "segments_pointed": 305,
+          "segment_chars_pointed": 61485,
+          "segments_with_text": 31,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 18,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 55,
+          "ir_texts_pointed_at_delivery": 14,
+          "ir_text_chars_pointed": 39003,
+          "ir_texts_kept_beside_delivery": 6
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 6,
+      "stage": "assess",
+      "chars": 134860,
+      "legacy_chars": 171718,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 134860,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 14,
+          "ir_text_chars_pointed": 39003,
+          "ir_texts_kept_beside_delivery": 6
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 7,
+      "stage": "ir",
+      "chars": 179557,
+      "legacy_chars": 379805,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 179557,
+        "counts": {
+          "segments_pointed": 305,
+          "segment_chars_pointed": 61485,
+          "segments_with_text": 50
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 7,
+      "stage": "ci",
+      "chars": 146802,
+      "legacy_chars": 535410,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 146802,
+        "counts": {
+          "segments_pointed": 319,
+          "segment_chars_pointed": 63115,
+          "segments_with_text": 36,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 19,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 74
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 7,
+      "stage": "check",
+      "chars": 199405,
+      "legacy_chars": 709257,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 199405,
+        "counts": {
+          "segments_pointed": 319,
+          "segment_chars_pointed": 63115,
+          "segments_with_text": 36,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 19,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 74,
+          "ir_texts_pointed_at_delivery": 14,
+          "ir_text_chars_pointed": 37060,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 7,
+      "stage": "assess",
+      "chars": 142962,
+      "legacy_chars": 177645,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 142962,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 14,
+          "ir_text_chars_pointed": 37060,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 8,
+      "stage": "ir",
+      "chars": 189181,
+      "legacy_chars": 396732,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 189181,
+        "counts": {
+          "segments_pointed": 318,
+          "segment_chars_pointed": 62599,
+          "segments_with_text": 64
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 8,
+      "stage": "ci",
+      "chars": 157167,
+      "legacy_chars": 625338,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 157167,
+        "counts": {
+          "segments_pointed": 344,
+          "segment_chars_pointed": 65916,
+          "segments_with_text": 38,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 19,
+          "feedback_earlier_latest_returned_code": 2,
+          "assessments_superseded_or_retired": 94
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 8,
+      "stage": "check",
+      "chars": 214094,
+      "legacy_chars": 806528,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 214094,
+        "counts": {
+          "segments_pointed": 344,
+          "segment_chars_pointed": 65916,
+          "segments_with_text": 38,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 19,
+          "feedback_earlier_latest_returned_code": 2,
+          "assessments_superseded_or_retired": 94,
+          "ir_texts_pointed_at_delivery": 15,
+          "ir_text_chars_pointed": 40501,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 8,
+      "stage": "assess",
+      "chars": 148715,
+      "legacy_chars": 186831,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 148715,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 15,
+          "ir_text_chars_pointed": 40501,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 9,
+      "stage": "ir",
+      "chars": 194995,
+      "legacy_chars": 414629,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 194995,
+        "counts": {
+          "segments_pointed": 344,
+          "segment_chars_pointed": 65916,
+          "segments_with_text": 64
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 9,
+      "stage": "ci",
+      "chars": 152875,
+      "legacy_chars": 719747,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 152875,
+        "counts": {
+          "segments_pointed": 369,
+          "segment_chars_pointed": 68861,
+          "segments_with_text": 39,
+          "requirements_never_in_a_delivery": 4,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 22,
+          "assessments_superseded_or_retired": 115
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 9,
+      "stage": "check",
+      "chars": 210698,
+      "legacy_chars": 910160,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 210698,
+        "counts": {
+          "segments_pointed": 369,
+          "segment_chars_pointed": 68861,
+          "segments_with_text": 39,
+          "requirements_never_in_a_delivery": 4,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 22,
+          "assessments_superseded_or_retired": 115,
+          "ir_texts_pointed_at_delivery": 19,
+          "ir_text_chars_pointed": 43446,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 9,
+      "stage": "assess",
+      "chars": 156557,
+      "legacy_chars": 196801,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 156557,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 19,
+          "ir_text_chars_pointed": 43446,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 10,
+      "stage": "ir",
+      "chars": 200793,
+      "legacy_chars": 431312,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 200793,
+        "counts": {
+          "segments_pointed": 369,
+          "segment_chars_pointed": 68861,
+          "segments_with_text": 62
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 10,
+      "stage": "ci",
+      "chars": 165138,
+      "legacy_chars": 815575,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 165138,
+        "counts": {
+          "segments_pointed": 387,
+          "segment_chars_pointed": 70982,
+          "segments_with_text": 44,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 25,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 137
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 10,
+      "stage": "check",
+      "chars": 223776,
+      "legacy_chars": 1014485,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 223776,
+        "counts": {
+          "segments_pointed": 387,
+          "segment_chars_pointed": 70982,
+          "segments_with_text": 44,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 25,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 137,
+          "ir_texts_pointed_at_delivery": 20,
+          "ir_text_chars_pointed": 45106,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 10,
+      "stage": "assess",
+      "chars": 161473,
+      "legacy_chars": 203270,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 161473,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 20,
+          "ir_text_chars_pointed": 45106,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 11,
+      "stage": "ir",
+      "chars": 207013,
+      "legacy_chars": 445717,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 207013,
+        "counts": {
+          "segments_pointed": 387,
+          "segment_chars_pointed": 70982,
+          "segments_with_text": 68
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 11,
+      "stage": "ci",
+      "chars": 168007,
+      "legacy_chars": 913549,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 168007,
+        "counts": {
+          "segments_pointed": 410,
+          "segment_chars_pointed": 73118,
+          "segments_with_text": 45,
+          "requirements_never_in_a_delivery": 3,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 27,
+          "assessments_superseded_or_retired": 163
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 11,
+      "stage": "check",
+      "chars": 227497,
+      "legacy_chars": 1119308,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 227497,
+        "counts": {
+          "segments_pointed": 410,
+          "segment_chars_pointed": 73118,
+          "segments_with_text": 45,
+          "requirements_never_in_a_delivery": 3,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 27,
+          "assessments_superseded_or_retired": 163,
+          "ir_texts_pointed_at_delivery": 23,
+          "ir_text_chars_pointed": 47242,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 11,
+      "stage": "assess",
+      "chars": 166573,
+      "legacy_chars": 209862,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 166573,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 23,
+          "ir_text_chars_pointed": 47242,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 12,
+      "stage": "ir",
+      "chars": 209757,
+      "legacy_chars": 457619,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 209757,
+        "counts": {
+          "segments_pointed": 410,
+          "segment_chars_pointed": 73118,
+          "segments_with_text": 61
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 12,
+      "stage": "ci",
+      "chars": 180971,
+      "legacy_chars": 1014142,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 180971,
+        "counts": {
+          "segments_pointed": 420,
+          "segment_chars_pointed": 74924,
+          "segments_with_text": 51,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 29,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 190
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:34be75108826adc37",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 12,
+      "stage": "check",
+      "chars": 240606,
+      "legacy_chars": 1225477,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 240606,
+        "counts": {
+          "segments_pointed": 420,
+          "segment_chars_pointed": 74924,
+          "segments_with_text": 51,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 29,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 190,
+          "ir_texts_pointed_at_delivery": 23,
+          "ir_text_chars_pointed": 47242,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:34be75108826adc37",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 12,
+      "stage": "assess",
+      "chars": 172023,
+      "legacy_chars": 215312,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 172023,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 23,
+          "ir_text_chars_pointed": 47242,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 13,
+      "stage": "ir",
+      "chars": 220978,
+      "legacy_chars": 476508,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 220978,
+        "counts": {
+          "segments_pointed": 420,
+          "segment_chars_pointed": 74924,
+          "segments_with_text": 82
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 13,
+      "stage": "ci",
+      "chars": 187697,
+      "legacy_chars": 1124259,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 187697,
+        "counts": {
+          "segments_pointed": 438,
+          "segment_chars_pointed": 78511,
+          "segments_with_text": 64,
+          "requirements_never_in_a_delivery": 2,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 30,
+          "assessments_superseded_or_retired": 220
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:34be75108826adc37",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:bb754a66ef6d10c76",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 13,
+      "stage": "check",
+      "chars": 248937,
+      "legacy_chars": 1343508,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 248937,
+        "counts": {
+          "segments_pointed": 438,
+          "segment_chars_pointed": 78511,
+          "segments_with_text": 64,
+          "requirements_never_in_a_delivery": 2,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 30,
+          "assessments_superseded_or_retired": 220,
+          "ir_texts_pointed_at_delivery": 25,
+          "ir_text_chars_pointed": 50851,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:34be75108826adc37",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:bb754a66ef6d10c76",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 13,
+      "stage": "assess",
+      "chars": 182192,
+      "legacy_chars": 228790,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 182192,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 25,
+          "ir_text_chars_pointed": 50851,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 14,
+      "stage": "ir",
+      "chars": 234208,
+      "legacy_chars": 500252,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 234208,
+        "counts": {
+          "segments_pointed": 438,
+          "segment_chars_pointed": 78511,
+          "segments_with_text": 92
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 14,
+      "stage": "ci",
+      "chars": 199189,
+      "legacy_chars": 1237346,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 199189,
+        "counts": {
+          "segments_pointed": 464,
+          "segment_chars_pointed": 82217,
+          "segments_with_text": 66,
+          "requirements_never_in_a_delivery": 2,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 32,
+          "assessments_superseded_or_retired": 250
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:34be75108826adc37",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:bb754a66ef6d10c76",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:b61744bdb8d120ed5",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 14,
+      "stage": "check",
+      "chars": 260752,
+      "legacy_chars": 1471249,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 260752,
+        "counts": {
+          "segments_pointed": 464,
+          "segment_chars_pointed": 82217,
+          "segments_with_text": 66,
+          "requirements_never_in_a_delivery": 2,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 32,
+          "assessments_superseded_or_retired": 250,
+          "ir_texts_pointed_at_delivery": 27,
+          "ir_text_chars_pointed": 55765,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:34be75108826adc37",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:bb754a66ef6d10c76",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:b61744bdb8d120ed5",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 14,
+      "stage": "assess",
+      "chars": 190721,
+      "legacy_chars": 241985,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 190721,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 27,
+          "ir_text_chars_pointed": 55765,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    },
+    {
+      "round": 15,
+      "stage": "ir",
+      "chars": 237950,
+      "legacy_chars": 514943,
+      "contract_chars": 57229,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ir",
+        "request_chars": 237950,
+        "counts": {
+          "segments_pointed": 464,
+          "segment_chars_pointed": 82217,
+          "segments_with_text": 82
+        },
+        "omitted": [
+          {
+            "kind": "source_events",
+            "id": "all",
+            "reason": "each input's text is shown once, as its segments; earlier inputs' payload provenance stays in the store"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 15,
+      "stage": "ci",
+      "chars": 211718,
+      "legacy_chars": 1349491,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "ci",
+        "request_chars": 211718,
+        "counts": {
+          "segments_pointed": 476,
+          "segment_chars_pointed": 83468,
+          "segments_with_text": 70,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 33,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 282
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:34be75108826adc37",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:bb754a66ef6d10c76",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:b61744bdb8d120ed5",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:1a56e25f19d1bec03",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 15,
+      "stage": "check",
+      "chars": 272370,
+      "legacy_chars": 1592748,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "check",
+        "request_chars": 272370,
+        "counts": {
+          "segments_pointed": 476,
+          "segment_chars_pointed": 83468,
+          "segments_with_text": 70,
+          "requirements_never_in_a_delivery": 1,
+          "deliveries_referenced": 1,
+          "feedback_same_latest_returned_code": 33,
+          "feedback_earlier_latest_returned_code": 1,
+          "assessments_superseded_or_retired": 282,
+          "ir_texts_pointed_at_delivery": 28,
+          "ir_text_chars_pointed": 57131,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:57d076718cc0facec",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:638e55ea43af9d87b",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e0d1656d2dcbadb41",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:dd577520685c8d6cd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6b76348620f52e810",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:44ab27fe5076dee8a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:e323acad3705bca1a",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:6eea84ce8a4ece5fd",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:16bc7ec4d3a9e52b0",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:69757807530ff72a2",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:34be75108826adc37",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:bb754a66ef6d10c76",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery",
+            "id": "ci-sha256:b61744bdb8d120ed5",
+            "reason": "no current requirement's latest delivery record is in it"
+          },
+          {
+            "kind": "delivery_text",
+            "id": "ci-sha256:1a56e25f19d1bec03",
+            "reason": "identity, decisions and per-requirement coverage kept; its attached passages are the IR content"
+          }
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "round": 15,
+      "stage": "assess",
+      "chars": 194840,
+      "legacy_chars": 247273,
+      "contract_chars": 0,
+      "reproducible": true,
+      "integrity_problems": [],
+      "report": {
+        "stage": "assess",
+        "request_chars": 194840,
+        "counts": {
+          "ir_texts_pointed_at_delivery": 28,
+          "ir_text_chars_pointed": 57131,
+          "ir_texts_kept_beside_delivery": 7
+        },
+        "omitted": [],
+        "warnings": []
+      }
+    }
+  ]
+}

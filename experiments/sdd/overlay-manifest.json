@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "files": [
+    {
+      "path": ".agents/skills/specart-author/SKILL.md",
+      "before_sha256": "53a21ec581cc49f496de49fa5da724e6c79c910c782274587c227ad0038ba207",
+      "sha256": "4ac94c2d85c6bd32dfb3140148e53d5b95e6665fa58e9ed2d9a07b3fd4bbd867"
+    },
+    {
+      "path": ".agents/skills/specart-implement/SKILL.md",
+      "before_sha256": "502b4f4d090316ca74486775ccb7152b8371b656c5061caa9331fc0ad86ef283",
+      "sha256": "19a0351e9d54660d4417ab73307b5bced8e4e7c0171a02798abef0b7d784d4b3"
+    },
+    {
+      "path": ".agents/skills/specart-verify/SKILL.md",
+      "before_sha256": "411fe33e189d991c60e0accea0e83d386a1c9bccf3ba5e49a8b94ec2f627509c",
+      "sha256": "9da9a23b4d6ddfd385999ce4a3d451903dbff6d7eab80e51541fc5c1fc3e6eab"
+    },
+    {
+      "path": ".agents/skills/specart/SKILL.md",
+      "before_sha256": "d659549bc90c257f040703d7d0c145137b0a0d9e479094b0ce6b4ef0cf2f3b8f",
+      "sha256": "1d6f8e3ecbee01f7cd6d91194b07defc654ff594f94cf1efedf4c8a160b39f79"
+    },
+    {
+      "path": ".agents/skills/specart/assets/validator/go/main.go",
+      "before_sha256": null,
+      "sha256": "5dacdeca9d363d41e12c864ac47f0d02406d6b08ae761773baf8ec2466b281be",
+      "previous_sha256": [
+        "5d2334575789a6b796bbfca73051a8dabe3f7d1e8a02689746262b3dc9de54bf"
+      ]
+    },
+    {
+      "path": ".agents/skills/specart/assets/validator/python/specart/adapters/spec.py",
+      "before_sha256": "e82ebe6524641174b7eb606e911a55751adfde90648d809c7a9c6774197b1192",
+      "sha256": "d77e292f37e594b52f6bb57d78c2b8151001971ffac564eb40f971240b9032de"
+    },
+    {
+      "path": ".agents/skills/specart/assets/validator/python/specart/bundle.py",
+      "before_sha256": "3fc5e228212720dc7d5ea74bf612986e3a095baf9223780bc434c82886f95927",
+      "sha256": "474405556df9c043c288dca82c36d0823c838c504d99141b45fdd1c6d91791eb",
+      "previous_sha256": [
+        "783741e799a48666391bb7a2037e3ece2dc9dc47c2d4b2574c8f80d7f9d004d0"
+      ]
+    },
+    {
+      "path": ".agents/skills/specart/assets/validator/python/specart/dependencies.py",
+      "before_sha256": "33e453fdab28c29ee1814303e06ca6e416be5f3ea834f969c263b077f6e9f1a6",
+      "sha256": "278f48f06bfd9827f78ba4932e190e7bfef0f41f6e975d577e581ec20e0eda7c",
+      "previous_sha256": [
+        "724fc06603ae5ad940ebf7b5eec4b2a41b8f65ac3a3f097d7d8a6faa9f50c77a"
+      ]
+    },
+    {
+      "path": ".agents/skills/specart/assets/validator/python/specart/helpers/go.py",
+      "before_sha256": null,
+      "sha256": "7555a0a313418d3c9dbad35b8246cf31513e9c665e50fa3a710944516f230f76"
+    },
+    {
+      "path": ".agents/skills/specart/assets/validator/python/specart/languages.py",
+      "before_sha256": "bb8469796b906bc124d0cc432838093ef114d48310b97644cfa4f81a30d4b22e",
+      "sha256": "57a161f43134437393905ee89c0dd95588c71d7d61b146bb621c38f38908cb97"
+    },
+    {
+      "path": ".agents/skills/specart/assets/validator/python/specart/source_model.py",
+      "before_sha256": "52e4ef79142d4b4ea778749f2e6ad1926e8d7ff7cf5df0cb2e036189d590f71d",
+      "sha256": "ff83f08eca5db4db8b1e48fb8595fb96823f6afba5146aea0b5eadc4e67112d5"
+    },
+    {
+      "path": ".agents/skills/specart/assets/validator/python/specart/validator.py",
+      "before_sha256": "adb6a8793ae98681894d32a61d0a1a283b4b1cd45cbd3dd88281cc93fecd3264",
+      "sha256": "30f3214a4ea59478f51bd7452f4faf51f4545c7c2dcc264f936c0e01d3e1e437"
+    },
+    {
+      "path": ".agents/skills/specart/references/go-language.md",
+      "before_sha256": null,
+      "sha256": "c2dda804bb7afbd3ed1deb32947d28c77362332151a6598f5512c30623a10a34",
+      "previous_sha256": [
+        "d9cfc6ddff02ab93dca56eeeb76267f64f2634e81614a8628f1365e19eff5cf9",
+        "92cef485c11a2b680b8d95052162c116a72c19fa00702b0c57178eefe0e192f5",
+        "aaa3d0a5e70d28bb630d4a102b4cadf3cfab51cd2ac2114292cc5e5d4e44ea0a"
+      ]
+    },
+    {
+      "path": "tests/specart-validator/test_go_adapter.py",
+      "before_sha256": null,
+      "sha256": "4d0a2094165947ace78495e8d0148c93e5fba553ca4265f41f3f018a64cd713a",
+      "previous_sha256": [
+        "e09d7a94afd6d64e8b6c6a5c26c4a964a051e86181590e2e446d860135fe4025",
+        "42dee3672e2ca38689371d20a29bf34195718f1b0fa6b78a2d3407efac199019",
+        "82df298686fefcda9fb964dce14ac5fe89ba4b29f994e4a4cde79d556ef799ad"
+      ]
+    }
+  ]
+}

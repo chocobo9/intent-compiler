@@ -1,0 +1,161 @@
+--- a/.agents/skills/specart/assets/validator/python/specart/dependencies.py
++++ b/.agents/skills/specart/assets/validator/python/specart/dependencies.py
+@@ -132,28 +132,55 @@
+ class GoImports:
+     def __init__(self, root: Path):
+         self.root = root.resolve()
++        self.modules = {}
++        for manifest in self.root.rglob('go.mod'):
++            if any(part.startswith('.') or part == 'vendor'
++                   for part in manifest.relative_to(self.root).parts[:-1]):
++                continue
++            directory = manifest.parent.resolve()
++            if not directory.is_relative_to(self.root):
++                raise ValueError('Go module outside project boundary')
++            text = manifest.read_text(encoding='utf-8')
++            match = re.search(r'^\s*module\s+("[^"\n]+"|[^\s/][^\s]*)', text, re.M)
++            if not match:
++                raise ValueError('go.mod has no module declaration')
++            module = match.group(1).strip('"')
++            if module in self.modules and self.modules[module] != directory:
++                raise ValueError(f'ambiguous local Go module: {module}')
++            self.modules[module] = directory
++            # Replacements can redirect an apparently external import into the
++            # project. Preserve an extraction gap until that mapping is supported.
++            if re.search(r'^\s*replace\b', text, re.M):
++                raise ValueError('Go replace directives require explicit dependency resolution')
++
++    def package(self, directory: Path) -> str:
++        relative = directory.relative_to(self.root).as_posix()
++        return 'project' + ('' if relative == '.' else '/' + relative)
+ 
+     def extract(self, file: dict) -> list[dict]:
+-        directory = (self.root / file['relative_path']).parent
+-        module_root = directory
+-        module = None
+-        while module_root.is_relative_to(self.root):
+-            manifest = module_root / 'go.mod'
+-            if manifest.is_file():
+-                match = re.search(r'^\s*module\s+("[^"\n]+"|[^\s/][^\s]*)', manifest.read_text(encoding='utf-8'), re.M)
+-                if not match:
+-                    raise ValueError('go.mod has no module declaration')
+-                module = match.group(1).strip('"')
+-                break
+-            if module_root == self.root:
+-                break
+-            module_root = module_root.parent
+-        relative = directory.relative_to(module_root if module else self.root).as_posix()
+-        owner = (module or 'project') + ('' if relative == '.' else '/' + relative)
++        directory = (self.root / file['relative_path']).parent.resolve()
++        owner = self.package(directory)
+         if not file.get('package'):
+             raise ValueError('Go package declaration missing')
+-        return [{'from': owner, 'to': imported['package'], 'file': file['relative_path'],
+-                 'position': imported.get('position', {})} for imported in file.get('imports', [])]
++        imports = file.get('imports', [])
++        if imports and nearest(directory, self.root, ('go.mod',)) is None:
++            raise ValueError('Go imports without go.mod have unknown project ownership')
++        result = []
++        for imported in imports:
++            target = imported['package']
++            for module in sorted(self.modules, key=len, reverse=True):
++                if target != module and not target.startswith(module + '/'):
++                    continue
++                target_path = (self.modules[module] / target[len(module):].lstrip('/')).resolve()
++                if not target_path.is_relative_to(self.root):
++                    raise ValueError(f'Go import outside project boundary: {target}')
++                target_owner = self.package(target_path)
++                if owner != target_owner:
++                    result.append({'from': owner, 'to': target_owner, 'file': file['relative_path'],
++                                   'position': imported.get('position', {})})
++                break
++            # Standard-library and third-party imports are not internal edges.
++        return result
+ 
+ 
+ def extract(root: Path, language: str, files: dict) -> list[dict]:
+--- a/.agents/skills/specart/references/go-language.md
++++ b/.agents/skills/specart/references/go-language.md
+@@ -11,7 +11,8 @@
+ - 用紧邻声明的 `/* ... */` 块保存 `行为规约:`、`@behavior`、`@src` 和 `@changedBy`。不把分散的多行 `//` 注释假定为一个规约块。
+ - summary 仍使用 `file/signature/owner/behavior/previous_signature`。类型 signature 写完整成员结构，包括嵌入字段、字段标签、接口方法；不带 package 行。
+ - 普通函数 owner 留空；方法 owner 是 receiver 的基础类型，例如 `Reader`。签名仍保留 `(r *Reader)`，不得丢掉指针、泛型、变长参数或返回值顺序。
+-- Go helper 只解析源码，不加载依赖或执行项目。语法解析不代替构建；包依赖检查限于 summary 文件的 import 边，不声称检查了整个模块图或依赖版本。
++- Go helper 只解析源码，不加载依赖或执行项目。语法解析不代替构建；包依赖保护只比较 summary 文件到项目内部包的 import 边，标准库和第三方包不属于此保护范围。包身份使用相对项目目录，go.mod 的 module 名用于解析 import，不作为包身份。支持项目内声明的嵌套 module；不检查依赖版本，也不声称覆盖整个模块图。
++- 有 import 但缺少 go.mod、模块声明不合法或存在尚不支持的 replace 映射时，保留 unresolved 提取事实，不伪装成完整空依赖图。必要项目配置由实现阶段建立，使用共同配置指定的构建命令验证。
+ - 成员检查只读取 summary 涉及的源码；需要检查跨文件类型时，显式把该类型声明列入 summary。同名类型按 Go package 目录区分。
+ 
+ ## 行为表达式
+--- a/tests/specart-validator/test_go_adapter.py
++++ b/tests/specart-validator/test_go_adapter.py
+@@ -1,6 +1,8 @@
+ from __future__ import annotations
+ 
+ import copy
++import os
++import subprocess
+ from pathlib import Path
+ 
+ import pytest
+@@ -121,13 +123,57 @@
+     assert 'SA183' in {d.code for d in design.accept(bundle)}
+ 
+ 
+-def test_go_import_edges_include_external_and_local(tmp_path):
++def test_go_import_edges_protect_only_internal_packages(tmp_path):
+     write(tmp_path / 'go.mod', 'module example.org/app\n')
+     file = {'relative_path': 'pkg/work.go', 'package': 'pkg', 'imports': [{'package': 'example.org/app/data'}, {'package': 'io'}]}
+     before = extract(tmp_path, 'go', {'pkg/work.go': file})
+-    assert {(r['from'], r['to']) for r in before} == {('example.org/app/pkg', 'example.org/app/data'), ('example.org/app/pkg', 'io')}
+-    after = extract(tmp_path, 'go', {'pkg/work.go': {**file, 'imports': [{'package': 'os'}]}})
+-    assert changes(before, after)['added'] == [('example.org/app/pkg', 'os')]
++    assert {(r['from'], r['to']) for r in before} == {('project/pkg', 'project/data')}
++    imports = [{'package': 'example.org/app/data'}, {'package': 'os'}, {'package': 'example.org/app-extra/client'}]
++    after = extract(tmp_path, 'go', {'pkg/work.go': {**file, 'imports': imports}})
++    assert changes(before, after) == {'added': [], 'removed': []}
++    after = extract(tmp_path, 'go', {'pkg/work.go': {**file, 'imports': [{'package': 'example.org/app/other'}]}})
++    assert changes(before, after) == {'added': [('project/pkg', 'project/other')],
++                                      'removed': [('project/pkg', 'project/data')]}
++
++
++def test_go_dependency_identity_survives_module_rename(tmp_path):
++    write(tmp_path / 'go.mod', 'module example.org/old\n')
++    file = {'relative_path': 'main.go', 'package': 'main', 'imports': [{'package': 'example.org/old/data'}]}
++    before = extract(tmp_path, 'go', {'main.go': file})
++    write(tmp_path / 'go.mod', 'module example.org/new\n')
++    file['imports'] = [{'package': 'example.org/new/data'}]
++    assert changes(before, extract(tmp_path, 'go', {'main.go': file})) == {'added': [], 'removed': []}
++
++
++def test_go_nested_module_and_unknown_replacement(tmp_path):
++    write(tmp_path / 'go.mod', 'module example.org/app\n')
++    write(tmp_path / 'lib/go.mod', 'module example.org/lib\n')
++    file = {'relative_path': 'main.go', 'package': 'main', 'imports': [{'package': 'example.org/lib/data'}]}
++    assert extract(tmp_path, 'go', {'main.go': file})[0]['to'] == 'project/lib/data'
++    write(tmp_path / 'go.mod', 'module example.org/app\nreplace example.org/lib => ./lib\n')
++    assert 'unresolved' in extract(tmp_path, 'go', {'main.go': file})[0]
++
++
++def test_go_implementation_imports_allow_check_and_repair(helper, tmp_path):
++    spec, source, design, bundle, validation = make_spec(tmp_path, helper)
++    assert validation.success
++    assert not design.accept(bundle)
++    # Empty design -> ordinary implementation imports + necessary project config.
++    write(tmp_path / 'go.mod', 'module example.org/echo\ngo 1.22\n')
++    text = source.read_text(encoding='utf-8').replace('package example', 'package example\nimport "fmt"')
++    write(source, text.rstrip() + ' { _ = fmt.Sprint(value); return value, true }\n')
++    bundle, checked = validate_bundle(spec, helper)
++    assert checked.success
++    assert not design.check(bundle)
++    assert not design.check(bundle, complete=False)  # start-implementation repair gate
++    assert Obligations(bundle).manifest()
++    built = subprocess.run([os.environ.get('SPECART_GO', 'go'), 'build', './...'], cwd=tmp_path,
++                           capture_output=True, text=True, timeout=60)
++    assert built.returncode == 0, built.stderr
++    # Internal architecture changes must still be rejected by the same gate.
++    write(source, source.read_text(encoding='utf-8').replace('import "fmt"', 'import ("fmt"; _ "example.org/echo/data")'))
++    bundle, _ = validate_bundle(spec, helper)
++    assert 'SA187' in {d.code for d in design.check(bundle, complete=False)}
+ 
+ 
+ @pytest.mark.parametrize('member,expected', [('Left', None), ('Right', None), ('Missing', 'SA145')])

@@ -1,0 +1,4 @@
+ir     adapted  102058  new   83637   82.0%  recorded input_tokens 27972  warnings 0  {"segments_with_text":48}
+ci     adapted   43169  new   26258   60.8%  recorded input_tokens 14941  warnings 0  {"segments_pointed":47,"segment_chars_pointed":18783,"segments_with_text":1,"requirements_never_in_a_delivery":7,"deliveries_referenced":0}
+check  adapted   70531  new   45933   65.1%  recorded input_tokens 21712  warnings 0  {"segments_pointed":47,"segment_chars_pointed":18783,"segments_with_text":1,"requirements_never_in_a_delivery":7,"deliveries_referenced":0,"ir_texts_pointed_at_delivery":7,"ir_text_chars_pointed":18785}
+assess adapted   52781  new   36076   68.4%  recorded input_tokens 17137  warnings 0  {"ir_texts_pointed_at_delivery":7,"ir_text_chars_pointed":18785}

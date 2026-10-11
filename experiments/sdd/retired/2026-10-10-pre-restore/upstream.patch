@@ -1,0 +1,805 @@
+--- a/.agents/skills/specart-author/SKILL.md
++++ b/.agents/skills/specart-author/SKILL.md
+@@ -1,6 +1,6 @@
+ ---
+ name: specart-author
+-description: "Execute Root-delegated source-skeleton design: declarations, contracts, UI and summary for an existing Cangjie or ArkTS project; preserve existing function bodies. 中文触发词：委派规格编写、规格修订、源码骨架。"
++description: "Execute Root-delegated source-skeleton design: declarations, contracts, UI and summary for an existing Cangjie, ArkTS or Go project; preserve existing function bodies. 中文触发词：委派规格编写、规格修订、源码骨架。"
+ ---
+ 
+ # Author SpecArt
+@@ -18,7 +18,7 @@
+ 1. Read the complete requirements, relevant code, and available UI evidence. If a system overview or design is provided, reflect its system boundaries, modules, interfaces, and dependency direction; return `SPEC_GAP` if it conflicts with the requirements. Do not invent missing behavior.
+ 2. Read `../specart/assets/format-reference.md`. Use the matching language example.
+ 3. When an HTML prototype exists, use `ui-prototype-explorer` to inspect the rendered UI and required paths. Use `ui-component-registry` read-only for UI vocabulary and `specart-predicates` read-only for structured predicates.
+-4. Determine the real target implementation language from the user, established project configuration, or the single unambiguous design choice, and write it in `language`. Cangjie uses `.cj`; ArkTS uses `.ets` or project `.ts`. Unsupported source languages return `SPEC_GAP`. If the implementation language cannot be determined, return `SPEC_GAP`.
++4. Determine the real target implementation language from the user, established project configuration, or the single unambiguous design choice, and write it in `language`. Cangjie uses `.cj`; ArkTS uses `.ets` or project `.ts`; Go uses `.go`. Unsupported source languages return `SPEC_GAP`. If the implementation language cannot be determined, return `SPEC_GAP`.
+ 5. Set `formal_proof: false` by default. Set it to `true` only when the user explicitly asks for strict verification, strict mode, formal proof, or an unambiguous equivalent. Ordinary requests to implement, check, validate, or verify do not enable strict formal proof. Only Cangjie supports `formal_proof: true`; return `SPEC_GAP` if strict formal proof is required for another language.
+ 6. Write declarations in their final project files. New functions have signatures only; existing functions retain their bodies and gain `@pendingUpdate`. Function APIs require a complete contract block first among associated comments, including `@src`. Types/fields need contracts only when they have behavior to specify. Mark each listed declaration with `@changedBy <task-ID>` in an associated comment, independently of whether it has a contract. Top-level target functions are APIs.
+ 7. Design the required project-internal package dependencies with real imports. Write `summary.yaml` with task ID, each changed/new declaration's file, complete signature, its contract if present and owner when needed. Include changes to contracts even when the signature is unchanged. Supply A2UI when Root requires UI. Use script-generated references when short API names are ambiguous.
+@@ -35,3 +35,7 @@
+ - `SPEC_READY`: specification path, Author self-validation success, evidence used, and explicit uncertainties.
+ - `SPEC_GAP`: missing/conflicting requirement or unsupported predicate/UI vocabulary and the affected identity.
+ - `BLOCKED`: unavailable permission, input, environment, or tool plus attempted remediation.
++
++## Go source adapter
++
++For a Go target, read `../specart/references/go-language.md` before writing or reviewing declarations and contracts. The Go adapter preserves the same design, implementation and independent verification gates.
+--- a/.agents/skills/specart-implement/SKILL.md
++++ b/.agents/skills/specart-implement/SKILL.md
+@@ -30,3 +30,7 @@
+ - `IMPLEMENTED`: changed files and relevant existing tests run, if any.
+ - `SPEC_GAP`: affected clause/identity, concrete implementation constraint, and confirmation that the specification was not changed.
+ - `BLOCKED`: unavailable permission, input, environment, dependency, or tool plus attempted remediation.
++
++## Go source adapter
++
++For a Go target, read `../specart/references/go-language.md` before writing or reviewing declarations and contracts. The Go adapter preserves the same design, implementation and independent verification gates.
+--- a/.agents/skills/specart-verify/SKILL.md
++++ b/.agents/skills/specart-verify/SKILL.md
+@@ -48,3 +48,7 @@
+ - `BLOCKED`: unresolved counterexample/risk or concrete evidence, environment, solver, or tool blocker.
+ 
+ Do not create a Repair Agent or continue a repair loop. Do not falsify evidence or review toward PASS. `SLICE_PROVED` proves only the selected slice; every machine result remains `COMPLETENESS_NOT_CHECKED`.
++
++## Go source adapter
++
++For a Go target, read `../specart/references/go-language.md` before writing or reviewing declarations and contracts. The Go adapter preserves the same design, implementation and independent verification gates.
+--- a/.agents/skills/specart/SKILL.md
++++ b/.agents/skills/specart/SKILL.md
+@@ -65,3 +65,7 @@
+ - Use validator-generated artifacts directly and follow its diagnostics and rerun actions.
+ 
+ Root does not load format, predicate, UI catalog, witness, SMT, fallback, or report-schema details.
++
++## Go source adapter
++
++For a Go target, read `../specart/references/go-language.md` before writing or reviewing declarations and contracts. The Go adapter preserves the same design, implementation and independent verification gates.
+--- /dev/null
++++ b/.agents/skills/specart/assets/validator/go/main.go
+@@ -0,0 +1,258 @@
++// SpecArt's source-only Go adapter. It never loads or executes project code.
++package main
++
++import (
++	"encoding/json"
++	"fmt"
++	"go/ast"
++	"go/parser"
++	"go/token"
++	"os"
++	"strconv"
++	"strings"
++)
++
++type record = map[string]any
++type reader struct {
++	fs  *token.FileSet
++	src []byte
++}
++
++func (r reader) text(n ast.Node) string {
++	if n == nil {
++		return ""
++	}
++	return string(r.src[r.fs.Position(n.Pos()).Offset:r.fs.Position(n.End()).Offset])
++}
++func (r reader) position(n ast.Node) record {
++	p, e := r.fs.Position(n.Pos()), r.fs.Position(n.End())
++	return record{"line": p.Line, "column": p.Column, "end_line": e.Line, "end_column": e.Column}
++}
++func modifiers(name string) []string {
++	if ast.IsExported(name) {
++		return []string{"public"}
++	}
++	return []string{"private"}
++}
++func (r reader) values(fields *ast.FieldList) []record {
++	out := []record{}
++	if fields == nil {
++		return out
++	}
++	for _, f := range fields.List {
++		if len(f.Names) == 0 {
++			out = append(out, record{"name": "", "type": r.text(f.Type)})
++			continue
++		}
++		for _, name := range f.Names {
++			out = append(out, record{"name": name.Name, "type": r.text(f.Type)})
++		}
++	}
++	return out
++}
++func (r reader) function(name string, typ *ast.FuncType, node ast.Node, body *ast.BlockStmt) record {
++	returns := r.values(typ.Results)
++	types := []string{}
++	for _, v := range returns {
++		types = append(types, v["type"].(string))
++	}
++	ret := ""
++	if len(types) == 1 {
++		ret = types[0]
++	} else if len(types) > 1 {
++		ret = "(" + strings.Join(types, ", ") + ")"
++	}
++	source := r.text(node)
++	sig := source
++	bodyText := ""
++	count := 0
++	locals := []record{}
++	if body != nil {
++		sig = string(r.src[r.fs.Position(node.Pos()).Offset:r.fs.Position(body.Pos()).Offset])
++		bodyText = r.text(body)
++		count = len(body.List)
++		ast.Inspect(body, func(n ast.Node) bool {
++			switch v := n.(type) {
++			case *ast.ValueSpec:
++				t := ""
++				if v.Type != nil {
++					t = r.text(v.Type)
++				}
++				for _, id := range v.Names {
++					locals = append(locals, record{"name": id.Name, "type": t})
++				}
++			case *ast.AssignStmt:
++				if v.Tok == token.DEFINE {
++					for _, expr := range v.Lhs {
++						if id, ok := expr.(*ast.Ident); ok {
++							locals = append(locals, record{"name": id.Name, "type": ""})
++						}
++					}
++				}
++			}
++			return true
++		})
++	}
++	return record{"kind": "function", "name": name, "modifiers": modifiers(name), "parameters": r.values(typ.Params),
++		"return_type": ret, "return_values": returns, "source": source, "signature": strings.TrimSpace(sig),
++		"body": bodyText, "body_present": body != nil, "body_statement_count": count, "abstract": false,
++		"position": r.position(node), "locals": locals}
++}
++func receiverName(expr ast.Expr) string {
++	switch t := expr.(type) {
++	case *ast.Ident:
++		return t.Name
++	case *ast.StarExpr:
++		return receiverName(t.X)
++	case *ast.IndexExpr:
++		return receiverName(t.X)
++	case *ast.IndexListExpr:
++		return receiverName(t.X)
++	case *ast.SelectorExpr:
++		return t.Sel.Name
++	}
++	return ""
++}
++func (r reader) members(fields *ast.FieldList, iface bool) []record {
++	out := []record{}
++	for _, field := range fields.List {
++		if fn, ok := field.Type.(*ast.FuncType); ok && iface && len(field.Names) == 1 {
++			rec := r.function(field.Names[0].Name, fn, field, nil)
++			rec["abstract"] = true
++			out = append(out, rec)
++			continue
++		}
++		names := field.Names
++		if len(names) == 0 {
++			name := receiverName(field.Type)
++			if name == "" {
++				name = r.text(field.Type)
++			}
++			names = []*ast.Ident{{Name: name}}
++		}
++		// Each field name is addressable; the complete grouped signature stays protected.
++		for _, n := range names {
++			out = append(out, record{"kind": "field", "name": n.Name, "type": r.text(field.Type),
++				"modifiers": modifiers(n.Name), "source": r.text(field), "signature": r.text(field), "position": r.position(field)})
++		}
++	}
++	return out
++}
++func (r reader) typeRecord(t *ast.TypeSpec) record {
++	rec := record{"kind": "declaration", "name": t.Name.Name, "modifiers": modifiers(t.Name.Name),
++		"source": "type " + r.text(t), "signature": "type " + r.text(t), "position": r.position(t)}
++	var fields *ast.FieldList
++	var brace token.Pos
++	switch typ := t.Type.(type) {
++	case *ast.StructType:
++		fields = typ.Fields
++		brace = typ.Fields.Opening
++		rec["kind"] = "struct"
++	case *ast.InterfaceType:
++		fields = typ.Methods
++		brace = typ.Methods.Opening
++		rec["kind"] = "interface"
++	}
++	if fields != nil {
++		rec["signature"] = strings.TrimSpace("type " + string(r.src[r.fs.Position(t.Pos()).Offset:r.fs.Position(brace).Offset]))
++		rec["members"] = r.members(fields, rec["kind"] == "interface")
++	}
++	return rec
++}
++func main() {
++	args := os.Args[1:]
++	fragment := len(args) == 2 && args[0] == "--declaration"
++	if fragment {
++		args = args[1:]
++	}
++	if len(args) != 1 {
++		fail("", "expected [--declaration] source.go")
++	}
++	path := args[0]
++	src, err := os.ReadFile(path)
++	if err != nil {
++		fail(path, err.Error())
++	}
++	if fragment {
++		src = append([]byte("package specart_fragment\n"), src...)
++	}
++	fs := token.NewFileSet()
++	file, err := parser.ParseFile(fs, path, src, parser.ParseComments|parser.AllErrors)
++	if err != nil {
++		fail(path, err.Error())
++	}
++	r := reader{fs, src}
++	decls := []record{}
++	imports := []record{}
++	comments := []record{}
++	for _, group := range file.Comments {
++		for _, c := range group.List {
++			p := fs.Position(c.Pos())
++			comments = append(comments, record{"value": c.Text, "line": p.Line, "column": p.Column})
++		}
++	}
++	for _, imp := range file.Imports {
++		value, e := strconv.Unquote(imp.Path.Value)
++		if e != nil {
++			fail(path, e.Error())
++		}
++		imports = append(imports, record{"package": value, "position": r.position(imp)})
++	}
++	for _, d := range file.Decls {
++		switch n := d.(type) {
++		case *ast.FuncDecl:
++			rec := r.function(n.Name.Name, n.Type, n, n.Body)
++			if n.Recv != nil {
++				if len(n.Recv.List) != 1 || len(n.Recv.List[0].Names) > 1 {
++					fail(path, "method must have exactly one receiver")
++				}
++				owner := receiverName(n.Recv.List[0].Type)
++				if owner == "" {
++					fail(path, "unsupported receiver type")
++				}
++				rec["owner"] = owner
++				rec["receiver"] = r.values(n.Recv)[0]
++			}
++			decls = append(decls, rec)
++		case *ast.GenDecl:
++			if n.Tok == token.IMPORT {
++				continue
++			}
++			if n.Tok == token.TYPE {
++				for _, spec := range n.Specs {
++					t := spec.(*ast.TypeSpec)
++					rec := r.typeRecord(t)
++					if len(n.Specs) == 1 && !n.Lparen.IsValid() {
++						rec["position"] = r.position(n)
++					}
++					decls = append(decls, rec)
++				}
++			} else {
++				names := []string{}
++				bodies := []string{}
++				ast.Inspect(n, func(node ast.Node) bool {
++					if fn, ok := node.(*ast.FuncLit); ok {
++						bodies = append(bodies, r.text(fn.Body))
++						return false
++					}
++					return true
++				})
++				for _, s := range n.Specs {
++					for _, id := range s.(*ast.ValueSpec).Names {
++						names = append(names, id.Name)
++					}
++				}
++				decls = append(decls, record{"kind": "declaration", "name": strings.Join(names, ","), "source": r.text(n), "signature": r.text(n),
++					"position": r.position(n), "implementation_bodies": bodies, "modifiers": []string{}})
++			}
++		default:
++			fail(path, "unsupported declaration")
++		}
++	}
++	json.NewEncoder(os.Stdout).Encode(record{"schema_version": 1, "package": file.Name.Name, "declarations": decls, "imports": imports, "comments": comments, "diagnostics": []record{}})
++}
++func fail(path, message string) {
++	json.NewEncoder(os.Stdout).Encode(record{"schema_version": 1, "diagnostics": []record{{"code": "SA103", "file": path, "message": message}}})
++	fmt.Fprintln(os.Stderr, message)
++	os.Exit(1)
++}
+--- a/.agents/skills/specart/assets/validator/python/specart/adapters/spec.py
++++ b/.agents/skills/specart/assets/validator/python/specart/adapters/spec.py
+@@ -5,6 +5,7 @@
+ from typing import Any
+ 
+ from ..helpers.arkts import ArktsHelperClient
++from ..helpers.go import GoHelperClient
+ from ..languages import LanguageCapability
+ 
+ 
+@@ -13,6 +14,9 @@
+ 
+ 
+ 
++
++    def parse_declaration(self, path: str, *, relative_path: str) -> dict:
++        return self.parse_file(path, relative_path=relative_path)
+ 
+     def normalize_type(self, name: object) -> str:
+         return re.sub(r"<.*>$", "", re.sub(r"^\?", "", str(name))).strip()
+@@ -99,7 +103,33 @@
+ 
+ 
+ 
++class GoSpecAdapter(BaseSpecAdapter):
++    def __init__(self, validator_root: str):
++        self.helper = GoHelperClient(validator_root)
++
++    def parse_file(self, path: str, *, relative_path: str) -> dict:
++        return self.helper.parse_file(path)
++
++    def parse_declaration(self, path: str, *, relative_path: str) -> dict:
++        return self.helper.parse_file(path, declaration=True)
++
++    def normalize_type(self, name: object) -> str:
++        # Preserve containers and numeric widths; only pointers name their base type.
++        return str(name).strip().lstrip('*').strip()
++
++    def _unit_type(self) -> str:
++        return ''
++
++    def literal_type(self, source: str) -> str | None:
++        return None  # Go untyped constants require context; never infer a concrete width.
++
++    def compatible_types(self, actual: str, expected: str) -> bool:
++        return actual == expected
++
++
+ def build_adapter(capability: LanguageCapability, *, cangjie_helper: Any, validator_root: str) -> BaseSpecAdapter:
++    if capability.spec_adapter == "go":
++        return GoSpecAdapter(validator_root)
+     if capability.spec_adapter == "arkts":
+         return ArktsSpecAdapter(ArktsHelperClient(validator_root))
+     return CangjieSpecAdapter(cangjie_helper)
+--- a/.agents/skills/specart/assets/validator/python/specart/bundle.py
++++ b/.agents/skills/specart/assets/validator/python/specart/bundle.py
+@@ -253,7 +253,7 @@
+                     with tempfile.TemporaryDirectory(prefix='specart-signature-') as directory:
+                         path = Path(directory) / Path(entry['file']).name
+                         path.write_text(entry['signature'], encoding='utf-8')
+-                        parsed = self.adapter.parse_file(str(path), relative_path=entry['file'])
++                        parsed = self.adapter.parse_declaration(str(path), relative_path=entry['file'])
+                         roots = parsed.get('declarations') or []
+                         if len(roots) == 1 and 'members' in roots[0]:
+                             type_signature = roots[0]
+--- a/.agents/skills/specart/assets/validator/python/specart/dependencies.py
++++ b/.agents/skills/specart/assets/validator/python/specart/dependencies.py
+@@ -129,12 +129,39 @@
+         return result
+ 
+ 
++class GoImports:
++    def __init__(self, root: Path):
++        self.root = root.resolve()
++
++    def extract(self, file: dict) -> list[dict]:
++        directory = (self.root / file['relative_path']).parent
++        module_root = directory
++        module = None
++        while module_root.is_relative_to(self.root):
++            manifest = module_root / 'go.mod'
++            if manifest.is_file():
++                match = re.search(r'^\s*module\s+("[^"\n]+"|[^\s/][^\s]*)', manifest.read_text(encoding='utf-8'), re.M)
++                if not match:
++                    raise ValueError('go.mod has no module declaration')
++                module = match.group(1).strip('"')
++                break
++            if module_root == self.root:
++                break
++            module_root = module_root.parent
++        relative = directory.relative_to(module_root if module else self.root).as_posix()
++        owner = (module or 'project') + ('' if relative == '.' else '/' + relative)
++        if not file.get('package'):
++            raise ValueError('Go package declaration missing')
++        return [{'from': owner, 'to': imported['package'], 'file': file['relative_path'],
++                 'position': imported.get('position', {})} for imported in file.get('imports', [])]
++
++
+ def extract(root: Path, language: str, files: dict) -> list[dict]:
+-    if language not in {'cangjie', 'arkts'}:
++    if language not in {'cangjie', 'arkts', 'go'}:
+         raise ValueError(f'unsupported import language: {language}')
+     failures = (ValueError, OSError, TypeError, KeyError, AttributeError, SyntaxError)
+     try:
+-        adapter = CangjieImports(root, files) if language == 'cangjie' else ArktsImports(root)
++        adapter = GoImports(root) if language == 'go' else CangjieImports(root, files) if language == 'cangjie' else ArktsImports(root)
+     except failures as error:
+         return [{'file': file['relative_path'], 'unresolved': str(error)} for file in files.values()]
+     result = []
+--- /dev/null
++++ b/.agents/skills/specart/assets/validator/python/specart/helpers/go.py
+@@ -0,0 +1,49 @@
++"""Build a content-addressed standard-library helper; never execute target code."""
++from __future__ import annotations
++
++import hashlib
++import json
++import os
++from pathlib import Path
++import subprocess
++import tempfile
++
++from .cangjie import HelperError, _locked_file
++from ..diagnostics import Diagnostic
++
++
++class GoHelperClient:
++    def __init__(self, validator_root):
++        self.source = Path(validator_root) / 'go/main.go'
++
++    def parse_file(self, path, *, declaration=False):
++        try:
++            override = os.environ.get('SPECART_GO_HELPER')
++            if override:
++                binary = Path(override)
++            else:
++                go = os.environ.get('SPECART_GO', 'go')
++                key = hashlib.sha256(self.source.read_bytes() + go.encode()).hexdigest()[:20]
++                directory = Path(tempfile.gettempdir()) / 'specart' / ('go-' + key)
++                binary = directory / ('helper.exe' if os.name == 'nt' else 'helper')
++                with _locked_file(directory / 'build.lock'):
++                    if not binary.exists():
++                        target = binary.with_suffix('.building.exe' if os.name == 'nt' else '.building')
++                        result = subprocess.run([go, 'build', '-o', str(target), str(self.source)],
++                                                capture_output=True, text=True, encoding='utf-8',
++                                                env={**os.environ, 'GOPROXY': 'off', 'GOSUMDB': 'off'}, timeout=120)
++                        if result.returncode:
++                            raise ValueError(result.stderr)
++                        target.replace(binary)
++            result = subprocess.run([str(binary), *(['--declaration'] if declaration else []), str(path)],
++                                    capture_output=True, text=True, encoding='utf-8', timeout=30)
++            data = json.loads(result.stdout)
++            if result.returncode or data.get('diagnostics'):
++                raise ValueError(str(data.get('diagnostics') or result.stderr))
++            if data.get('schema_version') != 1 or not isinstance(data.get('declarations'), list):
++                raise ValueError('invalid Go helper protocol')
++            return data
++        except (OSError, ValueError, subprocess.SubprocessError) as error:
++            raise HelperError(Diagnostic(code='SA103', title='Go 声明解析失败', file=str(path),
++                                        found=str(error), reason='Go parser 必须成功返回完整声明。',
++                                        suggestion='检查 Go 工具链与源码；不回退到其他语言。')) from error
+--- a/.agents/skills/specart/assets/validator/python/specart/languages.py
++++ b/.agents/skills/specart/assets/validator/python/specart/languages.py
+@@ -19,13 +19,18 @@
+         return {
+             "implementation_language": self.implementation_language,
+             "spec_language": self.spec_language,
+-            "spec_adapter": "cangjie-std.ast" if self.spec_adapter == "cangjie" else "arkts-typescript",
++            "spec_adapter": {"cangjie": "cangjie-std.ast", "arkts": "arkts-typescript", "go": "go-ast"}[self.spec_adapter],
+             "proof_adapter": self.proof_adapter_id,
+             "verification_mode": self.verification_mode,
+         }
+ 
+ 
+ _REGISTERED = {
++    "go": LanguageCapability(
++        implementation_language="go", spec_extension=".go", spec_adapter="go",
++        implementation_extensions=(".go",), proof_adapter=None, proof_adapter_id=None,
++        spec_language="go", verification_mode="llm-only",
++    ),
+     "cangjie": LanguageCapability(
+         implementation_language="cangjie",
+         spec_extension=".cj",
+--- a/.agents/skills/specart/assets/validator/python/specart/source_model.py
++++ b/.agents/skills/specart/assets/validator/python/specart/source_model.py
+@@ -36,7 +36,8 @@
+     result = []
+     def walk(records, owner='', abstract=False):
+         for record in records:
+-            record['owner'] = owner
++            # Go methods are top-level declarations with an explicit receiver owner.
++            record['owner'] = owner or (record.get('owner', '') if record.get('receiver') else '')
+             record['signature'] = signature(record)
+             modifiers = record.get('modifiers', [])
+             record['visibility'] = next((m for m in modifiers if m in {'private', 'internal', 'protected', 'public'}), 'default')
+--- a/.agents/skills/specart/assets/validator/python/specart/validator.py
++++ b/.agents/skills/specart/assets/validator/python/specart/validator.py
+@@ -553,6 +553,9 @@
+         owner = function.get("owner")
+         fields = self._class_members(owner, "field")
+         params = {item.get("name"): item.get("type") for item in function.get("parameters") or []}
++        if self.bundle.language == 'go' and function.get('receiver', {}).get('name'):
++            receiver = function['receiver']
++            params[receiver['name']] = receiver['type']
+         local_records = list(function.get("locals") or [])
+         locals_ = {item.get("name") for item in local_records}
+         local_types = {item.get("name"): item.get("type") for item in local_records}
+@@ -560,7 +563,9 @@
+         for access in expression_ir.get("member_accesses") or []:
+             base, member = str(access.get("base", "")), access.get("member")
+             source = access.get("source")
+-            if base == "this" and member not in fields:
++            if self.bundle.language == 'go' and (base == 'result' or base.startswith('result.')):
++                self._validate_go_result_access(function, base, member, file, source, common)
++            elif base == "this" and member not in fields:
+                 self._error("SA140", "this 成员不存在", file, source, f"{owner} 没有该成员。", "修正成员名或补充 class 状态声明。", *common)
+             elif base == "result" and self._unit_type(function.get("return_type")):
+                 self._error("SA141", "Unit 函数引用 result", file, source, "只有非 Unit 函数提供隐式 result。", "删除 result 引用或声明实际返回类型。", *common)
+@@ -592,6 +597,35 @@
+             else:
+                 self._validate_old_scope(function, clause, argument, set(params), set(fields))
+ 
++    def _validate_go_result_access(self, function, base, member, file, source, common):
++        values = function.get('return_values', [])
++        if not values:
++            self._error('SA141', '无返回值函数引用 result', file, source,
++                        'Go 声明没有返回值。', '删除 result 引用。', *common)
++            return
++        path = base.split('.')[1:] + [member]
++        if len(values) > 1:
++            slots = {f'item{i + 1}': value['type'] for i, value in enumerate(values)}
++            first = path.pop(0)
++            if first not in slots:
++                self._error('SA145', '返回值位置不存在', file, source,
++                            f'有效位置为 {", ".join(slots)}。', '按 Go 声明顺序引用 result.itemN。', *common)
++                return
++            type_name = slots[first]
++        else:
++            type_name = values[0]['type']
++        for name in path:
++            known = self._type_members(type_name, None)
++            if not known:
++                # As with other source adapters, unavailable type definitions are
++                # not evidence that a member exists; the independent review remains necessary.
++                return
++            if name not in known:
++                self._error('SA145', '返回类型成员不存在', file, source,
++                            f'{type_name} 没有 {name}。', '修正规约中的成员名。', *common)
++                return
++            type_name = known[name].get('type', '')
++
+     def _validate_old_scope(self, function: dict, clause: dict, argument: str,
+                             params: set[str], fields: set[str]) -> None:
+         ir = self._parse_expression(argument, self._file_path(function["relative_path"]), clause.get("line") or 1)
+@@ -663,6 +697,11 @@
+             item for file in self.bundle.files.values() for item in file.get("declarations") or []
+             if item.get("kind") in allowed_kinds and item.get("name") == nominal
+         ]
++        if self.bundle.language == 'go':
++            active = getattr(self, '_active_file', '')
++            # Identical type names in different Go package directories are unrelated.
++            matches = [item for item in matches
++                       if Path(item.get('relative_path', '')).parent == Path(active).parent]
+         local = [item for item in matches if item.get('relative_path') == getattr(self, '_active_file', None)]
+         candidates = local or matches
+         declaration = candidates[0] if len(candidates) == 1 else None
+--- /dev/null
++++ b/.agents/skills/specart/references/go-language.md
+@@ -0,0 +1,51 @@
++# Go 源码适配
++
++使用 `language: go`、真实 `.go` 文件和 `--ui none`（仅当任务无 UI）。
++Go 使用现有源码设计、独立审查、accept-design、start-implementation、check、obligations、prove、report 生命周期。
++没有 Go 实现证明适配器：`formal_proof: false`，独立 Verifier 按原 fallback 规则寻找反例并绑定源码证据；不得把能力受限写成 PROVED。
++
++## 声明与来源
++
++- 新函数在设计阶段写完整签名而不写函数体；实现阶段才补函数体并通过真实 Go 构建。
++- 已有函数保留函数体，设计修改用 `@pendingUpdate`，实现后移除此标记。
++- 用紧邻声明的 `/* ... */` 块保存 `行为规约:`、`@behavior`、`@src` 和 `@changedBy`。不把分散的多行 `//` 注释假定为一个规约块。
++- summary 仍使用 `file/signature/owner/behavior/previous_signature`。类型 signature 写完整成员结构，包括嵌入字段、字段标签、接口方法；不带 package 行。
++- 普通函数 owner 留空；方法 owner 是 receiver 的基础类型，例如 `Reader`。签名仍保留 `(r *Reader)`，不得丢掉指针、泛型、变长参数或返回值顺序。
++- Go helper 只解析源码，不加载依赖或执行项目。语法解析不代替构建；包依赖检查限于 summary 文件的 import 边，不声称检查了整个模块图或依赖版本。
++- 成员检查只读取 summary 涉及的源码；需要检查跨文件类型时，显式把该类型声明列入 summary。同名类型按 Go package 目录区分。
++
++## 行为表达式
++
++规约继续采用 SpecArt 表达式和谓词，不能直接把任意 Go 表达式放进 clause。
++
++| 返回声明 | 规约引用 |
++| --- | --- |
++| 无返回值 | 不可引用 result |
++| 一个返回值 | result；若类型定义可解析，可引用其成员 |
++| 多个返回值 | result.item1、result.item2……，严格按声明顺序 |
++
++命名与未命名返回值使用相同位置约定。`(value int, ok bool)` 的第二项不是 error，也不提供 `result.ok` 别名。位置只存在于规约解释中，不往 Go 源码添加结构体。
++方法通过真实 receiver 名称引用状态，例如 `OLD(r.Count)`。返回值不在入口可见，`OLD(result.item1)` 无效。
++外部类型、推断类型等解析信息不足时，成员正确性仍需独立审查与构建证据，不能把缺少诊断写成类型证明。
++
++Go helper 从标准库源码构建到临时缓存。可通过 `SPECART_GO` 指定 Go 可执行文件，或用 `SPECART_GO_HELPER` 指定已构建的 helper。行为表达式仍依赖现有仓颉 helper；不得因目标语言是 Go 就删掉该依赖。
++
++## 最小声明示例
++
++先执行现有 start-design，将返回的 task_id 替换下面的 TASK_ID，再按正常流程生成 manifest 和 summary。下面是设计骨架，不能直接当成已验收或已实现代码。
++
++```go
++package example
++
++/* 行为规约:
++返回输入与成功标记。
++@behavior
++@src requirements.md#echo
++@changedBy TASK_ID
++@ensures result.item1 == value
++@ensures result.item2 == true
++*/
++func Echo(value int) (int, bool)
++```
++
++summary 中的 signature 为 `func Echo(value int) (int, bool)`，behavior 与源码规约一致。accept-design 成功后才补 `{ return value, true }`，随后执行 check、真实构建和独立验证。多返回值与 receiver 的可运行离线例子见 `tests/specart-validator/test_go_adapter.py`。
+--- /dev/null
++++ b/tests/specart-validator/test_go_adapter.py
+@@ -0,0 +1,164 @@
++from __future__ import annotations
++
++import copy
++from pathlib import Path
++
++import pytest
++import yaml
++
++from conftest import validate_bundle, VALIDATOR_ROOT
++from specart.adapters.spec import GoSpecAdapter
++from specart.helpers.cangjie import HelperError
++from specart.source_model import declarations
++from specart.dependencies import extract, changes
++from specart.design import Design
++from specart.obligations import Obligations, ReportValidator
++from specart.proof import Engine
++
++
++def write(path, text):
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text(text, encoding='utf-8')
++
++
++def make_spec(root, helper, signature='func Echo(value int) (int, bool)', clause='result.item1 == value', existing=False):
++    root.mkdir(parents=True, exist_ok=True)
++    source, spec = root / 'main.go', root / '.specart'
++    if existing:
++        write(source, 'package example\n' + signature + ' { return value, true }\n')
++    design = Design(spec, root)
++    task_id = design.begin('go', ui='none')
++    behavior = f'''/* 行为规约:
++返回输入及成功标记。
++@behavior
++@src requirements.md#echo
++@changedBy {task_id}
++''' + ('@pendingUpdate\n' if existing else '') + f'@ensures {clause}\n*/'
++    write(source, 'package example\n' + behavior + '\n' + signature + (' { return value, true }' if existing else '') + '\n')
++    manifest = {'version': '2.0', 'language': 'go', 'formal_proof': False,
++                'feature_context': {'sources': ['requirements.md'], 'goal': 'echo', 'success_signals': [], 'out_of_scope': []},
++                'traceability_and_validation': {key: [] for key in ('pm_to_spec_trace', 'nl_to_intent_trace', 'architecture_to_code_trace', 'spec_to_test_trace')}}
++    write(spec / 'specart.yaml', yaml.safe_dump(manifest))
++    write(spec / 'summary.yaml', yaml.safe_dump({'task_id': task_id, 'declarations': [
++        {'file': 'main.go', 'signature': signature, 'behavior': behavior}]}))
++    bundle, validation = validate_bundle(spec, helper)
++    return spec, source, design, bundle, validation
++
++
++def test_real_go_parser_receiver_and_fragments(tmp_path):
++    adapter = GoSpecAdapter(str(VALIDATOR_ROOT))
++    source = tmp_path / 'model.go'
++    write(source, '''package model
++type Reader struct { Count int `json:"count"` }
++func (r *Reader) Read(value int) (count int, ok bool) { return value, true }
++type Source interface { Read(int) (int, bool) }
++const ( Zero = iota; One )
++''')
++    records = list(declarations(adapter.parse_file(str(source), relative_path='model.go')))
++    method = next(r for r in records if r.get('receiver'))
++    assert method['owner'] == 'Reader'
++    assert method['receiver'] == {'name': 'r', 'type': '*Reader'}
++    assert method['return_values'] == [{'name': 'count', 'type': 'int'}, {'name': 'ok', 'type': 'bool'}]
++    assert method['parameters'] == [{'name': 'value', 'type': 'int'}]
++    assert '*Reader' in method['signature']
++    fragment = tmp_path / 'fragment.go'
++    write(fragment, 'type Reader struct { Count int `json:"count"` }')
++    assert adapter.parse_declaration(str(fragment), relative_path='model.go')['declarations'][0]['kind'] == 'struct'
++    with pytest.raises(HelperError):
++        adapter.parse_file(str(fragment), relative_path='model.go')
++
++
++@pytest.mark.parametrize('signature,clause,expected', [
++    ('func Echo(value int) (int, bool)', 'result.item3 == value', 'SA145'),
++    ('func Echo(value int) (int, bool)', 'result.error == value', 'SA145'),
++    ('func Echo(value int)', 'result == value', 'SA141'),
++    ('func Echo(value int) (int, bool)', 'OLD(result.item1) == value', 'SA144'),
++])
++def test_invalid_return_references(helper, tmp_path, signature, clause, expected):
++    *_, validation = make_spec(tmp_path, helper, signature, clause)
++    assert expected in {d.code for d in validation.diagnostics}
++
++
++@pytest.mark.parametrize('existing', [False, True])
++def test_go_design_implementation_fallback_and_freshness(helper, tmp_path, existing):
++    spec, source, design, bundle, validation = make_spec(tmp_path, helper, existing=existing)
++    assert validation.success, [d.to_text() for d in validation.diagnostics]
++    assert not design.accept(bundle)
++    text = source.read_text(encoding='utf-8').replace('@pendingUpdate\n', '')
++    if not existing:
++        text = text.rstrip() + ' { return value, true }\n'
++    write(source, text)
++    bundle, validation = validate_bundle(spec, helper)
++    assert validation.success
++    assert not design.check(bundle)
++    manifest = Obligations(bundle).manifest()
++    proof = Engine(bundle=bundle, manifest=manifest, witness=None, helper=helper, repo_root=str(tmp_path), solver=None).run()
++    assert proof['verifier']['adapter'] == 'none/go'
++    assert proof['spec_adapter'] == 'go-ast'
++    report = Obligations(bundle).report_skeleton(manifest)
++    for result in report['results']:
++        result.update(conclusion='CAPABILITY_BLOCKED', reasoning='Offline fixture: return values match the clause.',
++                      evidence=copy.deepcopy(report['apis'][0]['evidence']))
++    report['overall'] = 'PASS'
++    def codes(r=report):
++        return {d.code for d in ReportValidator(bundle=bundle, obligation_manifest=manifest, proof_results=proof,
++                                               report=r, enforce_machine_results=True).run().diagnostics}
++    assert not codes()
++    forged = copy.deepcopy(report)
++    forged['results'][0]['conclusion'] = 'PROVED'
++    assert codes(forged)
++    write(source, text + '// later change\n')
++    assert 'SA247' in codes()
++    write(source, text.replace('value int', 'value int64'))
++    changed, _ = validate_bundle(spec, helper)
++    assert design.check(changed)
++
++
++def test_design_rejects_body_edits(helper, tmp_path):
++    spec, source, design, _, _ = make_spec(tmp_path, helper, existing=True)
++    write(source, source.read_text(encoding='utf-8').replace('return value, true', 'return 0, false'))
++    bundle, _ = validate_bundle(spec, helper)
++    assert 'SA183' in {d.code for d in design.accept(bundle)}
++
++
++def test_go_import_edges_include_external_and_local(tmp_path):
++    write(tmp_path / 'go.mod', 'module example.org/app\n')
++    file = {'relative_path': 'pkg/work.go', 'package': 'pkg', 'imports': [{'package': 'example.org/app/data'}, {'package': 'io'}]}
++    before = extract(tmp_path, 'go', {'pkg/work.go': file})
++    assert {(r['from'], r['to']) for r in before} == {('example.org/app/pkg', 'example.org/app/data'), ('example.org/app/pkg', 'io')}
++    after = extract(tmp_path, 'go', {'pkg/work.go': {**file, 'imports': [{'package': 'os'}]}})
++    assert changes(before, after)['added'] == [('example.org/app/pkg', 'os')]
++
++
++@pytest.mark.parametrize('member,expected', [('Left', None), ('Right', None), ('Missing', 'SA145')])
++def test_cross_file_return_members(helper, tmp_path, member, expected):
++    spec, _, _, _, _ = make_spec(tmp_path, helper, 'func Echo(value int) (*Pair, bool)',
++                                f'result.item1.{member} == value')
++    write(tmp_path / 'types.go', 'package example\ntype Pair struct { Left, Right int }\n')
++    include_pair(spec)
++    _, validation = validate_bundle(spec, helper)
++    codes = {d.code for d in validation.diagnostics}
++    if expected:
++        assert expected in codes
++    else:
++        assert 'SA145' not in codes
++
++
++def test_receiver_member_validation(helper, tmp_path):
++    spec, source, _, _, _ = make_spec(tmp_path, helper, 'func (r *Pair) Echo(value int) int', 'result == r.Left')
++    write(tmp_path / 'types.go', 'package example\ntype Pair struct { Left, Right int }\n')
++    include_pair(spec, owner='Pair')
++    _, validation = validate_bundle(spec, helper)
++    assert 'SA142' not in {d.code for d in validation.diagnostics}
++    write(source, source.read_text(encoding='utf-8').replace('r.Left', 'r.Missing'))
++    _, validation = validate_bundle(spec, helper)
++    assert 'SA142' in {d.code for d in validation.diagnostics}
++
++
++def include_pair(spec, owner=None):
++    path = spec / 'summary.yaml'
++    summary = yaml.safe_load(path.read_text(encoding='utf-8'))
++    if owner:
++        summary['declarations'][0]['owner'] = owner
++    summary['declarations'].append({'file': 'types.go', 'signature': 'type Pair struct { Left, Right int }'})
++    write(path, yaml.safe_dump(summary))

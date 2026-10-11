@@ -1,0 +1,12 @@
+{
+  "policy_version": "sdd-count-bounded-v4",
+  "round_deadline_seconds": null,
+  "stage_max_seconds": {"design": null, "coding": null, "prd": null, "final": null, "official": null},
+  "cleanup_reserve_seconds": 60,
+  "verification_reserve_seconds": 120,
+  "stage_repair_limits": {"coding": 2, "prd": 1},
+  "max_total_repairs": 3,
+  "max_design_revisions": 5,
+  "max_document_revisions": 2,
+  "max_auxiliary_delegations": 24
+}

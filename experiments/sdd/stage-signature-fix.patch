@@ -1,0 +1,162 @@
+--- a/.agents/skills/specart/assets/validator/go/main.go
++++ b/.agents/skills/specart/assets/validator/go/main.go
+@@ -2,9 +2,11 @@
+ package main
+ 
+ import (
++	"bytes"
+ 	"encoding/json"
+ 	"fmt"
+ 	"go/ast"
++	"go/format"
+ 	"go/parser"
+ 	"go/token"
+ 	"os"
+@@ -16,6 +18,56 @@
+ type reader struct {
+ 	fs  *token.FileSet
+ 	src []byte
++}
++
++// Expand grouped names for identity comparison while preserving names, types,
++// order, receivers and variadic markers. Source text and contracts stay intact.
++func canonicalSignature(sig string) string {
++	method := !strings.HasPrefix(strings.TrimSpace(sig), "func ")
++	text := sig
++	if method {
++		text = "func " + text
++	}
++	fs := token.NewFileSet()
++	file, err := parser.ParseFile(fs, "signature.go", "package p\n"+text, 0)
++	if err != nil {
++		panic(err)
++	}
++	decl := file.Decls[0].(*ast.FuncDecl)
++	ast.Inspect(decl, func(node ast.Node) bool {
++		fn, ok := node.(*ast.FuncType)
++		if !ok {
++			return true
++		}
++		for _, fields := range []*ast.FieldList{fn.TypeParams, fn.Params, fn.Results} {
++			if fields == nil {
++				continue
++			}
++			expanded := []*ast.Field{}
++			for _, field := range fields.List {
++				if len(field.Names) < 2 {
++					expanded = append(expanded, field)
++					continue
++				}
++				for _, name := range field.Names {
++					copy := *field
++					copy.Names = []*ast.Ident{name}
++					expanded = append(expanded, &copy)
++				}
++			}
++			fields.List = expanded
++		}
++		return true
++	})
++	var out bytes.Buffer
++	if err := format.Node(&out, fs, decl); err != nil {
++		panic(err)
++	}
++	result := strings.TrimSpace(out.String())
++	if method {
++		result = strings.TrimPrefix(result, "func ")
++	}
++	return result
+ }
+ 
+ func (r reader) text(n ast.Node) string {
+@@ -94,7 +146,7 @@
+ 		})
+ 	}
+ 	return record{"kind": "function", "name": name, "modifiers": modifiers(name), "parameters": r.values(typ.Params),
+-		"return_type": ret, "return_values": returns, "source": source, "signature": strings.TrimSpace(sig),
++		"return_type": ret, "return_values": returns, "source": source, "signature": canonicalSignature(sig),
+ 		"body": bodyText, "body_present": body != nil, "body_statement_count": count, "abstract": false,
+ 		"position": r.position(node), "locals": locals}
+ }
+--- a/.agents/skills/specart/assets/validator/python/specart/bundle.py
++++ b/.agents/skills/specart/assets/validator/python/specart/bundle.py
+@@ -248,14 +248,14 @@
+                 continue
+             file = self.files.get(entry.get("file"), {})
+             type_signature = None
+-            if self.adapter and '{' in entry['signature']:
++            if self.adapter and ('{' in entry['signature'] or self.language == 'go'):
+                 try:
+                     with tempfile.TemporaryDirectory(prefix='specart-signature-') as directory:
+                         path = Path(directory) / Path(entry['file']).name
+                         path.write_text(entry['signature'], encoding='utf-8')
+                         parsed = self.adapter.parse_declaration(str(path), relative_path=entry['file'])
+                         roots = parsed.get('declarations') or []
+-                        if len(roots) == 1 and 'members' in roots[0]:
++                        if len(roots) == 1 and ('members' in roots[0] or (self.language == 'go' and roots[0].get('kind') == 'function')):
+                             type_signature = roots[0]
+                             list(declarations(parsed, owner=entry.get('owner', '')))
+                             type_signature['owner'] = entry.get('owner', '')
+--- a/tests/specart-validator/test_go_adapter.py
++++ b/tests/specart-validator/test_go_adapter.py
+@@ -176,6 +176,50 @@
+     assert 'SA187' in {d.code for d in design.check(bundle, complete=False)}
+ 
+ 
++def test_go_grouped_parameters_survive_implementation_and_repair(helper, tmp_path):
++    signature = 'func Echo(a int, b int) (left int, right int)'
++    spec, source, design, bundle, validation = make_spec(tmp_path, helper, signature, 'result.item1 == a')
++    assert validation.success
++    assert not design.accept(bundle)
++    accepted = design.accepted.read_bytes()
++    body = source.read_text(encoding='utf-8').replace(signature, 'func Echo(a, b int) (left, right int)')
++    write(source, body.rstrip() + ' { return a, b }\n')
++    # Real lifecycle entry points, using the same helper and adapter as the runner.
++    cli = VALIDATOR_ROOT / 'bin/specart-validate'
++    for command in ['start-implementation', 'check', 'obligations']:
++        args = [os.sys.executable, str(cli), command, str(spec)]
++        if command == 'obligations':
++            args += ['--output', str(tmp_path / '.specart-verify/obligations.json')]
++        result = subprocess.run(args,
++                                capture_output=True, text=True, encoding='utf-8', timeout=60)
++        assert result.returncode == 0, result.stdout + result.stderr
++    write(source, source.read_text(encoding='utf-8').replace('return a, b', 'return a, b + 0'))
++    bundle, checked = validate_bundle(spec, helper)
++    assert checked.success
++    assert not design.check(bundle, complete=False)
++    assert design.accepted.read_bytes() == accepted
++    # A changed type or a changed behavioral contract must not be normalized away.
++    write(source, source.read_text(encoding='utf-8').replace('a, b int', 'a int, b string'))
++    _, checked = validate_bundle(spec, helper)
++    assert not checked.success
++    write(source, (body.rstrip() + ' { return a, b }\n').replace('返回输入及成功标记。', '返回不同结果。'))
++    _, checked = validate_bundle(spec, helper)
++    assert 'SA180' in {d.code for d in checked.diagnostics}
++
++
++def test_go_grouped_signature_preserves_receiver_generics_and_variadic(tmp_path):
++    adapter = GoSpecAdapter(str(VALIDATOR_ROOT))
++    source = tmp_path / 'types.go'
++    write(source, 'package p\ntype Box[T any] struct{}\n'
++                  'func (b *Box[T]) Mix(a, c int, rest ...T) (x, y T) { panic("stub") }\n')
++    grouped = list(declarations(adapter.parse_file(str(source), relative_path='types.go')))[1]
++    write(source, source.read_text().replace('a, c int', 'a int, c int').replace('x, y T', 'x T, y T'))
++    expanded = list(declarations(adapter.parse_file(str(source), relative_path='types.go')))[1]
++    assert grouped['signature'] == expanded['signature']
++    assert '(b *Box[T])' in grouped['signature']
++    assert '...T' in grouped['signature']
++
++
+ @pytest.mark.parametrize('member,expected', [('Left', None), ('Right', None), ('Missing', 'SA145')])
+ def test_cross_file_return_members(helper, tmp_path, member, expected):
+     spec, _, _, _, _ = make_spec(tmp_path, helper, 'func Echo(value int) (*Pair, bool)',
+--- a/.agents/skills/specart/references/go-language.md
++++ b/.agents/skills/specart/references/go-language.md
+@@ -11,6 +11,7 @@
+ - 用紧邻声明的 `/* ... */` 块保存 `行为规约:`、`@behavior`、`@src` 和 `@changedBy`。不把分散的多行 `//` 注释假定为一个规约块。
+ - summary 仍使用 `file/signature/owner/behavior/previous_signature`。类型 signature 写完整成员结构，包括嵌入字段、字段标签、接口方法；不带 package 行。
+ - 普通函数 owner 留空；方法 owner 是 receiver 的基础类型，例如 `Reader`。签名仍保留 `(r *Reader)`，不得丢掉指针、泛型、变长参数或返回值顺序。
++- 函数参数与命名返回值的合并写法由 Go AST 展开后参与身份匹配，`a, b int` 与 `a int, b int` 等价；名称、顺序、类型及 receiver 仍受保护。实现阶段若意外改动规约注释，应恢复已验收契约，不能通过修改 summary 或验收记录迁就错误实现。真正需要变更设计时才走现有设计修订、独立审查与重新验收流程。
+ - Go helper 只解析源码，不加载依赖或执行项目。语法解析不代替构建；包依赖保护只比较 summary 文件到项目内部包的 import 边，标准库和第三方包不属于此保护范围。包身份使用相对项目目录，go.mod 的 module 名用于解析 import，不作为包身份。支持项目内声明的嵌套 module；不检查依赖版本，也不声称覆盖整个模块图。
+ - 有 import 但缺少 go.mod、模块声明不合法或存在尚不支持的 replace 映射时，保留 unresolved 提取事实，不伪装成完整空依赖图。必要项目配置由实现阶段建立，使用共同配置指定的构建命令验证。
+ - 成员检查只读取 summary 涉及的源码；需要检查跨文件类型时，显式把该类型声明列入 summary。同名类型按 Go package 目录区分。

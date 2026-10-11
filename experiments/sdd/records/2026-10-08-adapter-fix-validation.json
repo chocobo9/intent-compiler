@@ -1,0 +1,39 @@
+{
+  "status": "offline_validation_passed",
+  "branch": "integration/sdd",
+  "date": "2026-10-08",
+  "tests": {
+    "sdd_regression": {
+      "passed": 95,
+      "seconds": 125.59
+    },
+    "shared_preparation_and_runner": {
+      "passed": 14,
+      "seconds": 2.9
+    }
+  },
+  "model_calls": 0,
+  "official_evaluation_runs": 0,
+  "sync_targets": [
+    "D:/sdd/sdd-loop-skeleton",
+    "D:/sdd/prdcheck"
+  ],
+  "sync_remaining_files": 0,
+  "preparation_probe": "D:/huawei/intent_compiler/project/.scratch/sdd-adapter-check-n7w9hv1o",
+  "changes": [
+    "Project-internal Go import protection with stable directory identities",
+    "Native OpenCode argument transport preserving multiline prompts",
+    "Frozen Go build command and toolchain directory",
+    "Common node6/.specart path for design and implementation"
+  ],
+  "sha256": {
+    "prepare.py": "8d59acc419abbbc4fbb6fce253aeffd46607d67c47dffc4b311a45b51406c44d",
+    "run_r1.py": "a157c1dcb5048c00ee0de6d19a3ed6e938ef4cba34da8382d2957659fa5aec82",
+    "sync.py": "8799288ef43874bc2c453f1394d01f7034aa4fdc2b3550bda8f2eb167c52e632",
+    "test_prepare.py": "ae4d6a6b51800920134d399dfd8feeb5874fc8df0eedc67eb43a6154f19a952f",
+    "test_run_r1.py": "86f296bccf32683c62a80116262dcb40307a4f29c0e1953df081fcb4d4250a07",
+    "test_sync.py": "a48d178226241a5cc4cf90e0d6f4ce4b755aaeb2c294ac8aaeb4f05415c57631",
+    "overlay-manifest.json": "e170bc53c739489745032098aeedc68a4a1f8f56f28008c204f72f4494775173",
+    "adaptation-fix.patch": "369efd10f4a6b026995fd1ad53e50d8018648c5668c0b759f82348255635f8cf"
+  }
+}

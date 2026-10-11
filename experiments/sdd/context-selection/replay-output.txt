@@ -1,0 +1,65 @@
+rounds 15; IR differs from the recorded run in rounds: 2[t-dpipe.current_scope t-dpipe.outputs], 3[t-dpipe.outputs], 4[t-dpipe.outputs], 5[t-dpipe.outputs], 6[t-dpipe.outputs], 7[t-dpipe.outputs], 8[t-dpipe.outputs], 9[t-dpipe.outputs], 10[t-dpipe.outputs], 11[t-dpipe.outputs], 12[t-dpipe.outputs], 13[t-dpipe.outputs], 14[t-dpipe.outputs], 15[t-dpipe.outputs]; replay-added context dispositions: 1
+R 1 ir     legacy   109860  new   90423   82.3%  reproducible=true  integrity_problems=0  warnings=0
+R 1 ci     legacy    46601  new   28206   60.5%  reproducible=true  integrity_problems=0  warnings=0
+R 1 check  legacy    69728  new   47873   68.7%  reproducible=true  integrity_problems=0  warnings=0
+R 1 assess legacy    48837  new   31102   63.7%  reproducible=true  integrity_problems=0  warnings=0
+R 2 ir     legacy   219067  new  143203   65.4%  reproducible=true  integrity_problems=0  warnings=0
+R 2 ci     legacy   128316  new   69887   54.5%  reproducible=true  integrity_problems=0  warnings=0
+R 2 check  legacy   204826  new  118224   57.7%  reproducible=true  integrity_problems=0  warnings=0
+R 2 assess legacy   107740  new   65440   60.7%  reproducible=true  integrity_problems=0  warnings=0
+R 3 ir     legacy   283342  new  142399   50.3%  reproducible=true  integrity_problems=0  warnings=0
+R 3 ci     legacy   204588  new  109784   53.7%  reproducible=true  integrity_problems=0  warnings=0
+R 3 check  legacy   322808  new  150880   46.7%  reproducible=true  integrity_problems=0  warnings=0
+R 3 assess legacy   132300  new   87954   66.5%  reproducible=true  integrity_problems=0  warnings=0
+R 4 ir     legacy   316634  new  150425   47.5%  reproducible=true  integrity_problems=0  warnings=0
+R 4 ci     legacy   281779  new  107726   38.2%  reproducible=true  integrity_problems=0  warnings=0
+R 4 check  legacy   419467  new  140930   33.6%  reproducible=true  integrity_problems=0  warnings=0
+R 4 assess legacy   146363  new   97161   66.4%  reproducible=true  integrity_problems=0  warnings=0
+R 5 ir     legacy   341262  new  157382   46.1%  reproducible=true  integrity_problems=0  warnings=0
+R 5 ci     legacy   371843  new  149626   40.2%  reproducible=true  integrity_problems=0  warnings=0
+R 5 check  legacy   523387  new  208049   39.8%  reproducible=true  integrity_problems=0  warnings=0
+R 5 assess legacy   167856  new  132843   79.1%  reproducible=true  integrity_problems=0  warnings=0
+R 6 ir     legacy   369692  new  178905   48.4%  reproducible=true  integrity_problems=0  warnings=0
+R 6 ci     legacy   451144  new  153530   34.0%  reproducible=true  integrity_problems=0  warnings=0
+R 6 check  legacy   621848  new  204260   32.8%  reproducible=true  integrity_problems=0  warnings=0
+R 6 assess legacy   171718  new  134860   78.5%  reproducible=true  integrity_problems=0  warnings=0
+R 7 ir     legacy   379805  new  179557   47.3%  reproducible=true  integrity_problems=0  warnings=0
+R 7 ci     legacy   535410  new  146802   27.4%  reproducible=true  integrity_problems=0  warnings=0
+R 7 check  legacy   709257  new  199405   28.1%  reproducible=true  integrity_problems=0  warnings=0
+R 7 assess legacy   177645  new  142962   80.5%  reproducible=true  integrity_problems=0  warnings=0
+R 8 ir     legacy   396732  new  189181   47.7%  reproducible=true  integrity_problems=0  warnings=0
+R 8 ci     legacy   625338  new  157167   25.1%  reproducible=true  integrity_problems=0  warnings=0
+R 8 check  legacy   806528  new  214094   26.5%  reproducible=true  integrity_problems=0  warnings=0
+R 8 assess legacy   186831  new  148715   79.6%  reproducible=true  integrity_problems=0  warnings=0
+R 9 ir     legacy   414629  new  194995   47.0%  reproducible=true  integrity_problems=0  warnings=0
+R 9 ci     legacy   719747  new  152875   21.2%  reproducible=true  integrity_problems=0  warnings=0
+R 9 check  legacy   910160  new  210698   23.1%  reproducible=true  integrity_problems=0  warnings=0
+R 9 assess legacy   196801  new  156557   79.6%  reproducible=true  integrity_problems=0  warnings=0
+R10 ir     legacy   431312  new  200793   46.6%  reproducible=true  integrity_problems=0  warnings=0
+R10 ci     legacy   815575  new  165138   20.2%  reproducible=true  integrity_problems=0  warnings=0
+R10 check  legacy  1014485  new  223776   22.1%  reproducible=true  integrity_problems=0  warnings=0
+R10 assess legacy   203270  new  161473   79.4%  reproducible=true  integrity_problems=0  warnings=0
+R11 ir     legacy   445717  new  207013   46.4%  reproducible=true  integrity_problems=0  warnings=0
+R11 ci     legacy   913549  new  168007   18.4%  reproducible=true  integrity_problems=0  warnings=0
+R11 check  legacy  1119308  new  227497   20.3%  reproducible=true  integrity_problems=0  warnings=0
+R11 assess legacy   209862  new  166573   79.4%  reproducible=true  integrity_problems=0  warnings=0
+R12 ir     legacy   457619  new  209757   45.8%  reproducible=true  integrity_problems=0  warnings=0
+R12 ci     legacy  1014142  new  180971   17.8%  reproducible=true  integrity_problems=0  warnings=0
+R12 check  legacy  1225477  new  240606   19.6%  reproducible=true  integrity_problems=0  warnings=0
+R12 assess legacy   215312  new  172023   79.9%  reproducible=true  integrity_problems=0  warnings=0
+R13 ir     legacy   476508  new  220978   46.4%  reproducible=true  integrity_problems=0  warnings=0
+R13 ci     legacy  1124259  new  187697   16.7%  reproducible=true  integrity_problems=0  warnings=0
+R13 check  legacy  1343508  new  248937   18.5%  reproducible=true  integrity_problems=0  warnings=0
+R13 assess legacy   228790  new  182192   79.6%  reproducible=true  integrity_problems=0  warnings=0
+R14 ir     legacy   500252  new  234208   46.8%  reproducible=true  integrity_problems=0  warnings=0
+R14 ci     legacy  1237346  new  199189   16.1%  reproducible=true  integrity_problems=0  warnings=0
+R14 check  legacy  1471249  new  260752   17.7%  reproducible=true  integrity_problems=0  warnings=0
+R14 assess legacy   241985  new  190721   78.8%  reproducible=true  integrity_problems=0  warnings=0
+R15 ir     legacy   514943  new  237950   46.2%  reproducible=true  integrity_problems=0  warnings=0
+R15 ci     legacy  1349491  new  211718   15.7%  reproducible=true  integrity_problems=0  warnings=0
+R15 check  legacy  1592748  new  272370   17.1%  reproducible=true  integrity_problems=0  warnings=0
+R15 assess legacy   247273  new  194840   78.8%  reproducible=true  integrity_problems=0  warnings=0
+ir: 15 calls, legacy 5657374, new 2737169 (48.4%)
+ci: 15 calls, legacy 9819128, new 2188323 (22.3%)
+check: 15 calls, legacy 12354784, new 2968351 (24.0%)
+assess: 15 calls, legacy 2682583, new 2065416 (77.0%)

@@ -347,61 +347,8 @@ export class ParentGeneration {
   }
 
   private prepare(proposal: IRProposal): NonNullable<ParentGenerationState["parent"]> {
-    const candidate: Candidate = {
-      ...structuredClone(proposal),
-      groups: proposal.groups.map(group => ({ ...structuredClone(group), coverage: [],
-        compilation: { decision: "reuse", current: [], reason: "Temporary parent; compilation has not run." },
-        // The IR stage does not author these; the CI stage does.  Fill the
-        // internal CandidateGroup shape so downstream code sees one type.
-        execution_decisions: [], assessments: [], checks: [] })),
-    }
-    // Identities code knows: the revision each change expects, and Ref digests.
-    for (const group of candidate.groups) bindExpectedRevisions(group, this.options.input.ir)
-    bindContentRefs(candidate, this.options.input.ir)
-    bindRefDigests(candidate, versionDigests([this.options.input.ir], this.options.input.compiled ?? {}))
-    const basis = this.options.validateBasis(candidate, (eventId) => this.display(eventId))
-    if (!basis.ok) throw Error(basis.message ?? "IR names the wrong input events")
-    if (this.options.input.events.some(event => event.kind === "user_input") && candidate.groups.length === 0) {
-      throw Error("User input needs an IR task and explicit handling of its requirements or uncertainty")
-    }
-    const sourceReport = this.options.resolve(candidate)
-    if (sourceReport.unresolved > 0) {
-      this.state.ir_repair_draft = { ...candidate, groups: irProposalGroups(candidate.groups) }
-      throw Error(unresolvedSources(sourceReport, (eventId) => this.display(eventId)))
-    }
-    const sources = [...(this.options.input.source_events ?? []), ...this.options.input.events]
-    const state = new IntentStateManager(this.options.input.ir)
-    let ir = state.snapshot()
-    const groups = new Set<string>(), tasks = new Set<string>()
-    // Recorded once the whole proposal is applied, so a fragment a later group
-    // re-selects in the same proposal is not called withdrawn.
-    const editedRemovals: LocalSourceEditRecord[] = []
-    for (const group of candidate.groups) {
-      if (groups.has(group.local_ref) || group.task_refs.length !== 1 || tasks.has(group.task_refs[0]!)) {
-        throw Error("Each IR group must have one distinct task and a distinct group identity")
-      }
-      groups.add(group.local_ref); tasks.add(group.task_refs[0]!)
-      const result = new IntentStateManager(ir).apply(group.ir_changes, group.task_refs)
-      if (!result.ok) throw Error(result.errors.map(e => e.message).join("; "))
-      ir = result.tasks
-      editedRemovals.push(...result.edits)
-      const task = ir[group.task_refs[0]!]
-      if (!task) throw Error("IR group names an unknown task")
-      materializeSourceContent(task, group.ir_changes, sources, (eventId) => this.display(eventId))
-      const targets = new Set([task.task_id, ...task.outputs.map(o => o.output_id), ...task.bindings.map(b => b.binding_id)])
-      for (const item of task.content) {
-        if (!item.text.trim() || !item.sources.length || !item.scope.length || item.scope.some(s => !targets.has(s.target_id))) {
-          throw Error(`IR content ${item.item_id} needs actual selected text and an already declared scope target; declare its material/output in IR without widening its scope`)
-        }
-      }
-    }
-    recordEditedRemovals(candidate, ir, editedRemovals)
-    settleContentRefs(ir)
-    const carriedEventIds = new Set((this.options.input.carried_delegations ?? []).map((delegation) => delegation.event_id))
-    const ownEventIds = new Set(this.options.input.events.filter(event => event.kind === "user_input" && !carriedEventIds.has(event.event_id)).map(event => event.event_id))
-    validateSourceCoverage(candidate, this.options.input.events, sources, this.options.input.ir, ir,
-      { carriedEventIds, ownEventIds, display: (eventId) => this.display(eventId) })
-    return { ir, candidate, digest: digestOf(ir) }
+    return prepareIntentIR(this.options.input, proposal, this.options.resolve, this.options.validateBasis,
+      id => this.display(id), draft => { this.state.ir_repair_draft = draft })
   }
 
   async propose(request: CompilerModelV2Input): Promise<CompilerModelV2Result> {
@@ -808,4 +755,68 @@ export class ParentGeneration {
     if (result.schema_rejected_draft) this.state.rejected_response = { stage, ...structuredClone(result.schema_rejected_draft) }
     return result
   }
+}
+
+/** Shared IR preparation for Atom and CI-to-SDD profiles; no execution admission. */
+export function prepareIntentIR(
+  input: CompilerModelV2Input, proposal: IRProposal,
+  resolve: Options["resolve"], validateBasis: Options["validateBasis"],
+  display: (id: string) => string = id => id,
+  onSourceFailure?: (draft: IRProposal) => void,
+): NonNullable<ParentGenerationState["parent"]> {
+    const candidate: Candidate = {
+      ...structuredClone(proposal),
+      groups: proposal.groups.map(group => ({ ...structuredClone(group), coverage: [],
+        compilation: { decision: "reuse", current: [], reason: "Temporary parent; compilation has not run." },
+        // The IR stage does not author these; the CI stage does.  Fill the
+        // internal CandidateGroup shape so downstream code sees one type.
+        execution_decisions: [], assessments: [], checks: [] })),
+    }
+    // Identities code knows: the revision each change expects, and Ref digests.
+    for (const group of candidate.groups) bindExpectedRevisions(group, input.ir)
+    bindContentRefs(candidate, input.ir)
+    bindRefDigests(candidate, versionDigests([input.ir], input.compiled ?? {}))
+    const basis = validateBasis(candidate, (eventId) => display(eventId))
+    if (!basis.ok) throw Error(basis.message ?? "IR names the wrong input events")
+    if (input.events.some(event => event.kind === "user_input") && candidate.groups.length === 0) {
+      throw Error("User input needs an IR task and explicit handling of its requirements or uncertainty")
+    }
+    const sourceReport = resolve(candidate)
+    if (sourceReport.unresolved > 0) {
+      onSourceFailure?.({ ...candidate, groups: irProposalGroups(candidate.groups) })
+      throw Error(unresolvedSources(sourceReport, (eventId) => display(eventId)))
+    }
+    const sources = [...(input.source_events ?? []), ...input.events]
+    const state = new IntentStateManager(input.ir)
+    let ir = state.snapshot()
+    const groups = new Set<string>(), tasks = new Set<string>()
+    // Recorded once the whole proposal is applied, so a fragment a later group
+    // re-selects in the same proposal is not called withdrawn.
+    const editedRemovals: LocalSourceEditRecord[] = []
+    for (const group of candidate.groups) {
+      if (groups.has(group.local_ref) || group.task_refs.length !== 1 || tasks.has(group.task_refs[0]!)) {
+        throw Error("Each IR group must have one distinct task and a distinct group identity")
+      }
+      groups.add(group.local_ref); tasks.add(group.task_refs[0]!)
+      const result = new IntentStateManager(ir).apply(group.ir_changes, group.task_refs)
+      if (!result.ok) throw Error(result.errors.map(e => e.message).join("; "))
+      ir = result.tasks
+      editedRemovals.push(...result.edits)
+      const task = ir[group.task_refs[0]!]
+      if (!task) throw Error("IR group names an unknown task")
+      materializeSourceContent(task, group.ir_changes, sources, (eventId) => display(eventId))
+      const targets = new Set([task.task_id, ...task.outputs.map(o => o.output_id), ...task.bindings.map(b => b.binding_id)])
+      for (const item of task.content) {
+        if (!item.text.trim() || !item.sources.length || !item.scope.length || item.scope.some(s => !targets.has(s.target_id))) {
+          throw Error(`IR content ${item.item_id} needs actual selected text and an already declared scope target; declare its material/output in IR without widening its scope`)
+        }
+      }
+    }
+    recordEditedRemovals(candidate, ir, editedRemovals)
+    settleContentRefs(ir)
+    const carriedEventIds = new Set((input.carried_delegations ?? []).map((delegation) => delegation.event_id))
+    const ownEventIds = new Set(input.events.filter(event => event.kind === "user_input" && !carriedEventIds.has(event.event_id)).map(event => event.event_id))
+    validateSourceCoverage(candidate, input.events, sources, input.ir, ir,
+      { carriedEventIds, ownEventIds, display: (eventId) => display(eventId) })
+    return { ir, candidate, digest: digestOf(ir) }
 }

@@ -1,0 +1,179 @@
+{
+  "status": "completed_failed",
+  "branch": "integration/sdd",
+  "scope": "SDD-only dpipe R1; separately authorized corrected launch after wrong-model attempt was aborted",
+  "run_root": "D:/huawei/EvoCodeBench/harbor_runs/sdd-luna-dpipe-r1-20261008-172442z-6b8ea38d",
+  "completion": {
+    "phases": [
+      {
+        "phase": "sdd-flow",
+        "exit_code": 1,
+        "seconds": 1798.547
+      },
+      {
+        "phase": "official-verifier",
+        "exit_code": 0,
+        "seconds": 12.485000000000127
+      }
+    ],
+    "elapsed_seconds": 1811.187,
+    "round": 1,
+    "automatic_relaunch": false,
+    "model": "openai/gpt-6-luna-fast",
+    "variant": "high-fast"
+  },
+  "usage": {
+    "assistant_messages": 229,
+    "sessions": 15,
+    "session_ids": [
+      "ses_ee34c0467ffeZ7NY4X4hFWQdiR",
+      "ses_ee34da3f5ffef92sWWeUZ1Z3JF",
+      "ses_ee34fb009ffeMooIRGP9znrh4R",
+      "ses_ee3503691ffe4jN6ML5KlAhdr5",
+      "ses_ee3513c97ffeMRQqvqHaB5PTrc",
+      "ses_ee3528e0cffeJhMjuHwTivNkdL",
+      "ses_ee355a3dcffeX5dslWBoiF00jh",
+      "ses_ee3565bdbffejV5gNRGORW6U6o",
+      "ses_ee3599769ffe3X3jZ76NQaLfcB",
+      "ses_ee35a4ad4ffepLdgIB6jPQ5bFR",
+      "ses_ee35d5259ffeyR0DhSVc3JyK9x",
+      "ses_ee35e0262ffeCZuXQyAJPzvrUV",
+      "ses_ee361f7e0ffeZLRJh9qUE4G5o3",
+      "ses_ee36361b0ffelzWTlfZv6DJVaw",
+      "ses_ee3665ac8ffex5NJBuFxMEiOrm"
+    ],
+    "profiles": [
+      {
+        "provider": "openai",
+        "model": "gpt-6-luna-fast",
+        "variant": "high-fast",
+        "messages": 229
+      }
+    ],
+    "tokens": {
+      "input": 906828,
+      "output": 115290,
+      "reasoning": 31969,
+      "total": 8862087,
+      "cache_write": 0,
+      "cache_read": 7808000
+    },
+    "recorded_cost": 0,
+    "cost_note": "Zero recorded cost does not establish zero actual charge. Counts are persisted assistant messages, not HTTP requests. Aborted wrong-profile trial excluded."
+  },
+  "stages": {
+    "prd": "passed",
+    "system_design": "passed",
+    "change": "passed",
+    "specart": "accepted",
+    "coding": "failed_REPAIR_REQUIRED",
+    "prd_check": "not_reached",
+    "post_flow_verification": "not_run"
+  },
+  "official_evaluation": {
+    "method": "Unmodified official test.sh invoked directly in no-network Docker container; not a Harbor orchestrator job",
+    "script": "D:/huawei/EvoCodeBench/data/evocodebench_wotraj/theme_d5_w9_data_engineering_reproducibility_verification/steps/round-1/tests/test.sh",
+    "script_sha256": "89418f2ad4ae7c63803bfb7f3600964c00da59f2a0d86ea8dbfee3b45cda09ba",
+    "image": "sdd-unattended-preflight:latest",
+    "total": 219,
+    "passed": 23,
+    "failed": 196,
+    "reward": 0.0,
+    "build": "passed",
+    "by_requirement": {
+      "build": {
+        "success": 1
+      },
+      "ingest": {
+        "fail": 26,
+        "success": 1
+      },
+      "transform.filter": {
+        "fail": 5,
+        "success": 2
+      },
+      "transform.derive": {
+        "fail": 49
+      },
+      "transform.sample": {
+        "success": 1
+      },
+      "transform.sort": {
+        "fail": 4,
+        "success": 1
+      },
+      "transform.aggregate": {
+        "fail": 20
+      },
+      "transform.join": {
+        "fail": 9,
+        "success": 2
+      },
+      "verify": {
+        "fail": 5,
+        "success": 1
+      },
+      "manifest": {
+        "fail": 6
+      },
+      "pipeline": {
+        "fail": 8,
+        "success": 2
+      },
+      "determinism": {
+        "success": 2,
+        "fail": 1
+      },
+      "error-handling": {
+        "success": 4,
+        "fail": 4
+      },
+      "transform.rename-drop": {
+        "fail": 1,
+        "success": 2
+      },
+      "transform.window": {
+        "fail": 28,
+        "success": 1
+      },
+      "transform.pivot": {
+        "fail": 19,
+        "success": 2
+      },
+      "transform.fill": {
+        "fail": 11,
+        "success": 1
+      }
+    }
+  },
+  "findings": [
+    {
+      "kind": "product",
+      "evidence": "runs/r1/repos/main/main.go:32",
+      "finding": "CLI dispatch expects positional arguments; original requirement and official tests specify named --input/--schema/--output flags. Most commands fail before business logic."
+    },
+    {
+      "kind": "product",
+      "evidence": "runs/r1/repos/main/.specart-verify/report.md",
+      "finding": "Independent review found missing window dispatch, incomplete derive expression evaluator and ignored aggregate having."
+    },
+    {
+      "kind": "adapter",
+      "evidence": "runs/r1/repos/main/.specart-verify/report.md",
+      "finding": "Go adapter records 17 standard-library imports against accepted empty dependency baseline; SA187 blocks implementation repair/check/obligations. Requires adapter semantics review; no authoritative full obligations/prove/report completion."
+    }
+  ],
+  "limits": [
+    "Official script exit 0 is not a passing score.",
+    "go test reports no test files.",
+    "coding-done marker is not a successful coding verdict.",
+    "No implementation changes or rerun after official test results.",
+    "Wrong-model aborted trial is separate and excluded from usage."
+  ],
+  "artifacts": {
+    "verdict": "D:/huawei/EvoCodeBench/harbor_runs/sdd-luna-dpipe-r1-20261008-172442z-6b8ea38d/runs/r1/repos/main/.verdict.md",
+    "independent_review": "D:/huawei/EvoCodeBench/harbor_runs/sdd-luna-dpipe-r1-20261008-172442z-6b8ea38d/runs/r1/repos/main/.specart-verify/report.md",
+    "official_log": "D:/huawei/EvoCodeBench/harbor_runs/sdd-luna-dpipe-r1-20261008-172442z-6b8ea38d/official-verifier.log"
+  },
+  "next_step": "Review IC/Go adapter dependency boundary and requirement-to-CLI contract preservation before authorizing another independent trial; do not change SDD core or official tests."
+}

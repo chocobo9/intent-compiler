@@ -1,0 +1,28 @@
+{
+  "status": "implemented_offline_validated",
+  "branch": "integration/sdd",
+  "policy_version": "sdd-bounded-v1",
+  "model_run_started": false,
+  "official_verifier_started": false,
+  "tests": {
+    "suite_passed": 30,
+    "container_synthetic_cli": "passed"
+  },
+  "sha256": {
+    "budget-policy.json": "cff8de0552c3376d0b0966fe8d613869e5f87fa0c884d9c6e5c4768162ae5576",
+    "budget.py": "906dd9b4705807302805351a187bec001eb9602c01fc8772c01dad371d9b4334",
+    "budget-plugin.mjs": "3e9d5db8bbaed15a6e9ba6de6b8d31a8232ad2b25ee9d334a6563517248e2c76",
+    "model_guard.py": "894001440ade81ce8d9c4aa842c91cfef8a76c27db6144d9f12d4f7d98a98f9e",
+    "process_scope.py": "f44548947aedda0e27b85ba68028dd5587fb7448bd511b7adb8e85dac57ded8d",
+    "run_results.py": "b30697a10b48449ff52fafe19bc4447a439bf39f94e349627c78690222f638be",
+    "run_r1.py": "3da1281cf7b8791f28e8810b33361c8995d31254474bde266b29d084a57105bb",
+    "prepare.py": "5dffd6fe4d5be4a95982be7ed043ba0db6b284d5fbdfa30162a35d944e52a07b",
+    "build_go_cli.sh": "c8a51df4764df9f4eed82603ea7f35902113c14d3b9e0fd9ebccfe7614911fa2",
+    "test_budget.py": "4e576fbde02db5c9fd3093fc8e3863fa3299feffca783383c1d772c49524391c",
+    "test_budget_plugin.py": "7e247e79d37315c0a8babe1ee62ecb839c279622755f4fddeb43a099b61b5d82",
+    "test_process_scope.py": "e376f05b80b8bf5c249ebeadc70b9076715f0ef147019680f661ca22a110065b",
+    "test_runtime_results.py": "b994028d88197c9e7605e9b3968094c72865b003d9be9e132e122c86d1f1f5ec",
+    "test_run_r1.py": "dd585d5876801fdcc05426a2d696878a40aa5c918dc0381d020f1c2dab784ff5",
+    "test_prepare.py": "750cbc93ed986ee833940be1e03c6038ca8c210462030dcc33349a5e12cb3824"
+  }
+}

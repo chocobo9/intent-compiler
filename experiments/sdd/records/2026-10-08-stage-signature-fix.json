@@ -1,0 +1,26 @@
+{
+  "status": "offline_validation_passed",
+  "branch": "integration/sdd",
+  "tests": {
+    "sdd": 97,
+    "shared": 15
+  },
+  "total_passed": 112,
+  "stopped_trial": "D:/huawei/EvoCodeBench/harbor_runs/sdd-luna-dpipe-r1-20261008-183929z-875153d4",
+  "new_model_calls": 0,
+  "official_results": null,
+  "checks": [
+    "Real CLI start-implementation, check, obligations",
+    "Grouped and expanded Go parameter identities agree",
+    "Types and behavior changes still rejected",
+    "Accepted record unchanged across implementation repair",
+    "Stage-specific document and implementation scope",
+    "Original SDD workflow config preparation"
+  ],
+  "files_sha256": {
+    "prepare.py": "7a31346d2fcf22fccc164d2ee07e577b29ad3ac49274d7da4fc34e20117d6889",
+    "run_r1.py": "99b7d0db78349c78c40a076123e60bddd01c85eade5384c23faefd76d0cafac5",
+    "overlay-manifest.json": "8de4498aaeb12e937020246aaa2677bf85d1af3708da0f4849ba8927a196a807",
+    "stage-signature-fix.patch": "f116e2edb9d164c482f57a37bc60177aecb5dce9775b06cfb8e5456c3adbf0af"
+  }
+}

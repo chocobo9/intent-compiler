@@ -236,3 +236,11 @@ export type {
   CostSummaryOptions,
   NumericCosts,
 } from "./runtime/cost-summary.js"
+
+export { SddCompiler } from "./core/sdd-compiler.js"
+export { SddAdapter } from "./adapters/sdd.js"
+export type { SddHost } from "./adapters/sdd.js"
+export { createSddModel } from "./model/sdd-model.js"
+export { createSddProcessHost } from "./runtime/sdd-host.js"
+export { connectSddManagement } from "./runtime/sdd-runtime.js"
+export type { CIDelivery, SddRun, SddResult, SddSnapshot } from "./core/sdd-contract.js"

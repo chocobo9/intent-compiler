@@ -57,7 +57,7 @@ export interface RequirementAssembly {
 
 export { contentKey, selectedSourceHistory }
 
-function attachAssignedRequirements(
+export function attachAssignedRequirements(
   instruction: string,
   task: TaskIntent,
   assigned: readonly { ref: Ref; item: ContentItem }[],
