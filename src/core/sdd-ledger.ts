@@ -1,6 +1,6 @@
 import type { TaskIntent } from "./intent-contract.js"
 import type { AcceptanceExample, ExampleTier, ItemRevisions, LedgerEntry, SddSnapshot } from "./sdd-contract.js"
-import { currentRevisions, narrowedItems } from "./sdd-increment.js"
+import { currentRevisions } from "./sdd-increment.js"
 
 /**
  * The failure ledger, derived by code from what the store records: for every
@@ -13,14 +13,11 @@ export function computeLedger(s: SddSnapshot, current: Record<string, TaskIntent
   const now = currentRevisions(current)
   const entries = new Map<string, LedgerEntry>()
   const runs = s.runs.filter(r => r.result && !r.superseded && !r.voided)
-  // The examples of the latest returned delivery: an example it no longer carries no longer states what holds.
-  let latest = new Set<string>()
   for (const run of runs) {
     const delivery = s.batches.find(b => b.delivery?.ref.id === run.ci_ref.id)?.delivery
     const examples = new Map<string, { subject: string; items: string[]; revisions: ItemRevisions; example: AcceptanceExample; tier?: ExampleTier }>()
     for (const a of delivery?.contract?.acceptance ?? []) a.examples.forEach((e, i) => examples.set(`${a.subject}#${i + 1}`, { subject: a.subject, items: a.items, revisions: a.revisions, example: e, tier: "verbatim" }))
     for (const e of delivery?.contract?.executable ?? []) examples.set(e.id, { subject: e.subject, items: e.items, revisions: e.revisions, example: e, tier: e.tier })
-    latest = new Set(examples.keys())
     for (const r of run.result!.example_results ?? []) {
       const known = examples.get(r.id)
       if (!known) continue
@@ -39,12 +36,9 @@ export function computeLedger(s: SddSnapshot, current: Record<string, TaskIntent
     }
     if (run.result!.prd_check) for (const entry of entries.values()) if (entry.kind === "prd_gap" && entry.state === "open" && !open.has(entry.subject)) { entry.state = "closed"; entry.last = { ...entry.last, event_id: run.event_id, run_id: run.run_id, passed: true } }
   }
-  // An item a later update cut part of without revising it counts as revised: its entries no longer state what holds.
-  const narrowed = narrowedItems(s.ir, current)
   for (const entry of entries.values()) {
-    const changed = Object.entries(entry.revisions).filter(([id, rev]) => now.get(id) !== rev || narrowed.has(id)).map(([id]) => id)
-    if (changed.length) { entry.state = "removed"; entry.removed_reason = `item ${changed.join(", ")} withdrawn, revised or cut since` }
-    else if (entry.kind === "example" && !latest.has(entry.id)) { entry.state = "removed"; entry.removed_reason = "no longer among the examples of the latest returned delivery" }
+    const changed = Object.entries(entry.revisions).filter(([id, rev]) => now.get(id) !== rev).map(([id]) => id)
+    if (changed.length) { entry.state = "removed"; entry.removed_reason = `item ${changed.join(", ")} withdrawn or revised since` }
   }
   return [...entries.values()]
 }
