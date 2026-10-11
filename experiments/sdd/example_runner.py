@@ -39,6 +39,14 @@ def lines_in_order(expected, text):
     return True
 
 
+def same_json(expected, got):
+    """Whether two JSON texts hold the same value (object key order and number spelling aside); None when either is not JSON."""
+    try:
+        return json.loads(expected) == json.loads(got)
+    except ValueError:
+        return None
+
+
 def csv_records(text):
     """A CSV text as its records, each field unquoted and joined by commas (how a requirement writes rows)."""
     import csv
@@ -70,11 +78,14 @@ def evaluate_asserts(exit_code, asserts, out):
         if a['mode'] == 'absent':
             ok = not any(a['value'] in t for t in texts)
         elif a['mode'] == 'exact':
-            ok = any(t.strip() == a['value'].strip() for t in texts)
+            whole = same_json(a['value'], texts[0]) if where.lower().endswith('.json') else None
+            ok = whole if whole is not None else any(t.strip() == a['value'].strip() for t in texts)
         elif a['mode'] == 'contains':
             ok = any(a['value'] in t for t in texts)
         elif a['mode'] == 'lines':
-            ok = any(lines_in_order(json.loads(a['value']), t) for t in texts)
+            expected = json.loads(a['value'])
+            whole = same_json('\n'.join(e[1:] for e in expected if e[:1] == '='), texts[0]) if where.lower().endswith('.json') else None
+            ok = whole if whole is not None and all(e[:1] == '=' for e in expected) else any(lines_in_order(expected, t) for t in texts)
         else:
             ok = any(re.search(a['value'], t) for t in texts)
         if not ok:

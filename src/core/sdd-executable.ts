@@ -7,14 +7,14 @@ type Carried = NonNullable<DeliveryContract["executable"]>
 type Check = NonNullable<AcceptanceExample["check"]>
 
 /** Executable examples of the previous delivery carried while their items are unchanged and delivered; the items of the rest are written again. */
-export function carryExecutable(previous: Carried | undefined, current: Record<string, TaskIntent>, excluded: ReadonlySet<string>): { carried: Carried; dropped: DeliveryContract["dropped"]; rewrite: string[] } {
+export function carryExecutable(previous: Carried | undefined, current: Record<string, TaskIntent>, excluded: ReadonlySet<string>, narrowed: ReadonlySet<string> = new Set()): { carried: Carried; dropped: DeliveryContract["dropped"]; rewrite: string[] } {
   const now = currentRevisions(current)
   const carried: Carried = [], dropped: DeliveryContract["dropped"] = [], rewrite = new Set<string>()
   for (const e of previous ?? []) {
     const ids = Object.keys(e.revisions)
-    const stale = ids.filter(id => now.get(id) !== e.revisions[id] || excluded.has(id))
+    const stale = ids.filter(id => now.get(id) !== e.revisions[id] || excluded.has(id) || narrowed.has(id))
     if (!stale.length) { carried.push({ ...e, carried: true }); continue }
-    dropped.push({ kind: "executable", name: e.id, reason: `item ${stale.join(", ")} withdrawn, revised or not delivered` })
+    dropped.push({ kind: "executable", name: e.id, reason: `item ${stale.join(", ")} withdrawn, revised, cut or not delivered` })
     ids.filter(id => now.has(id) && !excluded.has(id)).forEach(id => rewrite.add(id))
   }
   return { carried, dropped, rewrite: [...rewrite] }
@@ -104,6 +104,32 @@ export function ambiguousCsv(run: NonNullable<AcceptanceExample["run"]>): boolea
   })
 }
 
+/** What a derivation states at a place (stdout, stderr, either, file:<path>), as one text. */
+function derivedText(c: Check, where: string): string {
+  const out = where === "stdout" ? [c.stdout_exact, ...c.stdout_contains] : where === "stderr" ? c.stderr_contains
+    : where === "either" ? [c.stdout_exact, ...c.stdout_contains, ...c.stderr_contains]
+    : c.files.filter(f => `file:${f.path}` === where).flatMap(f => [f.exact, ...f.contains])
+  return out.filter((v): v is string => typeof v === "string").join("\n").replace(/\r\n/gu, "\n")
+}
+const sameJson = (a: string, b: string) => { try { return canonical(JSON.parse(a)) === canonical(JSON.parse(b)) } catch { return false } }
+
+/**
+ * The verbatim assertions an example's own input determines: those the
+ * independent derivation, working from that input alone, also states (a value
+ * it states, a template its text matches, the same exit code). A value the
+ * requirement writes only as an illustration of another input is left out.
+ * Without a derivation, nothing is confirmed.
+ */
+export function confirmedAsserts(exitCode: number | null, asserts: ExampleAssertion[], derivation: Derivation | undefined): { exit_code: number | null; asserts: ExampleAssertion[] } {
+  if (!derivation) return { exit_code: null, asserts: [] }
+  const kept = asserts.filter(a => {
+    const text = derivedText(derivation.check, a.where)
+    if (a.mode === "pattern") return new RegExp(a.value, "u").test(text)
+    const value = a.value.replace(/\r\n/gu, "\n").trim()
+    return text.includes(value) || (a.where.toLowerCase().endsWith(".json") && sameJson(value, text))
+  })
+  return { exit_code: exitCode !== null && derivation.check.exit_code === exitCode ? exitCode : null, asserts: kept }
+}
 
 export interface ProposedExample { subject: string; items: string[]; tier: ExampleTier; given: string; expect?: string; run: NonNullable<AcceptanceExample["run"]>; check: Check }
 /** The independent derivation of one example: whether its invocation is valid under the requirements, and the result it works out. */
@@ -156,11 +182,10 @@ export function keepExamples(proposed: ProposedExample[], derivations: Map<numbe
     if (p.tier === "verbatim") {
       const r = checkability({ ...p, expect: "" }, delivered)
       if (!r.checkable) { counts.not_checkable++; return }
-      const worked = again ? claims(again.check) : new Map()
-      const place = (where: string) => where === "either" ? "stdout" : where
-      const asserts = r.asserts.filter(a => a.mode !== "exact" || !a.value.includes("\n") || worked.get(place(a.where)) === JSON.stringify(claimLines(a.value, true)))
-      if (r.exit_code === null && !asserts.length) { counts.not_checkable++; return }
-      kept.push({ ...base, tier: "verbatim", checkable: true, exit_code: r.exit_code, asserts }); counts.verbatim++
+      // Only what the example's own input determines: the independent derivation must state it too.
+      const confirmed = confirmedAsserts(r.exit_code, r.asserts, again)
+      if (confirmed.exit_code === null && !confirmed.asserts.length) { counts.not_checkable++; return }
+      kept.push({ ...base, tier: "verbatim", checkable: true, exit_code: confirmed.exit_code, asserts: confirmed.asserts }); counts.verbatim++
       return
     }
     // Only what both derivations claim, in the same place and line order, is asserted.

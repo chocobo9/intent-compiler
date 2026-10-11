@@ -27,9 +27,21 @@ export function previousContract(s: SddSnapshot, b: SddBatch): DeliveryContract 
   return [...s.batches].reverse().find(x => x !== b && x.event_id !== b.event_id && x.state === "accepted" && x.delivery?.contract)?.delivery!.contract
 }
 
+/**
+ * Items at the same revision as in the accepted IR whose source passages differ:
+ * a later update cut or moved part of what they deliver without revising them.
+ * For carrying they count as revised.
+ */
+export function narrowedItems(accepted: Record<string, TaskIntent>, current: Record<string, TaskIntent>): Set<string> {
+  const spans = (ir: Record<string, TaskIntent>) => new Map(Object.values(ir ?? {}).flatMap(t => t.content.map(c => [c.item_id, { revision: c.revision, key: JSON.stringify((c.sources ?? []).map(x => [x.source_id, x.span?.start ?? null, x.span?.end ?? null]).sort()) }] as const)))
+  const before = spans(accepted)
+  return new Set([...spans(current)].filter(([id, now]) => { const was = before.get(id); return was !== undefined && was.revision === now.revision && was.key !== now.key }).map(([id]) => id))
+}
+
 export function planCarry(previous: DeliveryContract | undefined, accepted: Record<string, TaskIntent>, current: Record<string, TaskIntent>, excluded: ReadonlySet<string> = new Set()): CarryPlan {
   const now = currentRevisions(current), before = currentRevisions(accepted)
-  const toWrite = new Set([...now].filter(([id, revision]) => before.get(id) !== revision).map(([id]) => id))
+  const narrowed = narrowedItems(accepted, current)
+  const toWrite = new Set([...now].filter(([id, revision]) => before.get(id) !== revision || narrowed.has(id)).map(([id]) => id))
   const plan: CarryPlan = { fields: [], acceptance: [], effective: [], dropped: [], toWrite: [] }
   const judge = (revisions: ItemRevisions): { carry: true } | { carry: false; reason: string; rewrite: string[] } => {
     const ids = Object.keys(revisions)
@@ -37,6 +49,8 @@ export function planCarry(previous: DeliveryContract | undefined, accepted: Reco
     if (gone.length) return { carry: false, reason: `item ${gone.join(", ")} withdrawn`, rewrite: ids.filter(id => now.has(id)) }
     const changed = ids.filter(id => now.get(id) !== revisions[id])
     if (changed.length) return { carry: false, reason: `item ${changed.map(id => `${id}@${revisions[id]}→${now.get(id)}`).join(", ")} revised`, rewrite: ids }
+    const cut = ids.filter(id => narrowed.has(id))
+    if (cut.length) return { carry: false, reason: `item ${cut.join(", ")} delivers other passages now (a later update cut or moved part of it)`, rewrite: ids }
     const held = ids.filter(id => excluded.has(id))
     if (held.length) return { carry: false, reason: `item ${held.join(", ")} not delivered now`, rewrite: ids.filter(id => !excluded.has(id)) }
     return { carry: true }

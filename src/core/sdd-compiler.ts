@@ -11,7 +11,7 @@ import { normalizeIrProposal, type IrNormalization } from "./sdd-ir-normalize.js
 import { decodeSdd, SDD_DELIVERY_SCHEMA, SDD_CHECK_SCHEMA, SDD_EXAMPLES_SCHEMA, SDD_DERIVE_SCHEMA, type ExamplesRequest, type SddModel, type SddCheck } from "../model/sdd-model.js"
 import { SDD_PROFILE, type CIDelivery, type DeliveryContract, type DeliveryDraft, type RemovedPassage, type SddBatch, type SddCheckFinding, type SddRun, type SddResult, type SddSnapshot } from "./sdd-contract.js"
 import { checkRequest, deliveryRequest, irRequest, type CheckRequest, type ContextReport, type DeliveryRequest } from "./sdd-context.js"
-import { currentRevisions, planCarry, previousContract } from "./sdd-increment.js"
+import { currentRevisions, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
 import { markCheckable } from "./sdd-examples.js"
 import { LEDGER_FEEDBACK, computeLedger, ledgerSection } from "./sdd-ledger.js"
 import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
@@ -196,7 +196,7 @@ export class SddCompiler {
   /** Carry the previous executable examples whose items are unchanged; no model call. */
   private carryOnly(s: SddSnapshot, batch: SddBatch): void {
     const d = batch.delivery!
-    const { carried, dropped } = carryExecutable(previousContract(s, batch)?.executable, batch.parent!.ir, this.undelivered(batch))
+    const { carried, dropped } = carryExecutable(previousContract(s, batch)?.executable, batch.parent!.ir, this.undelivered(batch), narrowedItems(s.ir, batch.parent!.ir))
     this.setExecutable(d, carried, dropped)
   }
   private setExecutable(d: CIDelivery, executable: NonNullable<DeliveryContract["executable"]>, dropped: DeliveryContract["dropped"]): void {
@@ -216,7 +216,7 @@ export class SddCompiler {
     const d = batch.delivery!, ir = batch.parent!.ir
     const excluded = this.undelivered(batch)
     const previous = previousContract(s, batch)
-    const { carried, dropped, rewrite } = carryExecutable(previous?.executable, ir, excluded)
+    const { carried, dropped, rewrite } = carryExecutable(previous?.executable, ir, excluded, narrowedItems(s.ir, ir))
     const toWrite = [...new Set([...planCarry(previous, s.ir, ir).toWrite, ...rewrite])].filter(id => !excluded.has(id))
     const counts = { verbatim: 0, derived_kept: 0, derived_dropped: 0, not_checkable: 0, invalid_input: 0, runs_kept: 0, runs_dropped: 0 }
     let kept: NonNullable<DeliveryContract["executable"]> = []

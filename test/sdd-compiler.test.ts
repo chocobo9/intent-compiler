@@ -388,6 +388,18 @@ test("code carries unchanged entries, drops withdrawn ones and rewrites revised 
   assert.deepEqual(plan.dropped.map(d => [d.kind, d.name]), [["field", "gone"], ["field", "revised"], ["field", "held"], ["effective", "c"]])
   assert.deepEqual([...plan.toWrite].sort(), ["a", "c", "e", "f"], "new f, revised c, and the still-current items of entries not carried")
 })
+test("an item a later update cut part of without revising it counts as revised for carrying", async () => {
+  const { planCarry, narrowedItems } = await import("../src/core/sdd-increment.js")
+  const ir = (spans: Record<string, [number, number]>) => ({ t: { task_id: "t", revision: 0, content: Object.entries(spans).map(([item_id, [start, end]]) => ({ item_id, revision: 0, sources: [{ source_id: "r1", span: { start, end } }] })) } }) as never
+  const accepted = ir({ ingest: [0, 100], transform: [100, 200] })
+  const current = ir({ ingest: [0, 100], transform: [100, 160] })
+  assert.deepEqual([...narrowedItems(accepted, current)], ["transform"])
+  const entry = (name: string) => ({ object: name, subject: name, items: [name], revisions: { [name]: 0 }, carried: false, fields: [], examples: [] })
+  const plan = planCarry({ fields: [entry("ingest"), entry("transform")], acceptance: [], effective: [], dropped: [] } as never, accepted, current)
+  assert.deepEqual(plan.fields.map(o => o.object), ["ingest"])
+  assert.match(plan.dropped.find(d => d.name === "transform")!.reason, /cut or moved part of it/u)
+  assert.deepEqual([...plan.toWrite], ["transform"])
+})
 test("a check note is recorded but does not send the CI back; a resolved blocking finding does", async () => {
   const f = fixture()
   let checks = 0
@@ -477,12 +489,13 @@ test("the examples stage keeps verbatim examples the requirement writes and deri
     { subject: "agreed", items: input.requirements.map(r => r.item_id).slice(0, 1), tier: "derived", given: "a", run, check: check({ stdout_exact: "x" }) },
     { subject: "disputed", items: input.requirements.map(r => r.item_id).slice(0, 1), tier: "derived", given: "b", run, check: check({ stdout_exact: "y" }) },
     { subject: "invalid call", items: input.requirements.map(r => r.item_id).slice(0, 1), tier: "verbatim", given: "required option left out", run, check: check({ stderr_contains: ["INPUT_MISSING"] }) },
+    { subject: "illustration", items: input.requirements.map(r => r.item_id).slice(0, 1), tier: "verbatim", given: "an input the written value does not follow from", run, check: check({ stderr_contains: ["INPUT_MISSING"] }) },
   ] }) })
   const valid = { invocation_valid: true, invalid_reason: null }
-  f.model.derive = async input => { derivedSeen = input; return { text: JSON.stringify({ results: [{ index: 0, ...valid, check: check({}) }, { index: 1, ...valid, check: check({ stdout_exact: "x" }) }, { index: 2, ...valid, check: check({ stdout_exact: "z" }) },
-    { index: 3, invocation_valid: false, invalid_reason: "the required option is missing", check: check({}) }] }) } }
+  f.model.derive = async input => { derivedSeen = input; return { text: JSON.stringify({ results: [{ index: 0, ...valid, check: check({ stderr_contains: ["INPUT_MISSING"] }) }, { index: 1, ...valid, check: check({ stdout_exact: "x" }) }, { index: 2, ...valid, check: check({ stdout_exact: "z" }) },
+    { index: 3, invocation_valid: false, invalid_reason: "the required option is missing", check: check({}) }, { index: 4, ...valid, check: check({ stdout_contains: ["done"] }) }] }) } }
   const d = await compile(f)
-  assert.deepEqual(d.examples_call, { state: "written", verbatim: 1, derived_kept: 1, derived_dropped: 1, not_checkable: 0, invalid_input: 1, runs_kept: 0, runs_dropped: 0 })
+  assert.deepEqual(d.examples_call, { state: "written", verbatim: 1, derived_kept: 1, derived_dropped: 1, not_checkable: 1, invalid_input: 1, runs_kept: 0, runs_dropped: 0 }, "a written value the example's own input does not determine is not asserted")
   assert.deepEqual(d.contract.executable!.map(e => [e.subject, e.tier]), [["missing input", "verbatim"], ["agreed", "derived"]])
   assert.ok(!JSON.stringify(derivedSeen).includes('"stdout_exact"'), "the derivation never sees the expected results")
   assert.ok(d.text.includes("# Executable acceptance examples\n") && d.text.includes("## 1. missing input"))
