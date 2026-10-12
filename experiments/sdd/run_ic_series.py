@@ -117,6 +117,22 @@ def upstream_spec_gap(promotion):
     return failure.get('stopped_stage') in ('specart', 'design') and 'SPEC_GAP' in (failure.get('stage_conclusion') or '')
 
 
+def accept_returned(trial, number, prior_completion, log):
+    """IC's in-round acceptance and targeted repair of a returned trial, before IC reads its code (once per trial)."""
+    if json.loads((trial / 'completion.json').read_text(encoding='utf-8')).get('acceptance_repair'):
+        return None
+    import acceptance_repair
+    from ic_bridge import acceptance_result
+    log(f'R{number} acceptance started')
+    prior = acceptance_result(prior_completion) if prior_completion else None
+    accepted = acceptance_repair.apply(trial, number, {o['id'] for o in prior['open']} if prior else None)
+    fixed = accepted['passes'][-1].get('fixed', []) if accepted.get('passes') else []
+    now = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))['results']['official'].get('passed')
+    log(f"R{number} acceptance: {accepted['outcome']}; failing before {len(accepted['failing_before'])}, fixed {len(fixed)}, excluded as P2 {len(accepted.get('excluded_p2', []))}"
+        + (f"; official {accepted['sdd_official'].get('passed')} -> {now}" if accepted.get('sdd_official') else ''))
+    return accepted
+
+
 def round_action(mode, rate, attempts_done, fix_retried=False, upstream_gap=False, pause_below_floor=True):
     """'pause' (diagnose first), 'retry' (same CI, same baseline) or 'promote' (fixed rule).
 
@@ -356,17 +372,8 @@ def execute_ic_series(root, resume=None, retry_paused=False):
                     if time.monotonic() > deadline:
                         raise RuntimeError(f'R{number}: no completion within {ROUND_WAIT_SECONDS}s; inspect {trial}')
                     time.sleep(30)
-                if config.get('acceptance_repair') and not json.loads((trial / 'completion.json').read_text(encoding='utf-8')).get('acceptance_repair'):
-                    # IC's in-round acceptance and targeted repair, before IC reads the returned code.
-                    import acceptance_repair
-                    log(f'R{number} acceptance started')
-                    from ic_bridge import acceptance_result
-                    prior = records[-2].get('completion') if len(records) > 1 else None
-                    prior_acceptance = acceptance_result(prior) if prior else None
-                    accepted = acceptance_repair.apply(trial, number, {o['id'] for o in prior_acceptance['open']} if prior_acceptance else None)
-                    fixed = accepted['passes'][-1].get('fixed', []) if accepted.get('passes') else []
-                    log(f"R{number} acceptance: {accepted['outcome']}; failing before {len(accepted['failing_before'])}, fixed {len(fixed)}"
-                        + (f"; official {accepted['sdd_official'].get('passed')} -> {json.loads((trial / 'completion.json').read_text(encoding='utf-8'))['results']['official'].get('passed')}" if accepted.get('sdd_official') else ''))
+                if config.get('acceptance_repair'):
+                    accept_returned(trial, number, records[-2].get('completion') if len(records) > 1 else None, log)
                 command(f'r{number}-reconcile{suffix}', dict(common, command='reconcile', execution_id=run['run_id'], host=dict(host, round=number)))
                 completion = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))
                 record.update(stage='returned', completion=completion, promotion=promotion_record(trial, completion))

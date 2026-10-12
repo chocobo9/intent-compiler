@@ -23,7 +23,7 @@ def wire(monkeypatch, run, results, edits):
     passes = iter(edits)
     def fix(t, env, log):
         next(passes)(run / 'repos/main')
-        return 0, 'prompt'
+        return 0, 'prompt', None
     monkeypatch.setattr(ar, 'prdfix', fix)
     monkeypatch.setattr(ar, 'build_and_test', lambda main: (0, 'ok'))
 
@@ -62,3 +62,16 @@ def test_nothing_failing_means_no_repair(tmp_path, monkeypatch):
     t, run = trial(tmp_path)
     wire(monkeypatch, run, [set()], [])
     assert ar.repair_trial(t, 2, {})['outcome'] == 'nothing_to_repair'
+
+
+def test_an_interrupted_attempt_is_undone_before_starting_over(tmp_path, monkeypatch):
+    t, run = trial(tmp_path)
+    (t / 'acceptance/sdd-main').mkdir(parents=True)
+    (t / 'acceptance/sdd-main/main.go').write_text('package main\n')
+    (t / 'acceptance/08-sdd-report.md').write_text('SDD report\n')
+    (run / 'repos/main/main.go').write_text('package main // half-repaired\n')
+    (run / ar.REPORT).write_text('IC report\n')
+    wire(monkeypatch, run, [set()], [])
+    assert ar.repair_trial(t, 2, {})['outcome'] == 'nothing_to_repair'
+    assert (run / 'repos/main/main.go').read_text() == 'package main\n' and (run / ar.REPORT).read_text() == 'SDD report\n'
+    assert list(t.glob('acceptance-interrupted-*'))

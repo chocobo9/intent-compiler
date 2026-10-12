@@ -150,7 +150,26 @@ def report(failures, texts, prd_text):
 """
 
 
+CONTINUE_CODING_SESSION = True
+
+
+def coding_session(run):
+    """The session id of this round's coding stage, from its stream (None when absent)."""
+    stream = Path(run) / 'logs/coding-main.stream'
+    if not stream.exists():
+        return None
+    m = re.search(r'"sessionID":"(ses_[A-Za-z0-9]+)"', stream.read_text(encoding='utf-8', errors='replace'))
+    return m.group(1) if m else None
+
+
+def _stream_ok(log):
+    """The run produced model steps (a continued session that cannot be found produces none)."""
+    text = Path(log).read_text(encoding='utf-8', errors='replace') if Path(log).exists() else ''
+    return '"type":"step_finish"' in text
+
+
 def prdfix(trial, env, log):
+    """SDD's prd-fix; like SDD's original code-fix stage, it continues the coding session when it can, else starts a new one."""
     run = run_r1.run_directory(trial)
     w = json.loads((run / 'workflow-cli.json').read_text(encoding='utf-8'))
     s = w['skills']['prd-fix']
@@ -159,10 +178,17 @@ def prdfix(trial, env, log):
     prompt = s['prompt_template'].replace('${prompt_mode_prefix}', mode.get('mode_prefix', '')).replace('${prompt_mode_suffix}', mode.get('mode_suffix', ''))
     for k in ('2', '3', '4', '7', '8'):
         prompt = prompt.replace('${n%s_path}' % k, nodes[k])
-    args = ['C:/Program Files/Git/usr/bin/sh.exe', env['OPENCODE_BIN'], 'run', '--agent', 'build', '--dir', str(run).replace('\\', '/'),
-            '--format', 'json', '--auto', '--model', run_r1.MODEL, '--variant', run_r1.VARIANT, '--', prompt]
+    base = ['C:/Program Files/Git/usr/bin/sh.exe', env['OPENCODE_BIN'], 'run', '--agent', 'build', '--dir', str(run).replace('\\', '/'),
+            '--format', 'json', '--auto', '--model', run_r1.MODEL, '--variant', run_r1.VARIANT]
+    session = coding_session(run) if CONTINUE_CODING_SESSION else None
+    if session:
+        with open(log, 'w', encoding='utf-8') as out:
+            rc = subprocess.call(base + ['--session', session, '--', prompt], stdout=out, stderr=subprocess.STDOUT, env=env, cwd=str(run), timeout=3600)
+        if _stream_ok(log):
+            return rc, prompt, session
+        Path(log).rename(Path(log).with_suffix('.continue-failed'))
     with open(log, 'w', encoding='utf-8') as out:
-        return subprocess.call(args, stdout=out, stderr=subprocess.STDOUT, env=env, cwd=str(run), timeout=3600), prompt
+        return subprocess.call(base + ['--', prompt], stdout=out, stderr=subprocess.STDOUT, env=env, cwd=str(run), timeout=3600), prompt, None
 
 
 def build_and_test(main):
@@ -187,7 +213,16 @@ def repair_trial(trial, round_number, env, previous_failing=None):
     run = run_r1.run_directory(trial)
     main = run / 'repos/main'
     work = trial / 'acceptance'
-    work.mkdir(exist_ok=True)
+    if work.exists():
+        # An interrupted earlier attempt: put back the code SDD returned and SDD's report, then start over.
+        if (work / 'sdd-main').exists():
+            restore(work / 'sdd-main', main)
+        if (work / '08-sdd-report.md').exists():
+            shutil.copy2(work / '08-sdd-report.md', run / REPORT)
+        if (work / 'prd-sdd.md').exists():
+            shutil.copy2(work / 'prd-sdd.md', run / PRD)
+        shutil.move(work, trial / ('acceptance-interrupted-' + dt.datetime.now().strftime('%H%M%S')))
+    work.mkdir()
     texts = texts_upto(round_number)
     record = {'started': dt.datetime.now(dt.timezone.utc).isoformat(), 'passes': []}
     before, info = accept(main, texts)
@@ -216,9 +251,9 @@ def repair_trial(trial, round_number, env, previous_failing=None):
         (work / f'report-pass{n}.md').write_text(text, encoding='utf-8')
         (run / REPORT).write_text(text, encoding='utf-8')
         snapshot = code_files(main)
-        rc, prompt = prdfix(trial, env, work / f'prdfix-pass{n}.stream')
+        rc, prompt, session = prdfix(trial, env, work / f'prdfix-pass{n}.stream')
         (work / 'prdfix-prompt.txt').write_text(prompt, encoding='utf-8')
-        p = {'pass': n, 'gaps': sorted(current), 'prdfix_exit': rc}
+        p = {'pass': n, 'gaps': sorted(current), 'prdfix_exit': rc, 'continued_session': session}
         after_files = code_files(main)
         p['changed_files'] = sorted(f for f in set(after_files) | set(snapshot) if after_files.get(f) != snapshot.get(f))
         if sha(run / PRD) != prd_sha:
