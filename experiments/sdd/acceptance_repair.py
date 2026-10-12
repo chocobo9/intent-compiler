@@ -151,6 +151,25 @@ def report(failures, texts, prd_text):
 
 
 CONTINUE_CODING_SESSION = True
+# A continued session that writes nothing for this long is given up (smoke 2026-10-11: one produced
+# no output in 10 minutes); prd-fix then runs in a new session.
+CONTINUE_FIRST_OUTPUT_SECONDS = 300
+
+
+def _call_watched(args, log, env, cwd, first_output_seconds, timeout=3600):
+    """Run args with output to log; None when nothing is written within first_output_seconds (process killed)."""
+    import time
+    with open(log, 'w', encoding='utf-8') as out:
+        proc = subprocess.Popen(args, stdout=out, stderr=subprocess.STDOUT, env=env, cwd=str(cwd))
+        started = time.monotonic()
+        while proc.poll() is None:
+            elapsed = time.monotonic() - started
+            if elapsed > first_output_seconds and Path(log).stat().st_size == 0 or elapsed > timeout:
+                subprocess.run(['taskkill', '/PID', str(proc.pid), '/T', '/F'], capture_output=True)
+                proc.wait()
+                return None
+            time.sleep(5)
+        return proc.returncode
 
 
 def coding_session(run):
@@ -182,9 +201,8 @@ def prdfix(trial, env, log):
             '--format', 'json', '--auto', '--model', run_r1.MODEL, '--variant', run_r1.VARIANT]
     session = coding_session(run) if CONTINUE_CODING_SESSION else None
     if session:
-        with open(log, 'w', encoding='utf-8') as out:
-            rc = subprocess.call(base + ['--session', session, '--', prompt], stdout=out, stderr=subprocess.STDOUT, env=env, cwd=str(run), timeout=3600)
-        if _stream_ok(log):
+        rc = _call_watched(base + ['--session', session, '--', prompt], log, env, run, first_output_seconds=CONTINUE_FIRST_OUTPUT_SECONDS)
+        if rc is not None and _stream_ok(log):
             return rc, prompt, session
         Path(log).rename(Path(log).with_suffix('.continue-failed'))
     with open(log, 'w', encoding='utf-8') as out:

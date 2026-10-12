@@ -33,3 +33,11 @@ def test_p2_candidates_are_failures_whose_unit_has_prd_assumptions(tmp_path, mon
                 'unit:op:clip': {'kind': 'unit', 'unit': ('op', 'clip')}}
     got = dl.p2_candidates(t, failures)
     assert list(got) == ['probe:verify:missing-file'] and got['probe:verify:missing-file']['assumptions']
+
+
+def test_a_shortened_case_id_still_maps_to_its_unique_candidate(tmp_path, monkeypatch):
+    t = run_dir(tmp_path, monkeypatch)
+    answer = '{"type":"text","part":{"text":"{\\"cases\\":[{\\"id\\":\\"op:crossjoin\\",\\"contradicts\\":true,\\"reason\\":\\"r\\"}]}"}}\n'
+    monkeypatch.setattr(dl.subprocess, 'call', lambda *a, **k: (open(k['stdout'].name, 'w', encoding='utf-8').write(answer), 0)[1])
+    got = dl.judge_p2(t, {'OPENCODE_BIN': 'x'}, {'unit:op:crossjoin': {'unit': 'crossjoin', 'assumptions': ['a'], 'rule': 'r'}}, [''], tmp_path / 'j.stream')
+    assert got == {'unit:op:crossjoin': {'contradicts': True, 'reason': 'r'}}

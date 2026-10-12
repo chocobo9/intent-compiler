@@ -75,3 +75,10 @@ def test_an_interrupted_attempt_is_undone_before_starting_over(tmp_path, monkeyp
     assert ar.repair_trial(t, 2, {})['outcome'] == 'nothing_to_repair'
     assert (run / 'repos/main/main.go').read_text() == 'package main\n' and (run / ar.REPORT).read_text() == 'SDD report\n'
     assert list(t.glob('acceptance-interrupted-*'))
+
+
+def test_a_call_that_writes_nothing_in_time_is_killed(tmp_path):
+    import sys
+    log = tmp_path / 'log'
+    assert ar._call_watched([sys.executable, '-c', 'import time; time.sleep(30)'], log, None, tmp_path, first_output_seconds=1) is None
+    assert ar._call_watched([sys.executable, '-c', 'print("step")'], log, None, tmp_path, first_output_seconds=1) == 0

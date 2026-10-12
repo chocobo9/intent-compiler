@@ -131,4 +131,11 @@ def judge_p2(trial, env, candidates, texts, log):
         answer = json.loads(m.group(0)) if m else {}
     except ValueError:
         answer = {}
-    return {c['id']: {'contradicts': bool(c.get('contradicts')), 'reason': c.get('reason', '')} for c in answer.get('cases', []) if c.get('id') in candidates}
+    # The model may shorten a case id (e.g. drop its "unit:" prefix): match on the unique candidate it ends.
+    out = {}
+    for c in answer.get('cases', []):
+        cid = str(c.get('id', ''))
+        match = [k for k in candidates if k == cid or k.endswith(':' + cid) or k.endswith(cid)]
+        if len(match) == 1:
+            out[match[0]] = {'contradicts': bool(c.get('contradicts')), 'reason': c.get('reason', '')}
+    return out
