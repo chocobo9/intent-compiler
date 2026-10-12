@@ -1,8 +1,8 @@
 """Units the requirements name and whether the code dispatches on them (no execution, no data).
 
-A requirement names its variants in its own samples: a JSON key whose string value
-differs across samples (for example an operation or step kind) where the value also
-heads a section of its own, and the subcommand after the program name in command
+A requirement names its variants in its own samples: a JSON key (in any sample object,
+nested ones included) whose string value differs across samples (for example an
+operation or step kind or a strategy) where the value also heads a section of its own, and the subcommand after the program name in command
 synopses. Code that implements a variant dispatches
 on its exact name, so a name absent from every dispatch position is not implemented.
 """
@@ -15,22 +15,51 @@ DISCRIMINATOR_MIN_VALUES = 3
 IDENT = r'[A-Za-z][A-Za-z0-9_\-]*'
 
 
+def _objects(text):
+    """Top-level JSON objects in text, nested ones included (balanced braces, strings respected)."""
+    depth, start, in_str, esc = 0, None, False, False
+    for i, ch in enumerate(text):
+        if in_str:
+            esc = (ch == '\\') and not esc
+            if ch == '"' and not esc:
+                in_str = False
+            continue
+        if ch == '"':
+            in_str, esc = True, False
+        elif ch == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '}' and depth:
+            depth -= 1
+            if depth == 0:
+                yield text[start:i + 1]
+
+
+def _dicts(value):
+    if isinstance(value, dict):
+        yield value
+        for v in value.values():
+            yield from _dicts(v)
+    elif isinstance(value, list):
+        for v in value:
+            yield from _dicts(v)
+
+
 def json_samples(text):
-    for block in re.findall(r'```[a-zA-Z]*\n(.*?)```', text, re.S):
-        for candidate in re.findall(r'\{[^{}]*\}', block):
+    """Every JSON object the text's samples hold, nested objects included."""
+    chunks = re.findall(r'```[a-zA-Z]*\n(.*?)```', text, re.S) + re.findall(r'`(\{[^`]*\})`', text)
+    for chunk in chunks:
+        try:
+            yield from _dicts(json.loads(chunk))
+            continue
+        except ValueError:
+            pass
+        for candidate in _objects(chunk):
             try:
-                value = json.loads(candidate)
+                yield from _dicts(json.loads(candidate))
             except ValueError:
                 continue
-            if isinstance(value, dict):
-                yield value
-    for candidate in re.findall(r'`(\{[^`]*\})`', text):
-        try:
-            value = json.loads(candidate)
-        except ValueError:
-            continue
-        if isinstance(value, dict):
-            yield value
 
 
 def units(texts):
@@ -45,8 +74,9 @@ def units(texts):
     # A variant the requirement defines has its own heading naming it.
     headed = {m for text in texts for line in re.findall(r'(?m)^#{1,6} .*$', text) for m in re.findall(r'`(' + IDENT + r')`', line)}
     found = {}
+    # A discriminating key takes at least two values across the samples; a data value has no heading of its own.
     for key, names in values.items():
-        if len(names) >= DISCRIMINATOR_MIN_VALUES:
+        if len(names) >= 2:
             for name in names & headed:
                 found[(key, name)] = first[(key, name)]
     programs, subs = defaultdict(int), {}

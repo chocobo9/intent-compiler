@@ -32,3 +32,12 @@ def test_a_unit_is_missing_unless_code_dispatches_on_its_exact_name(tmp_path):
     (tmp_path / 'main_test.go').write_text('case "run":\n')
     got = missing(tmp_path, [('op', 'upper'), ('op', 'lower'), ('op', 'trim'), ('command', 'show'), ('command', 'run')])
     assert got == [('command', 'show'), ('command', 'run')]
+
+
+def test_nested_samples_and_two_valued_headed_keys_are_units():
+    r1 = '### Fill\n```json\n{"op": "fill", "strategy": "forward"}\n```\n'
+    r2 = ('### `rollup`\n```json\n{"op": "rollup", "aggregations": [{"column": "sales", "function": "sum", "as": "total"}]}\n```\n'
+          '### Fill `linear` strategy\n```json\n{"op": "fill", "strategy": "linear"}\n```\n### `split`\n```json\n{"op": "split"}\n```\n')
+    found = units([r1, r2])
+    assert ('op', 'rollup') in found and ('strategy', 'linear') in found
+    assert ('function', 'sum') not in found, 'a value without its own heading is not a unit'

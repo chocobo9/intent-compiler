@@ -434,7 +434,10 @@ def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False):
     replaced = {}
     # The host bridge and the example runner go with the IC build: the examples and ledger the new IC records are run by them.
     # Keeping the IC build keeps the bridge and example runner that go with it.
-    for name in ['run_series.py', 'run_results.py', 'run_ic_series.py', 'run_r1.py', 'execution-context.md'] + ([] if keep_ic else ['ic_bridge.py', 'example_runner.py']):
+    # The in-round acceptance is harness too: its checks are replaced with the other harness files.
+    harness = ['run_series.py', 'run_results.py', 'run_ic_series.py', 'run_r1.py', 'execution-context.md',
+               'acceptance_repair.py', 'static_units.py', 'error_probes.py', 'drift_labels.py']
+    for name in harness + ([] if keep_ic else ['ic_bridge.py', 'example_runner.py']):
         before = run_r1.sha(root / 'adapter' / name) if (root / 'adapter' / name).exists() else None
         shutil.copy2(source / name, root / 'adapter' / name)
         if run_r1.sha(root / 'adapter' / name) != before:
