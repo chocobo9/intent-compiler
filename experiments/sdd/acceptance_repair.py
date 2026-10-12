@@ -28,6 +28,7 @@ import drift_labels
 PRD = 'output/02-澄清后PRD.md'
 REPORT = 'output/08-验证结果.md'
 MAX_PASSES = 2
+BUILD = 'build:requested'
 SKIP = ('.specart', '.specart-verify', '.system-design', '.verdict.md', '.coding-done', '.sdd-build', '.git')
 
 
@@ -52,6 +53,9 @@ def details(failures):
             kind, name = f['unit']
             out[cid] = {'subject': f'`{name}` ({kind}) is not implemented', 'unit': name, 'round': f.get('round'),
                         'observed': f'No non-test source dispatches on "{name}" (case, map key or comparison).'}
+        elif f['kind'] == 'build':
+            out[cid] = {'subject': 'the code does not pass the required build and tests (`go build -o dpipe ./... && go test ./...`)',
+                        'observed': f['output'][-600:]}
         else:
             p, obs = f['probe'], f['observed'] or {}
             out[cid] = {'subject': f"error rule not met: {p['id']}", 'rule': p['rule'], 'args': p['run']['args'],
@@ -65,6 +69,11 @@ def accept(main, texts):
     failures = {}
     for kind, name in missing(main, list(named)):
         failures[f'unit:{kind}:{name}'] = {'kind': 'unit', 'unit': (kind, name), 'round': named[(kind, name)] + 1}
+    rc, output = build_and_test(main)
+    if rc != 0:
+        # Code that does not build and pass its tests cannot be probed; the build failure itself is the finding.
+        failures[BUILD] = {'kind': 'build', 'output': output}
+        return failures, {'build_exit': str(rc), 'checks': len(named) + 1}
     ps = probes(texts, len(texts))
     res = run_examples(main, ps)
     for p, r in zip(ps, res['results']):
@@ -92,6 +101,14 @@ def _prd_lines(prd, name):
     return [(i, line.strip()[:400]) for i, line in enumerate(prd.splitlines(), 1) if f'`{name}`' in line or re.search(r'\b' + re.escape(name) + r'\b', line)][:2]
 
 
+def judge(before, after):
+    """(fixed, regressed). Probes never ran on code that did not build, so after a build failure is fixed
+    the probes it reveals are not regressions; a build that breaks is."""
+    fixed = sorted(set(before) - set(after))
+    comparable = {k for k in after if not (BUILD in before and k.startswith('probe:'))}
+    return fixed, sorted(comparable - set(before))
+
+
 def report(failures, texts, prd_text):
     gaps = []
     for k, (cid, f) in enumerate(sorted(failures.items()), 1):
@@ -111,6 +128,20 @@ def report(failures, texts, prd_text):
 {sec}
 
 - PRD_ONLY 二次核验：检索 `"{name}"` 的分派位置，范围 `repos/main/**/*.go`（排除测试），无命中。
+- 评审建议方向：建议改代码（仅建议，不执行）。
+""")
+        elif f['kind'] == 'build':
+            gaps.append(f"""#### GAP-{k:03d} 代码不能通过要求的构建与测试命令
+
+- PRD 坐标：`{PRD}`（交付要求）
+- 差异类型：`MISMATCH`
+- 差异说明：任务要求的构建命令 `go build -o dpipe ./... && go test ./...`（在本任务的 docker 构建环境中执行）失败；修复使其通过，不得删除或削弱已有测试的断言来规避失败。
+- 输出末尾：
+
+```
+{f['output'][-1500:]}
+```
+
 - 评审建议方向：建议改代码（仅建议，不执行）。
 """)
         else:
@@ -140,7 +171,7 @@ def report(failures, texts, prd_text):
 ## 3. 差异统计
 
 - 差异总数：{n}
-- 按类型：`CODE_ONLY` 0 / `PRD_ONLY` {sum(f['kind'] == 'unit' for f in failures.values())} / `MISMATCH` {sum(f['kind'] == 'probe' for f in failures.values())}
+- 按类型：`CODE_ONLY` 0 / `PRD_ONLY` {sum(f['kind'] == 'unit' for f in failures.values())} / `MISMATCH` {sum(f['kind'] in ('probe', 'build') for f in failures.values())}
 
 ## 4. 板块差异明细
 
@@ -287,21 +318,20 @@ def repair_trial(trial, round_number, env, previous_failing=None):
         for f in deleted:
             shutil.copy2(work / 'sdd-main' / f, main / f)
         p['tests_restored'] = deleted
-        p['build_test_exit'], p['build_tail'] = build_and_test(main)
-        if p['build_test_exit'] == 0:
-            after, _ = accept(main, texts)
-            record['details'].update(details(after))
-            p['failing_after'] = sorted(after)
-            p['fixed'] = sorted(set(before) - set(after))
-            p['regressed'] = sorted(set(after) - set(before))
+        after, _ = accept(main, texts)  # builds and tests first; probes only when that passes
+        record['details'].update(details(after))
+        p['build_test_exit'] = 1 if BUILD in after else 0
+        if BUILD in after:
+            p['build_tail'] = after[BUILD]['output'][-1500:]
+        p['failing_after'] = sorted(after)
+        p['fixed'], p['regressed'] = judge(before, after)
         record['passes'].append(p)
-        if p['build_test_exit'] == 0 and p['fixed'] and not p['regressed']:
+        if BUILD not in after and p['fixed'] and not p['regressed']:
             record['outcome'] = 'adopted'
             break
-        if p['build_test_exit'] == 0:
-            current = {k: v for k, v in after.items()}
+        current = dict(after)
         if n == MAX_PASSES:
-            ok = p['build_test_exit'] == 0 and len(p['failing_after']) < len(before)
+            ok = BUILD not in after and len(p['fixed']) > len(p['regressed'])
             if not ok:
                 restore(work / 'sdd-main', main)
             record['outcome'] = 'adopted_with_regressions' if ok else 'reverted'

@@ -18,7 +18,8 @@ def wire(monkeypatch, run, results, edits):
     calls = iter(results)
     monkeypatch.setattr(ar.run_r1, 'run_directory', lambda t: run)
     monkeypatch.setattr(ar, 'texts_upto', lambda n: ['text'])
-    monkeypatch.setattr(ar, 'accept', lambda main, texts: ({k: {'kind': 'unit', 'unit': ('op', k)} for k in next(calls)}, {'checks': 5, 'build_exit': '0'}))
+    kinds = lambda k: {'kind': 'build', 'output': 'main.go:3: undefined: x'} if k == ar.BUILD else {'kind': 'probe', 'probe': {'id': k[6:], 'rule': 'r', 'run': {'args': [], 'files': []}}, 'observed': {}} if k.startswith('probe:') else {'kind': 'unit', 'unit': ('op', k)}
+    monkeypatch.setattr(ar, 'accept', lambda main, texts: ({k: kinds(k) for k in next(calls)}, {'checks': 5, 'build_exit': '0'}))
     monkeypatch.setattr(ar, 'report', lambda failures, texts, prd: 'IC report ' + ','.join(sorted(failures)))
     passes = iter(edits)
     def fix(t, env, log):
@@ -82,3 +83,27 @@ def test_a_call_that_writes_nothing_in_time_is_killed(tmp_path):
     log = tmp_path / 'log'
     assert ar._call_watched([sys.executable, '-c', 'import time; time.sleep(30)'], log, None, tmp_path, first_output_seconds=1) is None
     assert ar._call_watched([sys.executable, '-c', 'print("step")'], log, None, tmp_path, first_output_seconds=1) == 0
+
+
+def test_code_that_does_not_build_is_repaired_and_the_probes_it_then_reveals_are_not_regressions(tmp_path, monkeypatch):
+    t, run = trial(tmp_path)
+    wire(monkeypatch, run, [{ar.BUILD}, {'probe:compare:missing-flag-key'}], [lambda m: (m / 'main.go').write_text('package main // fixed\n')])
+    r = ar.repair_trial(t, 2, {})
+    assert r['outcome'] == 'adopted' and r['passes'][0]['fixed'] == [ar.BUILD] and r['passes'][0]['regressed'] == []
+    assert 'compare:missing-flag-key' in str(r['passes'][0]['failing_after'])
+
+
+def test_a_fix_that_breaks_the_build_is_a_regression_and_without_recovery_is_reverted(tmp_path, monkeypatch):
+    t, run = trial(tmp_path)
+    broke = lambda m: (m / 'main.go').write_text('package main // broken\n')
+    wire(monkeypatch, run, [{'clip'}, {ar.BUILD}, {ar.BUILD}], [broke, broke])
+    r = ar.repair_trial(t, 2, {})
+    assert r['passes'][0]['regressed'] == [ar.BUILD] and r['passes'][1]['gaps'] == [ar.BUILD]
+    assert r['outcome'] == 'reverted' and (run / 'repos/main/main.go').read_text() == 'package main\n'
+
+
+def test_accept_does_not_probe_code_that_fails_to_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(ar, 'build_and_test', lambda main: (1, 'undefined: x'))
+    monkeypatch.setattr(ar, 'run_examples', lambda *a, **k: (_ for _ in ()).throw(AssertionError('probes ran')))
+    failures, info = ar.accept(tmp_path, ['### `clip`\n```json\n{"op": "clip"}\n```\n'])
+    assert list(failures) == [ar.BUILD] and info['build_exit'] == '1'

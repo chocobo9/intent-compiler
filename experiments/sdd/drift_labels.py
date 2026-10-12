@@ -12,6 +12,7 @@ nothing is added inside SDD:
   K3  the unit passed in the previous round's kept code and fails now
   G1  K1/K2 holds and SDD's own PRD check left no GAP naming the unit
   V1  SDD's coding verdict reports SPEC_GAP/REPAIR_REQUIRED/BLOCKED although the build passed
+  B   (round) the code SDD returned failed the required build and tests
 """
 import json
 import re
@@ -78,8 +79,13 @@ def labels(trial, round_number, unit_rounds, acceptance, previous_failing=None, 
             tags.append('G1')
         if tags:
             out[f'{kind}:{name}'] = tags
+    round_tags = []
+    if 'build:requested' in failing:
+        round_tags.append('B')
     if re.search(r'SPEC_GAP|REPAIR_REQUIRED|BLOCKED', verdict) and re.search(r'"pass"\s*:\s*false', verdict) and build_ok:
-        out['round'] = ['V1']
+        round_tags.append('V1')
+    if round_tags:
+        out['round'] = round_tags
     return out
 
 
@@ -88,6 +94,8 @@ def p2_candidates(trial, failures):
     prd = _read(run_r1.run_directory(Path(trial)) / PRD)
     out = {}
     for cid, f in failures.items():
+        if f['kind'] not in ('unit', 'probe'):
+            continue
         name = f['unit'][1] if f['kind'] == 'unit' else f['probe']['id'].split(':')[0]
         lines = assumption_lines(prd, name)
         if lines:
