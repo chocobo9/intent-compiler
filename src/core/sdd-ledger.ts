@@ -38,6 +38,18 @@ export function computeLedger(s: SddSnapshot, current: Record<string, TaskIntent
       if (entry) { entry.last = last; entry.state = "open" } else entries.set(id, { id, kind: "prd_gap", subject: g.title, items: [], revisions: {}, first_failed: run.event_id, last, state: "open" })
     }
     if (run.result!.prd_check) for (const entry of entries.values()) if (entry.kind === "prd_gap" && entry.state === "open" && !open.has(entry.subject)) { entry.state = "closed"; entry.last = { ...entry.last, event_id: run.event_id, run_id: run.run_id, passed: true } }
+    // IC's in-round acceptance: checks still failing in the code this run returns; the rest of what was open now passes.
+    const acceptance = run.result!.acceptance
+    if (acceptance) {
+      const failing = new Set(acceptance.open.map(o => `acceptance:${o.id}`))
+      for (const o of acceptance.open) {
+        const id = `acceptance:${o.id}`
+        const last = { event_id: run.event_id, run_id: run.run_id, passed: false, observed: o.observed.slice(0, 600) }
+        const entry = entries.get(id)
+        if (entry) { entry.last = last; entry.state = "open" } else entries.set(id, { id, kind: "acceptance", subject: o.subject, items: [], revisions: {}, first_failed: run.event_id, last, state: "open" })
+      }
+      for (const entry of entries.values()) if (entry.kind === "acceptance" && entry.state === "open" && !failing.has(entry.id)) { entry.state = "closed"; entry.last = { ...entry.last, event_id: run.event_id, run_id: run.run_id, passed: true } }
+    }
   }
   // An item a later update cut part of without revising it counts as revised: its entries no longer state what holds.
   const narrowed = narrowedItems(s.ir, current)
@@ -56,7 +68,7 @@ export function ledgerSection(entries: LedgerEntry[], current: Record<string, Ta
   const items = new Map(Object.values(current).flatMap(t => t.content.map(c => [c.item_id, c.text] as const)))
   const body = open.map((e, i) => {
     const quote = e.items.map(id => items.get(id)).filter(Boolean).map(t => t!.length > 400 ? `${t!.slice(0, 400)}…` : t!).join("\n")
-    return [`## ${i + 1}. ${e.subject}${e.kind === "prd_gap" ? " (left open by SDD's own PRD check)" : e.tier === "derived" ? " (expected result worked out from the requirement's rules, not written in it)" : e.tier === "runs" ? " (the requirement's own sample input does not run)" : ""}`,
+    return [`## ${i + 1}. ${e.subject}${e.kind === "prd_gap" ? " (left open by SDD's own PRD check)" : e.kind === "acceptance" ? " (found by management's acceptance of the code)" : e.tier === "derived" ? " (expected result worked out from the requirement's rules, not written in it)" : e.tier === "runs" ? " (the requirement's own sample input does not run)" : ""}`,
       `Failing since user update ${e.first_failed.replace(/^r(\d+)-user-input$/u, "$1")}; last result in update ${e.last.event_id.replace(/^r(\d+)-user-input$/u, "$1")}.`,
       ...(quote ? [`Requirement (original text):\n${quote}`] : []),
       ...(e.example ? [`Example:\nGiven:\n${e.example.given.trim()}\nExpect:\n${e.example.expect.trim()}`] : []),
@@ -73,4 +85,13 @@ export function ledgerSection(entries: LedgerEntry[], current: Record<string, Ta
  */
 export const LEDGER_FEEDBACK = false
 
-export const LEDGER_NOTE = "Code ran the acceptance examples above against the code this update starts from, and read SDD's own PRD check. These earlier requirements are not met by that code. They are not new requirements: the original text below already states them, unchanged. Meeting them is part of this update."
+/**
+ * The open entries the delivered text carries. Acceptance entries (static unit
+ * check, code-built error probes: no model-built input, no false positive on the
+ * held-out code) always; example and PRD-check entries only with LEDGER_FEEDBACK.
+ */
+export function fedBack(entries: LedgerEntry[]): LedgerEntry[] {
+  return entries.filter(e => e.kind === "acceptance" || LEDGER_FEEDBACK)
+}
+
+export const LEDGER_NOTE = "Management checked the code this update starts from against the requirements (static checks and calls built from the requirement's own error rules). These earlier requirements are not met by that code. They are not new requirements: the original text below already states them, unchanged. Meeting them is part of this update."

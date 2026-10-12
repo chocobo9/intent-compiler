@@ -88,3 +88,15 @@ def test_reject_changed_adapter_before_freezing(tmp_path):
     result = invoke('prepare', request)
     assert result.returncode != 0 and 'Pinned adapter digest differs' in result.stderr
     assert not (tmp_path / 'prepared-run').exists()
+
+
+def test_acceptance_result_reports_what_the_returned_code_still_fails():
+    from ic_bridge import acceptance_result
+    details = {'unit:op:clip': {'subject': '`clip` (op) is not implemented', 'observed': 'no dispatch'}, 'unit:op:tag': {'subject': '`tag` (op) is not implemented', 'observed': 'no dispatch'}}
+    adopted = {'acceptance_repair': {'outcome': 'adopted_with_regressions', 'checks': 9, 'failing_before': ['unit:op:clip', 'unit:op:tag'], 'details': details,
+                                     'passes': [{'failing_after': ['unit:op:tag']}]}}
+    assert [o['id'] for o in acceptance_result(adopted)['open']] == ['unit:op:tag']
+    reverted = dict(adopted['acceptance_repair'], outcome='reverted')
+    assert [o['id'] for o in acceptance_result({'acceptance_repair': reverted})['open']] == ['unit:op:clip', 'unit:op:tag'], "reverted: SDD's own code is returned"
+    assert acceptance_result({'acceptance_repair': {'outcome': 'nothing_to_repair', 'checks': 9, 'failing_before': []}})['open'] == []
+    assert acceptance_result({}) is None

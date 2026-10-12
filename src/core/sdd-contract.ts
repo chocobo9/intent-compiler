@@ -151,7 +151,7 @@ export interface CIDelivery {
 /** One failing example or open PRD gap of the code a delivery starts from. */
 export interface LedgerEntry {
   id: string
-  kind: "example" | "prd_gap"
+  kind: "example" | "prd_gap" | "acceptance"
   /** For an example: verbatim (expected values written by the requirements) or derived (worked out from their rules). */
   tier?: ExampleTier
   subject: string
@@ -201,6 +201,8 @@ export interface SddResult {
   prd_check?: PrdCheckSummary
   /** The delivery's checkable examples run by the host against this run's code. */
   example_results?: Array<{ id: string; passed: boolean; failures: string[] }>
+  /** IC's in-round acceptance of the returned code (static unit check, code-built error probes): checks still failing. */
+  acceptance?: { outcome: string; checks: number; open: Array<{ id: string; subject: string; observed: string }> }
   reason: string
 }
 export interface SddRun {

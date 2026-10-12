@@ -470,6 +470,23 @@ test("the ledger opens failing examples, closes passing ones, drops revised ones
   assert.deepEqual(computeLedger(store([run("c1", "r1-user-input", false)]), ir(1) as never).map(e => e.state), ["removed"])
   assert.equal(ledgerSection(later, ir(0) as never), "")
 })
+test("acceptance entries open from what IC's acceptance left failing, close when a later run passes them, and alone are fed back", async () => {
+  const { computeLedger, ledgerSection, fedBack, LEDGER_FEEDBACK } = await import("../src/core/sdd-ledger.js")
+  const run = (event: string, open: Array<[string, string]>, examplePassed = false) => ({ run_id: `run-${event}`, event_id: event, ci_ref: { id: "c1" },
+    result: { example_results: [{ id: "verify#1", passed: examplePassed, failures: examplePassed ? [] : ["no MISMATCH"] }], acceptance: { outcome: "adopted_with_regressions", checks: 9, open: open.map(([id, subject]) => ({ id, subject, observed: `${id} observed` })) } } })
+  const example = { given: "g", expect: "e", run: { args: [], files: [], stdin: null }, check: null, checkable: true }
+  const store = (runs: unknown[]) => ({ batches: [{ delivery: { ref: { id: "c1" }, contract: { acceptance: [{ subject: "verify", items: ["r-verify"], revisions: { "r-verify": 0 }, examples: [example] }] } } }], runs }) as never
+  const ir = { t: { content: [{ item_id: "r-verify", revision: 0, text: "verify" }] } } as never
+  const first = computeLedger(store([run("r3-user-input", [["unit:op:clip", "`clip` (op) is not implemented"], ["probe:lineage:malformed-json-config", "error rule not met: lineage"]])]), ir)
+  assert.deepEqual(first.filter(e => e.kind === "acceptance").map(e => [e.id, e.state]), [["acceptance:unit:op:clip", "open"], ["acceptance:probe:lineage:malformed-json-config", "open"]])
+  assert.equal(LEDGER_FEEDBACK, false)
+  assert.deepEqual(fedBack(first).map(e => e.kind), ["acceptance", "acceptance"], "example entries stay recorded only")
+  const section = ledgerSection(fedBack(first), ir)
+  assert.match(section, /`clip` \(op\) is not implemented \(found by management's acceptance of the code\)/u); assert.match(section, /unit:op:clip observed/u)
+  assert.doesNotMatch(section, /verify#1/u)
+  const later = computeLedger(store([run("r3-user-input", [["unit:op:clip", "`clip` (op) is not implemented"]]), run("r4-user-input", [])]), ir)
+  assert.deepEqual(later.filter(e => e.kind === "acceptance").map(e => [e.state, e.last.event_id]), [["closed", "r4-user-input"]])
+})
 test("a placeholder-only fixed text is no template: an example cannot pass on it vacuously", async () => {
   const { checkability } = await import("../src/core/sdd-examples.js")
   const text = "Writes the report to `<path>`; errors print `ERROR: file not found: <path>`."

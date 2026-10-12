@@ -87,8 +87,25 @@ def operate(mode, request):
             # SDD's own PRD consistency check is the requirement-level feedback.
             'prd_check': results.prd_check_summary(run),
             'example_results': example_results(delivery, run / 'repos/main'),
+            **({'acceptance': acceptance_result(value)} if value.get('acceptance_repair') else {}),
             'reason': 'Original SDD completion, stage evidence and its PRD check; no separate IC assessment.'}
 
+
+
+def acceptance_result(value):
+    """What IC's in-round acceptance left failing in the code this run returns (its repaired code when adopted)."""
+    a = value.get('acceptance_repair')
+    if not a:
+        return None
+    if a['outcome'] == 'nothing_to_repair':
+        open_ids = []
+    elif a['outcome'] in ('adopted', 'adopted_with_regressions'):
+        open_ids = a['passes'][-1].get('failing_after', [])
+    else:
+        open_ids = a['failing_before']
+    info = a.get('details', {})
+    return {'outcome': a['outcome'], 'checks': a['checks'],
+            'open': [{'id': i, 'subject': info.get(i, {}).get('subject', i), 'observed': info.get(i, {}).get('observed', '')} for i in open_ids]}
 
 
 def example_results(delivery, code):
@@ -120,6 +137,7 @@ def adopted_result(trial, claim, adapter, delivery=None):
             'source_digest': results.source_hash(run / 'repos/main'),
             'prd_check': results.prd_check_summary(run),
             'example_results': example_results(delivery or {}, run / 'repos/main'),
+            **({'acceptance': acceptance_result(value)} if value.get('acceptance_repair') else {}),
             'reason': f'Adopted completed SDD run {root.name}; its node 1 was an earlier CI of this user update.'}
 
 if __name__ == '__main__':

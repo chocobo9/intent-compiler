@@ -43,6 +43,21 @@ def code_files(main):
             if p.is_file() and not any(part.startswith(SKIP) for part in p.relative_to(main).parts) and p.name not in ('dpipe', 'dpipe.exe')}
 
 
+def details(failures):
+    """What IC tells SDD about each failing check: subject and the observed behaviour."""
+    out = {}
+    for cid, f in failures.items():
+        if f['kind'] == 'unit':
+            kind, name = f['unit']
+            out[cid] = {'subject': f'`{name}` ({kind}) is not implemented', 'unit': name, 'round': f.get('round'),
+                        'observed': f'No non-test source dispatches on "{name}" (case, map key or comparison).'}
+        else:
+            p, obs = f['probe'], f['observed'] or {}
+            out[cid] = {'subject': f"error rule not met: {p['id']}", 'rule': p['rule'], 'args': p['run']['args'],
+                        'observed': f"dpipe {' '.join(p['run']['args'])} -> exit {obs.get('exit_code')}, stderr {(obs.get('stderr') or '').strip()[:200]!r}"}
+    return out
+
+
 def accept(main, texts):
     """Failing checks on the code at main: {check id: detail}."""
     named = units(texts)
@@ -175,7 +190,7 @@ def repair_trial(trial, round_number, env):
     texts = texts_upto(round_number)
     record = {'started': dt.datetime.now(dt.timezone.utc).isoformat(), 'passes': []}
     before, info = accept(main, texts)
-    record.update(checks=info['checks'], failing_before=sorted(before))
+    record.update(checks=info['checks'], failing_before=sorted(before), details=details(before))
     if not before:
         record['outcome'] = 'nothing_to_repair'
         return record
@@ -214,6 +229,7 @@ def repair_trial(trial, round_number, env):
         p['build_test_exit'], p['build_tail'] = build_and_test(main)
         if p['build_test_exit'] == 0:
             after, _ = accept(main, texts)
+            record['details'].update(details(after))
             p['failing_after'] = sorted(after)
             p['fixed'] = sorted(set(before) - set(after))
             p['regressed'] = sorted(set(after) - set(before))

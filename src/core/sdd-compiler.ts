@@ -13,7 +13,7 @@ import { SDD_PROFILE, type CIDelivery, type DeliveryContract, type DeliveryDraft
 import { checkRequest, deliveryRequest, irRequest, type CheckRequest, type ContextReport, type DeliveryRequest } from "./sdd-context.js"
 import { currentRevisions, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
 import { markCheckable } from "./sdd-examples.js"
-import { LEDGER_FEEDBACK, computeLedger, ledgerSection } from "./sdd-ledger.js"
+import { computeLedger, fedBack, ledgerSection } from "./sdd-ledger.js"
 import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
 import { carryExecutable, executableSection, keepExamples, type Derivation, type ProposedExample } from "./sdd-executable.js"
 
@@ -363,7 +363,7 @@ export class SddCompiler {
       const completed = completeFields(contract.fields, text)
       emptyObjects.push(...completed.leftOut)
       namesAdded.push(...completed.added)
-      text = `${ACCUMULATED_HEADER}\n${changeSection(settled.changes, LEDGER_FEEDBACK ? ledger : [], ir)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance)}${LEDGER_FEEDBACK ? ledgerSection(ledger, ir) : ""}${text.slice(ACCUMULATED_HEADER.length)}`
+      text = `${ACCUMULATED_HEADER}\n${changeSection(settled.changes, fedBack(ledger), ir)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance)}${ledgerSection(fedBack(ledger), ir)}${text.slice(ACCUMULATED_HEADER.length)}`
     }
     const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract, ...(settled.changes.length ? { changes: settled.changes } : {}), ...(Object.keys(s.ir).length && draft.changes === undefined ? { changes_not_given: true } : {}), ...(ledger.length ? { ledger } : {}), ...(emptyObjects.length ? { field_objects_left_out: emptyObjects } : {}), ...(namesAdded.length ? { field_names_added: namesAdded } : {}) }
     return { ...content, ref: { id: `ci-${digestText(this.runId + ":" + b.event_id).slice(0, 24)}`, revision: 1, digest: digestOf(content) } }
@@ -432,6 +432,8 @@ export class SddCompiler {
         && ["pass", "not_passed", "unknown"].includes(result.sdd_status), "Invalid SDD result")
       unique(result.artifacts.map(a => a.path), "result artifact")
       requireThat(result.artifacts.every(a => a.path && a.digest), "Result evidence needs identity")
+      requireThat(result.acceptance === undefined || (typeof result.acceptance.outcome === "string" && Array.isArray(result.acceptance.open)
+        && result.acceptance.open.every(o => typeof o.id === "string" && typeof o.subject === "string")), "Acceptance result needs its open checks")
       const check = result.prd_check
       requireThat(check === undefined || (typeof check.status === "string" && Array.isArray(check.open_gaps)
         && check.open_gaps.every(g => typeof g.title === "string" && typeof g.text === "string")), "Invalid PRD check summary")
