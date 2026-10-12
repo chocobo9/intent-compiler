@@ -41,3 +41,9 @@ def test_a_shortened_case_id_still_maps_to_its_unique_candidate(tmp_path, monkey
     monkeypatch.setattr(dl.subprocess, 'call', lambda *a, **k: (open(k['stdout'].name, 'w', encoding='utf-8').write(answer), 0)[1])
     got = dl.judge_p2(t, {'OPENCODE_BIN': 'x'}, {'unit:op:crossjoin': {'unit': 'crossjoin', 'assumptions': ['a'], 'rule': 'r'}}, [''], tmp_path / 'j.stream')
     assert got == {'unit:op:crossjoin': {'contradicts': True, 'reason': 'r'}}
+
+
+def test_the_p2_excerpt_is_the_unit_s_own_section():
+    texts = ['# T\n### `sort`\nsorts\n### `resample`\nStratified.\n#### Rules\n- groups\n### `clip`\nclips\n']
+    got = dl.unit_section(texts, 'resample')
+    assert got.startswith('### `resample`') and '- groups' in got and 'clip' not in got

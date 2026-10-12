@@ -103,6 +103,22 @@ def p2_candidates(trial, failures):
     return out
 
 
+def unit_section(texts, name, limit=4000):
+    """The requirement's own section for a unit (the heading naming it in backticks, to the next heading of its level)."""
+    for text in texts:
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            h = re.match(r'^(#{1,6})\s', line)
+            if h and f'`{name}`' in line:
+                end = next((j for j in range(i + 1, len(lines)) if re.match(r'^#{1,%d}\s' % len(h.group(1)), lines[j])), len(lines))
+                return '\n'.join(lines[i:end])[:limit]
+    for text in texts:
+        k = text.find(f'`{name}`')
+        if k >= 0:
+            return text[max(0, k - 200): k + 1500]
+    return ''
+
+
 P2_PROMPT = """You judge only whether PRD assumptions contradict the original requirement. Do not edit any file, run any command or use any tool.
 For each case below, the original requirement fixes a behaviour, and the PRD contains assumption lines (marked 【假设】) about the same unit.
 Answer "contradicts": true only when following the assumption would produce behaviour the original requirement's text rules out.
@@ -118,7 +134,7 @@ def judge_p2(trial, env, candidates, texts, log):
         return {}
     cases = []
     for cid, c in candidates.items():
-        original = c['rule'] or next((t[t.find(f'`{c["unit"]}`') - 200: t.find(f'`{c["unit"]}`') + 1500] for t in texts if f'`{c["unit"]}`' in t), '')
+        original = c['rule'] or unit_section(texts, c['unit'])
         cases.append(f"## {cid}\nOriginal requirement (verbatim excerpt):\n{original.strip()}\nPRD assumption lines:\n" + '\n'.join(c['assumptions']))
     run = run_r1.run_directory(Path(trial))
     # The read-only plan agent: the judgement needs no tool and may change nothing.
