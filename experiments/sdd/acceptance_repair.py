@@ -1,0 +1,257 @@
+"""In-round acceptance and targeted repair (IC arm), run between SDD's return and IC's reconcile.
+
+1. Accept: units the requirements name that the code never dispatches on (static_units),
+   and code-built error-path probes (error_probes). No model, no invented data.
+2. Report: each failure as a GAP in SDD's own prd-check report format.
+3. Repair: SDD's own prd-fix skill, with the prompt template of the prepared workflow.
+4. Re-check by code, per unit: scope, PRD unchanged, no deleted tests, build and tests,
+   failures fixed, no regression. Adopt, or one more pass, or revert to the code SDD returned.
+5. Re-score the adopted code with the official verifier; the score SDD's code got is kept.
+
+Original records are never overwritten: SDD's report, its code and its official result
+are archived under acceptance/ in the trial.
+"""
+import datetime as dt
+import hashlib
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import run_r1
+from error_probes import probes
+from example_runner import run_examples
+from static_units import missing, units
+
+PRD = 'output/02-澄清后PRD.md'
+REPORT = 'output/08-验证结果.md'
+MAX_PASSES = 2
+SKIP = ('.specart', '.specart-verify', '.system-design', '.verdict.md', '.coding-done', '.sdd-build', '.git')
+
+
+def texts_upto(n):
+    return [(run_r1.OFFICIAL / f'steps/round-{k}/instruction.md').read_text(encoding='utf-8') for k in range(1, n + 1)]
+
+
+def sha(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def code_files(main):
+    return {str(p.relative_to(main)).replace('\\', '/'): sha(p) for p in Path(main).rglob('*')
+            if p.is_file() and not any(part.startswith(SKIP) for part in p.relative_to(main).parts) and p.name not in ('dpipe', 'dpipe.exe')}
+
+
+def accept(main, texts):
+    """Failing checks on the code at main: {check id: detail}."""
+    named = units(texts)
+    failures = {}
+    for kind, name in missing(main, list(named)):
+        failures[f'unit:{kind}:{name}'] = {'kind': 'unit', 'unit': (kind, name), 'round': named[(kind, name)] + 1}
+    ps = probes(texts, len(texts))
+    res = run_examples(main, ps)
+    for p, r in zip(ps, res['results']):
+        bad = list(r['failures'])
+        if p.get('nonzero') and r['observed'] and r['observed']['exit_code'] == 0:
+            bad.append('exit code 0 (expected non-zero)')
+        if bad:
+            failures[f"probe:{p['id']}"] = {'kind': 'probe', 'probe': p, 'failures': bad, 'observed': r['observed']}
+    return failures, {'build_exit': res['build_exit'], 'checks': len(named) + len(ps)}
+
+
+def _section(texts, name):
+    for n, t in enumerate(texts, 1):
+        lines = t.splitlines()
+        for i, line in enumerate(lines):
+            h = re.match(r'^(#{2,4})\s', line)
+            if h and f'`{name}`' in line:
+                level = len(h.group(1))
+                end = next((j for j in range(i + 1, len(lines)) if re.match(r'^#{1,%d}\s' % level, lines[j])), len(lines))
+                return n, '\n'.join(lines[i:end]).strip()
+    return None, ''
+
+
+def _prd_lines(prd, name):
+    return [(i, line.strip()[:400]) for i, line in enumerate(prd.splitlines(), 1) if f'`{name}`' in line or re.search(r'\b' + re.escape(name) + r'\b', line)][:2]
+
+
+def report(failures, texts, prd_text):
+    gaps = []
+    for k, (cid, f) in enumerate(sorted(failures.items()), 1):
+        if f['kind'] == 'unit':
+            kind, name = f['unit']
+            rn, sec = _section(texts, name)
+            lines = _prd_lines(prd_text, name)
+            gaps.append(f"""#### GAP-{k:03d} `{name}`（{kind}）未实现
+
+- PRD 坐标：{'；'.join(f'`{PRD}#第{i}行`' for i, _ in lines) or f'`{PRD}`（未检索到）'}
+- 代码证据：`repos/main/**/*.go`（不含测试）中没有在任何分派位置（case、映射键、比较）出现 `"{name}"`。
+- 差异类型：`PRD_ONLY`
+- 差异说明：需求定义了 `{name}`，更新后代码没有实现。
+- PRD 原描述：{' / '.join(t for _, t in lines) or '（PRD 中未检索到）'}
+- 原始需求（第 {rn} 轮，逐字）：
+
+{sec}
+
+- PRD_ONLY 二次核验：检索 `"{name}"` 的分派位置，范围 `repos/main/**/*.go`（排除测试），无命中。
+- 评审建议方向：建议改代码（仅建议，不执行）。
+""")
+        else:
+            p = f['probe']
+            obs = f['observed'] or {}
+            gaps.append(f"""#### GAP-{k:03d} 报错行为与需求不符：`{p['id']}`
+
+- PRD 坐标：`{PRD}`（报错规则）
+- 原始需求（逐字）：{p['rule']}
+- 差异类型：`MISMATCH`
+- 差异说明：按需求触发该报错规则时，程序输出与需求写明的文本或退出码不符。
+- 复现命令：`dpipe {' '.join(p['run']['args'])}`（输入文件：{', '.join(x['path'] for x in p['run']['files']) or '无，全部输入路径不存在'}）
+- 代码实际行为：退出码 {obs.get('exit_code')}；stderr `{(obs.get('stderr') or '').strip()[:200]}`
+- 评审建议方向：建议改代码（仅建议，不执行）。
+""")
+    n = len(gaps)
+    return f"""# PRD 一致性检查报告
+
+> 本报告由管理层（IC）当轮验收生成：依据原始需求与 PRD，对更新后代码做静态检索和按需求报错规则的实际调用。只列出确认的差异。
+
+## 1. 输入基线
+
+- PRD：`{PRD}`
+- 更新后代码仓：`repos/main/`
+- 生成日期：{dt.date.today().isoformat()}
+
+## 3. 差异统计
+
+- 差异总数：{n}
+- 按类型：`CODE_ONLY` 0 / `PRD_ONLY` {sum(f['kind'] == 'unit' for f in failures.values())} / `MISMATCH` {sum(f['kind'] == 'probe' for f in failures.values())}
+
+## 4. 板块差异明细
+
+{chr(10).join(gaps)}
+
+<!--VERDICT:{{"skill":"prd-check","pass":true,"unresolved":{n},"blocked":0,"manual_review":0}}-->
+"""
+
+
+def prdfix(trial, env, log):
+    run = run_r1.run_directory(trial)
+    w = json.loads((run / 'workflow-cli.json').read_text(encoding='utf-8'))
+    s = w['skills']['prd-fix']
+    mode = s.get('prompt_modes', {}).get('unattended', {})
+    nodes = {k: v['path'].replace('${path_suffix}', '') for k, v in w['nodes'].items()}
+    prompt = s['prompt_template'].replace('${prompt_mode_prefix}', mode.get('mode_prefix', '')).replace('${prompt_mode_suffix}', mode.get('mode_suffix', ''))
+    for k in ('2', '3', '4', '7', '8'):
+        prompt = prompt.replace('${n%s_path}' % k, nodes[k])
+    args = ['C:/Program Files/Git/usr/bin/sh.exe', env['OPENCODE_BIN'], 'run', '--agent', 'build', '--dir', str(run).replace('\\', '/'),
+            '--format', 'json', '--auto', '--model', run_r1.MODEL, '--variant', run_r1.VARIANT, '--', prompt]
+    with open(log, 'w', encoding='utf-8') as out:
+        return subprocess.call(args, stdout=out, stderr=subprocess.STDOUT, env=env, cwd=str(run), timeout=3600), prompt
+
+
+def build_and_test(main):
+    done = subprocess.run(['docker', 'run', '--rm', '--network', 'none', '--mount', f'type=bind,source={main},target=/app', '--workdir', '/app',
+                           '--entrypoint', '/bin/bash', 'sdd-unattended-preflight:latest', '-lc', 'go build -o dpipe ./... && go test ./...'],
+                          capture_output=True, text=True, encoding='utf-8', errors='replace')
+    return done.returncode, (done.stdout + done.stderr)[-2000:]
+
+
+def restore(src, dst):
+    for p in list(Path(dst).iterdir()):
+        if p.name in ('.git',):
+            continue
+        shutil.rmtree(p) if p.is_dir() else p.unlink()
+    for p in Path(src).iterdir():
+        (shutil.copytree(p, Path(dst) / p.name) if p.is_dir() else shutil.copy2(p, Path(dst) / p.name))
+
+
+def repair_trial(trial, round_number, env):
+    """Run acceptance and repair on a returned trial; return the record written into completion.json."""
+    trial = Path(trial)
+    run = run_r1.run_directory(trial)
+    main = run / 'repos/main'
+    work = trial / 'acceptance'
+    work.mkdir(exist_ok=True)
+    texts = texts_upto(round_number)
+    record = {'started': dt.datetime.now(dt.timezone.utc).isoformat(), 'passes': []}
+    before, info = accept(main, texts)
+    record.update(checks=info['checks'], failing_before=sorted(before))
+    if not before:
+        record['outcome'] = 'nothing_to_repair'
+        return record
+    shutil.copytree(main, work / 'sdd-main', dirs_exist_ok=False)
+    if (run / REPORT).exists():
+        shutil.copy2(run / REPORT, work / '08-sdd-report.md')
+    prd_sha = sha(run / PRD)
+    shutil.copy2(run / PRD, work / 'prd-sdd.md')
+    origin_before = code_files(run / 'repos/origin')
+    tests_before = {f for f in code_files(main) if f.endswith('_test.go')}
+    passing_before = None  # every check that passed on SDD's code
+    current = dict(before)
+    for n in range(1, MAX_PASSES + 1):
+        text = report(current, texts, (run / PRD).read_text(encoding='utf-8'))
+        (work / f'report-pass{n}.md').write_text(text, encoding='utf-8')
+        (run / REPORT).write_text(text, encoding='utf-8')
+        snapshot = code_files(main)
+        rc, prompt = prdfix(trial, env, work / f'prdfix-pass{n}.stream')
+        (work / 'prdfix-prompt.txt').write_text(prompt, encoding='utf-8')
+        p = {'pass': n, 'gaps': sorted(current), 'prdfix_exit': rc}
+        after_files = code_files(main)
+        p['changed_files'] = sorted(f for f in set(after_files) | set(snapshot) if after_files.get(f) != snapshot.get(f))
+        if sha(run / PRD) != prd_sha:
+            shutil.copy2(work / 'prd-sdd.md', run / PRD)  # the PRD stays SDD's; code changes are kept
+            p['prd_restored'] = True
+        if code_files(run / 'repos/origin') != origin_before:
+            p['baseline_changed'] = True
+            restore(work / 'sdd-main', main)
+            record['passes'].append(p)
+            record['outcome'] = 'reverted_baseline_touched'
+            break
+        deleted = sorted(tests_before - set(after_files))
+        for f in deleted:
+            shutil.copy2(work / 'sdd-main' / f, main / f)
+        p['tests_restored'] = deleted
+        p['build_test_exit'], p['build_tail'] = build_and_test(main)
+        if p['build_test_exit'] == 0:
+            after, _ = accept(main, texts)
+            p['failing_after'] = sorted(after)
+            p['fixed'] = sorted(set(before) - set(after))
+            p['regressed'] = sorted(set(after) - set(before))
+        record['passes'].append(p)
+        if p['build_test_exit'] == 0 and p['fixed'] and not p['regressed']:
+            record['outcome'] = 'adopted'
+            break
+        if p['build_test_exit'] == 0:
+            current = {k: v for k, v in after.items()}
+        if n == MAX_PASSES:
+            ok = p['build_test_exit'] == 0 and len(p['failing_after']) < len(before)
+            if not ok:
+                restore(work / 'sdd-main', main)
+            record['outcome'] = 'adopted_with_regressions' if ok else 'reverted'
+    shutil.copy2(work / f"report-pass{len(record['passes'])}.md", work / 'last-ic-report.md')
+    if (work / '08-sdd-report.md').exists():
+        shutil.copy2(work / '08-sdd-report.md', run / REPORT)
+    record['finished'] = dt.datetime.now(dt.timezone.utc).isoformat()
+    return record
+
+
+def apply(trial, round_number):
+    """Acceptance + repair on a returned trial, then re-score; updates completion.json in place, archiving the old one."""
+    trial = Path(trial)
+    settings = json.loads((trial / 'environment.json').read_text(encoding='utf-8'))
+    env = run_r1.execution_env(settings | (run_r1.posix_cp_settings(trial) if (trial / 'bin/posix_cp.sh').exists() else {}))
+    complete = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))
+    record = repair_trial(trial, round_number, env)
+    if record['outcome'] in ('adopted', 'adopted_with_regressions'):
+        archive = trial / 'acceptance' / 'sdd-official'
+        archive.mkdir(parents=True, exist_ok=True)
+        for name in ['official-app', 'official-verifier', 'official-verifier.log', 'completion.json']:
+            if (trial / name).exists():
+                shutil.move(trial / name, archive / name)
+        records = list(complete['phases'])
+        record['sdd_official'] = complete['results'].get('official')
+        complete['results']['official'] = run_r1.official_phase(trial, env, records)
+        complete['phases'] = records
+    complete['acceptance_repair'] = record
+    run_r1.write_json(trial / 'completion.json', complete)
+    return record
