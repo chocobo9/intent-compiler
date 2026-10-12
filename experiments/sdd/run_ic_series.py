@@ -360,7 +360,10 @@ def execute_ic_series(root, resume=None, retry_paused=False):
                     # IC's in-round acceptance and targeted repair, before IC reads the returned code.
                     import acceptance_repair
                     log(f'R{number} acceptance started')
-                    accepted = acceptance_repair.apply(trial, number)
+                    from ic_bridge import acceptance_result
+                    prior = records[-2].get('completion') if len(records) > 1 else None
+                    prior_acceptance = acceptance_result(prior) if prior else None
+                    accepted = acceptance_repair.apply(trial, number, {o['id'] for o in prior_acceptance['open']} if prior_acceptance else None)
                     fixed = accepted['passes'][-1].get('fixed', []) if accepted.get('passes') else []
                     log(f"R{number} acceptance: {accepted['outcome']}; failing before {len(accepted['failing_before'])}, fixed {len(fixed)}"
                         + (f"; official {accepted['sdd_official'].get('passed')} -> {json.loads((trial / 'completion.json').read_text(encoding='utf-8'))['results']['official'].get('passed')}" if accepted.get('sdd_official') else ''))

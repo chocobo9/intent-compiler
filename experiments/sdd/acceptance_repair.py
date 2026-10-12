@@ -23,6 +23,7 @@ import run_r1
 from error_probes import probes
 from example_runner import run_examples
 from static_units import missing, units
+import drift_labels
 
 PRD = 'output/02-澄清后PRD.md'
 REPORT = 'output/08-验证结果.md'
@@ -180,7 +181,7 @@ def restore(src, dst):
         (shutil.copytree(p, Path(dst) / p.name) if p.is_dir() else shutil.copy2(p, Path(dst) / p.name))
 
 
-def repair_trial(trial, round_number, env):
+def repair_trial(trial, round_number, env, previous_failing=None):
     """Run acceptance and repair on a returned trial; return the record written into completion.json."""
     trial = Path(trial)
     run = run_r1.run_directory(trial)
@@ -191,8 +192,15 @@ def repair_trial(trial, round_number, env):
     record = {'started': dt.datetime.now(dt.timezone.utc).isoformat(), 'passes': []}
     before, info = accept(main, texts)
     record.update(checks=info['checks'], failing_before=sorted(before), details=details(before))
-    if not before:
-        record['outcome'] = 'nothing_to_repair'
+    # P2: a failure whose unit carries PRD assumptions contradicting the requirement is not given to
+    # prd-fix (it repairs toward the PRD); it stays open and goes to the next round's CI.
+    candidates = drift_labels.p2_candidates(trial, before)
+    record['p2'] = drift_labels.judge_p2(trial, env, candidates, texts, work / 'p2-judge.stream') if candidates else {}
+    p2 = {cid for cid, v in record['p2'].items() if v['contradicts']}
+    record['excluded_p2'] = sorted(p2)
+    if not set(before) - p2:
+        record['outcome'] = 'nothing_to_repair' if not before else 'not_repaired_p2'
+        record['labels'] = label(trial, round_number, texts, record, previous_failing)
         return record
     shutil.copytree(main, work / 'sdd-main', dirs_exist_ok=False)
     if (run / REPORT).exists():
@@ -202,7 +210,7 @@ def repair_trial(trial, round_number, env):
     origin_before = code_files(run / 'repos/origin')
     tests_before = {f for f in code_files(main) if f.endswith('_test.go')}
     passing_before = None  # every check that passed on SDD's code
-    current = dict(before)
+    current = {k: v for k, v in before.items() if k not in p2}
     for n in range(1, MAX_PASSES + 1):
         text = report(current, texts, (run / PRD).read_text(encoding='utf-8'))
         (work / f'report-pass{n}.md').write_text(text, encoding='utf-8')
@@ -247,17 +255,30 @@ def repair_trial(trial, round_number, env):
     shutil.copy2(work / f"report-pass{len(record['passes'])}.md", work / 'last-ic-report.md')
     if (work / '08-sdd-report.md').exists():
         shutil.copy2(work / '08-sdd-report.md', run / REPORT)
+    record['labels'] = label(trial, round_number, texts, record, previous_failing)
     record['finished'] = dt.datetime.now(dt.timezone.utc).isoformat()
     return record
 
 
-def apply(trial, round_number):
+def label(trial, round_number, texts, record, previous_failing):
+    named = units(texts)
+    out = drift_labels.labels(trial, round_number, {k: i + 1 for k, i in named.items()}, record, previous_failing)
+    for cid in record.get('excluded_p2', []):
+        f = record['details'].get(cid, {})
+        key = next((k for k in out if k.endswith(':' + (f.get('unit') or cid.split(':')[1]))), None)
+        if key and 'P2' not in out[key]:
+            out[key].append('P2')
+    (Path(trial) / 'acceptance' / 'labels.json').write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding='utf-8')
+    return out
+
+
+def apply(trial, round_number, previous_failing=None):
     """Acceptance + repair on a returned trial, then re-score; updates completion.json in place, archiving the old one."""
     trial = Path(trial)
     settings = json.loads((trial / 'environment.json').read_text(encoding='utf-8'))
     env = run_r1.execution_env(settings | (run_r1.posix_cp_settings(trial) if (trial / 'bin/posix_cp.sh').exists() else {}))
     complete = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))
-    record = repair_trial(trial, round_number, env)
+    record = repair_trial(trial, round_number, env, previous_failing)
     if record['outcome'] in ('adopted', 'adopted_with_regressions'):
         archive = trial / 'acceptance' / 'sdd-official'
         archive.mkdir(parents=True, exist_ok=True)
