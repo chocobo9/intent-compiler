@@ -7,6 +7,7 @@ round is promoted by the same rule (run_series.promotion_decision).
 """
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ import time
 import urllib.request
 import uuid
 
+import costs
 import run_r1
 from run_results import source_hash
 from run_series import VOID, next_baseline, promotion_decision, promotion_record
@@ -25,7 +27,11 @@ from ic_bridge import adapter_digest
 
 PROJECT = Path(__file__).resolve().parents[2]
 NODE = 'C:/Program Files/nodejs/node.exe'
-TRIAL_PREFIX = 'ic-sdd-dpipe'
+TRIAL_PREFIX = 'ic5-sdd-dpipe'
+# The management host: OpenCode built with OpenAI strict structured output (D3, user 2026-10-16).
+STRICT_HOST = Path('D:/huawei/opencode-v1.18.31-strict/bin/opencode.cmd')
+# Extra management calls a round may receive once, recorded (D5: as agreed for v4, user 2026-10-16).
+REOPEN_CALLS = 10
 # Calls per round; when they run out the series stops (BLOCKED). Extra calls only by an
 # explicit --reopen N after the user approves (user, 2026-10-11).
 MANAGEMENT_BUDGET = 15
@@ -46,7 +52,20 @@ def free_port():
         return s.getsockname()[1]
 
 
-def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round=1, acceptance_repair=False, pause_below_floor=True):
+def host_identity(native):
+    """The management host launcher, and for one run from patched OpenCode source its revision and patch."""
+    native = Path(native).resolve()
+    if not native.is_file():
+        raise ValueError('Management host launcher missing: ' + str(native))
+    identity = {'path': str(native), 'launcher_sha256': run_r1.sha(native)}
+    repo = native.parent.parent
+    if (repo / '.git').exists():
+        git = lambda *a: subprocess.check_output(['git', '-C', str(repo), *a])
+        identity.update(source_head=git('rev-parse', 'HEAD').decode().strip(), source_diff_sha256=hashlib.sha256(git('diff', '--binary')).hexdigest())
+    return identity
+
+
+def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round=1, acceptance_repair=False, pause_below_floor=True, native=None):
     root = run_r1.BASE / 'harbor_runs' / (f'{trial_prefix}-15round-' + dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%Sz-') + uuid.uuid4().hex[:8])
     root.mkdir(parents=True)
     source = Path(__file__).parent
@@ -84,7 +103,7 @@ def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round
     run_r1.write_json(root / 'series.json', {
         'status': 'prepared', 'rounds': 15, 'arm': 'ic+sdd', 'model': run_r1.MODEL, 'variant': run_r1.VARIANT,
         'trial_prefix': trial_prefix, 'ledger_from_round': ledger_from_round, 'acceptance_repair': acceptance_repair, 'pause_below_floor': pause_below_floor, 'management_budget': MANAGEMENT_BUDGET, 'request_timeout_ms': 2147483647,
-        'native': str(run_r1.resolve_opencode()), 'node': NODE, 'python': str(run_r1.PYTHON), 'port': free_port(),
+        'native': str(Path(native).resolve()) if native else str(run_r1.resolve_opencode()), **({'native_frozen': host_identity(native)} if native else {}), 'reopen_calls': REOPEN_CALLS, 'node': NODE, 'python': str(run_r1.PYTHON), 'port': free_port(),
         'adapter_digest': adapter_digest(adapter), 'frozen_files': frozen,
         'ic': {'dist': str(dist), 'files': ic_files, 'source_head': head, 'source_uncommitted': dirty},
         'original_instructions': {str(n): run_r1.sha(run_r1.OFFICIAL / f'steps/round-{n}/instruction.md') for n in range(1, 16)},
@@ -200,19 +219,89 @@ def split_resumed(previous, retry_paused=False, pause_below_floor=True):
     return kept, None
 
 
+def round_cost(store, event_id, record):
+    """M8: management calls and tokens, SDD stage tokens of every attempt, acceptance repair tokens."""
+    batch = next(b for b in store['batches'] if b['event_id'] == event_id)
+    trials = [a['trial'] for a in record.get('attempts', [])] + [record['root']]
+    sdd = [{'trial': t, **costs.sdd_tokens(t)} for t in dict.fromkeys(trials)]
+    return {'management': costs.management_tokens(batch), 'management_calls': batch['requests_used'], 'reopened': batch.get('reopened'),
+            'sdd': [{k: v for k, v in x.items() if k != 'stages'} | {'stages': {n: (t or {}).get('input') for n, t in x['stages'].items()}} for x in sdd],
+            'sdd_total': {k: sum((x['total'] or {}).get(k, 0) for x in sdd) for k in (*costs.KEYS, 'steps')} if all(x['total'] for x in sdd) else 'unknown',
+            'repair': costs.repair_tokens(record['root'])}
+
+
+def write_checkpoint(root, number, event, store, record, baseline):
+    """M6: the state at the end of round n, written once; the round after it restarts from exactly this."""
+    from run_results import source_hash
+    folder = root / 'checkpoints' / f'r{number:02d}'
+    folder.mkdir(parents=True, exist_ok=False)
+    batch = next(b for b in store['batches'] if b['event_id'] == event['event_id'])
+    run = next((r for r in reversed(store['runs']) if r['run_id'] == record['execution_id']), None)
+    run_r1.write_json(folder / 'event.json', event)
+    run_r1.write_json(folder / 'store.json', store)
+    (folder / 'delivered-ci.md').write_text(batch['delivery']['text'], encoding='utf-8')
+    contract = batch['delivery'].get('contract') or {}
+    run_r1.write_json(folder / 'ledgers.json', {'revisions': contract.get('revisions', []), 'ledger': batch['delivery'].get('ledger', []), 'rewrite_next': contract.get('rewrite_next', [])})
+    manifest = {'round': number, 'event_id': event['event_id'], 'store_sha256': run_r1.sha(folder / 'store.json'),
+                'ci_ref': batch['delivery']['ref'], 'ci_sha256': run_r1.sha(folder / 'delivered-ci.md'),
+                'code': {'path': str(baseline), 'source_hash': source_hash(baseline)},
+                'sdd_receipt': (run or {}).get('result'), 'official': (record.get('completion') or {}).get('results', {}).get('official'),
+                'promotion': (record.get('promotion') or {}).get('mode'), 'trial': record['root'], 'cost': record.get('cost'),
+                'written': dt.datetime.now(dt.timezone.utc).isoformat()}
+    run_r1.write_json(folder / 'manifest.json', manifest)
+    return {'path': str(folder), 'store_sha256': manifest['store_sha256'], 'code_hash': manifest['code']['source_hash']}
+
+
+def restore_checkpoint(root, k, reason):
+    """Restart at round k from the checkpoint of round k-1: the store and the series records are replaced as they were then;
+    what came after is archived, never mixed in."""
+    root = Path(root).resolve()
+    if k < 2:
+        raise ValueError('Round 1 has no earlier checkpoint; start a new series')
+    folder = root / 'checkpoints' / f'r{k - 1:02d}'
+    manifest = json.loads((folder / 'manifest.json').read_text(encoding='utf-8'))
+    if run_r1.sha(folder / 'store.json') != manifest['store_sha256']:
+        raise ValueError('Checkpoint store changed')
+    from run_results import source_hash
+    if source_hash(Path(manifest['code']['path'])) != manifest['code']['source_hash']:
+        raise ValueError('Checkpoint code changed: ' + manifest['code']['path'])
+    stamp = dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%Sz')
+    archive = root / 'restarts' / f'from-r{k:02d}-{stamp}'
+    archive.mkdir(parents=True)
+    for name in ['store', 'series-results.json', 'series-report.md']:
+        if (root / name).exists():
+            shutil.move(str(root / name), str(archive / name))
+    for later in sorted((root / 'checkpoints').glob('r*')):
+        if int(later.name[1:]) >= k:
+            shutil.move(str(later), str(archive / later.name))
+    (root / 'store').mkdir()
+    shutil.copy2(folder / 'store.json', root / 'store' / 'ci-sdd.json')
+    state = json.loads((archive / 'series-results.json').read_text(encoding='utf-8'))
+    kept = [r for r in state['rounds'] if r['round'] < k]
+    publish(root, kept, 'restored')
+    config = json.loads((root / 'series.json').read_text(encoding='utf-8'))
+    config.setdefault('restores', []).append({'round': k, 'from_checkpoint': str(folder), 'archive': str(archive), 'reason': reason, 'at': stamp})
+    run_r1.write_json(root / 'series.json', config)
+    return archive
+
+
 def publish(root, records, status):
     run_r1.write_json(root / 'series-results.json', {'status': status, 'completed_rounds': len(records), 'rounds': records})
     lines = ['# IC+SDD dpipe 15-round results', '', f'Status: {status}', '',
              "Promotion 'auto_manual_decision': SDD stopped at NEED_MANUAL_DECISION and the current code was kept. 'auto_void_round': SDD did not complete the round; it was voided and the next round started from its baseline (reason in series-results.json promotion.failure).", '',
-             '| Round | Attempts | IC calls | SDD | Promotion | Unresolved PRD gaps / stop | Official status | Passed / total | SDD seconds |',
-             '|---|---|---|---|---|---|---|---|---|']
+             '| Round | Attempts | IC calls | SDD | Promotion | Unresolved PRD gaps / stop | Stop class | Official status | Passed / total | SDD seconds | IC tokens in/out | SDD tokens in/out | Repair tokens in/out |',
+             '|---|---|---|---|---|---|---|---|---|---|---|---|---|']
     for r in records:
         c = r.get('completion') or {}
         official = c.get('results', {}).get('official', {})
         promotion = r.get('promotion') or {}
         gaps = '; '.join(promotion.get('unresolved_gaps') or []) or (f"stopped at {promotion['failure']['stopped_stage']}" if promotion.get('failure') else '-')
-        lines.append(f"| {r['round']} | {len(r.get('attempts', [])) + 1} | {r.get('management_calls', '-')} | {c.get('sdd_status', r.get('stage', '-'))} | {promotion.get('mode') or 'blocked'} | {gaps} | "
-                     f"{official.get('status', 'missing')} | {official.get('passed', 0)} / {official.get('total', 0)} | {c.get('elapsed_seconds', 0):.1f} |")
+        cost = r.get('cost') or {}
+        tok = lambda t: f"{t['input']}/{t['output']}" if isinstance(t, dict) else 'unknown'
+        ic = cost.get('management', {}).get('budgeted') if cost else None
+        lines.append(f"| {r['round']} | {len(r.get('attempts', [])) + 1} | {r.get('management_calls', '-')} | {c.get('sdd_status', r.get('stage', '-'))} | {promotion.get('mode') or 'blocked'} | {gaps} | {(r.get('stop') or {}).get('class', '-')} | "
+                     f"{official.get('status', 'missing')} | {official.get('passed', 0)} / {official.get('total', 0)} | {c.get('elapsed_seconds', 0):.1f} | "
+                     f"{tok(ic) if ic else 'unknown'} | {tok(cost.get('sdd_total')) if cost else 'unknown'} | {tok((cost.get('repair') or {}).get('total')) if cost and cost.get('repair') else ('none' if cost else 'unknown')} |")
     (root / 'series-report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
@@ -275,7 +364,7 @@ def execute_ic_series(root, resume=None, retry_paused=False):
                                       cwd=root / 'management', env=server_env, stdout=out, stderr=out,
                                       creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         url = f"http://127.0.0.1:{config['port']}"
-        for _ in range(60):
+        for _ in range(180):
             if server.poll() is not None:
                 raise RuntimeError('Management server exited')
             try:
@@ -313,6 +402,13 @@ def execute_ic_series(root, resume=None, retry_paused=False):
             log(f'R{number} IC compile started')
             command(f'r{number}-compile', dict(common, command='compile', event=event, max_requests=config['management_budget']))
             batch = snapshot()['batches'][-1]
+            if batch['state'] == 'rejected' and not batch.get('reopened') and config.get('reopen_calls'):
+                # D5: one extra allotment per round, recorded in the store and the log.
+                log(f"R{number} IC batch rejected after {batch['requests_used']} calls ({(batch.get('error') or '')[:300]}); reopening once with {config['reopen_calls']} calls")
+                command(f'r{number}-reopen', dict(common, command='reopen', event_id=event['event_id'], extra_requests=config['reopen_calls'],
+                                                  reason='one extra allotment per round (D5, as agreed for v4)'))
+                command(f'r{number}-compile-reopened', dict(common, command='compile', event_id=event['event_id'], max_requests=config['management_budget']))
+                batch = snapshot()['batches'][-1]
             record['management_calls'] = batch['requests_used']
             if batch['state'] != 'accepted' or batch['delivery']['draft']['decision'] != 'deliver':
                 raise RuntimeError(f"R{number}: IC did not approve a delivery: {batch.get('error', batch['state'])}")
@@ -356,7 +452,7 @@ def execute_ic_series(root, resume=None, retry_paused=False):
                     start = dict(common, command='start', event_id=event['event_id'], host=dict(host, round=number),
                                  baseline=dict(path=str(baseline), digest=source_hash(baseline)), config_digest=config['adapter_digest'])
                     if runs:
-                        start['retry_voided'] = record['attempts'][-1]['rule']
+                        start['retry_voided'] = record['attempts'][-1]['rule'] or 'rerun of the same delivery'
                     elif voided:
                         start['previous_voided'] = records[-2]['promotion']['rule']
                     command(f'r{number}-start{suffix}', start)
@@ -372,6 +468,18 @@ def execute_ic_series(root, resume=None, retry_paused=False):
                     if time.monotonic() > deadline:
                         raise RuntimeError(f'R{number}: no completion within {ROUND_WAIT_SECONDS}s; inspect {trial}')
                     time.sleep(30)
+                returned = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))
+                stop = costs.stop_record(trial, returned, promotion_record(trial, returned))
+                if stop and not stop['coding_entered'] and stop['class'] == 'T' and not record.get('t_rerun'):
+                    # D1 (user, 2026-10-16): only a tool or environment stop before coding is rerun, once, same CI and baseline.
+                    command(f'r{number}-reconcile{suffix}', dict(common, command='reconcile', execution_id=run['run_id'], host=dict(host, round=number)))
+                    record.update(stage='returned', completion=returned, promotion=promotion_record(trial, returned), t_rerun=stop)
+                    record['attempts'].append(attempt_summary(record))
+                    record['attempts'][-1]['rule'] = 'T stop before coding (' + '; '.join(stop['tool_fault']) + '): rerun once with the same CI from the same baseline (D1)'
+                    record['attempts'][-1]['promotion'] = dict(record['attempts'][-1]['promotion'] or {}, rule=record['attempts'][-1]['rule'])
+                    publish(root, records, 'running')
+                    log(f"R{number}: SDD stopped before coding at {stop['stage']} with a tool/environment fault ({'; '.join(stop['tool_fault'])}); rerunning once (D1)")
+                    continue
                 if config.get('acceptance_repair'):
                     accept_returned(trial, number, records[-2].get('completion') if len(records) > 1 else None, log)
                 command(f'r{number}-reconcile{suffix}', dict(common, command='reconcile', execution_id=run['run_id'], host=dict(host, round=number)))
@@ -404,8 +512,12 @@ def execute_ic_series(root, resume=None, retry_paused=False):
                 record['attempts'].append(attempt_summary(record))
                 failure = record['promotion'].get('failure') or {}
                 log(f"R{number} attempt {len(record['attempts'])} voided at {rate:.1%} (stopped at {failure.get('stopped_stage')}); rerunning the same CI from the same baseline")
-            publish(root, records, 'running')
             baseline = next_baseline(Path(record['root']), record['completion'])
+            record['cost'] = round_cost(snapshot(), event['event_id'], record)
+            record['stop'] = costs.stop_record(Path(record['root']), record['completion'], record['promotion'])
+            record['checkpoint'] = write_checkpoint(root, number, event, snapshot(), record, baseline)
+            publish(root, records, 'running')
+            log(f"R{number} checkpoint written: {record['checkpoint']['path']}")
         publish(root, records, 'completed')
         log('SERIES FINISHED: all 15 round records saved; see series-report.md and series-results.json')
     except Exception as error:
@@ -414,7 +526,7 @@ def execute_ic_series(root, resume=None, retry_paused=False):
         raise
     finally:
         if server and server.poll() is None:
-            server.terminate()
+            subprocess.run(['taskkill', '/PID', str(server.pid), '/T', '/F'], capture_output=True)
 
 
 def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False):
@@ -475,7 +587,11 @@ if __name__ == '__main__':
     parser.add_argument('--no-pause', action='store_true', help='rounds below the pass floor go on instead of pausing (recorded as below_floor)')
     parser.add_argument('--reopen', type=int, help='extra management calls for a rejected batch (only after user approval)')
     parser.add_argument('--acceptance-repair', action='store_true', help='freeze: after SDD returns, IC accepts the code and has SDD prd-fix what failed (acceptance_repair.py)')
+    parser.add_argument('--native', help='freeze: the management host launcher (v5: the strict OpenCode build)')
+    parser.add_argument('--from-checkpoint', type=int, help='with --resume: restart at this round from the checkpoint of the round before')
     args = parser.parse_args()
+    if args.resume and args.from_checkpoint:
+        restore_checkpoint(Path(args.resume), args.from_checkpoint, args.reason or 'unspecified')
     if args.resume:
         root = Path(args.resume).resolve()
         number = resume_ic_series(root, args.reason or 'unspecified', args.reopen, args.keep_ic, args.no_pause)
@@ -487,4 +603,4 @@ if __name__ == '__main__':
             raise SystemExit(subprocess.call([sys.executable, str(runner), '--launch', str(Path(args.launch).resolve())]))
         execute_ic_series(args.launch)
     else:
-        freeze_ic_series(args.adopt_r1, args.trial_prefix, args.ledger_from_round, args.acceptance_repair, not args.no_pause)
+        freeze_ic_series(args.adopt_r1, args.trial_prefix, args.ledger_from_round, args.acceptance_repair, not args.no_pause, args.native)
