@@ -233,6 +233,7 @@ export function createOpenCodeStructuredTransport<Request>(
       )
     }
 
+    const native = nativeStructuredSchema(schema)
     const created = await callSessionCreate(options.client, options.directory)
     const sessionId = sessionIdFromResponse(created)
     options.onSessionCreated?.(sessionId)
@@ -249,13 +250,15 @@ export function createOpenCodeStructuredTransport<Request>(
       timeoutMs: options.timeoutMs ?? 300_000,
       format: {
         type: "json_schema",
-        schema,
+        schema: native.schema,
         // Structured-output retries are a separate retry layer. Keep them
         // disabled so one management prompt cannot silently expand here.
         retryCount: 0,
       },
     })
     const call = v2CallFromPromptResponse(completed, startedAt, sessionId)
+    // The answer in the native form goes back to the canonical one before anything reads it.
+    call.text = canonicalStructuredText(schema, native.wrapped, call.text)
     // info.structured is a host container, not evidence of schema validation.
     // Keep raw output and usage, and report schema failures as candidate errors
     // rather than transport failures that could trigger a network retry.
@@ -264,6 +267,130 @@ export function createOpenCodeStructuredTransport<Request>(
       `${error.instancePath || "/"}: ${error.message ?? "invalid"} ${JSON.stringify(error.params)}`)
     return call
   }
+}
+
+type Schema = Record<string, unknown>
+
+/**
+ * The schema as OpenAI strict structured output accepts it, with the same
+ * answers valid: a non-object root is wrapped as {response}; every object
+ * lists all its properties as required and closes additional properties, an
+ * optional property becoming nullable (null means absent); an unsatisfiable
+ * integer range (an empty handle domain) becomes the single value -1, which
+ * the canonical schema never accepts. Local validation keeps the canonical schema.
+ */
+export function nativeStructuredSchema(schema: unknown): { schema: unknown; wrapped: boolean } {
+  if (!isRecord(schema)) return { schema, wrapped: false }
+  const nullable = (node: unknown): unknown => {
+    if (!isRecord(node)) return node
+    if (node.type === "null" || (Array.isArray(node.type) && node.type.includes("null"))) return node
+    if (Array.isArray(node.anyOf) && node.anyOf.some(x => isRecord(x) && x.type === "null")) return node
+    return { anyOf: [{ type: "null" }, node] }
+  }
+  const project = (node: unknown): unknown => {
+    if (Array.isArray(node)) return node.map(project)
+    if (!isRecord(node)) return node
+    const out: Schema = {}
+    for (const [key, value] of Object.entries(node)) {
+      // A keyword strict output does not support is left to the canonical validation.
+      if (!STRICT_KEYWORDS.has(key)) continue
+      if (key === "properties" || key === "definitions" || key === "$defs") out[key] = isRecord(value) ? Object.fromEntries(Object.entries(value).map(([name, v]) => [name, project(v)])) : value
+      else out[key] = key === "enum" || key === "required" || key === "const" ? value : project(value)
+    }
+    if (isRecord(out.properties)) {
+      const required = new Set(Array.isArray(node.required) ? node.required as string[] : [])
+      const properties = Object.fromEntries(Object.entries(out.properties).map(([name, v]) => [name, required.has(name) ? v : nullable(v)]))
+      out.properties = properties
+      out.required = Object.keys(properties)
+      if (out.additionalProperties === undefined) out.additionalProperties = false
+    }
+    if (out.type === "integer" && typeof out.minimum === "number" && typeof out.maximum === "number" && out.maximum < out.minimum) return { type: "integer", enum: [-1] }
+    return out
+  }
+  const projected = project(schema) as Schema
+  if (projected.type === "object") return { schema: projected, wrapped: false }
+  const { definitions, $defs, $schema: _, ...response } = projected
+  return { schema: { type: "object", properties: { response }, required: ["response"], additionalProperties: false,
+    ...(definitions === undefined ? {} : { definitions }), ...($defs === undefined ? {} : { $defs }) }, wrapped: true }
+}
+
+/** The answer in the canonical form: unwrapped from {response}, and a null given for an optional property removed. */
+export function canonicalStructuredText(schema: unknown, wrapped: boolean, text: string): string {
+  let value: unknown
+  try { value = JSON.parse(text) } catch { return text }
+  if (wrapped) {
+    if (!isRecord(value) || !Object.prototype.hasOwnProperty.call(value, "response")) {
+      throw new OpenCodeModelTransportError("STRUCTURED_RESULT_INVALID", "Structured result lacks the native response wrapper")
+    }
+    value = value.response
+  }
+  return stableJson(dropOptionalNulls(schema as Schema, schema, value))
+}
+
+function resolveRef(root: unknown, node: unknown): unknown {
+  if (!isRecord(node) || typeof node.$ref !== "string" || !node.$ref.startsWith("#/")) return node
+  return node.$ref.slice(2).split("/").reduce<unknown>((at, key) => isRecord(at) ? at[key] : undefined, root)
+}
+
+function allowsNull(root: unknown, node: unknown): boolean {
+  const n = resolveRef(root, node)
+  if (!isRecord(n)) return true
+  if (n.type === "null" || (Array.isArray(n.type) && n.type.includes("null"))) return true
+  return Array.isArray(n.anyOf) && n.anyOf.some(x => allowsNull(root, x))
+}
+
+function dropOptionalNulls(root: Schema, node: unknown, value: unknown): unknown {
+  const schema = resolveRef(root, node)
+  if (!isRecord(schema)) return value
+  if (Array.isArray(value)) return isRecord(schema.items) || isRecord(resolveRef(root, schema.items)) ? value.map(v => dropOptionalNulls(root, schema.items, v)) : value
+  if (!isRecord(value)) return value
+  if (Array.isArray(schema.anyOf)) {
+    // The one object branch whose properties hold every key given.
+    const branches = schema.anyOf.map(x => resolveRef(root, x)).filter((x): x is Schema => isRecord(x) && isRecord(x.properties) && Object.keys(value).every(k => k in (x.properties as Schema)))
+    return branches.length === 1 ? dropOptionalNulls(root, branches[0], value) : value
+  }
+  if (!isRecord(schema.properties)) return value
+  const properties = schema.properties as Schema
+  const required = new Set(Array.isArray(schema.required) ? schema.required as string[] : [])
+  const out: Record<string, unknown> = {}
+  for (const [key, v] of Object.entries(value)) {
+    if (v === null && key in properties && !required.has(key) && !allowsNull(root, properties[key])) continue
+    out[key] = key in properties ? dropOptionalNulls(root, properties[key], v) : v
+  }
+  return out
+}
+
+const STRICT_KEYWORDS = new Set(["type", "properties", "required", "additionalProperties", "items", "enum", "const", "anyOf", "$ref", "$defs", "definitions", "description", "title",
+  "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "multipleOf", "pattern", "format", "minItems", "maxItems", "$schema"])
+
+/**
+ * Where a schema breaks OpenAI strict structured output: a non-object root,
+ * an object without every property required or with open additional
+ * properties, an unsupported keyword, an empty integer range. Offline check
+ * only; the host is the authority.
+ */
+export function strictSchemaProblems(schema: unknown): string[] {
+  const problems: string[] = []
+  if (!isRecord(schema) || schema.type !== "object") problems.push("/: root is not an object")
+  const walk = (node: unknown, path: string, depth: number) => {
+    if (Array.isArray(node)) { node.forEach((x, i) => walk(x, `${path}/${i}`, depth)); return }
+    if (!isRecord(node)) return
+    for (const key of Object.keys(node)) if (!STRICT_KEYWORDS.has(key)) problems.push(`${path}: keyword ${key} is not supported`)
+    if (isRecord(node.properties)) {
+      const keys = Object.keys(node.properties)
+      const required = Array.isArray(node.required) ? node.required as string[] : []
+      const missing = keys.filter(k => !required.includes(k))
+      if (missing.length) problems.push(`${path}: properties not required: ${missing.join(", ")}`)
+      if (node.additionalProperties !== false) problems.push(`${path}: additionalProperties is not false`)
+      for (const [k, v] of Object.entries(node.properties)) walk(v, `${path}/properties/${k}`, depth + 1)
+    } else if (node.type === "object" && node.additionalProperties !== false) problems.push(`${path}: object without properties`)
+    if (node.type === "integer" && typeof node.minimum === "number" && typeof node.maximum === "number" && node.maximum < node.minimum) problems.push(`${path}: empty integer range`)
+    for (const key of ["items", "anyOf"]) if (node[key] !== undefined) walk(node[key], `${path}/${key}`, depth + (key === "items" ? 1 : 0))
+    for (const key of ["definitions", "$defs"]) if (isRecord(node[key])) for (const [k, v] of Object.entries(node[key] as Schema)) walk(v, `${path}/${key}/${k}`, depth)
+    if (depth > 10) problems.push(`${path}: nested deeper than 10`)
+  }
+  walk(schema, "", 0)
+  return problems
 }
 
 function validateOptions(options: OpenCodeModelTransportOptions): void {
