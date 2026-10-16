@@ -256,6 +256,16 @@ def restore(src, dst):
         (shutil.copytree(p, Path(dst) / p.name) if p.is_dir() else shutil.copy2(p, Path(dst) / p.name))
 
 
+def coding_entered(run):
+    """SDD's coding stage started: its stream exists (upstream writes no state for a stage that failed)."""
+    return (Path(run) / 'logs/coding-main.stream').exists()
+
+
+def pending_updates(main):
+    """SpecArt's design-time contract blocks left in the code (`@pendingUpdate` occurrences in Go sources)."""
+    return sum(p.read_text(encoding='utf-8', errors='replace').count('@pendingUpdate') for p in Path(main).rglob('*.go'))
+
+
 def repair_trial(trial, round_number, env, previous_failing=None):
     """Run acceptance and repair on a returned trial; return the record written into completion.json."""
     trial = Path(trial)
@@ -264,7 +274,9 @@ def repair_trial(trial, round_number, env, previous_failing=None):
     work = trial / 'acceptance'
     if work.exists():
         # An interrupted earlier attempt: put back the code SDD returned and SDD's report, then start over.
-        if (work / 'sdd-main').exists():
+        if (work / 'sdd-main-precoding').exists():
+            restore(work / 'sdd-main-precoding', main)
+        elif (work / 'sdd-main').exists():
             restore(work / 'sdd-main', main)
         if (work / '08-sdd-report.md').exists():
             shutil.copy2(work / '08-sdd-report.md', run / REPORT)
@@ -273,7 +285,13 @@ def repair_trial(trial, round_number, env, previous_failing=None):
         shutil.move(work, trial / ('acceptance-interrupted-' + dt.datetime.now().strftime('%H%M%S')))
     work.mkdir()
     texts = texts_upto(round_number)
-    record = {'started': dt.datetime.now(dt.timezone.utc).isoformat(), 'passes': []}
+    record = {'started': dt.datetime.now(dt.timezone.utc).isoformat(), 'passes': [], 'start': 'sdd_main'}
+    if not coding_entered(run):
+        # SDD stopped before coding: what is in repos/main is SpecArt's design-time skeleton, not code
+        # SDD finished. Acceptance starts from this round's baseline, so no skeleton reaches the next round.
+        shutil.copytree(main, work / 'sdd-main-precoding')
+        record.update(start='origin', precoding_pending_updates=pending_updates(main), origin_pending_updates=pending_updates(run / 'repos/origin'))
+        restore(run / 'repos/origin', main)
     before, info = accept(main, texts)
     record.update(checks=info['checks'], failing_before=sorted(before), details=details(before))
     # P2: a failure whose unit carries PRD assumptions contradicting the requirement is not given to
@@ -282,9 +300,19 @@ def repair_trial(trial, round_number, env, previous_failing=None):
     record['p2'] = drift_labels.judge_p2(trial, env, candidates, texts, work / 'p2-judge.stream') if candidates else {}
     p2 = {cid for cid, v in record['p2'].items() if v['contradicts']}
     record['excluded_p2'] = sorted(p2)
+    # The checks still failing in the code this round ends with.
+    record['failing_final'] = sorted(before)
     if not set(before) - p2:
         record['outcome'] = 'nothing_to_repair' if not before else 'not_repaired_p2'
         record['labels'] = label(trial, round_number, texts, record, previous_failing)
+        return record
+    if not (run / PRD).exists():
+        # prd-fix repairs toward SDD's PRD; without one there is nothing to repair toward. The checks stay
+        # recorded (they go to the next round's CI) and the round goes on to reconcile and promotion.
+        record['outcome'] = 'not_repaired_no_prd'
+        record['prd_missing'] = f'{PRD} was not written by this run'
+        record['labels'] = label(trial, round_number, texts, record, previous_failing)
+        record['finished'] = dt.datetime.now(dt.timezone.utc).isoformat()
         return record
     shutil.copytree(main, work / 'sdd-main', dirs_exist_ok=False)
     if (run / REPORT).exists():
@@ -293,8 +321,9 @@ def repair_trial(trial, round_number, env, previous_failing=None):
     shutil.copy2(run / PRD, work / 'prd-sdd.md')
     origin_before = code_files(run / 'repos/origin')
     tests_before = {f for f in code_files(main) if f.endswith('_test.go')}
-    passing_before = None  # every check that passed on SDD's code
     current = {k: v for k, v in before.items() if k not in p2}
+    # What a pass is judged against: the starting code, then the code of the last adopted pass.
+    reference, adopted = before, None
     for n in range(1, MAX_PASSES + 1):
         text = report(current, texts, (run / PRD).read_text(encoding='utf-8'))
         (work / f'report-pass{n}.md').write_text(text, encoding='utf-8')
@@ -310,9 +339,9 @@ def repair_trial(trial, round_number, env, previous_failing=None):
             p['prd_restored'] = True
         if code_files(run / 'repos/origin') != origin_before:
             p['baseline_changed'] = True
-            restore(work / 'sdd-main', main)
+            restore(adopted or work / 'sdd-main', main)
             record['passes'].append(p)
-            record['outcome'] = 'reverted_baseline_touched'
+            record['outcome'] = 'adopted' if adopted else 'reverted_baseline_touched'
             break
         deleted = sorted(tests_before - set(after_files))
         for f in deleted:
@@ -324,17 +353,33 @@ def repair_trial(trial, round_number, env, previous_failing=None):
         if BUILD in after:
             p['build_tail'] = after[BUILD]['output'][-1500:]
         p['failing_after'] = sorted(after)
-        p['fixed'], p['regressed'] = judge(before, after)
+        p['fixed'], p['regressed'] = judge(reference, after)
         record['passes'].append(p)
+        remaining = {k: v for k, v in after.items() if k not in p2}
         if BUILD not in after and p['fixed'] and not p['regressed']:
             record['outcome'] = 'adopted'
+            p['adopted'] = True
+            record['failing_final'] = sorted(after)
+            if not remaining or n == MAX_PASSES:
+                break
+            # Adopted, and failures remain: one more pass on top of the adopted code.
+            adopted = work / f'adopted-pass{n}'
+            shutil.copytree(main, adopted)
+            reference, current = after, remaining
+            continue
+        if adopted:
+            # This pass did not hold on top of an adopted one: back to the adopted code.
+            restore(adopted, main)
+            p['reverted_to'] = adopted.name
             break
-        current = dict(after)
+        current = remaining
         if n == MAX_PASSES:
             ok = BUILD not in after and len(p['fixed']) > len(p['regressed'])
             if not ok:
                 restore(work / 'sdd-main', main)
             record['outcome'] = 'adopted_with_regressions' if ok else 'reverted'
+            if ok:
+                record['failing_final'] = sorted(after)
     shutil.copy2(work / f"report-pass{len(record['passes'])}.md", work / 'last-ic-report.md')
     if (work / '08-sdd-report.md').exists():
         shutil.copy2(work / '08-sdd-report.md', run / REPORT)
@@ -362,7 +407,9 @@ def apply(trial, round_number, previous_failing=None):
     env = run_r1.execution_env(settings | (run_r1.posix_cp_settings(trial) if (trial / 'bin/posix_cp.sh').exists() else {}))
     complete = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))
     record = repair_trial(trial, round_number, env, previous_failing)
-    if record['outcome'] in ('adopted', 'adopted_with_regressions'):
+    # Rescored whenever the code differs from what the official verifier evaluated (a repair was adopted,
+    # or acceptance started from the baseline because SDD stopped before coding).
+    if record['outcome'] in ('adopted', 'adopted_with_regressions') or record.get('start') == 'origin':
         archive = trial / 'acceptance' / 'sdd-official'
         archive.mkdir(parents=True, exist_ok=True)
         for name in ['official-app', 'official-verifier', 'official-verifier.log', 'completion.json']:

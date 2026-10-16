@@ -99,6 +99,8 @@ def acceptance_result(value):
         return None
     if a['outcome'] == 'nothing_to_repair' and not a.get('excluded_p2'):
         open_ids = []
+    elif 'failing_final' in a:
+        open_ids = a['failing_final']
     elif a['outcome'] in ('adopted', 'adopted_with_regressions'):
         open_ids = a['passes'][-1].get('failing_after', [])
     else:

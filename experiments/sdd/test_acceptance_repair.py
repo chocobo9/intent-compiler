@@ -6,6 +6,8 @@ def trial(tmp_path):
     (run / 'repos/main').mkdir(parents=True)
     (run / 'repos/origin').mkdir(parents=True)
     (run / 'output').mkdir()
+    (run / 'logs').mkdir()
+    (run / 'logs/coding-main.stream').write_text('')
     (run / 'repos/main/main.go').write_text('package main\n')
     (run / 'repos/main/main_test.go').write_text('package main\n')
     (run / ar.PRD).write_text('# PRD\n')
@@ -59,6 +61,48 @@ def test_a_regression_gets_a_second_pass_and_without_net_gain_the_code_sdd_retur
     assert r['outcome'] == 'reverted' and (run / 'repos/main/main.go').read_text() == 'package main\n'
 
 
+def test_after_a_partial_fix_is_adopted_the_remaining_failures_get_a_second_pass(tmp_path, monkeypatch):
+    t, run = trial(tmp_path)
+    fix = lambda name: lambda m: (m / f'{name}.go').write_text('package main\n')
+    wire(monkeypatch, run, [{'clip', 'tag'}, {'tag'}, set()], [fix('clip'), fix('tag')])
+    r = ar.repair_trial(t, 2, {})
+    assert r['outcome'] == 'adopted' and [p['gaps'] for p in r['passes']] == [['clip', 'tag'], ['tag']]
+    assert [p['fixed'] for p in r['passes']] == [['clip'], ['tag']] and r['failing_final'] == []
+    assert (run / 'repos/main/clip.go').exists() and (run / 'repos/main/tag.go').exists()
+
+
+def test_a_second_pass_that_regresses_goes_back_to_the_adopted_first_pass(tmp_path, monkeypatch):
+    t, run = trial(tmp_path)
+    def broke(m):
+        (m / 'main.go').write_text('package main // broken\n')
+    wire(monkeypatch, run, [{'clip', 'tag'}, {'tag'}, {'tag', 'scale'}], [lambda m: (m / 'clip.go').write_text('package main\n'), broke])
+    r = ar.repair_trial(t, 2, {})
+    assert r['outcome'] == 'adopted' and r['passes'][1]['regressed'] == ['scale'] and r['passes'][1]['reverted_to'] == 'adopted-pass1'
+    assert r['failing_final'] == ['tag'] and (run / 'repos/main/clip.go').exists()
+    assert (run / 'repos/main/main.go').read_text() == 'package main\n'
+
+
+def test_before_coding_acceptance_starts_from_the_baseline_not_the_spec_skeleton(tmp_path, monkeypatch):
+    t, run = trial(tmp_path)
+    (run / 'logs/coding-main.stream').unlink()
+    (run / 'repos/origin/main.go').write_text('package main // baseline\n')
+    (run / 'repos/main/main.go').write_text('package main\n// @pendingUpdate x\n')
+    wire(monkeypatch, run, [set()], [])
+    r = ar.repair_trial(t, 2, {})
+    assert r['start'] == 'origin' and r['precoding_pending_updates'] == 1 and r['origin_pending_updates'] == 0
+    assert (run / 'repos/main/main.go').read_text() == 'package main // baseline\n'
+    assert not (run / 'repos/main/main_test.go').exists() and (t / 'acceptance/sdd-main-precoding/main_test.go').exists()
+
+
+def test_without_a_prd_the_checks_are_recorded_and_nothing_is_repaired(tmp_path, monkeypatch):
+    t, run = trial(tmp_path)
+    (run / ar.PRD).unlink()
+    wire(monkeypatch, run, [{'clip'}], [])
+    r = ar.repair_trial(t, 2, {})
+    assert r['outcome'] == 'not_repaired_no_prd' and r['failing_final'] == ['clip'] and r['passes'] == []
+    assert not (t / 'acceptance/sdd-main').exists()
+
+
 def test_nothing_failing_means_no_repair(tmp_path, monkeypatch):
     t, run = trial(tmp_path)
     wire(monkeypatch, run, [set()], [])
@@ -87,10 +131,13 @@ def test_a_call_that_writes_nothing_in_time_is_killed(tmp_path):
 
 def test_code_that_does_not_build_is_repaired_and_the_probes_it_then_reveals_are_not_regressions(tmp_path, monkeypatch):
     t, run = trial(tmp_path)
-    wire(monkeypatch, run, [{ar.BUILD}, {'probe:compare:missing-flag-key'}], [lambda m: (m / 'main.go').write_text('package main // fixed\n')])
+    wire(monkeypatch, run, [{ar.BUILD}, {'probe:compare:missing-flag-key'}, set()],
+         [lambda m: (m / 'main.go').write_text('package main // fixed\n'), lambda m: (m / 'compare.go').write_text('package main\n')])
     r = ar.repair_trial(t, 2, {})
     assert r['outcome'] == 'adopted' and r['passes'][0]['fixed'] == [ar.BUILD] and r['passes'][0]['regressed'] == []
     assert 'compare:missing-flag-key' in str(r['passes'][0]['failing_after'])
+    # The probe the build fix revealed gets the second pass.
+    assert r['passes'][1]['gaps'] == ['probe:compare:missing-flag-key'] and r['failing_final'] == []
 
 
 def test_a_fix_that_breaks_the_build_is_a_regression_and_without_recovery_is_reverted(tmp_path, monkeypatch):
