@@ -42,6 +42,8 @@ export function planCarry(previous: DeliveryContract | undefined, accepted: Reco
   const now = currentRevisions(current), before = currentRevisions(accepted)
   const narrowed = narrowedItems(accepted, current)
   const toWrite = new Set([...now].filter(([id, revision]) => before.get(id) !== revision || narrowed.has(id)).map(([id]) => id))
+  // Entries code dropped last round because a revision replaced a fact they stated are written again.
+  for (const id of previous?.rewrite_next ?? []) toWrite.add(id)
   const plan: CarryPlan = { fields: [], acceptance: [], effective: [], dropped: [], toWrite: [] }
   const judge = (revisions: ItemRevisions): { carry: true } | { carry: false; reason: string; rewrite: string[] } => {
     const ids = Object.keys(revisions)

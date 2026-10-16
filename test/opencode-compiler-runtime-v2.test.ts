@@ -10,6 +10,7 @@ import { buildGenerationSchema } from "../src/model/generation-schema.js"
 import type { Candidate, CompilerEvent } from "../src/core/intent-contract.js"
 import { buildStrictCandidateExample } from "../src/model/candidate-schema-strict.js"
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
+import { nativeStructuredSchema } from "../src/model/opencode-transport.js"
 
 test("v2 runtime routes each run through its own compiler", async () => {
   const root = mkdtempSync(join(tmpdir(), "intent-v2-runtime-"))
@@ -34,8 +35,8 @@ test("v2 runtime routes each run through its own compiler", async () => {
           assert.equal(input.capabilities.operations.includes("edit"), false)
         }
         const stage = input.generation_stage as "ir" | "ci" | undefined
-        const isCandidate = stage !== undefined && JSON.stringify(schema) === JSON.stringify(buildGenerationSchema(stage, "openai", { checkRequired: true }))
-        const isCheck = JSON.stringify(schema) === JSON.stringify(buildStrictCandidateCheckSchema("openai"))
+        const isCandidate = stage !== undefined && JSON.stringify(schema) === JSON.stringify(nativeStructuredSchema(buildGenerationSchema(stage, "openai", { checkRequired: true })).schema)
+        const isCheck = JSON.stringify(schema) === JSON.stringify(nativeStructuredSchema(buildStrictCandidateCheckSchema("openai")).schema)
         assert.equal(isCandidate || isCheck, true, "runtime must send the IR, CI or check OpenAI strict schema")
         const schemaKind = isCandidate ? stage! : "check"
         promptRequests.push({ sessionId: request.path.id, schemaKind })

@@ -11,9 +11,9 @@ import { CANDIDATE_EXAMPLE, CANDIDATE_EXAMPLE_INPUT } from "../src/model/candida
 import type { CompilerEvent } from "../src/core/intent-contract.js"
 
 const event: CompilerEvent = { schema_version: 2, run_id: "sdd-test", event_id: "input-event-id", kind: "user_input", source: { channel: "user", producer_id: "test" }, payload: { text: CANDIDATE_EXAMPLE_INPUT } }
-/** One acceptance example whose input writes a key the example input defines ("items"). */
-function acceptanceFor(_e: CompilerEvent, items: string[] = []) {
-  return { subject: "tool", items, examples: [{ given: '{"items": []}', expect: "exit code 0", run: null, check: null }] }
+/** One acceptance example quoting the input's config passage (s3) and the behaviour it states (s5). */
+function acceptanceFor(e: CompilerEvent, items: string[] = []) {
+  return { subject: "tool", items, examples: [{ given: [{ source_id: e.event_id, segment_id: "s3" }], expect: [{ source_id: e.event_id, segment_id: "s5" }] }] }
 }
 const itemsOf = (ir: Record<string, { content: Array<{ item_id: string }> }>) => Object.values(ir).flatMap(t => t.content.map(c => c.item_id))
 function fixture() {
@@ -268,29 +268,34 @@ test("a coverage that misses a requirement is rejected with the missing item ids
   const errors = f.compiler.inspect().batches[0]!.calls.map(c => c.error ?? "").join(" ")
   assert.match(errors, /missing coverage for item_id .+\. Give one coverage entry for each of: /)
 })
-test("acceptance examples open SDD's input; a literal the cited input does not contain is rejected with its name", async () => {
+test("acceptance examples quote the cited passages verbatim; a reference no input has is left out and recorded", async () => {
   const f = fixture(), deliver = f.model.deliver
-  let answers = 0
   f.model.deliver = async input => {
     const answer = JSON.parse((await deliver(input)).text)
-    if (answers++ === 0) answer.acceptance[0].examples[0].given += ' {"not-in-the-input": 2}'
+    answer.acceptance[0].examples.push({ given: [{ source_id: event.event_id, segment_id: "s99" }], expect: [] })
     return { text: JSON.stringify(answer) }
   }
   const d = await compile(f)
-  const errors = f.compiler.inspect().batches[0]!.calls.map(c => c.error ?? "").join(" ")
-    assert.match(errors, /key "not-in-the-input" is not a key the requirements write/)
   assert.ok(d.text.startsWith("# Accumulated original user requirements\nApply each update in order. Later explicit revisions replace only the affected earlier requirements.\n\n# Interface and data: field dictionary\n"))
-  assert.ok(d.text.indexOf("## tool\nExample 1\nGiven:\n{") < d.text.indexOf("## Original user update 1\n"))
+  const s3 = CANDIDATE_EXAMPLE_INPUT.split("\n\n")[2]!
+  assert.ok(d.text.includes(`## tool\nExample 1\nGiven:\n(user update 1)\n> ${s3.split("\n")[0]}`))
+  assert.ok(d.text.indexOf("# Acceptance examples\n") < d.text.indexOf("## Original user update 1\n"))
   assert.ok(d.text.includes(`## Original user update 1\n\n${CANDIDATE_EXAMPLE_INPUT}\n`))
+  assert.equal(d.contract.acceptance[0]!.examples.length, 1)
+  assert.ok(d.contract.dropped.some(x => x.kind === "acceptance" && /s99: no such segment/u.test(x.reason)))
+  assert.equal(d.reference_text?.startsWith("# Accumulated original user requirements"), true)
 })
-test("a key that survives only in text this delivery cuts, or that the requirements never write, is rejected", async () => {
-  const { checkAcceptance } = await import("../src/core/sdd-compiler.js")
-  const original = 'Use the old key `legacy_key` with {"op": "x"}.'
-  const example = (given: string) => [{ subject: "op", items: [], examples: [{ given, expect: "ok" }] }]
-  assert.throws(() => checkAcceptance(example('{"op": "x", "legacy_key": 1}'), 'with {"op": "x"}.', original), /key "legacy_key" occurs only in text this delivery cuts/)
-  assert.doesNotThrow(() => checkAcceptance(example('{"op": "x", "legacy_key": 1, "file": ignored}'.replace('"file": ignored', '"legacy_key": 2')), original, original))
-  assert.throws(() => checkAcceptance(example('{"operator": "gt"}'), original, original), /key "operator" is not a key the requirements write/)
-  assert.throws(() => checkAcceptance([], "x", "x"), /needs acceptance examples/)
+test("a quoted passage this delivery cuts is not delivered; an example left with none is dropped", async () => {
+  const { quotedAcceptance } = await import("../src/core/sdd-compiler.js")
+  const { segmentIndex } = await import("../src/core/sdd-quotes.js")
+  const index = segmentIndex([event])
+  const dropped: Array<{ kind: string; name: string; reason: string }> = []
+  const cutS3 = (q: { segment_id: string }) => q.segment_id === "s3"
+  const out = quotedAcceptance([{ subject: "bundle", items: [], examples: [{ given: [{ source_id: event.event_id, segment_id: "s3" }], expect: [{ source_id: event.event_id, segment_id: "s5" }] }, { given: [{ source_id: event.event_id, segment_id: "s3" }], expect: [] }] }], index, cutS3 as never, dropped as never)
+  assert.equal(out[0]!.examples.length, 1)
+  assert.equal(out[0]!.examples[0]!.given, "")
+  assert.match(out[0]!.examples[0]!.expect, /^\(user update 1\)\n> bundle reads the input files/u)
+  assert.ok(dropped.some(x => /this delivery cuts its text/u.test(x.reason)))
 })
 test("the field dictionary precedes the examples; a field the requirements never write is rejected", async () => {
   const { checkFields } = await import("../src/core/sdd-compiler.js")
@@ -364,7 +369,7 @@ test("a CI repair receives the rejected draft with the issue and revises it, als
   f.model.deliver = async input => {
     seen.push({ previous: input.previous_draft !== undefined, issues: input.issues })
     const answer = JSON.parse((await deliver(input)).text)
-    if (seen.length === 1) answer.acceptance[0].examples[0].given += ' {"not-in-the-input": 2}'
+    if (seen.length === 1) answer.fields[0].fields.push({ field: "not-in-the-input", type: "number", required: "no", meaning: "m" })
     return { text: JSON.stringify(answer) }
   }
   await f.compiler.accept(event, 3)
@@ -536,24 +541,30 @@ test("derived agreement compares what each check claims, place by place, and ite
   assert.equal(itemOf("r-dpipe-validate-extra", now), "r-dpipe-validate-extra")
   assert.equal(itemOf("r-other", now), undefined)
 })
-test("the change list keeps entries on items this update changed, fills uncovered changed items, and lists open ledger entries", async () => {
+test("the change list quotes the cited passages, keeps only values and subjects they write, fills uncovered changed items, and lists open entries", async () => {
   const { changedItems, settleChanges, changeSection } = await import("../src/core/sdd-changes.js")
-  const task = (items: Array<[string, number, string]>) => ({ t: { task_id: "t", content: items.map(([item_id, revision, text]) => ({ item_id, revision, text })) } }) as never
-  const before = task([["r-fill", 0, "### fill\nLinear fill uses both anchors."], ["r-sort", 0, "### sort\nSorts rows."]])
-  const after = task([["r-fill", 1, "### fill\nLinear fill with one anchor copies that anchor."], ["r-sort", 0, "### sort\nSorts rows."], ["r-clip", 0, "### clip\n`{\"op\": \"clip\", \"column\": \"v\", \"min\": 0}`"]])
+  const { segmentIndex } = await import("../src/core/sdd-quotes.js")
+  const ev = (id: string, text: string) => ({ ...event, event_id: id, payload: { text } }) as CompilerEvent
+  const r1 = "### verify\nComputes SHA-256 of `--file`.\n\n### fill\nLinear fill uses both anchors."
+  const r2 = "Behavior change: `verify` now uses BLAKE2b-256 instead.\n\n### clip\n`{\"op\": \"clip\"}`"
+  const events = [ev("r1", r1), ev("r2", r2)]
+  const at = (id: string, text: string, start: number) => ({ source_id: id, span: { unit: "utf16", start, end: start + text.length } })
+  const task = (items: Array<[string, number, string, unknown[]]>) => ({ t: { task_id: "t", content: items.map(([item_id, revision, text, sources]) => ({ item_id, revision, text, sources })) } }) as never
+  const before = task([["r-verify", 0, "### verify\nComputes SHA-256 of `--file`.", [at("r1", "### verify\nComputes SHA-256 of `--file`.", 0)]]])
+  const after = task([["r-verify", 1, "verify now BLAKE2b", [at("r1", "### verify\nComputes SHA-256 of `--file`.", 0), at("r2", "Behavior change: `verify` now uses BLAKE2b-256 instead.", 0)]], ["r-clip", 0, "### clip", [at("r2", "### clip\n`{\"op\": \"clip\"}`", r2.indexOf("### clip"))]]])
   const changed = changedItems(before, after, new Set())
-  assert.deepEqual([...changed.keys()], ["r-fill", "r-clip"])
-  const { changes, dropped } = settleChanges([
-    { kind: "revised", subject: "fill", items: ["r-fill: linear"], old_rule: "both anchors needed", new_rule: "one anchor is copied", parameters: [], quote: "Linear fill with one anchor   copies that anchor." },
-    { kind: "revised", subject: "sort", items: ["r-sort"], old_rule: "x", new_rule: "y", parameters: [], quote: "Sorts rows." },
-  ], changed)
-  assert.deepEqual(changes.map(c => [c.subject, c.items, !!c.filled_by_code, !!c.quote_replaced]), [["fill", ["r-fill"], false, false], ["clip", ["r-clip"], true, false]])
-  assert.deepEqual(dropped.map(d => d.name), ["sort"])
-  const ledger = [{ id: "x#1", kind: "example", subject: "verify mismatch", items: ["r-sort"], revisions: {}, first_failed: "r1-user-input", last: { event_id: "r1-user-input", run_id: "run", passed: false, observed: "printed nothing" }, state: "open" }] as never
-  const section = changeSection(changes, ledger, after)
+  const context = { index: segmentIndex(events), cut: () => false, input: 2, previous: before, current: after }
+  const { changes, dropped } = settleChanges([{ kind: "revised", subject: "verify digest", items: ["r-verify"], subjects: ["verify", "manifest"], before: [{ source_id: "r1", segment_id: "s1" }], now: [{ source_id: "r2", segment_id: "s1" }, { source_id: "r1", segment_id: "s2" }],
+    old_values: ["SHA256", "MD5"], new_values: ["BLAKE2b-256"], parameters: [] }], changed, context)
+  assert.deepEqual(changes.map(c => [c.subject, c.items, !!c.filled_by_code]), [["verify digest", ["r-verify"], false], ["clip", ["r-clip"], true]])
+  assert.deepEqual([changes[0]!.subjects, changes[0]!.old_values, changes[0]!.new_values], [["verify"], ["SHA256"], ["BLAKE2b-256"]])
+  assert.deepEqual(changes[0]!.now.map(q => q.segment_id), ["s1"])
+  assert.match(dropped[0]!.reason, /not from this update[\s\S]*"MD5" is not written in before[\s\S]*"manifest" is not written in now/u)
+  const ledger = [{ id: "x#1", kind: "acceptance", subject: "verify mismatch", items: [], revisions: {}, first_failed: "r1", last: { event_id: "r1", run_id: "run", passed: false, observed: "printed nothing" }, state: "open" }] as never
+  const section = changeSection(changes, [], ledger, after, "r2")
   assert.match(section, /^# Changes in this update\n/u)
-  assert.match(section, /## Changed: fill\nBefore: both anchors needed\nNow: one anchor is copied/u)
-  assert.match(section, /## New: clip/u); assert.match(section, /## Not yet met: verify mismatch[\s\S]*printed nothing/u)
+  assert.match(section, /## Changed: verify digest\nReplaced: `SHA256` → `BLAKE2b-256`\nBefore \(original text\):\n\(user update 1\)\n> ### verify\n> Computes SHA-256 of `--file`.\nNow:\n\(user update 2\)\n> Behavior change/u)
+  assert.match(section, /## New: clip\nListed by code/u); assert.match(section, /## Not yet met: verify mismatch[\s\S]*printed nothing/u)
 })
 test("a runs example is kept only when it uses the requirement's own sample, and asserts that it runs", async () => {
   const { keepExamples, usesSample } = await import("../src/core/sdd-executable.js")
@@ -573,10 +584,4 @@ test("a runs example is kept only when it uses the requirement's own sample, and
   assert.equal(r.counts.runs_kept, 1); assert.equal(r.counts.runs_dropped, 1); assert.equal(r.counts.invalid_input, 1, "a blank line inside CSV data is an undecided input")
   assert.deepEqual(r.kept[0]!.asserts, [{ where: "either", mode: "absent", value: "ERROR", source: "runs" }, { where: "file:o.csv", mode: "exists", value: "", source: "runs" }])
   assert.equal(r.kept[0]!.exit_code, 0)
-})
-test("a change entry code fills states plainly that code listed it from the IR change", async () => {
-  const { settleChanges, changeSection } = await import("../src/core/sdd-changes.js")
-  const { changes } = settleChanges([], new Map([["r-x", { existed: true, text: "### x\nNow x rounds up." }]]))
-  assert.equal(changes[0]!.filled_by_code, true); assert.equal(changes[0]!.old_rule, null)
-  assert.match(changeSection(changes, [], {} as never), /Listed by code from this update's IR change; quotes the original./u)
 })

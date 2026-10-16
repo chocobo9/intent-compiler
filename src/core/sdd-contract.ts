@@ -36,7 +36,8 @@ export interface DeliveryDraft {
    */
   /** Only for the requirements this round writes (DeliveryRequest.to_write); unchanged ones are carried by code. */
   fields: FieldObject[]
-  acceptance: AcceptanceSubject[]
+  /** Examples select original passages; code delivers their text verbatim. */
+  acceptance: DraftAcceptance[]
   /**
    * This round's change list, from the IR change: each behaviour correction of
    * an existing command or operation (old rule → new rule) and each new command
@@ -45,15 +46,53 @@ export interface DeliveryDraft {
    */
   changes?: ChangeEntry[]
 }
+/** An original passage, by the segment ids the request lists. */
+export interface SegmentRef { source_id: string; segment_id: string }
+/** An original passage as delivered: the segment's verbatim text and the user input (1-based) it comes from. */
+export interface Quote extends SegmentRef { input: number; text: string }
+export interface DraftAcceptance { subject: string; items: string[]; examples: Array<{ given: SegmentRef[]; expect: SegmentRef[] }> }
+/** One change of this update as the model gives it: which passages state it, and which values it replaces. */
 export interface ChangeEntry {
   kind: "revised" | "added"
   subject: string
   items: string[]
-  old_rule: string | null
-  new_rule: string
+  /** The command and operation names the change concerns, as written. */
+  subjects: string[]
+  /** For revised: segments of earlier inputs stating the rule it replaces. */
+  before: SegmentRef[]
+  /** Segments of this update stating the change. */
+  now: SegmentRef[]
+  /** Values or names the change replaces, as written in before; and those replacing them, as written in now. */
+  old_values: string[]
+  new_values: string[]
   parameters: string[]
-  /** Verbatim from the original text of the items. */
-  quote: string
+}
+/** A change entry as delivered: references resolved to verbatim quotes, values and subjects code found written. */
+export interface SettledChange {
+  kind: "revised" | "added"
+  subject: string
+  items: string[]
+  subjects: string[]
+  before: Quote[]
+  now: Quote[]
+  old_values: string[]
+  new_values: string[]
+  parameters: string[]
+  filled_by_code?: boolean
+}
+/**
+ * A revision carried with every delivery until code confirms the code meets it
+ * (every executable example written for its items at or after it passes on the
+ * code a run returned, and there is at least one) or a later input replaces it.
+ */
+export interface RevisionEntry extends SettledChange {
+  id: string
+  /** The user update that made the change, and its 1-based input number. */
+  event_id: string
+  input: number
+  revisions: ItemRevisions
+  state: "open" | "confirmed" | "superseded"
+  closed?: { event_id: string; reason: string }
 }
 /** verbatim: every expected value written by the requirements; derived: worked out from their rules; runs: the requirement's own sample input runs. */
 export type ExampleTier = "verbatim" | "derived" | "runs"
@@ -63,11 +102,14 @@ export interface FieldObject {
   /** IR content items this object describes; code carries it to later rounds while they stay unchanged. */
   items: string[]
   fields: Array<{ field: string; type: string; required: string; meaning: string }>
+  /** Set by code: the facts (names, values) the entry states, normalized; a revision of one of them drops it. */
+  facts?: string[]
 }
 export interface AcceptanceSubject {
   subject: string
   items: string[]
   examples: AcceptanceExample[]
+  facts?: string[]
 }
 /**
  * An acceptance example in words (given/expect, read by SDD) and, where the
@@ -87,6 +129,9 @@ export interface AcceptanceExample {
     stderr_contains: string[]
     files: Array<{ path: string; exact: string | null; contains: string[] }>
   } | null
+  /** The original passages given and expect deliver verbatim (acceptance examples). */
+  given_quotes?: Quote[]
+  expect_quotes?: Quote[]
   /** Set by code, not by the model: whether it runs, why not, and the assertions built from the requirement text. */
   checkable?: boolean
   not_checkable?: string[]
@@ -112,12 +157,19 @@ export interface DeliveryContract {
    * independent derivation gave the same check). Carried while their items are unchanged.
    */
   executable?: Array<ExecutableExample & { revisions: ItemRevisions; carried: boolean }>
+  /** The revision ledger as of this delivery: open entries are delivered, closed ones stay recorded. */
+  revisions?: RevisionEntry[]
+  /** Items whose entries code dropped because a revision replaced a fact they state: written again next round. */
+  rewrite_next?: string[]
 }
 export interface ExecutableExample extends AcceptanceExample {
   id: string
   subject: string
   items: string[]
   tier: ExampleTier
+  facts?: string[]
+  /** Set by code: whether every input it gives is the requirement's own (only those are delivered to SDD). */
+  original_inputs?: boolean
 }
 export interface CIDelivery {
   profile: typeof SDD_PROFILE
@@ -140,7 +192,15 @@ export interface CIDelivery {
   /** Carried and newly written contract entries; the next round carries from here. */
   contract: DeliveryContract
   /** This round's change list as delivered: the model's entries that rest on this round's IR change, and entries code filled for changed items none covered. */
-  changes?: Array<ChangeEntry & { filled_by_code?: boolean; quote_replaced?: boolean }>
+  changes?: SettledChange[]
+  /**
+   * Incremental delivery (from the second update): the PRD SDD wrote for an
+   * earlier update stands for the inputs up to it; only later inputs follow
+   * verbatim. Absent: every input is delivered (the first update, or no PRD yet).
+   */
+  baseline_prd?: { run_id: string; event_id: string; input: number; digest: string; chars: number }
+  /** Every input as SDD alone would receive it, minus cuts: what names and examples are checked against. */
+  reference_text?: string
   /** The draft gave no change list: every entry is code's. */
   changes_not_given?: boolean
   /** The failure ledger as code computed it for this delivery; open entries are in the text's own section. */
@@ -162,6 +222,8 @@ export interface LedgerEntry {
   first_failed: string
   last: { event_id: string; run_id: string; passed: boolean; observed: string }
   state: "open" | "closed" | "removed"
+  /** Whether every fact the example states still holds (no open revision replaced one); recorded, not fed back. */
+  facts_valid?: boolean
   removed_reason?: string
 }
 /** A passage an accepted or the current IR selected that this delivery does not deliver. */

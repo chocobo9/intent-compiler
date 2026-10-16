@@ -208,7 +208,8 @@ function carrier(segment: SourceSegment, eventId: string, digest: string, irs: R
 }
 
 /** The check is shown how the delivered text was built instead of a second copy of every input. */
-const DELIVERY_TEXT_REST = " every user input verbatim and in input order, minus each passage in delivery.removed, with each effective statement of delivery.contract placed after the paragraph its requirement was changed in; the store keeps the exact text)"
+const withoutReference = ({ reference_text: _r, ...rest }: CIDelivery) => rest
+const DELIVERY_TEXT_REST = " from the second update the PRD SDD clarified for an earlier update (delivery.baseline_prd) in place of the inputs up to it, then every later user input verbatim and in input order, minus each passage in delivery.removed, with each effective statement of delivery.contract placed after the paragraph its requirement was changed in; the store keeps the exact text)"
 export const DELIVERY_TEXT_VIEW = "(not repeated here: the delivered text is this update's change list (delivery.changes, then the open ledger entries fed back), the field dictionary and acceptance examples of delivery.contract (carried and newly written entries), the section code writes for the open ledger entries fed back (" + (LEDGER_FEEDBACK ? "all open entries of delivery.ledger" : "the open acceptance entries of delivery.ledger") + ": earlier requirements the starting code does not meet; code's, not to be judged), then" + DELIVERY_TEXT_REST
 
 function changeView(previous: Record<string, TaskIntent>, prepared: Record<string, TaskIntent>): IrChangeView {
@@ -484,7 +485,8 @@ export function checkRequest(s: SddSnapshot, b: SddBatch): { request: CheckReque
     effective: d.contract.effective.map(e => ({ task_id: e.task_id, revision: e.revision, carried: e.carried, entry: e.carried ? { item_id: e.entry.item_id } : { item_id: e.entry.item_id, written: "in delivery.draft.tasks[].effective" } })) }
   const request: CheckRequest = {
     ...base,
-    delivery: { ...d, text: DELIVERY_TEXT_VIEW, contract: contract as unknown as CIDelivery["contract"] },
+    // The reference text is every input again; the check reads the inputs from sources.
+    delivery: { ...withoutReference(d), text: DELIVERY_TEXT_VIEW, contract: contract as unknown as CIDelivery["contract"] },
     ir_update: {
       basis: candidate.basis,
       groups: candidate.groups.map(g => ({ local_ref: g.local_ref, task_refs: g.task_refs, ir_changes: g.ir_changes })),

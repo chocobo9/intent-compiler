@@ -12,10 +12,12 @@ import { decodeSdd, SDD_DELIVERY_SCHEMA, SDD_CHECK_SCHEMA, SDD_EXAMPLES_SCHEMA, 
 import { SDD_PROFILE, type CIDelivery, type DeliveryContract, type DeliveryDraft, type RemovedPassage, type SddBatch, type SddCheckFinding, type SddRun, type SddResult, type SddSnapshot } from "./sdd-contract.js"
 import { checkRequest, deliveryRequest, irRequest, type CheckRequest, type ContextReport, type DeliveryRequest } from "./sdd-context.js"
 import { currentRevisions, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
-import { markCheckable } from "./sdd-examples.js"
 import { computeLedger, fedBack, ledgerSection } from "./sdd-ledger.js"
 import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
-import { carryExecutable, executableSection, keepExamples, type Derivation, type ProposedExample } from "./sdd-executable.js"
+import { carryExecutable, executableSection, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
+import { quoteBlock, resolveQuotes, segmentIndex } from "./sdd-quotes.js"
+import { ledgerRevisions, markFactsValid, purge } from "./sdd-revisions.js"
+import type { AcceptanceSubject, DraftAcceptance } from "./sdd-contract.js"
 
 const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b)
 function requireThat(value: unknown, message: string): asserts value { if (!value) throw Error(message) }
@@ -200,10 +202,14 @@ export class SddCompiler {
     this.setExecutable(d, carried, dropped)
   }
   private setExecutable(d: CIDelivery, executable: NonNullable<DeliveryContract["executable"]>, dropped: DeliveryContract["dropped"]): void {
-    d.contract.executable = executable
-    d.contract.dropped.push(...dropped)
-    const at = d.text.indexOf("\n## Original user update 1")
-    if (at >= 0) d.text = `${d.text.slice(0, at + 1)}${executableSection(executable)}${d.text.slice(at + 1)}`
+    // An open revision drops what states a value it replaced; the rest is marked by whether its inputs are the requirement's own.
+    const purged = purge(d.contract.revisions ?? [], [], [], executable)
+    const reference = d.reference_text ?? d.text
+    d.contract.executable = purged.executable.map(e => ({ ...e, original_inputs: originalInputs(e.run, reference) }))
+    d.contract.dropped.push(...dropped, ...purged.dropped)
+    // Before the requirement baseline (incremental delivery) or the first original update delivered.
+    const at = [d.text.indexOf(`\n${BASELINE_HEADING}`), d.text.indexOf("\n## Original user update ")].filter(i => i >= 0).sort((a, b) => a - b)[0]
+    if (at !== undefined) d.text = `${d.text.slice(0, at + 1)}${executableSection(d.contract.executable)}${d.text.slice(at + 1)}`
     const { ref, ...content } = d
     d.ref = { ...ref, digest: digestOf(content) }
   }
@@ -216,8 +222,12 @@ export class SddCompiler {
     const d = batch.delivery!, ir = batch.parent!.ir
     const excluded = this.undelivered(batch)
     const previous = previousContract(s, batch)
-    const { carried, dropped, rewrite } = carryExecutable(previous?.executable, ir, excluded, narrowedItems(s.ir, ir))
-    const toWrite = [...new Set([...planCarry(previous, s.ir, ir).toWrite, ...rewrite])].filter(id => !excluded.has(id))
+    const { carried: carriedAll, dropped, rewrite } = carryExecutable(previous?.executable, ir, excluded, narrowedItems(s.ir, ir))
+    // A carried example stating a value an open revision replaced is dropped and its items written again now.
+    const stale = purge(d.contract.revisions ?? [], [], [], carriedAll)
+    const carried = stale.executable
+    dropped.push(...stale.dropped)
+    const toWrite = [...new Set([...planCarry(previous, s.ir, ir).toWrite, ...rewrite, ...stale.rewrite])].filter(id => !excluded.has(id))
     const counts = { verbatim: 0, derived_kept: 0, derived_dropped: 0, not_checkable: 0, invalid_input: 0, runs_kept: 0, runs_dropped: 0 }
     let kept: NonNullable<DeliveryContract["executable"]> = []
     let state: "written" | "failed" | "skipped" = "written", reason: string | undefined
@@ -249,7 +259,8 @@ export class SddCompiler {
             for (const r of decodeSdd<{ results: Array<Derivation & { index: number }> }>(again.call, SDD_DERIVE_SCHEMA).results) derivedChecks.set(r.index, r)
           } catch (error) { again.error = error instanceof Error ? error.message : String(error) }
         }
-        const original = d.text.slice(d.text.indexOf("## Original user update 1"))
+        // Checked against every input as SDD alone would receive it (the delivered text may start from a PRD baseline).
+        const original = d.reference_text ?? d.text.slice(d.text.indexOf("## Original user update 1"))
         const result = keepExamples(proposal.examples, derivedChecks, original, ir, batch.event_id)
         kept = result.kept; Object.assign(counts, result.counts)
       } catch (error) { state = "failed"; reason = error instanceof Error ? error.message : String(error); record.error = reason }
@@ -329,6 +340,7 @@ export class SddCompiler {
       if (item && !excluded.has(item.item_id)) effective.push({ item, entry: c.entry })
     }
     const earlier = s.batches.filter(x => x.state === "accepted" && x.parent && x.event_id !== b.event_id).map(x => x.parent!.ir)
+    // Every input as SDD alone would receive it, minus cuts: what names and quotes are checked against.
     // A hold delivers nothing, so it has no SDD input text.
     const built = delivered.length === 0 ? { text: "", removed: [] } : accumulatedText(s.events, earlier, ir, delivered, dispositions, effective)
     // An effective statement must not bring back original text this delivery cuts as withdrawn or superseded.
@@ -337,35 +349,61 @@ export class SddCompiler {
       requireThat(!back.length, `Effective statement for ${entry.item_id} repeats text this delivery cuts as withdrawn or superseded: ${back.map(t => JSON.stringify(t.slice(0, 120))).join("; ")}; state only what holds now`)
     }
     const removed = built.removed
-    let text = built.text
+    const reference = built.text
+    // From the second update the PRD SDD wrote for an earlier update stands for the inputs up to it.
+    const baseline = delivered.length === 0 ? undefined : prdBaseline(s, b.event_id)
+    const shown = baseline ? accumulatedText(s.events, earlier, ir, delivered, dispositions, effective, baseline.input + 1).text : reference
+    let text = ""
     const emptyObjects: string[] = [], namesAdded: string[] = []
     const revisionsOf = (items: string[]) => Object.fromEntries(items.map(id => [id, now.get(id)!]))
     const taskOf = (itemId: string) => Object.values(ir).find(t => t.content.some(c => c.item_id === itemId))!.task_id
     const contract: DeliveryContract = { fields: [], acceptance: [], effective: [], dropped: [...final.dropped] }
-    // Requirements the starting code does not meet, from the store's run results (code, not model).
-    const ledger = computeLedger(s, ir)
+    const index = segmentIndex(s.events)
+    const input = s.events.filter(e => e.kind === "user_input").findIndex(e => e.event_id === b.event_id) + 1
+    // A passage this delivery cuts in part or whole is not quoted.
+    const cut = (q: { source_id: string; start: number; end: number }) => removed.some(r => r.source_id === q.source_id && r.start < q.end && q.start < r.end)
     // This round's change list (not in the first delivery, where everything is new): the model's entries settled by code against the IR change.
-    const settled = Object.keys(s.ir).length ? settleChanges(draft.changes ?? [], changedItems(s.ir, ir, excluded)) : { changes: [], dropped: [] }
+    const settled = Object.keys(s.ir).length ? settleChanges(draft.changes ?? [], changedItems(s.ir, ir, excluded), { index, cut, input, previous: s.ir, current: ir }) : { changes: [], dropped: [] }
     contract.dropped.push(...settled.dropped)
+    // The revision ledger: earlier revisions still open, and this update's.
+    const revisions = ledgerRevisions(previous?.revisions, settled.changes, s, ir, b.event_id, input)
+    // Requirements the starting code does not meet, from the store's run results (code, not model).
+    const ledger = markFactsValid(computeLedger(s, ir), revisions)
     if (delivered.length) {
-      // Newly written entries must hold; a carried entry whose names the delivered text no longer writes is dropped.
-      checkFields(writtenFields, text, original)
-      checkAcceptance(writtenSubjects, text, original, true)
-      const carriedFields = final.fields.filter(o => { try { checkFields([o], text, original); return true } catch (e) { contract.dropped.push({ kind: "field", name: o.object, reason: (e as Error).message }); return false } })
-      const carriedSubjects = final.acceptance.filter(a => { try { checkAcceptance([a], text, original, true); return true } catch (e) { contract.dropped.push({ kind: "acceptance", name: a.subject, reason: (e as Error).message }); return false } })
-      contract.fields = [...carriedFields, ...writtenFields.map(o => ({ ...o, revisions: revisionsOf(o.items), carried: false }))]
-      // Every example, carried or new, is marked checkable against what the delivered text writes now.
-      contract.acceptance = markCheckable([...carriedSubjects, ...writtenSubjects.map(a => ({ ...a, revisions: revisionsOf(a.items), carried: false }))], text)
+      // Newly written entries must hold; a carried entry whose names the requirements no longer write is dropped.
+      checkFields(writtenFields, reference, original)
+      const carriedFields = final.fields.filter(o => { try { checkFields([o], reference, original); return true } catch (e) { contract.dropped.push({ kind: "field", name: o.object, reason: (e as Error).message }); return false } })
+      const rewrite = new Set<string>()
+      // A carried example whose passage this delivery now cuts no longer states what holds.
+      const carriedSubjects = final.acceptance.flatMap(a => {
+        const examples = a.examples.filter(e => ![...(e.given_quotes ?? []), ...(e.expect_quotes ?? [])].some(q => { const at = index.get(`${q.source_id}|${q.segment_id}`); return !at || cut(at) }))
+        if (examples.length < a.examples.length) { contract.dropped.push({ kind: "acceptance", name: a.subject, reason: "an example quotes a passage this delivery cuts" }); a.items.forEach(id => rewrite.add(id)) }
+        return examples.length ? [{ ...a, examples }] : []
+      })
+      const written = quotedAcceptance(writtenSubjects, index, cut, contract.dropped)
+      const purged = purge(revisions,
+        [...carriedFields, ...writtenFields.map(o => ({ ...o, revisions: revisionsOf(o.items), carried: false }))],
+        [...carriedSubjects, ...written.map(a => ({ ...a, revisions: revisionsOf(a.items), carried: false }))])
+      contract.fields = purged.fields
+      contract.acceptance = purged.acceptance
+      contract.dropped.push(...purged.dropped)
+      purged.rewrite.forEach(id => rewrite.add(id))
+      if (rewrite.size) contract.rewrite_next = [...rewrite].filter(id => now.has(id))
       contract.effective = [...final.effective.filter(c => !excluded.has(c.entry.item_id)),
         ...draft.tasks.flatMap(t => t.effective.map(entry => ({ task_id: taskOf(entry.item_id), revision: now.get(entry.item_id)!, entry, carried: false })))]
-      requireThat(contract.acceptance.length > 0, "CI needs acceptance examples for the commands and operations the delivered requirements define")
-      // Code merges repeated rows, leaves out objects without fields, and adds every name the text writes that no object lists.
-      const completed = completeFields(contract.fields, text)
+      contract.revisions = revisions
+      // Code merges repeated rows, leaves out objects without fields, and adds every name the requirements write that no object lists.
+      const completed = completeFields(contract.fields, reference)
       emptyObjects.push(...completed.leftOut)
       namesAdded.push(...completed.added)
-      text = `${ACCUMULATED_HEADER}\n${changeSection(settled.changes, fedBack(ledger), ir)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance)}${ledgerSection(fedBack(ledger), ir)}${text.slice(ACCUMULATED_HEADER.length)}`
+      const head = baseline ? `${INCREMENTAL_HEADER}\n` : `${ACCUMULATED_HEADER}\n`
+      const body = baseline ? `${baselineSection(baseline)}${shown.slice(ACCUMULATED_HEADER.length)}` : reference.slice(ACCUMULATED_HEADER.length)
+      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance)}${ledgerSection(fedBack(ledger), ir)}${body}`
     }
-    const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract, ...(settled.changes.length ? { changes: settled.changes } : {}), ...(Object.keys(s.ir).length && draft.changes === undefined ? { changes_not_given: true } : {}), ...(ledger.length ? { ledger } : {}), ...(emptyObjects.length ? { field_objects_left_out: emptyObjects } : {}), ...(namesAdded.length ? { field_names_added: namesAdded } : {}) }
+    const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract,
+      ...(delivered.length ? { reference_text: reference } : {}),
+      ...(baseline ? { baseline_prd: { run_id: baseline.run_id, event_id: baseline.event_id, input: baseline.input, digest: baseline.digest, chars: baseline.text.length } } : {}),
+      ...(settled.changes.length ? { changes: settled.changes } : {}), ...(Object.keys(s.ir).length && draft.changes === undefined ? { changes_not_given: true } : {}), ...(ledger.length ? { ledger } : {}), ...(emptyObjects.length ? { field_objects_left_out: emptyObjects } : {}), ...(namesAdded.length ? { field_names_added: namesAdded } : {}) }
     return { ...content, ref: { id: `ci-${digestText(this.runId + ":" + b.event_id).slice(0, 24)}`, revision: 1, digest: digestOf(content) } }
   }
   /** Durable claim precedes any external preparation. Repeating a claim never grants a second launch. */
@@ -485,32 +523,48 @@ export function resolveCheckFindings(findings: SddCheck["findings"], request: Ch
 export const EXAMPLES_CALL_LIMIT = 4
 const ACCUMULATED_HEADER = "# Accumulated original user requirements\nApply each update in order. Later explicit revisions replace only the affected earlier requirements.\n"
 
+const PRD_ARTIFACT = "output/02-澄清后PRD.md"
+export const BASELINE_HEADING = "# Requirement baseline: "
+const INCREMENTAL_HEADER = "# Requirement baseline and later original user updates\nThe PRD below is the requirement as SDD clarified it for an earlier user update; the original user updates after it follow verbatim, in order. Apply each update in order. Later explicit revisions replace only the affected earlier requirements.\n"
+
 /**
- * Every JSON key an acceptance example's input writes ("key":) must be written
- * by the delivered requirements, as "key" or `key`; code reads the keys, so an
- * operation's parameter names are checked without the model listing them. A key
- * found only in passages this delivery cuts is withdrawn or superseded.
+ * The PRD that stands for the inputs up to its update: the latest run whose
+ * code counts (not voided, not superseded) that returned one, before this
+ * update. Undefined when no such run has (the first update).
  */
-export function checkAcceptance(acceptance: DeliveryDraft["acceptance"], delivered: string, original: string, allowEmpty = false): void {
-  requireThat(allowEmpty || acceptance.length > 0, "CI needs acceptance examples for the commands and operations the delivered requirements define")
-  unique(acceptance.map(a => a.subject), "acceptance subject")
-  const written = (text: string, key: string) => text.includes(`"${key}"`) || text.includes(`\`${key}\``)
-  const problems: string[] = []
-  for (const a of acceptance) {
-    if (!a.subject.trim()) problems.push("an acceptance entry has no subject")
-    if (!a.examples.length) problems.push(`acceptance subject ${a.subject} has no example`)
-    a.examples.forEach((e, i) => {
-      const where = `acceptance ${a.subject} example ${i + 1}`
-      if (!e.given.trim() || !e.expect.trim()) problems.push(`${where} needs both given and expect`)
-      for (const key of new Set([...e.given.matchAll(/"([^"\\\n]+)"\s*:/gu)].map(m => m[1]!))) {
-        if (written(delivered, key)) continue
-        problems.push(written(original, key)
-          ? `${where}: key "${key}" occurs only in text this delivery cuts as withdrawn or superseded`
-          : `${where}: key "${key}" is not a key the requirements write; use the requirement's own key, copied exactly`)
-      }
-    })
+export function prdBaseline(s: SddSnapshot, eventId: string): { run_id: string; event_id: string; input: number; text: string; digest: string } | undefined {
+  const order = new Map(s.events.filter(e => e.kind === "user_input").map((e, i) => [e.event_id, i + 1]))
+  for (const run of [...s.runs].reverse()) {
+    if (!run.result || run.superseded || run.voided || run.event_id === eventId) continue
+    const prd = run.result.artifacts.find(a => a.path.replace(/\\/gu, "/").endsWith(PRD_ARTIFACT) && a.text)
+    if (prd) return { run_id: run.run_id, event_id: run.event_id, input: order.get(run.event_id)!, text: prd.text!, digest: prd.digest }
   }
-  requireThat(!problems.length, `Acceptance examples do not hold: ${problems.join("; ")}`)
+  return undefined
+}
+
+export function baselineSection(baseline: { input: number; text: string }): string {
+  return `\n${BASELINE_HEADING}the PRD SDD clarified for user update ${baseline.input}\n\n${baseline.text.trim()}\n`
+}
+
+/**
+ * The acceptance subjects as delivered: each example's passages resolved to
+ * verbatim quotes. A reference no input has, or to a passage this delivery
+ * cuts, is left out; an example left with no passage, and a subject left with
+ * no example, is dropped. Each is recorded.
+ */
+export function quotedAcceptance(acceptance: DraftAcceptance[], index: ReturnType<typeof segmentIndex>, cut: Parameters<typeof resolveQuotes>[2], dropped: DeliveryContract["dropped"]): AcceptanceSubject[] {
+  unique(acceptance.map(a => a.subject), "acceptance subject")
+  return acceptance.flatMap(a => {
+    const examples = a.examples.flatMap((e, i) => {
+      const given = resolveQuotes(e.given, index, cut), expect = resolveQuotes(e.expect, index, cut)
+      const lost = [...given.dropped, ...expect.dropped]
+      if (lost.length) dropped.push({ kind: "acceptance", name: `${a.subject} example ${i + 1}`, reason: `passages left out: ${lost.join("; ")}` })
+      if (!given.quotes.length && !expect.quotes.length) return []
+      return [{ given: quoteBlock(given.quotes), expect: quoteBlock(expect.quotes), given_quotes: given.quotes, expect_quotes: expect.quotes }]
+    })
+    if (!examples.length) { dropped.push({ kind: "acceptance", name: a.subject, reason: "no example quotes a delivered passage" }); return [] }
+    return [{ subject: a.subject, items: a.items, examples }]
+  })
 }
 
 /** A field name the requirements write: quoted, in backticks, or as a dashed command-line option. */
@@ -571,12 +625,13 @@ export function fieldSection(fields: DeliveryDraft["fields"]): string {
 
 export const FIELD_NOTE = "Management derived this dictionary from the original requirements that follow, for the PRD's interface-and-data section. Each field name is part of the external interface (command-line options, file and configuration keys, output fields) and must be kept and implemented exactly as written."
 
-export function acceptanceSection(acceptance: DeliveryDraft["acceptance"]): string {
-  const body = acceptance.map(a => `## ${a.subject.trim()}\n${a.examples.map((e, i) => `Example ${i + 1}\nGiven:\n${e.given.trim()}\nExpect:\n${e.expect.trim()}`).join("\n\n")}`).join("\n\n")
+export function acceptanceSection(acceptance: AcceptanceSubject[]): string {
+  if (!acceptance.length) return ""
+  const body = acceptance.map(a => `## ${a.subject.trim()}\n${a.examples.map((e, i) => [`Example ${i + 1}`, ...(e.given.trim() ? [`Given:\n${e.given.trim()}`] : []), ...(e.expect.trim() ? [`Expect:\n${e.expect.trim()}`] : [])].join("\n")).join("\n\n")}`).join("\n\n")
   return `# Acceptance examples\n${ACCEPTANCE_NOTE}\n\n${body}\n\n`
 }
 
-export const ACCEPTANCE_NOTE = "Management derived these examples from the original requirements that follow; every name, key, value, fixed text and exit code in them is written exactly as the requirements write it and must be implemented exactly so. They are acceptance criteria for every command and operation listed; the original requirements below remain the full specification."
+export const ACCEPTANCE_NOTE = "Management selected these passages of the original requirements per command and operation: an input the requirements give and the result they state. Every passage is quoted verbatim from the user update named; every name, key, value, fixed text and exit code in it must be implemented exactly so. The original requirements remain the full specification."
 
 export interface EffectivePlacement { item: ContentItem; entry: DeliveryDraft["tasks"][number]["effective"][number] }
 type Spans = Map<string, Array<{ start: number; end: number; item: ContentItem }>>
@@ -595,7 +650,7 @@ function spansOf(items: Iterable<ContentItem>): Spans {
  * holding its first current passage.
  */
 export function accumulatedText(events: readonly CompilerEvent[], earlier: ReadonlyArray<Record<string, TaskIntent>>, current: Record<string, TaskIntent>,
-  delivered: readonly ContentItem[], dispositions: ReadonlyMap<ContentItem, string>, effective: readonly EffectivePlacement[]): { text: string; removed: RemovedPassage[] } {
+  delivered: readonly ContentItem[], dispositions: ReadonlyMap<ContentItem, string>, effective: readonly EffectivePlacement[], from = 1): { text: string; removed: RemovedPassage[] } {
   const inputOrder = new Map(events.map((e, i) => [e.event_id, i + 1]))
   const before = spansOf(earlier.flatMap(ir => Object.values(ir).flatMap(t => t.content)))
   const now = spansOf(Object.values(current).flatMap(t => t.content))
@@ -638,9 +693,12 @@ export function accumulatedText(events: readonly CompilerEvent[], earlier: Reado
     const inputs = [...new Set(entry.basis.map(x => inputOrder.get(x.source_id)!))].sort((a, c) => a - c)
     const block = `[requirement as it now holds, per user input ${inputs.join(", ")}]\n${entry.text.trim()}`
     // Without a located passage the statement goes after the latest input it rests on.
-    const event = events[(first ? inputOrder.get(first.source_id)! : inputs.at(-1)!) - 1]!
+    // An input not delivered (it stands in the PRD baseline): after the latest input the statement rests on.
+    const placed = first ? inputOrder.get(first.source_id)! : inputs.at(-1)!
+    const event = events[(placed >= from ? placed : Math.max(inputs.at(-1)!, from)) - 1] ?? events.at(-1)!
+    const anchored = placed >= from ? first : undefined
     const length = texts.get(event.event_id)!.length
-    const at = first ? sourceSegments([event]).find(x => x.span.start <= first.start && first.start < x.span.end)?.span.end ?? length : length
+    const at = anchored ? sourceSegments([event]).find(x => x.span.start <= anchored.start && anchored.start < x.span.end)?.span.end ?? length : length
     const forEvent = inserts.get(event.event_id) ?? new Map<number, string[]>()
     forEvent.set(at, [...(forEvent.get(at) ?? []), block]); inserts.set(event.event_id, forEvent)
   }
@@ -666,7 +724,7 @@ export function accumulatedText(events: readonly CompilerEvent[], earlier: Reado
       for (let j = i + 1; j < end; j++) for (const block of at.get(j) ?? []) out += `${block}\n\n`
       i = end - 1
     }
-    parts.push(`\n## Original user update ${index + 1}\n\n${out}\n`)
+    if (index + 1 >= from) parts.push(`\n## Original user update ${index + 1}\n\n${out}\n`)
   })
   return { text: parts.join("\n"), removed }
 }

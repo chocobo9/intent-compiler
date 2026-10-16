@@ -1,4 +1,5 @@
 import { test } from "node:test"
+import { nativeStructuredSchema } from "../src/model/opencode-transport.js"
 import assert from "node:assert/strict"
 import { readFileSync, mkdtempSync } from "node:fs"
 import { resolve, join } from "node:path"
@@ -29,7 +30,7 @@ function replay(structured: unknown) {
         prompts++
         assert.equal(input.body.format?.retryCount, 0)
         const sent = JSON.parse(input.body.parts[0].text)
-        assert.deepEqual(input.body.format?.schema, sent.generation_stage ? buildGenerationSchema(sent.generation_stage, "openai") : buildStrictCandidateSchema("openai"))
+        assert.deepEqual(input.body.format?.schema, nativeStructuredSchema(sent.generation_stage ? buildGenerationSchema(sent.generation_stage, "openai") : buildStrictCandidateSchema("openai")).schema)
         const validate = new Ajv({ strict: false }).compile(input.body.format!.schema as object)
         assert.equal(validate(JSON.parse(sent.contract.example_candidate)), true)
         const response = sent.generation_stage ? stageCandidate(sent, structured as Candidate) : structured

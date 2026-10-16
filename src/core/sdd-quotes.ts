@@ -1,0 +1,57 @@
+import type { CompilerEvent } from "./intent-contract.js"
+import { sourceSegments } from "./source-payload.js"
+import type { Quote, SegmentRef } from "./sdd-contract.js"
+
+/** A value as compared: lower case, letters and digits only ("SHA-256" and "sha256" are the same value). */
+export const normValue = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/gu, "")
+
+/** Every segment of the recorded inputs by "source_id|segment_id", with its 1-based input number. */
+export function segmentIndex(events: readonly CompilerEvent[]): Map<string, Quote & { start: number; end: number }> {
+  const order = new Map(events.filter(e => e.kind === "user_input").map((e, i) => [e.event_id, i + 1]))
+  return new Map(sourceSegments(events).flatMap(x => order.has(x.source_id)
+    ? [[`${x.source_id}|${x.segment_id}`, { source_id: x.source_id, segment_id: x.segment_id, input: order.get(x.source_id)!, text: x.text, start: x.span.start, end: x.span.end }] as const] : []))
+}
+
+/**
+ * References resolved to verbatim quotes, in the order given, each once. A
+ * reference no input has, or one whose passage this delivery cuts (withdrawn,
+ * superseded, not delivered), is left out and named in dropped.
+ */
+export function resolveQuotes(refs: readonly SegmentRef[], index: ReturnType<typeof segmentIndex>, cut: (q: Quote & { start: number; end: number }) => boolean): { quotes: Quote[]; dropped: string[] } {
+  const quotes: Quote[] = [], dropped: string[] = [], seen = new Set<string>()
+  for (const ref of refs) {
+    const key = `${ref.source_id}|${ref.segment_id}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    const found = index.get(key)
+    if (!found) { dropped.push(`${key}: no such segment`); continue }
+    if (cut(found)) { dropped.push(`${key}: this delivery cuts its text`); continue }
+    quotes.push({ source_id: found.source_id, segment_id: found.segment_id, input: found.input, text: found.text })
+  }
+  return { quotes, dropped }
+}
+
+/** Quotes as delivered: each passage verbatim, as a block quote under the update it comes from. */
+export function quoteBlock(quotes: readonly Quote[]): string {
+  return quotes.map(q => `(user update ${q.input})\n${q.text.trim().split("\n").map(l => `> ${l}`).join("\n")}`).join("\n")
+}
+
+/**
+ * The facts a text states, by the identifiers code can read: words (command,
+ * operation, option and field names), backticked and quoted spans, and values
+ * with digits, all normalized. A revision drops an entry whose facts name one
+ * of its subjects and whose text holds a value it replaced.
+ */
+export function factsOf(text: string): string[] {
+  const out = new Set<string>()
+  for (const m of text.matchAll(/[A-Za-z_][A-Za-z0-9_-]*/gu)) { const v = normValue(m[0]); if (v.length >= 2) out.add(v) }
+  for (const m of text.matchAll(/`([^`\n]+)`|"([^"\n]+)"/gu)) { const v = normValue(m[1] ?? m[2] ?? ""); if (v) out.add(v) }
+  for (const m of text.matchAll(/[A-Za-z0-9]*\d[A-Za-z0-9.-]*/gu)) { const v = normValue(m[0]); if (v) out.add(v) }
+  return [...out].sort()
+}
+
+/** Whether a text holds a value: compared normalized, so punctuation and case do not matter. */
+export function holdsValue(text: string, value: string): boolean {
+  const v = normValue(value)
+  return v.length > 0 && normValue(text).includes(v)
+}

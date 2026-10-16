@@ -9,6 +9,7 @@ import {
 import { V2_COMPILER_CONTRACT, type CompilerModelV2Input } from "../src/model/compiler-model-v2.js"
 import { CANDIDATE_EXAMPLE } from "../src/model/candidate-example.js"
 import { buildStrictCandidateExample, buildStrictCandidateSchema } from "../src/model/candidate-schema-strict.js"
+import { nativeStructuredSchema } from "../src/model/opencode-transport.js"
 
 const candidate = { schema_version: 2, basis: { event_ids: ["e1"], refs: [] }, groups: [], source_coverage: [] }
 function input(): CompilerModelV2Input {
@@ -62,7 +63,7 @@ test("v2 OpenCode transport accepts StructuredOutput info.structured and preserv
       create: async () => { created = true; return { data: { id: "structured-session" } } },
       prompt: async (request) => {
         assert.equal(request.body.format?.type, "json_schema")
-        assert.deepEqual(request.body.format?.schema, buildStrictCandidateSchema("openai"))
+        assert.deepEqual(request.body.format?.schema, nativeStructuredSchema(buildStrictCandidateSchema("openai")).schema)
         assert.deepEqual(request.body.tools, { "*": false, StructuredOutput: true })
         assert.deepEqual(Object.keys(request.body.tools), ["*", "StructuredOutput"])
         const sentInput = JSON.parse(request.body.parts[0].text) as CompilerModelV2Input

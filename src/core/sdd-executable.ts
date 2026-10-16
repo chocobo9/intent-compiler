@@ -94,6 +94,28 @@ export function usesSample(run: NonNullable<AcceptanceExample["run"]>, text: str
   return false
 }
 
+/**
+ * Whether every input a run gives is the requirement's own: each file's
+ * content written in the text (whitespace aside), or JSON that is one of the
+ * text's samples or a list of them (key order aside); stdin likewise. A run
+ * with an input the text never writes was made up for the example.
+ */
+export function originalInputs(run: AcceptanceExample["run"], text: string): boolean {
+  if (!run) return false
+  const flat = (t: string) => t.replace(/\s+/gu, " ").trim()
+  const all = flat(text)
+  const samples = new Set(sampleObjects(text).map(canonical))
+  const written = (content: string) => {
+    const c = flat(content)
+    if (!c || all.includes(c)) return true
+    try {
+      const v: unknown = JSON.parse(content)
+      return samples.has(canonical(v)) || (Array.isArray(v) && v.length > 0 && v.every(x => samples.has(canonical(x))))
+    } catch { return false }
+  }
+  return run.files.every(f => written(f.content)) && (run.stdin === null || written(run.stdin))
+}
+
 /** A CSV input with a blank line inside its data: CSV readers skip blank lines, so whether it is an empty-value row is undecided. */
 export function ambiguousCsv(run: NonNullable<AcceptanceExample["run"]>): boolean {
   return run.files.some(f => {
@@ -197,9 +219,9 @@ export function keepExamples(proposed: ProposedExample[], derivations: Map<numbe
   return { kept, counts }
 }
 
-/** The verbatim executable examples, for SDD: every expected value is the requirement's own. */
+/** The verbatim executable examples whose inputs are the requirement's own, for SDD: nothing in them is made up. All examples still run. */
 export function executableSection(examples: Carried): string {
-  const verbatim = examples.filter(e => e.tier === "verbatim")
+  const verbatim = examples.filter(e => e.tier === "verbatim" && e.original_inputs === true)
   if (!verbatim.length) return ""
   const body = verbatim.map((e, i) => `## ${i + 1}. ${e.subject}\nGiven:\n${e.given.trim()}\nExpect:\n${e.expect.trim()}`).join("\n\n")
   return `# Executable acceptance examples\n${EXECUTABLE_NOTE}\n\n${body}\n\n`

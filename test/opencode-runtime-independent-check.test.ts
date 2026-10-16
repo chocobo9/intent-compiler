@@ -11,6 +11,7 @@ import { buildStrictCandidateExample } from "../src/model/candidate-schema-stric
 import { buildStrictCandidateCheckSchema } from "../src/model/candidate-check-schema-strict.js"
 import { buildGenerationSchema } from "../src/model/generation-schema.js"
 import { stageCandidate } from "./fixtures/stage-candidate.js"
+import { nativeStructuredSchema } from "../src/model/opencode-transport.js"
 
 test("OpenCode runtime independently proposes and checks with GPT-6 Luna contracts", async () => {
   const root = mkdtempSync(join(tmpdir(), "opencode-independent-check-"))
@@ -41,8 +42,8 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
         const schema = request.body.format?.schema
         const input = JSON.parse(request.body.parts[0].text)
         const stage = input.generation_stage as "ir" | "ci" | undefined
-        const proposal = stage !== undefined && JSON.stringify(schema) === JSON.stringify(buildGenerationSchema(stage, "openai", { checkRequired: true }))
-        const check = JSON.stringify(schema) === JSON.stringify(buildStrictCandidateCheckSchema("openai"))
+        const proposal = stage !== undefined && JSON.stringify(schema) === JSON.stringify(nativeStructuredSchema(buildGenerationSchema(stage, "openai", { checkRequired: true })).schema)
+        const check = JSON.stringify(schema) === JSON.stringify(nativeStructuredSchema(buildStrictCandidateCheckSchema("openai")).schema)
         assert.equal(proposal || check, true, "runtime must send the IR, CI or independent-check OpenAI strict schema")
         const responseText = proposal
           ? JSON.stringify(stageCandidate(input, buildStrictCandidateExample("openai", candidate) as unknown as Candidate))
@@ -86,10 +87,10 @@ test("OpenCode runtime independently proposes and checks with GPT-6 Luna contrac
     assert.equal(prompt.body.variant, "high")
     assert.equal(prompt.body.format?.retryCount, 0)
   }
-  assert.deepEqual(prompts[0]!.body.format?.schema, buildGenerationSchema("ir", "openai"))
-  assert.deepEqual(prompts[1]!.body.format?.schema, buildGenerationSchema("ci", "openai", { checkRequired: true }))
+  assert.deepEqual(prompts[0]!.body.format?.schema, nativeStructuredSchema(buildGenerationSchema("ir", "openai")).schema)
+  assert.deepEqual(prompts[1]!.body.format?.schema, nativeStructuredSchema(buildGenerationSchema("ci", "openai", { checkRequired: true })).schema)
   assert.doesNotMatch(prompts[1]!.body.system, /parent_issues/)
-  assert.deepEqual(prompts[2]!.body.format?.schema, buildStrictCandidateCheckSchema("openai"))
+  assert.deepEqual(prompts[2]!.body.format?.schema, nativeStructuredSchema(buildStrictCandidateCheckSchema("openai")).schema)
   assert.notEqual(prompts[0]!.body.system, prompts[1]!.body.system)
   assert.equal(prompts[2]!.body.system, CHECK_SYSTEM_PROMPT)
   assert.match(prompts[0]!.body.system, /management model/i)
