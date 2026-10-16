@@ -305,7 +305,7 @@ def publish(root, records, status):
     (root / 'series-report.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
 
-def execute_ic_series(root, resume=None, retry_paused=False):
+def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
     root = Path(root).resolve()
     config = json.loads((root / 'series.json').read_text(encoding='utf-8'))
     for path, digest in config['frozen_files'].items():
@@ -355,6 +355,16 @@ def execute_ic_series(root, resume=None, retry_paused=False):
                 a['promotion'] = promotion_record(a['trial'], a['completion'])
                 a['mode'] = a['promotion'].get('mode')
         records, reentered = split_resumed(previous, retry_paused, config.get('pause_below_floor', True))
+        if retry_round:
+            # Operator rerun of a promoted round (user decision, recorded in series.json): its finished
+            # attempt is kept as an attempt; the same delivery runs again from the same baseline and the
+            # better attempt is kept.
+            last = records[-1] if records else None
+            if not last or last['round'] != retry_round:
+                raise ValueError(f'--retry-round {retry_round} must be the last kept round')
+            reason = (config.get('resumes') or [{}])[-1].get('reason', 'operator rerun')
+            records = records[:-1]
+            reentered = dict(last, attempts=last.get('attempts', []) + [dict(attempt_summary(last), rule=f'operator rerun: {reason}')], operator_retry=reason)
     publish(root, records, 'running')
     try:
         server_env = dict(env, OPENCODE_CONFIG=str(root / 'management-config.json'), OPENCODE_DISABLE_PROJECT_CONFIG='1',
@@ -383,6 +393,8 @@ def execute_ic_series(root, resume=None, retry_paused=False):
         baseline = next_baseline(records[-1]['root'], records[-1]['completion']) if records else root / 'baseline-r0'
         for number in range(len(records) + 1, config['rounds'] + 1):
             record = {'round': number, 'stage': 'ic_compile', 'attempts': list((reentered or {}).get('attempts', []))}
+            if (reentered or {}).get('operator_retry'):
+                record['operator_retry'] = reentered['operator_retry']
             if (reentered or {}).get('fix_retried'):
                 record['fix_retried'] = True
             reentered = None
@@ -571,9 +583,11 @@ def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) in (4, 5) and sys.argv[1] == '--continue':
+    if len(sys.argv) in (4, 5, 6) and sys.argv[1] == '--continue':
         # Internal: run the resumed series with the adapter copy that resume just updated.
-        execute_ic_series(sys.argv[2], int(sys.argv[3]), sys.argv[4:] == ['--retry-paused'])
+        rest = sys.argv[4:]
+        execute_ic_series(sys.argv[2], int(sys.argv[3]), '--retry-paused' in rest,
+                          int(rest[rest.index('--retry-round') + 1]) if '--retry-round' in rest else None)
         raise SystemExit(0)
     parser = argparse.ArgumentParser()
     parser.add_argument('--launch')
@@ -581,6 +595,7 @@ if __name__ == '__main__':
     parser.add_argument('--resume')
     parser.add_argument('--reason')
     parser.add_argument('--retry-paused', action='store_true', help='rerun the paused round once after a fix')
+    parser.add_argument('--retry-round', type=int, help='with --resume: rerun this promoted round once (operator decision; the store and records return to its checkpoint)')
     parser.add_argument('--trial-prefix', default=TRIAL_PREFIX, help='names this series and its trials (a new IC version gets its own)')
     parser.add_argument('--ledger-from-round', type=int, default=1, help='first round whose returned code is run against the examples (an adopted R1 before it is not)')
     parser.add_argument('--keep-ic', action='store_true', help='resume with the frozen IC build and bridge of the series (only the harness files are replaced)')
@@ -592,11 +607,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.resume and args.from_checkpoint:
         restore_checkpoint(Path(args.resume), args.from_checkpoint, args.reason or 'unspecified')
+    if args.resume and args.retry_round:
+        # Back to the end of that round (whatever started after it is archived), then its checkpoint is archived too: it is rewritten after the rerun.
+        archive = restore_checkpoint(Path(args.resume), args.retry_round + 1, args.reason or 'unspecified')
+        shutil.move(str(Path(args.resume) / 'checkpoints' / f'r{args.retry_round:02d}'), str(archive / f'r{args.retry_round:02d}'))
     if args.resume:
         root = Path(args.resume).resolve()
         number = resume_ic_series(root, args.reason or 'unspecified', args.reopen, args.keep_ic, args.no_pause)
         raise SystemExit(subprocess.call([sys.executable, str(root / 'adapter/run_ic_series.py'), '--continue', str(root), str(number)]
-                                         + (['--retry-paused'] if args.retry_paused else [])))
+                                         + (['--retry-paused'] if args.retry_paused else []) + (['--retry-round', str(args.retry_round)] if args.retry_round else [])))
     if args.launch:
         runner = Path(args.launch).resolve() / 'adapter/run_ic_series.py'
         if runner != Path(__file__).resolve():
