@@ -50,8 +50,17 @@ export function factsOf(text: string): string[] {
   return [...out].sort()
 }
 
-/** Whether a text holds a value: compared normalized, so punctuation and case do not matter. */
+/** A text's words, each normalized; a hyphenated or dotted word is one word ("BLAKE2b-256", ".sha256"). */
+const words = (text: string) => text.split(/[\s`"'()[\]{},:;|<>=*/\\]+/u).map(normValue).filter(Boolean)
+
+/**
+ * Whether a text holds a value: its words appear in the text in order, each
+ * compared normalized ("SHA-256" is "SHA256"), never as part of a longer word
+ * ("blake2b" is not in "BLAKE2b-256").
+ */
 export function holdsValue(text: string, value: string): boolean {
-  const v = normValue(value)
-  return v.length > 0 && normValue(text).includes(v)
+  const v = words(value), t = words(text)
+  if (!v.length) return false
+  for (let i = 0; i + v.length <= t.length; i++) if (v.every((w, k) => t[i + k] === w)) return true
+  return false
 }

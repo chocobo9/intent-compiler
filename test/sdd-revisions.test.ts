@@ -19,7 +19,11 @@ test("a revision opens, is carried, and closes when every example written for it
   assert.deepEqual(opened.map(r => [r.id, r.state, r.revisions]), [["r5-user-input#1", "open", { "r-verify": 1 }]])
   // R6: no example ran yet — still open, carried.
   assert.equal(ledgerRevisions(opened, [], empty, ir({ "r-verify": 1 }), "r6-user-input", 6)[0]!.state, "open")
-  const example = (id: string, revision: number) => ({ id, subject: "verify", items: ["r-verify"], revisions: { "r-verify": revision }, tier: "verbatim", given: "", expect: "", carried: false })
+  const example = (id: string, revision: number, expect = "VERIFIED with a BLAKE2b-256 checksum") => ({ id, subject: "verify", items: ["r-verify"], revisions: { "r-verify": revision }, tier: "verbatim", given: "", expect, carried: false })
+  // An example for its items that does not state the new value does not exercise the change.
+  const unrelated = { batches: [{ delivery: { ref: { id: "c5" }, contract: { executable: [example("r5:2", 1, "ERROR: file not found")] } } }],
+    runs: [{ run_id: "run5", event_id: "r5-user-input", ci_ref: { id: "c5" }, result: { example_results: [{ id: "r5:2", passed: true, failures: [] }] } }] } as never
+  assert.equal(ledgerRevisions(opened, [], unrelated, ir({ "r-verify": 1 }), "r6-user-input", 6)[0]!.state, "open")
   const store = (passed: boolean) => ({ batches: [{ delivery: { ref: { id: "c5" }, contract: { executable: [example("r5:1", 1), example("r1:3", 0)] } } }],
     runs: [{ run_id: "run5", event_id: "r5-user-input", ci_ref: { id: "c5" }, result: { example_results: [{ id: "r5:1", passed, failures: [] }, { id: "r1:3", passed: false, failures: [] }] } }] }) as never
   assert.equal(ledgerRevisions(opened, [], store(false), ir({ "r-verify": 1 }), "r6-user-input", 6)[0]!.state, "open")
@@ -84,6 +88,15 @@ test("an example's inputs are the requirement's own only when each is written in
   assert.ok(originalInputs({ args: ["x"], files: [{ path: "r.json", content: "[{\"min\": 0, \"op\": \"clip\"}]" }, { path: "d.csv", content: "name,age\nann,3\n" }], stdin: null }, text))
   assert.ok(!originalInputs({ args: ["x"], files: [{ path: "d.csv", content: "name,age\nbob,abc\n" }], stdin: null }, text), "a made-up CSV")
   assert.ok(!originalInputs(null, text))
+})
+
+test("a value is held word by word, normalized, never as part of a longer word", async () => {
+  const { holdsValue } = await import("../src/core/sdd-quotes.js")
+  assert.ok(holdsValue("computes its SHA-256", "SHA256"))
+  assert.ok(holdsValue("writes `<output>.sha256` too", ".sha256"))
+  assert.ok(holdsValue("input = `dir` (treated as a single node)", "treated as a single node"))
+  assert.ok(!holdsValue("the same BLAKE2b-256 computation", "blake2b"))
+  assert.ok(holdsValue('{"path": "f", "blake2b": "abc"}', "blake2b"))
 })
 
 test("facts are normalized names and values a text states", () => {

@@ -14,7 +14,7 @@ import { checkRequest, deliveryRequest, irRequest, type CheckRequest, type Conte
 import { currentRevisions, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
 import { computeLedger, fedBack, ledgerSection } from "./sdd-ledger.js"
 import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
-import { carryExecutable, executableSection, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
+import { carryExecutable, executableSection, itemOf, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
 import { quoteBlock, resolveQuotes, segmentIndex } from "./sdd-quotes.js"
 import { ledgerRevisions, markFactsValid, purge } from "./sdd-revisions.js"
 import type { AcceptanceSubject, DraftAcceptance } from "./sdd-contract.js"
@@ -321,20 +321,23 @@ export class SddCompiler {
     const now = currentRevisions(ir)
     const excluded = new Set([...dispositions].filter(([, d]) => d !== "assigned" && d !== "supported").map(([item]) => item.item_id))
     const final = planCarry(previous, s.ir, ir, excluded)
-    const writtenFields = draft.fields, writtenSubjects = draft.acceptance
-    const carriedNames = (names: string[], written: string[], kind: string) => {
-      const clash = written.filter(n => names.includes(n))
-      requireThat(!clash.length, `${kind} ${clash.join(", ")} already carried unchanged from the accepted delivery; use another name or leave it out`)
-    }
-    carriedNames(final.fields.map(o => o.object), writtenFields.map(o => o.object), "Field dictionary object")
-    carriedNames(final.acceptance.map(a => a.subject), writtenSubjects.map(a => a.subject), "Acceptance subject")
-    for (const [kind, entries] of [["field dictionary object", writtenFields.map(o => ({ name: o.object, items: o.items }))], ["acceptance subject", writtenSubjects.map(a => ({ name: a.subject, items: a.items }))]] as const) {
-      for (const e of entries) {
-        const unknown = e.items.filter(id => !now.has(id))
-        requireThat(e.items.length && !unknown.length, `${kind} ${e.name}: items must name current IR content items${unknown.length ? `; unknown ${unknown.join(", ")}` : " (none given)"}`)
-        requireThat(e.items.some(id => plan.toWrite.includes(id)), `${kind} ${e.name}: describes only requirements carried unchanged (${e.items.join(", ")}); write entries only for requirements in to_write`)
-      }
-    }
+    // Bookkeeping is code's: an entry naming items that are not current, or describing only requirements
+    // carried unchanged, is left out and recorded; a written entry replaces a carried one of the same name.
+    const sorted: DeliveryContract["dropped"] = []
+    const admissible = <T extends { items: string[] }>(kind: "field" | "acceptance", name: (e: T) => string, entries: T[]): T[] => entries.flatMap(e => {
+      const items = e.items.map(id => itemOf(id, now)).filter((id): id is string => id !== undefined)
+      const unknown = e.items.filter(id => itemOf(id, now) === undefined)
+      if (unknown.length) sorted.push({ kind, name: name(e), reason: `names items that are not current: ${unknown.join(", ")}` })
+      if (!items.length) { sorted.push({ kind, name: name(e), reason: "names no current item" }); return [] }
+      if (!items.some(id => plan.toWrite.includes(id))) { sorted.push({ kind, name: name(e), reason: `describes only requirements carried unchanged (${items.join(", ")})` }); return [] }
+      return [{ ...e, items: [...new Set(items)] }]
+    })
+    const writtenFields = admissible("field", o => o.object, draft.fields), writtenSubjects = admissible("acceptance", a => a.subject, draft.acceptance)
+    const replaced = (carried: string[], written: string[], kind: "field" | "acceptance") => new Set(carried.filter(n => written.includes(n)).map(n => { sorted.push({ kind, name: n, reason: "replaced by the entry of the same name written this round" }); return n }))
+    const replacedFields = replaced(final.fields.map(o => o.object), writtenFields.map(o => o.object), "field")
+    const replacedSubjects = replaced(final.acceptance.map(a => a.subject), writtenSubjects.map(a => a.subject), "acceptance")
+    final.fields = final.fields.filter(o => !replacedFields.has(o.object))
+    final.acceptance = final.acceptance.filter(a => !replacedSubjects.has(a.subject))
     for (const c of final.effective) {
       const item = ir[c.task_id]?.content.find(x => x.item_id === c.entry.item_id)
       if (item && !excluded.has(item.item_id)) effective.push({ item, entry: c.entry })
@@ -357,7 +360,7 @@ export class SddCompiler {
     const emptyObjects: string[] = [], namesAdded: string[] = []
     const revisionsOf = (items: string[]) => Object.fromEntries(items.map(id => [id, now.get(id)!]))
     const taskOf = (itemId: string) => Object.values(ir).find(t => t.content.some(c => c.item_id === itemId))!.task_id
-    const contract: DeliveryContract = { fields: [], acceptance: [], effective: [], dropped: [...final.dropped] }
+    const contract: DeliveryContract = { fields: [], acceptance: [], effective: [], dropped: [...final.dropped, ...sorted] }
     const index = segmentIndex(s.events)
     const input = s.events.filter(e => e.kind === "user_input").findIndex(e => e.event_id === b.event_id) + 1
     // A passage this delivery cuts in part or whole is not quoted.

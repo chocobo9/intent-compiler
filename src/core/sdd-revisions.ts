@@ -36,7 +36,9 @@ function confirmation(r: RevisionEntry, s: SddSnapshot): string | undefined {
   const run = s.runs.filter(x => x.result && !x.superseded && !x.voided).at(-1)
   if (!run) return undefined
   const delivery = s.batches.find(b => b.delivery?.ref.id === run.ci_ref.id)?.delivery
-  const examples = (delivery?.contract.executable ?? []).filter(e => Object.entries(r.revisions).some(([id, rev]) => (e.revisions[id] ?? -1) >= rev))
+  // Written for its items at or after it; where it states new values, only examples stating one exercise the change.
+  const examples = (delivery?.contract.executable ?? []).filter(e => Object.entries(r.revisions).some(([id, rev]) => (e.revisions[id] ?? -1) >= rev)
+    && (!r.new_values.length || r.new_values.some(v => holdsValue(exampleText(e), v))))
   if (!examples.length) return undefined
   const results = new Map((run.result!.example_results ?? []).map(x => [x.id, x.passed]))
   if (!examples.every(e => results.get(e.id) === true)) return undefined
