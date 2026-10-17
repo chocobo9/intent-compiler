@@ -110,6 +110,10 @@ def identifiers(value, skip=()):
     out = []
     def walk(v):
         if isinstance(v, dict):
+            # A map of columns or fields names its columns by its keys.
+            for key in ('columns', 'fields'):
+                if isinstance(v.get(key), dict):
+                    out.extend(k for k in v[key] if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', k) and k not in out)
             for x in v.values():
                 walk(x)
         elif isinstance(v, list):
@@ -212,7 +216,8 @@ def _transform_run(sample, synopsis):
 def command_run(command, synopsis, texts):
     """A run of a command with placeholder CSV inputs and its section's own JSON sample for JSON options; None when an option cannot be filled."""
     inputs = section_input_samples(texts, command)
-    columns = identifiers(output_samples(texts).get(command, {})) + [c for s in inputs for c in identifiers(s)]
+    # The columns its own input samples name first (a schema's columns), then those its output sample names.
+    columns = [c for s in inputs for c in identifiers(s)] + identifiers(output_samples(texts).get(command, {}))
     columns = list(dict.fromkeys(columns))[:12]
     args, files = [command], []
     for opt, value, optional in synopsis['options']:
@@ -327,3 +332,120 @@ def structure_item(command, expected, observed, out_name, result, ran):
         return {**base, 'failed': True, 'state': 'output is not JSON', 'problems': ['output is not JSON']}
     problems = compare_shape(expected, actual)
     return {**base, 'failed': bool(problems), 'state': 'compared', 'problems': problems}
+
+
+# ---------- P3 cross-round regression ----------
+
+TIME_LINE = re.compile(r'current (?:time|date)|timestamp|wall.?clock|\bUTC\b|ISO ?8601|RFC ?3339|time of (?:the )?run|generated', re.I)
+ISO_TIME = re.compile(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?')
+
+
+def nondeterministic_keys(texts):
+    """Keys the original says hold a time of the run (named on a line that mentions one)."""
+    keys = set()
+    for text in texts:
+        for line in text.split('\n'):
+            if TIME_LINE.search(line):
+                keys.update(re.findall(r'[`"]([A-Za-z_][A-Za-z0-9_]*)[`"]', line))
+    return keys
+
+
+def touched_units(round_text, revision_subjects=()):
+    """Units this round's own input names (its samples' op/type values, its synopses, backticked names in its headings) and revision subjects."""
+    names = set(revision_subjects)
+    for sample in json_samples(round_text):
+        for key in DISCRIMINATORS:
+            if isinstance(sample.get(key), str):
+                names.add(sample[key])
+    synopses, _ = error_probes.parse([round_text])
+    names.update(synopses)
+    for line in re.findall(r'(?m)^#{1,6} .*$', round_text):
+        names.update(re.findall(r'`([A-Za-z_][A-Za-z0-9_-]*)`', line))
+    return names
+
+
+def _normalize(text, keys):
+    try:
+        value = json.loads(text)
+    except ValueError:
+        return ISO_TIME.sub('<time>', text.replace('\r\n', '\n'))
+    def walk(v):
+        if isinstance(v, dict):
+            return {k: ('<nondeterministic>' if k in keys else walk(x)) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(x) for x in v]
+        return ISO_TIME.sub('<time>', v) if isinstance(v, str) else v
+    return json.dumps(walk(value), sort_keys=True)
+
+
+def p3(previous_code, current_code, texts, round_text, revision_subjects=()):
+    """Every unit and command this round does not touch, run with the same code-built inputs on the previous adopted code and this round's; a difference is a suspected regression. Records only (D3)."""
+    synopses, _ = error_probes.parse(texts)
+    touched = touched_units(round_text, revision_subjects)
+    keys = nondeterministic_keys(texts)
+    runs, skipped = [], []
+    for (key, name), samples in unit_samples(texts).items():
+        if name in touched:
+            skipped.append(name)
+        elif key == 'op' and 'transform' in synopses:
+            runs.append({'id': f'p3:{key}:{name}', 'name': name, 'run': _transform_run(samples[0], synopses['transform']), 'asserts': [], 'exit_code': None})
+    for command, synopsis in synopses.items():
+        run = command_run(command, synopsis, texts)
+        if command in touched:
+            skipped.append(command)
+        elif run:
+            runs.append({'id': f'p3:command:{command}', 'name': command, 'run': run, 'asserts': [], 'exit_code': None})
+    before = {r['id']: r for r in example_runner.run_examples(previous_code, runs)['results']} if runs else {}
+    after = {r['id']: r for r in example_runner.run_examples(current_code, runs)['results']} if runs else {}
+    items = []
+    for r in runs:
+        a, b = before.get(r['id']) or {}, after.get(r['id']) or {}
+        oa, ob = a.get('observed') or {}, b.get('observed') or {}
+        diffs = []
+        if not oa or not ob:
+            diffs = [] if not oa and not ob else ['ran on one side only']
+        else:
+            if oa.get('exit_code') != ob.get('exit_code'):
+                diffs.append(f"exit {oa.get('exit_code')} -> {ob.get('exit_code')}")
+            for stream in ('stdout', 'stderr'):
+                if _normalize(oa.get(stream) or '', keys) != _normalize(ob.get(stream) or '', keys):
+                    diffs.append(f'{stream} differs')
+            fa, fb = a.get('files_content') or {}, b.get('files_content') or {}
+            for f in sorted(set(fa) | set(fb)):
+                if _normalize(fa.get(f, '<absent>'), keys) != _normalize(fb.get(f, '<absent>'), keys):
+                    diffs.append(f'{f} differs')
+        items.append({'class': 'p3_regression', 'id': r['id'], 'name': r['name'], 'failed': bool(diffs), 'match': 'name', 'input': CODE_BUILT, 'diffs': diffs,
+                      'example': {'before': (a.get('files_content') or {}), 'after': (b.get('files_content') or {})} if diffs else None})
+    return items, sorted(set(skipped))
+
+
+# ---------- P4 summary naming ----------
+
+def _hits(text, name):
+    """(identifier hits, prose hits): quoted or backticked, a case label, or inside a CamelCase/snake identifier; else prose."""
+    ident = re.compile(r'["`]' + re.escape(name) + r'["`]|[A-Za-z0-9]' + re.escape(name.capitalize()) + r'|' + re.escape(name.capitalize()) + r'[A-Z]|\b' + re.escape(name) + r'_|_' + re.escape(name) + r'\b', re.S)
+    word = re.compile(r'\b' + re.escape(name) + r'\b', re.I)
+    return len(ident.findall(text)), len(word.findall(text))
+
+
+def p4(run_dir, texts, round_index):
+    """Units this round's input adds that the PRD names and SpecArt's summary does not. Recorded, never sent back.
+    A summary that names a unit only in prose (a common word such as round or scale) is marked: that hit may be the word, not the unit."""
+    run_dir = Path(run_dir)
+    prd = run_dir / 'output/02-澄清后PRD.md'
+    summary = run_dir / 'output/06-Spec骨架/.specart/summary.yaml'
+    if not prd.exists() or not summary.exists():
+        return [], 'no PRD' if not prd.exists() else 'no SpecArt summary'
+    prd_text, summary_text = prd.read_text(encoding='utf-8', errors='replace'), summary.read_text(encoding='utf-8', errors='replace')
+    earlier = set(unit_samples(texts[:round_index])) | {('command', c) for c in error_probes.parse(texts[:round_index])[0]}
+    now = set(unit_samples(texts[:round_index + 1])) | {('command', c) for c in error_probes.parse(texts[:round_index + 1])[0]}
+    items = []
+    for key, name in sorted(now - earlier):
+        p_ident, p_any = _hits(prd_text, name)
+        s_ident, s_any = _hits(summary_text, name)
+        if not p_any:
+            continue
+        # Named by a word match. A common word (round, scale, ...) may match the word rather than the unit: the hit count is recorded for review.
+        state = 'missing' if not s_any else 'named'
+        items.append({'class': 'p4_summary', 'id': f'p4:{name}', 'name': name, 'failed': state == 'missing', 'match': 'name', 'state': state, 'summary_word_hits': s_any})
+    return items, None
