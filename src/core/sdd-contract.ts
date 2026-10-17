@@ -45,7 +45,15 @@ export interface DeliveryDraft {
    * revised in this round. Not carried: each round writes its own.
    */
   changes?: ChangeEntry[]
+  /**
+   * Where the original requirements say different things about the same thing (two inputs, or a general rule
+   * and a specific one): the passages that disagree, the ruling, and the basis for it. Code delivers the
+   * passages verbatim with the update each comes from. Not carried: each round writes its own.
+   */
+  conflicts?: ConflictEntry[]
 }
+/** One inconsistency in the original requirements as the model reads it. */
+export interface ConflictEntry { subject: string; items: string[]; passages: SegmentRef[]; ruling: string; basis: string }
 /** An original passage, by the segment ids the request lists. */
 export interface SegmentRef { source_id: string; segment_id: string }
 /** An original passage as delivered: the segment's verbatim text and the user input (1-based) it comes from. */
@@ -153,7 +161,7 @@ export interface DeliveryContract {
   fields: Array<FieldObject & { revisions: ItemRevisions; carried: boolean }>
   acceptance: Array<AcceptanceSubject & { revisions: ItemRevisions; carried: boolean }>
   effective: Array<{ task_id: string; revision: number; entry: EffectiveStatement; carried: boolean }>
-  dropped: Array<{ kind: "field" | "acceptance" | "effective" | "executable" | "change"; name: string; reason: string }>
+  dropped: Array<{ kind: "field" | "acceptance" | "effective" | "executable" | "change" | "conflict"; name: string; reason: string }>
   /**
    * Executable examples written by the separate examples call: tier "verbatim"
    * (every expected value written by the requirements) and tier "derived"

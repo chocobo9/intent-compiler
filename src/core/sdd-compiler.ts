@@ -17,7 +17,7 @@ import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
 import { carryExecutable, executableSection, itemOf, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
 import { quoteBlock, refList, resolveQuotes, segmentIndex } from "./sdd-quotes.js"
 import { ledgerRevisions, markFactsValid, purge } from "./sdd-revisions.js"
-import type { AcceptanceSubject, DraftAcceptance } from "./sdd-contract.js"
+import type { AcceptanceSubject, ConflictEntry, DraftAcceptance, Quote } from "./sdd-contract.js"
 
 const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b)
 function requireThat(value: unknown, message: string): asserts value { if (!value) throw Error(message) }
@@ -368,6 +368,8 @@ export class SddCompiler {
     // This round's change list (not in the first delivery, where everything is new): the model's entries settled by code against the IR change.
     const settled = Object.keys(s.ir).length ? settleChanges(draft.changes ?? [], changedItems(s.ir, ir, excluded), { index, cut, input, previous: s.ir, current: ir }) : { changes: [], dropped: [] }
     contract.dropped.push(...settled.dropped)
+    // Inconsistencies in the original the model rules on: its ruling and basis, the passages as code quotes them.
+    const conflicts = delivered.length ? settleConflicts(draft.conflicts ?? [], index, cut, now, plan.toWrite, contract.dropped) : []
     // The revision ledger: earlier revisions still open, and this update's.
     const revisions = ledgerRevisions(previous?.revisions, settled.changes, s, ir, b.event_id, input)
     // Requirements the starting code does not meet, from the store's run results (code, not model).
@@ -401,12 +403,12 @@ export class SddCompiler {
       namesAdded.push(...completed.added)
       const head = baseline ? `${INCREMENTAL_HEADER}\n` : `${ACCUMULATED_HEADER}\n`
       const body = baseline ? `${baselineSection(baseline)}${shown.slice(ACCUMULATED_HEADER.length)}` : reference.slice(ACCUMULATED_HEADER.length)
-      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
+      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${conflictSection(conflicts)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
     }
     const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract,
       ...(delivered.length ? { reference_text: reference } : {}),
       ...(baseline ? { baseline_prd: { run_id: baseline.run_id, event_id: baseline.event_id, input: baseline.input, digest: baseline.digest, chars: baseline.text.length } } : {}),
-      ...(settled.changes.length ? { changes: settled.changes } : {}), ...(Object.keys(s.ir).length && draft.changes === undefined ? { changes_not_given: true } : {}), ...(ledger.length ? { ledger } : {}), ...(emptyObjects.length ? { field_objects_left_out: emptyObjects } : {}), ...(namesAdded.length ? { field_names_added: namesAdded } : {}) }
+      ...(settled.changes.length ? { changes: settled.changes } : {}), ...(conflicts.length ? { conflicts } : {}), ...(Object.keys(s.ir).length && draft.changes === undefined ? { changes_not_given: true } : {}), ...(ledger.length ? { ledger } : {}), ...(emptyObjects.length ? { field_objects_left_out: emptyObjects } : {}), ...(namesAdded.length ? { field_names_added: namesAdded } : {}) }
     return { ...content, ref: { id: `ci-${digestText(this.runId + ":" + b.event_id).slice(0, 24)}`, revision: 1, digest: digestOf(content) } }
   }
   /** Durable claim precedes any external preparation. Repeating a claim never grants a second launch. */
@@ -629,9 +631,39 @@ export function completeFields(fields: DeliveryDraft["fields"], delivered: strin
 
 export const OTHER_NAMES = "Other names the requirements write (listed by code)"
 
+/** A conflict as delivered: the model's ruling and basis, its passages quoted by code. */
+export interface SettledConflict { subject: string; items: string[]; quotes: Quote[]; ruling: string; basis: string }
+
+/**
+ * The model's conflict entries, settled by code. Ruling and basis are required (a ruling without its basis is
+ * rejected). An entry is left out, and recorded, when it names no current item this round writes, or when fewer
+ * than two of its passages remain to quote (a passage this delivery cuts was already settled by a later update).
+ */
+export function settleConflicts(entries: readonly ConflictEntry[], index: ReturnType<typeof segmentIndex>,
+  cut: (q: { source_id: string; start: number; end: number }) => boolean, now: ReturnType<typeof currentRevisions>, toWrite: readonly string[],
+  dropped: DeliveryContract["dropped"]): SettledConflict[] {
+  return entries.flatMap(e => {
+    requireThat(e.ruling.trim().length > 0 && e.basis.trim().length > 0, `Conflict "${e.subject}": give both the ruling and its basis (a later update governs the part it changes; a specific rule takes precedence over a general one)`)
+    const items = [...new Set(e.items.map(id => itemOf(id, now)).filter((id): id is string => id !== undefined))]
+    if (!items.some(id => toWrite.includes(id))) { dropped.push({ kind: "conflict", name: e.subject, reason: "names no requirement this round writes" }); return [] }
+    const resolved = resolveQuotes(e.passages, index, cut)
+    if (resolved.quotes.length < 2) { dropped.push({ kind: "conflict", name: e.subject, reason: `fewer than two passages to quote (${resolved.dropped.join("; ") || "one passage given"})` }); return [] }
+    return [{ subject: e.subject.trim(), items, quotes: resolved.quotes, ruling: e.ruling.trim(), basis: e.basis.trim() }]
+  })
+}
+
+export function conflictSection(conflicts: readonly SettledConflict[]): string {
+  if (!conflicts.length) return ""
+  const body = conflicts.map(c => `## ${c.subject}\n${quoteBlock(c.quotes)}\n\n- Ruling: ${c.ruling}\n- Basis: ${c.basis}`).join("\n\n")
+  return `# Inconsistencies in the original requirements\n${CONFLICT_NOTE}\n\n${body}\n\n`
+}
+
+export const CONFLICT_NOTE = "The original requirements say different things in the places below. Each passage is quoted verbatim with the user update it comes from; management's ruling and its basis follow. Carry the ruling into the PRD and implement it; the passages themselves stay authoritative as written."
+
 export function fieldSection(fields: DeliveryDraft["fields"]): string {
   const cell = (v: string) => v.replace(/\|/gu, "\\|").replace(/\r?\n/gu, " ").trim()
-  const body = fields.map(o => `## ${o.object.trim()}\n| Field | Type | Required | Meaning |\n|---|---|---|---|\n${o.fields.map(f => `| \`${cell(f.field)}\` | ${cell(f.type)} | ${cell(f.required)} | ${cell(f.meaning)} |`).join("\n")}`).join("\n\n")
+  const required = (v: string) => v === "not stated" ? "not stated in the original (a sample value is not a constraint)" : v
+  const body = fields.map(o => `## ${o.object.trim()}\n| Field | Type | Required | Meaning |\n|---|---|---|---|\n${o.fields.map(f => `| \`${cell(f.field)}\` | ${cell(f.type)} | ${cell(required(f.required))} | ${cell(f.meaning)} |`).join("\n")}`).join("\n\n")
   return `# Interface and data: field dictionary\n${FIELD_NOTE}\n\n${body}\n\n`
 }
 
