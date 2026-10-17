@@ -104,6 +104,10 @@ def stop_record(trial, completion, promotion):
     marker = Path(trial) / 'watchdog.json'
     if marker.exists():
         tool.append('watchdog: ' + json.loads(marker.read_text(encoding='utf-8')).get('reason', 'request hang'))
+    # The same hang stopped by the operator before the watchdog existed (v6 pilot R1, user decision).
+    operator = Path(trial) / 'operator-stop.json'
+    if operator.exists():
+        tool.append('operator stop: ' + json.loads(operator.read_text(encoding='utf-8')).get('reason', 'request hang'))
     log = run / 'flow.log'
     text = log.read_text(encoding='utf-8', errors='replace') if log.exists() else ''
     if re.search(r'timed? ?out|timeout|killed|terminated', text, re.I):

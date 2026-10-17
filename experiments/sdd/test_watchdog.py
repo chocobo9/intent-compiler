@@ -43,3 +43,10 @@ def test_a_watchdog_stop_is_a_tool_fault(tmp_path):
     (t / 'watchdog.json').write_text(json.dumps({'reason': 'no model activity for 41 minutes (limit 40): request hang'}))
     stop = costs.stop_record(t, {'results': {'design': {}}}, {'failure': {'stopped_stage': 'specart', 'stage_conclusion': '<!--VERDICT:{"skill":"specart","pass":true}-->'}})
     assert stop['class'] == 'T' and any('watchdog' in f for f in stop['tool_fault'])
+
+
+def test_a_hang_stopped_by_the_operator_is_a_tool_fault_too(tmp_path):
+    t = trial(tmp_path)
+    (t / 'operator-stop.json').write_text(json.dumps({'reason': 'model stream returned nothing for 30 minutes: request hang'}))
+    stop = costs.stop_record(t, {'results': {'design': {}}}, {'failure': {'stopped_stage': 'specart', 'stage_conclusion': ''}})
+    assert stop['class'] == 'T' and any(f.startswith('operator stop:') for f in stop['tool_fault'])
