@@ -114,7 +114,10 @@ def acceptance_result(value):
                 for it in post if it.get('failed') and it['class'] in closed]
     recorded += [{'id': it['id'], 'subject': f"p3_regression: {it['name']}", 'observed': '; '.join(it.get('diffs', []))} for it in (a.get('recorded_p3') or {}).get('items', []) if it.get('failed')]
     recorded += [{'id': it['id'], 'subject': f"p4_summary: {it['name']}", 'observed': 'named by the PRD, not by the SpecArt summary'} for it in (a.get('recorded_p4') or {}).get('items', []) if it.get('failed')]
-    return {'outcome': a['outcome'], 'checks': a['checks'],
+    # C2: what a revision may be confirmed by: P1/P2 checks of classes the gate opens that pass on the code this run returns.
+    verified = [{'class': it['class'], 'name': it['name'], 'output_keys': it.get('output_keys') or []} for it in post
+                if not it.get('failed') and it['class'] in ('p1_stub', 'p2_structure') and it['class'] not in closed and it.get('state', 'compared') == 'compared']
+    return {'outcome': a['outcome'], 'checks': a['checks'], **({'verified': verified} if verified else {}),
             'open': [{'id': i, 'subject': info.get(i, {}).get('subject', i), 'observed': info.get(i, {}).get('observed', '')} for i in open_ids],
             **({'recorded': recorded} if recorded else {})}
 

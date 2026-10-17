@@ -269,7 +269,9 @@ export interface SddResult {
   example_results?: Array<{ id: string; passed: boolean; failures: string[] }>
   /** IC's in-round acceptance of the returned code (static unit check, code-built error probes): checks still failing. */
   /** recorded: findings IC records but never feeds back (P1/P2 of classes the V2 gate keeps closed, P3 suspected regressions, P4 summary gaps). */
-  acceptance?: { outcome: string; checks: number; open: Array<{ id: string; subject: string; observed: string }>; recorded?: Array<{ id: string; subject: string; observed: string }> }
+  acceptance?: { outcome: string; checks: number; open: Array<{ id: string; subject: string; observed: string }>; recorded?: Array<{ id: string; subject: string; observed: string }>;
+    /** C2: P1/P2 checks of classes the V2 gate opens that pass on this run's code (P2 with the key names its output holds). */
+    verified?: Array<{ class: string; name: string; output_keys: string[] }> }
   reason: string
 }
 export interface SddRun {

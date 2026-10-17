@@ -13,22 +13,21 @@ const change = (over: Partial<SettledChange> = {}): SettledChange => ({ kind: "r
   now: [quote(5, "verify now uses BLAKE2b-256 (previously SHA256)")], old_values: ["SHA256"], new_values: ["BLAKE2b-256"], parameters: [], ...over })
 const ir = (items: Record<string, number>) => ({ t: { task_id: "t", content: Object.entries(items).map(([item_id, revision]) => ({ item_id, revision, text: item_id })) } }) as never
 
-test("a revision opens, is carried, and closes when every example written for its items passes on returned code", () => {
+test("a revision opens, is carried, and closes only when a gate-open structure check passes with a new value among its keys", () => {
   const empty = { runs: [], batches: [] } as never
-  const opened = ledgerRevisions(undefined, [change()], empty, ir({ "r-verify": 1 }), "r5-user-input", 5)
-  assert.deepEqual(opened.map(r => [r.id, r.state, r.revisions]), [["r5-user-input#1", "open", { "r-verify": 1 }]])
-  // R6: no example ran yet — still open, carried.
-  assert.equal(ledgerRevisions(opened, [], empty, ir({ "r-verify": 1 }), "r6-user-input", 6)[0]!.state, "open")
-  const example = (id: string, revision: number, expect = "VERIFIED with a BLAKE2b-256 checksum") => ({ id, subject: "verify", items: ["r-verify"], revisions: { "r-verify": revision }, tier: "verbatim", given: "", expect, carried: false })
-  // An example for its items that does not state the new value does not exercise the change.
-  const unrelated = { batches: [{ delivery: { ref: { id: "c5" }, contract: { executable: [example("r5:2", 1, "ERROR: file not found")] } } }],
-    runs: [{ run_id: "run5", event_id: "r5-user-input", ci_ref: { id: "c5" }, result: { example_results: [{ id: "r5:2", passed: true, failures: [] }] } }] } as never
-  assert.equal(ledgerRevisions(opened, [], unrelated, ir({ "r-verify": 1 }), "r6-user-input", 6)[0]!.state, "open")
-  const store = (passed: boolean) => ({ batches: [{ delivery: { ref: { id: "c5" }, contract: { executable: [example("r5:1", 1), example("r1:3", 0)] } } }],
-    runs: [{ run_id: "run5", event_id: "r5-user-input", ci_ref: { id: "c5" }, result: { example_results: [{ id: "r5:1", passed, failures: [] }, { id: "r1:3", passed: false, failures: [] }] } }] }) as never
-  assert.equal(ledgerRevisions(opened, [], store(false), ir({ "r-verify": 1 }), "r6-user-input", 6)[0]!.state, "open")
-  const closed = ledgerRevisions(opened, [], store(true), ir({ "r-verify": 1 }), "r6-user-input", 6)[0]!
-  assert.equal(closed.state, "confirmed"); assert.match(closed.closed!.reason, /1 executable example/u)
+  const manifest = change({ subjects: ["manifest"], old_values: ["sha256"], new_values: ["checksum", "algorithm"], items: ["r-m"] })
+  const opened = ledgerRevisions(undefined, [manifest], empty, ir({ "r-m": 1 }), "r10-user-input", 10)
+  assert.deepEqual(opened.map(r => [r.id, r.state]), [["r10-user-input#1", "open"]])
+  const run = (verified: unknown[], example_results: unknown[] = []) => ({ batches: [], runs: [{ run_id: "run10", event_id: "r10-user-input", ci_ref: { id: "c10" }, result: { example_results, acceptance: { outcome: "adopted", checks: 1, open: [], verified } } }] }) as never
+  // IC's own examples passing no longer confirm it (C2).
+  assert.equal(ledgerRevisions(opened, [], run([], [{ id: "r10:1", passed: true, failures: [] }]), ir({ "r-m": 1 }), "r11-user-input", 11)[0]!.state, "open")
+  assert.equal(ledgerRevisions(opened, [], run([{ class: "p2_structure", name: "manifest", output_keys: ["files", "path", "sha256"] }]), ir({ "r-m": 1 }), "r11-user-input", 11)[0]!.state, "open", "the new key is absent")
+  assert.equal(ledgerRevisions(opened, [], run([{ class: "p1_stub", name: "manifest", output_keys: [] }]), ir({ "r-m": 1 }), "r11-user-input", 11)[0]!.state, "open", "a stub check does not see values")
+  const closed = ledgerRevisions(opened, [], run([{ class: "p2_structure", name: "manifest", output_keys: ["files", "path", "checksum", "algorithm"] }]), ir({ "r-m": 1 }), "r11-user-input", 11)[0]!
+  assert.equal(closed.state, "confirmed"); assert.match(closed.closed!.reason, /manifest output structure check passed/u)
+  // A value change no check sees (verify's digest) stays open.
+  const digest = ledgerRevisions(undefined, [change()], empty, ir({ "r-verify": 1 }), "r5-user-input", 5)
+  assert.equal(ledgerRevisions(digest, [], run([{ class: "p2_structure", name: "verify", output_keys: [] }]), ir({ "r-verify": 1 }), "r6-user-input", 6)[0]!.state, "open")
 })
 
 test("a later revision of the same subjects replacing a value it set supersedes it; withdrawn items close it too", () => {

@@ -15,7 +15,7 @@ import { currentRevisions, narrowedItems, planCarry, previousContract } from "./
 import { computeLedger, fedBack, ledgerSection } from "./sdd-ledger.js"
 import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
 import { carryExecutable, executableSection, itemOf, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
-import { quoteBlock, resolveQuotes, segmentIndex } from "./sdd-quotes.js"
+import { quoteBlock, refList, resolveQuotes, segmentIndex } from "./sdd-quotes.js"
 import { ledgerRevisions, markFactsValid, purge } from "./sdd-revisions.js"
 import type { AcceptanceSubject, DraftAcceptance } from "./sdd-contract.js"
 
@@ -401,7 +401,7 @@ export class SddCompiler {
       namesAdded.push(...completed.added)
       const head = baseline ? `${INCREMENTAL_HEADER}\n` : `${ACCUMULATED_HEADER}\n`
       const body = baseline ? `${baselineSection(baseline)}${shown.slice(ACCUMULATED_HEADER.length)}` : reference.slice(ACCUMULATED_HEADER.length)
-      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance)}${ledgerSection(fedBack(ledger), ir)}${body}`
+      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
     }
     const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract,
       ...(delivered.length ? { reference_text: reference } : {}),
@@ -628,13 +628,15 @@ export function fieldSection(fields: DeliveryDraft["fields"]): string {
 
 export const FIELD_NOTE = "Management derived this dictionary from the original requirements that follow, for the PRD's interface-and-data section. Each field name is part of the external interface (command-line options, file and configuration keys, output fields) and must be kept and implemented exactly as written."
 
-export function acceptanceSection(acceptance: AcceptanceSubject[]): string {
+export function acceptanceSection(acceptance: AcceptanceSubject[], deliveredFrom = 1): string {
   if (!acceptance.length) return ""
-  const body = acceptance.map(a => `## ${a.subject.trim()}\n${a.examples.map((e, i) => [`Example ${i + 1}`, ...(e.given.trim() ? [`Given:\n${e.given.trim()}`] : []), ...(e.expect.trim() ? [`Expect:\n${e.expect.trim()}`] : [])].join("\n")).join("\n\n")}`).join("\n\n")
+  // C1 (v6): examples name the passages they rest on; the original text is delivered once, below.
+  const part = (label: string, quotes: AcceptanceSubject["examples"][number]["given_quotes"], text: string) => quotes?.length ? [`${label}:\n${refList(quotes, deliveredFrom)}`] : text.trim() ? [`${label}:\n${text.trim()}`] : []
+  const body = acceptance.map(a => `## ${a.subject.trim()}\n${a.examples.map((e, i) => [`Example ${i + 1}`, ...part("Given", e.given_quotes, e.given), ...part("Expect", e.expect_quotes, e.expect)].join("\n")).join("\n\n")}`).join("\n\n")
   return `# Acceptance examples\n${ACCEPTANCE_NOTE}\n\n${body}\n\n`
 }
 
-export const ACCEPTANCE_NOTE = "Management selected these passages of the original requirements per command and operation: an input the requirements give and the result they state. Every passage is quoted verbatim from the user update named; every name, key, value, fixed text and exit code in it must be implemented exactly so. The original requirements remain the full specification."
+export const ACCEPTANCE_NOTE = "Management lists, per command and operation, the passages of the original requirements that give an input and the result they state. Each passage is named by its user update and opening words and is found in the original text below (an update the PRD baseline stands for is covered by the PRD); every name, key, value, fixed text and exit code in it must be implemented exactly so."
 
 export interface EffectivePlacement { item: ContentItem; entry: DeliveryDraft["tasks"][number]["effective"][number] }
 type Spans = Map<string, Array<{ start: number; end: number; item: ContentItem }>>

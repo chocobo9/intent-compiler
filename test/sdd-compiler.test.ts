@@ -278,7 +278,9 @@ test("acceptance examples quote the cited passages verbatim; a reference no inpu
   const d = await compile(f)
   assert.ok(d.text.startsWith("# Accumulated original user requirements\nApply each update in order. Later explicit revisions replace only the affected earlier requirements.\n\n# Interface and data: field dictionary\n"))
   const s3 = CANDIDATE_EXAMPLE_INPUT.split("\n\n")[2]!
-  assert.ok(d.text.includes(`## tool\nExample 1\nGiven:\n(user update 1)\n> ${s3.split("\n")[0]}`))
+  // C1: the example names its passages; the original text is delivered once, below.
+  assert.ok(d.text.includes(`## tool\nExample 1\nGiven:\n- update 1, paragraph «${s3.trim().replace(/\s+/gu, " ").slice(0, 60)}`))
+  assert.equal(d.text.split(s3.trim()).length - 1, 1, "the cited paragraph appears once, in the original")
   assert.ok(d.text.indexOf("# Acceptance examples\n") < d.text.indexOf("## Original user update 1\n"))
   assert.ok(d.text.includes(`## Original user update 1\n\n${CANDIDATE_EXAMPLE_INPUT}\n`))
   assert.equal(d.contract.acceptance[0]!.examples.length, 1)
@@ -563,7 +565,9 @@ test("the change list quotes the cited passages, keeps only values and subjects 
   const ledger = [{ id: "x#1", kind: "acceptance", subject: "verify mismatch", items: [], revisions: {}, first_failed: "r1", last: { event_id: "r1", run_id: "run", passed: false, observed: "printed nothing" }, state: "open" }] as never
   const section = changeSection(changes, [], ledger, after, "r2")
   assert.match(section, /^# Changes in this update\n/u)
-  assert.match(section, /## Changed: verify digest\nReplaced: `SHA256` → `BLAKE2b-256`\nBefore \(original text\):\n\(user update 1\)\n> ### verify\n> Computes SHA-256 of `--file`.\nNow:\n\(user update 2\)\n> Behavior change/u)
+  assert.match(section, /## Changed: verify digest\nReplaced: `SHA256` → `BLAKE2b-256`\nBefore \(original passages\):\n- update 1, paragraph «### verify Computes SHA-256 of `--file`\.»\nNow:\n- update 2, paragraph «Behavior change/u)
+  // With a PRD baseline standing for update 1, its passage is named, not attached (D1).
+  assert.match(changeSection(changes, [], [], after, "r2", 2), /Before \(original passages\):\n- update 1 \(stands in the PRD baseline\)/u)
   assert.match(section, /## New: clip\nListed by code/u); assert.match(section, /## Not yet met: verify mismatch[\s\S]*printed nothing/u)
 })
 test("a runs example is kept only when it uses the requirement's own sample, and asserts that it runs", async () => {

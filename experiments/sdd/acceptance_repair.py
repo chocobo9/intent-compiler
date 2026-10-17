@@ -111,7 +111,7 @@ def accept(main, texts, gate=None):
         if it['failed']:
             prefix = 'p1' if it['class'] == 'p1_stub' else 'p2'
             failures[f"{prefix}:{it['name']}"] = {'kind': it['class'], 'name': it['name'], 'static': it.get('static'), 'stderr': it.get('stderr', ''), 'problems': it.get('problems', [])}
-    recorded = [{k: it.get(k) for k in ('class', 'id', 'name', 'failed', 'run_state', 'agree', 'state', 'problems', 'input')} | {'static': (it.get('static') or {}).get('where')} for it in post]
+    recorded = [{k: it.get(k) for k in ('class', 'id', 'name', 'failed', 'run_state', 'agree', 'state', 'problems', 'input', 'output_keys')} | {'static': (it.get('static') or {}).get('where')} for it in post]
     withheld = {k: v for k, v in failures.items() if gate.get(check_class(k), 'open') != 'open'}
     sent = ordered({k: v for k, v in failures.items() if k not in withheld})
     return sent, {'build_exit': res['build_exit'], 'checks': len(named) + len(ps) + len(post), 'recorded': recorded, 'withheld': sorted(withheld), 'gate': gate}

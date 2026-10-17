@@ -331,7 +331,9 @@ def structure_item(command, expected, observed, out_name, result, ran):
     except ValueError:
         return {**base, 'failed': True, 'state': 'output is not JSON', 'problems': ['output is not JSON']}
     problems = compare_shape(expected, actual)
-    return {**base, 'failed': bool(problems), 'state': 'compared', 'problems': problems}
+    # The key names the output holds: what a revision that renames or adds keys is confirmed by (C2).
+    keys = sorted({p.rsplit('.', 1)[-1].replace('[]', '') for p in shape(actual) if '.' in p})
+    return {**base, 'failed': bool(problems), 'state': 'compared', 'problems': problems, 'output_keys': keys}
 
 
 # ---------- P3 cross-round regression ----------

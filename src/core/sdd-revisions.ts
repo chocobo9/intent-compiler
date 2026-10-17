@@ -28,21 +28,18 @@ export function ledgerRevisions(previous: RevisionEntry[] | undefined, settled: 
 }
 
 /**
- * Code's confirmation: the latest run whose code counts returned results for
- * executable examples written for this revision's items at or after it, at
- * least one, and every one passed. Undefined otherwise.
+ * Code's confirmation (C2, v6): the latest run whose code counts has a check of a class the V2 gate
+ * opens that passes for one of the revision's subjects and holds a new value it set: a P2 structure
+ * check whose output carries a new value as a key. IC's own examples alone never confirm a revision;
+ * a change no such check sees stays open until a later input supersedes it.
  */
 function confirmation(r: RevisionEntry, s: SddSnapshot): string | undefined {
   const run = s.runs.filter(x => x.result && !x.superseded && !x.voided).at(-1)
-  if (!run) return undefined
-  const delivery = s.batches.find(b => b.delivery?.ref.id === run.ci_ref.id)?.delivery
-  // Written for its items at or after it; where it states new values, only examples stating one exercise the change.
-  const examples = (delivery?.contract.executable ?? []).filter(e => Object.entries(r.revisions).some(([id, rev]) => (e.revisions[id] ?? -1) >= rev)
-    && (!r.new_values.length || r.new_values.some(v => holdsValue(exampleText(e), v))))
-  if (!examples.length) return undefined
-  const results = new Map((run.result!.example_results ?? []).map(x => [x.id, x.passed]))
-  if (!examples.every(e => results.get(e.id) === true)) return undefined
-  return `all ${examples.length} executable example(s) written for its items passed on the code of ${run.run_id}`
+  if (!run || !r.subjects.length || !r.new_values.length) return undefined
+  const subjects = new Set(r.subjects.map(normValue))
+  const hit = (run.result!.acceptance?.verified ?? []).find(v => v.class === "p2_structure" && subjects.has(normValue(v.name))
+    && r.new_values.some(n => v.output_keys.some(k => normValue(k) === normValue(n))))
+  return hit ? `the ${hit.name} output structure check passed on the code of ${run.run_id}, with ${r.new_values.filter(n => hit.output_keys.some(k => normValue(k) === normValue(n))).join(", ")} among its keys` : undefined
 }
 
 /** The open revision a piece of an entry breaks: the entry names one of its subjects and the piece holds a value it replaced, unless the piece quotes that update or a later one. */

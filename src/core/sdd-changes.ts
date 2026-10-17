@@ -2,7 +2,7 @@ import type { TaskIntent } from "./intent-contract.js"
 import type { ChangeEntry, DeliveryContract, LedgerEntry, Quote, RevisionEntry, SettledChange } from "./sdd-contract.js"
 import { itemOf } from "./sdd-executable.js"
 import { currentRevisions } from "./sdd-increment.js"
-import { holdsValue, normValue, quoteBlock, resolveQuotes, type segmentIndex } from "./sdd-quotes.js"
+import { holdsValue, normValue, refList, resolveQuotes, type segmentIndex } from "./sdd-quotes.js"
 
 type Index = ReturnType<typeof segmentIndex>
 /** Earlier passages code takes for a revision's before. */
@@ -94,7 +94,7 @@ export function settleChanges(entries: ChangeEntry[], changed: Map<string, { exi
 }
 
 /** The change-list section placed first in the delivered text: this update's changes, revisions still open, then earlier requirements the starting code does not meet. */
-export function changeSection(changes: SettledChange[], revisions: RevisionEntry[], ledger: LedgerEntry[], current: Record<string, TaskIntent>, eventId: string): string {
+export function changeSection(changes: SettledChange[], revisions: RevisionEntry[], ledger: LedgerEntry[], current: Record<string, TaskIntent>, eventId: string, deliveredFrom = 1): string {
   const open = ledger.filter(e => e.state === "open")
   const carried = revisions.filter(r => r.state === "open" && r.event_id !== eventId)
   if (!changes.length && !carried.length && !open.length) return ""
@@ -104,8 +104,9 @@ export function changeSection(changes: SettledChange[], revisions: RevisionEntry
     ...(c.filled_by_code ? ["Listed by code from this update's IR change; quotes the original."] : []),
     ...(c.old_values.length || c.new_values.length ? [`Replaced: ${c.old_values.map(v => `\`${v}\``).join(", ") || "-"} → ${c.new_values.map(v => `\`${v}\``).join(", ") || "-"}`] : []),
     ...(c.parameters.length ? [`Parameters: ${c.parameters.join(", ")}`] : []),
-    ...(c.before.length ? [`Before (original text):\n${quoteBlock(c.before)}`] : []),
-    ...(c.now.length ? [`${c.kind === "revised" ? "Now" : "Original text"}:\n${quoteBlock(c.now)}`] : []),
+    ...(c.before.length ? [`Before (original passages):\n${refList(c.before, deliveredFrom)}`] : []),
+    // A new command or operation is the update's own text, delivered below; a revision names where it now holds.
+    ...(c.now.length && c.kind === "revised" ? [`Now:\n${refList(c.now, deliveredFrom)}`] : []),
   ]
   const sections = [
     ...changes.map(c => [`## ${c.kind === "revised" ? "Changed" : "New"}: ${c.subject}`, ...body(c)].join("\n")),
@@ -117,4 +118,4 @@ export function changeSection(changes: SettledChange[], revisions: RevisionEntry
   ]
   return `# Changes in this update\n${CHANGES_NOTE}\n\n${sections.join("\n\n")}\n\n`
 }
-export const CHANGES_NOTE = "Management lists here, one by one, what this update changes in the requirements below (corrections of existing commands or operations, and new ones), changes of earlier updates it has not yet confirmed in the code, and earlier requirements the current code does not yet meet. Each entry is a separate requirement of this update: carry each into the PRD as its own item and make the code follow it. Every quoted passage is the user's original text, the authority."
+export const CHANGES_NOTE = "Management lists here, one by one, what this update changes in the requirements below (corrections of existing commands or operations, and new ones), changes of earlier updates it has not yet confirmed in the code, and earlier requirements the current code does not yet meet. Each entry is a separate requirement of this update: carry each into the PRD as its own item and make the code follow it. Passages are named by their user update and opening words; the user's original text below is the authority."

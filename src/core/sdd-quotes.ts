@@ -31,6 +31,27 @@ export function resolveQuotes(refs: readonly SegmentRef[], index: ReturnType<typ
   return { quotes, dropped }
 }
 
+/**
+ * C1 (v6): passages by reference, the original delivered once. A passage of an input this text delivers is
+ * named by its update and its opening words (the reader finds it below); one of an input the PRD baseline
+ * stands for is named by its update only (its text is not attached, D1).
+ */
+export function refList(quotes: readonly Quote[], deliveredFrom: number): string {
+  const opening = (q: Quote) => { const t = q.text.trim().replace(/\s+/gu, " "); return `«${t.slice(0, 60)}${t.length > 60 ? "…" : ""}»` }
+  // Consecutive paragraphs of one update are one range.
+  const runs: Quote[][] = []
+  for (const q of quotes) {
+    const last = runs.at(-1)?.at(-1)
+    if (last && last.source_id === q.source_id && Number(q.segment_id.slice(1)) === Number(last.segment_id.slice(1)) + 1) runs.at(-1)!.push(q)
+    else runs.push([q])
+  }
+  return runs.map(run => {
+    const first = run[0]!, last = run.at(-1)!
+    if (first.input < deliveredFrom) return `- update ${first.input} (stands in the PRD baseline)`
+    return run.length === 1 ? `- update ${first.input}, paragraph ${opening(first)}` : `- update ${first.input}, ${run.length} paragraphs from ${opening(first)} to ${opening(last)}`
+  }).filter((line, i, all) => all.indexOf(line) === i).join("\n")
+}
+
 /** Quotes as delivered: each passage verbatim, as a block quote under the update it comes from. */
 export function quoteBlock(quotes: readonly Quote[]): string {
   return quotes.map(q => `(user update ${q.input})\n${q.text.trim().split("\n").map(l => `> ${l}`).join("\n")}`).join("\n")
