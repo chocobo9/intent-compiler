@@ -5,6 +5,8 @@ import { currentRevisions } from "./sdd-increment.js"
 import { holdsValue, normValue, quoteBlock, resolveQuotes, type segmentIndex } from "./sdd-quotes.js"
 
 type Index = ReturnType<typeof segmentIndex>
+/** Earlier passages code takes for a revision's before. */
+export const BEFORE_LIMIT = 4
 type Cut = Parameters<typeof resolveQuotes>[2]
 
 /** The content items this update added or revised, delivered: id → whether an earlier accepted IR had the item, and its text. */
@@ -63,15 +65,30 @@ export function settleChanges(entries: ChangeEntry[], changed: Map<string, { exi
       ...e.new_values.filter(v => !newValues.includes(v)).map(v => `new value ${JSON.stringify(v)} is not written in now`),
       ...e.subjects.filter(x => !subjects.includes(x)).map(x => `subject ${JSON.stringify(x)} is not written in now`))
     if (!nowQuotes.length) nowQuotes.push(...items.flatMap(id => itemQuotes(context.current, id, n => n === context.input, context.index, context.cut)))
+    // M3 (v6): a revision whose answer cites no earlier passage gets it from code: the previous versions of its items,
+    // only the passages that name its subjects (or the words of its title), at most BEFORE_LIMIT.
+    let beforeByCode = false
+    if (e.kind === "revised" && !beforeQuotes.length) {
+      const names = (subjects.length ? subjects : [...e.subject.matchAll(/[A-Za-z_][A-Za-z0-9_-]{2,}/gu)].map(m => m[0])).map(normValue)
+      const scored = items.flatMap(id => itemQuotes(context.previous, id, n => n < context.input, context.index, () => false))
+        .map(q => ({ q, score: names.filter(n => holdsValue(q.text, n)).length })).filter(x => x.score > 0)
+      const best = scored.sort((a, b) => b.score - a.score).slice(0, BEFORE_LIMIT).map(x => x.q).sort((a, b) => a.input - b.input || Number(a.segment_id.slice(1)) - Number(b.segment_id.slice(1)))
+      beforeQuotes.push(...best)
+      beforeByCode = best.length > 0
+    }
+    // What a revision still lacks is recorded, so it can be traced; no rule asks the model to fill it.
+    const missing = e.kind !== "revised" ? [] : [...(beforeQuotes.length ? [] : ["before"]), ...(oldValues.length ? [] : ["old_values"]), ...(subjects.length ? [] : ["subjects"])]
     if (notes.length) dropped.push({ kind: "change", name: e.subject, reason: `kept with parts left out: ${notes.join("; ")}` })
-    changes.push({ kind: e.kind, subject: e.subject, items, subjects, before: beforeQuotes, now: nowQuotes, old_values: oldValues, new_values: newValues, parameters: e.parameters })
+    changes.push({ kind: e.kind, subject: e.subject, items, subjects, before: beforeQuotes, now: nowQuotes, old_values: oldValues, new_values: newValues, parameters: e.parameters,
+      ...(beforeByCode ? { before_by_code: true } : {}), ...(missing.length ? { missing } : {}) })
   }
   const covered = new Set(changes.flatMap(c => c.items))
   for (const [id, { existed, text }] of changed) {
     if (covered.has(id)) continue
     changes.push({ kind: existed ? "revised" : "added", subject: heading(text) || id, items: [id], subjects: [], old_values: [], new_values: [], parameters: [],
       now: itemQuotes(context.current, id, n => n === context.input, context.index, context.cut),
-      before: existed ? itemQuotes(context.previous, id, n => n < context.input, context.index, () => false) : [], filled_by_code: true })
+      before: existed ? itemQuotes(context.previous, id, n => n < context.input, context.index, () => false).slice(0, BEFORE_LIMIT) : [], filled_by_code: true,
+      ...(existed ? { missing: ["old_values", "subjects"] } : {}) })
   }
   return { changes, dropped }
 }

@@ -79,6 +79,10 @@ export interface SettledChange {
   new_values: string[]
   parameters: string[]
   filled_by_code?: boolean
+  /** before taken by code from the previous versions of the items (the answer cited none). */
+  before_by_code?: boolean
+  /** What a revision lacks (before, old_values, subjects): recorded for tracing, never asked of the model. */
+  missing?: string[]
 }
 /**
  * A revision carried with every delivery until code confirms the code meets it
