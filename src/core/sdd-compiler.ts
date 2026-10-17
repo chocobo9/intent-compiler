@@ -1,9 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync, renameSync, openSync, closeSync, unlinkSync, existsSync } from "node:fs"
 import { resolve } from "node:path"
-import { canonicalJson, digestOf, digestText, validateEvent, type CompilerEvent, type ContentItem, type Ref, type TaskIntent } from "./intent-contract.js"
+import { canonicalJson, digestOf, digestText, validateEvent, type CompilerEvent, type ContentItem, type Ref, type SourceRef, type TaskIntent } from "./intent-contract.js"
 import { prepareIntentIR } from "./parent-generation.js"
 import { resolveSourceRefs } from "./intent-compiler-v2.js"
-import { locateQuote, sourceSegments, userText } from "./source-payload.js"
+import { locateQuote, selectedSourceHistory, sourceSegments, userText } from "./source-payload.js"
 import { Ajv } from "ajv"
 import { createCompilerModelV2, V2_COMPILER_CONTRACT, type CompilerModelV2Input, type CompilerModelV2Result } from "../model/compiler-model-v2.js"
 import { buildGenerationSchema } from "../model/generation-schema.js"
@@ -146,7 +146,7 @@ export class SddCompiler {
             requireThat(proposed.ok && proposed.ir_proposal, proposed.error?.message ?? "No IR proposal")
             batch.parent = prepareIntentIR(input!, proposed.ir_proposal, candidate => resolveSourceRefs(candidate, s.events), candidate => ({
               ok: same(candidate.basis.event_ids, [eventId]), message: "IR basis must name this user update exactly",
-            }))
+            }), undefined, undefined, normativeHistoryOf(s))
             batch.state = "ci"
           } else if (stage === "ci") {
             record.call = await this.model.deliver(built.request as DeliveryRequest)
@@ -486,6 +486,15 @@ export class SddCompiler {
       r.result = structuredClone(result); r.state = "returned"; this.save(s)
     })
   }
+}
+
+/**
+ * Every span a content item of this run has selected: the content selections of
+ * the accepted batches and the current IR, as the source ledger reads them.
+ */
+export function normativeHistoryOf(s: SddSnapshot): SourceRef[] {
+  const log = s.batches.filter(b => b.state === "accepted" && b.parent).map(b => ({ status: "accepted", candidate: b.parent!.candidate }))
+  return [...selectedSourceHistory(log, s.ir).values()].flat()
 }
 
 /**

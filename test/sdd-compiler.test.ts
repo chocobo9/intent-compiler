@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { SddCompiler } from "../src/core/sdd-compiler.js"
+import { normativeHistoryOf, SddCompiler } from "../src/core/sdd-compiler.js"
 import { SddAdapter, type SddHost } from "../src/adapters/sdd.js"
 import type { SddModel } from "../src/model/sdd-model.js"
 import type { SddResult } from "../src/core/sdd-contract.js"
@@ -588,4 +588,12 @@ test("a runs example is kept only when it uses the requirement's own sample, and
   assert.equal(r.counts.runs_kept, 1); assert.equal(r.counts.runs_dropped, 1); assert.equal(r.counts.invalid_input, 1, "a blank line inside CSV data is an undecided input")
   assert.deepEqual(r.kept[0]!.asserts, [{ where: "either", mode: "absent", value: "ERROR", source: "runs" }, { where: "file:o.csv", mode: "exists", value: "", source: "runs" }])
   assert.equal(r.kept[0]!.exit_code, 0)
+})
+
+test("the run's selection history is read from accepted batches and the current IR only", () => {
+  const span = (start: number, end: number) => ({ source_id: "e1", digest: "sha256:x", span: { unit: "utf16" as const, start, end } })
+  const batch = (state: string, start: number, end: number) => ({ state, parent: { candidate: { groups: [{ task_refs: ["t"], ir_changes: [{ action: "create", target: "content", local_ref: "r", sources: [span(start, end)] }] }] } } })
+  const s = { batches: [batch("accepted", 0, 10), batch("rejected", 20, 30)], ir: { t: { task_id: "t", content: [{ item_id: "r", sources: [span(40, 50)] }] } } }
+  const history = normativeHistoryOf(s as never).map(ref => `${ref.span!.start}-${ref.span!.end}`)
+  assert.deepEqual(history.sort(), ["0-10", "40-50"])
 })

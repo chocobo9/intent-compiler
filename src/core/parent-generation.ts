@@ -763,6 +763,8 @@ export function prepareIntentIR(
   resolve: Options["resolve"], validateBasis: Options["validateBasis"],
   display: (id: string) => string = id => id,
   onSourceFailure?: (draft: IRProposal) => void,
+  /** Every span an item of this run has selected (see SourceCoverageOptions.history). */
+  history?: readonly SourceRef[],
 ): NonNullable<ParentGenerationState["parent"]> {
     const candidate: Candidate = {
       ...structuredClone(proposal),
@@ -817,6 +819,6 @@ export function prepareIntentIR(
     const carriedEventIds = new Set((input.carried_delegations ?? []).map((delegation) => delegation.event_id))
     const ownEventIds = new Set(input.events.filter(event => event.kind === "user_input" && !carriedEventIds.has(event.event_id)).map(event => event.event_id))
     validateSourceCoverage(candidate, input.events, sources, input.ir, ir,
-      { carriedEventIds, ownEventIds, display: (eventId) => display(eventId) })
+      { carriedEventIds, ownEventIds, display: (eventId) => display(eventId), ...(history ? { history } : {}) })
     return { ir, candidate, digest: digestOf(ir) }
 }

@@ -564,3 +564,47 @@ test("every carried delegation and every unassigned selection is reported togeth
   assert.throws(() => validateSourceCoverage(candidate(), [extra], [extra], {}, adopted),
     (error: Error) => /r1 has no matching/.test(error.message) && /r2 has no matching/.test(error.message) && error.message.split(" | ").length === 2)
 })
+
+// v6 R10 (series ic6-sdd-dpipe-15round-20261017-013343z-376e8abc, calls 14 and 22): a revision
+// re-selected "Recursively scans ..." without its bullet marker and was refused for dropping "-".
+test("a remainder of a dropped selection with no letter or digit is layout, not dropped text", () => {
+  const old = event("old", "### Manifest\n\n- Recursively scans the dir.\n- Writes a manifest.\n  ```json\n  {}\n  ```\n- Sorted by path.")
+  const previous = { t: task(item("r-m", [ref(old, "- Recursively scans the dir.\n- Writes a manifest.\n  ```json\n  {}\n  ```\n- Sorted by path.")])) }
+  // Only the bullet markers and the fence lines are left out.
+  const markers = { t: task(item("r-m", [ref(old, "Recursively scans the dir."), ref(old, "Writes a manifest."), ref(old, "{}"), ref(old, "Sorted by path.")])) }
+  assert.doesNotThrow(() => validateSourceCoverage(candidate(), [], [old], previous, markers))
+  // A remainder with words is still dropped text.
+  const words = { t: task(item("r-m", [ref(old, "Recursively scans the dir."), ref(old, "Sorted by path.")])) }
+  assert.throws(() => validateSourceCoverage(candidate(), [], [old], previous, words), /no current source or superseded entry covers utf16 \d+-\d+ \(segment s2\) "- Writes a manifest\."/)
+})
+
+// v6 R10 calls 6 and 13: the answer named again a sentence R5 had already withdrawn and was
+// refused as "not previously normative", although an item had selected it since R1.
+test("a superseded entry restating an earlier withdrawal is dropped; text no item ever selected still cannot be superseded", () => {
+  const old = event("old", "- Scans the dir.\n- Computes SHA-256.\n- Writes the sha256 field.\n\nBackground: why manifests exist.")
+  const next = event("next", "The sha256 field is replaced by checksum.")
+  const all = ref(old, "- Scans the dir.\n- Computes SHA-256.\n- Writes the sha256 field.")
+  // The item selected all three lines once; an earlier batch withdrew "- Computes SHA-256.".
+  const history = [all]
+  const previous = { t: task(item("r-m", [ref(old, "- Scans the dir."), ref(old, "- Writes the sha256 field.")])) }
+  const current = { t: task(item("r-m", [ref(old, "- Scans the dir.")])) }
+  const superseded = (source: SourceRef) => ({ source, disposition: "superseded" as const, requirements: [], reason: "Replaced by the update.", basis: [ref(next)] })
+  const answer = () => {
+    const c = candidate()
+    c.source_coverage!.push(superseded(ref(old, "- Computes SHA-256.")), superseded(ref(old, "- Writes the sha256 field.")))
+    return c
+  }
+  const c = answer()
+  assert.doesNotThrow(() => validateSourceCoverage(c, [next], [old, next], previous, current, { history }))
+  assert.deepEqual(c.source_coverage!.map(entry => entry.source.span), [ref(old, "- Writes the sha256 field.").span], "the restated withdrawal is dropped, the new one kept")
+  // Without the run's history the restatement cannot be told from text never adopted.
+  assert.throws(() => validateSourceCoverage(answer(), [next], [old, next], previous, current), /superseded source_coverage\[0\] was not previously normative text$/)
+  // Text no item ever selected stays refused with the history.
+  const never = answer()
+  never.source_coverage!.push(superseded(ref(old, "Background: why manifests exist.")))
+  assert.throws(() => validateSourceCoverage(never, [next], [old, next], previous, current, { history }), /superseded source_coverage\[2\] was not previously normative text$/)
+  // A withdrawal still has to cover what it withdraws: leaving the sha256 line out is a drop.
+  const dropped = candidate()
+  dropped.source_coverage!.push(superseded(ref(old, "- Computes SHA-256.")))
+  assert.throws(() => validateSourceCoverage(dropped, [next], [old, next], previous, current, { history }), /was dropped without an explicit superseded disposition.*"- Writes the sha256 field\."/)
+})

@@ -232,6 +232,13 @@ export interface SourceCoverageOptions {
    * destination in the source ledger, whether or not the batch changes the IR.
    */
   ownEventIds?: ReadonlySet<string>
+  /**
+   * Every span a content item of this run has selected at some time (the
+   * accepted batches' selections and the supplied IR), as `selectedSourceHistory`
+   * reads it.  Text in it was normative once; a superseded entry naming such
+   * text that the supplied IR no longer holds restates an earlier withdrawal.
+   */
+  history?: readonly SourceRef[]
 }
 
 /** Validate explicit dispositions and preserve previously adopted source text. */
@@ -246,7 +253,7 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     const text = texts.get(entry.source.source_id)
     try { const span = validSpan(entry.source, texts, display); return !headingOnly(text!, span.start, span.end) } catch { return true }
   })
-  const entries = candidate.source_coverage
+  let entries = candidate.source_coverage
   const currentIds = new Set(currentEvents.filter(event => userText(event) !== undefined).map(event => event.event_id))
   const taskIds = new Set(candidate.groups.flatMap(group => group.task_refs))
   const items = Object.entries(current).filter(([id]) => taskIds.has(id)).flatMap(([, task]) => task.content)
@@ -255,6 +262,9 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
   const oldSources = oldItems.flatMap(item => item.sources)
   const spansFor = (refs: readonly SourceRef[], sourceId: string) => refs.filter(ref => ref.source_id === sourceId).map(ref => validSpan(ref, texts, display))
   const superseded: SourceRef[] = []
+  // Superseded entries that only name text an earlier batch already withdrew.
+  const restated = new Set<SourceDisposition>()
+  const history = (options.history ?? []).filter(ref => { try { validSpan(ref, texts, display); return true } catch { return false } })
   const adoptedByItem = new Map<ContentItem, SourceRef[]>()
   // Selecting source text into an IR item is already the model's normative
   // adoption decision. Derive its exact destination rather than asking for a
@@ -308,12 +318,19 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
         // resolves inside the source set this batch's validation was given.  It
         // is not a claim about which sources the model request displayed.
         if (!basisOk) throw new Error(`superseded source_coverage[${index}] needs a resolvable source available to this batch as its change basis`)
-        if (!covered(text, span.start, span.end, spansFor(oldSources, entry.source.source_id))) throw new Error(`superseded source_coverage[${index}] was not previously normative text`)
+        const held = spansFor(oldSources, entry.source.source_id)
+        // Previously normative: held by the supplied IR, or selected by an item of this run before
+        // and withdrawn since.  Text no item ever selected still cannot be superseded.
+        if (!covered(text, span.start, span.end, [...held, ...spansFor(history, entry.source.source_id)])) throw new Error(`superseded source_coverage[${index}] was not previously normative text`)
+        // Nothing of it is in the supplied IR: an earlier batch already withdrew it, and naming it
+        // again withdraws nothing, so code drops the entry rather than judging it.
+        if (!held.some(old => substantive(Math.max(old.start, span.start), Math.min(old.end, span.end)))) { restated.add(entry); return }
         superseded.push(entry.source)
       }
     }
   })
   throwProblems(problems)
+  if (restated.size > 0) entries = candidate.source_coverage = entries.filter(entry => !restated.has(entry))
   // A carried delegation is an unresolved task from an earlier turn, not
   // background for this one.  It may be adopted, or explicitly deferred with a
   // reason, but it cannot be passed over in silence.
@@ -341,7 +358,9 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
     let span: NonNullable<SourceRef["span"]>
     try { span = validSpan(source, texts, display) } catch (error) { if (dropped.length > 0) throw droppedError(); throw error }
     const text = texts.get(source.source_id)!
-    const residual = residualRanges(text, span.start, span.end, [...spansFor([...activeSources, ...superseded], source.source_id), ...markdownHeadings(text)])
+    // A remainder with no letter or digit (a list marker, a fence) is layout, as the source ledger treats it.
+    const residual = residualRanges(text, span.start, span.end, [...spansFor([...activeSources, ...superseded], source.source_id), ...headingLines(text)])
+      .filter(range => /[\p{L}\p{N}]/u.test(text.slice(range.start, range.end)))
     if (residual.length === 0) continue
     dropped.push({ source_id: source.source_id, detail: `IR ${old.item_id} selected ${display(source.source_id)} utf16 ${span.start}-${span.end}; no current source or superseded entry covers ${listed(residual, LISTED_RANGES, range => rangeView(text, range), "; ")}` })
   }
