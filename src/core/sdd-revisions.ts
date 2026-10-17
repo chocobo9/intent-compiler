@@ -1,6 +1,6 @@
 import type { TaskIntent } from "./intent-contract.js"
 import type { AcceptanceSubject, DeliveryContract, ExecutableExample, FieldObject, ItemRevisions, LedgerEntry, RevisionEntry, SettledChange, SddSnapshot } from "./sdd-contract.js"
-import { currentRevisions } from "./sdd-increment.js"
+import { currentRevisions, dueForReview, REVISION_REVIEW_AFTER } from "./sdd-increment.js"
 import { factsOf, holdsValue, normValue } from "./sdd-quotes.js"
 
 /**
@@ -14,7 +14,7 @@ import { factsOf, holdsValue, normValue } from "./sdd-quotes.js"
  * recorded earlier) goes to review: the revision itself is to be checked, and
  * it is no longer delivered.
  */
-export const REVISION_REVIEW_AFTER = 2
+export { REVISION_REVIEW_AFTER }
 export function ledgerRevisions(previous: RevisionEntry[] | undefined, settled: SettledChange[], s: SddSnapshot, current: Record<string, TaskIntent>, eventId: string, input: number): RevisionEntry[] {
   const now = currentRevisions(current)
   const fresh: RevisionEntry[] = settled.filter(c => c.kind === "revised" && c.wording && !c.filled_by_code).map((c, k) => ({ ...c, id: `${eventId}#${k + 1}`, event_id: eventId, input,
@@ -29,7 +29,7 @@ export function ledgerRevisions(previous: RevisionEntry[] | undefined, settled: 
     const confirmed = confirmation(r, s)
     if (confirmed) { r.state = "confirmed"; r.closed = { event_id: eventId, reason: confirmed }; continue }
     if (!r.wording) { r.state = "review"; r.closed = { event_id: eventId, reason: "it rests on no words of its update saying a rule is replaced; the revision itself is to be checked" }; continue }
-    if (input - r.input > REVISION_REVIEW_AFTER) { r.state = "review"; r.closed = { event_id: eventId, reason: `not confirmed in the code after ${input - r.input - 1} later updates carried it; the revision itself is to be checked` } }
+    if (dueForReview(r, input)) { r.state = "review"; r.closed = { event_id: eventId, reason: `not confirmed in the code after ${input - r.input - 1} later updates carried it; the revision itself is to be checked` } }
   }
   return [...out, ...fresh]
 }

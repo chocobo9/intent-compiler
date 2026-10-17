@@ -130,3 +130,22 @@ test("only a worded revision opens an entry; one unconfirmed after two later upd
   const next = ledgerRevisions(old, [], empty, items, "r4-user-input", 4)[0]!
   assert.equal(next.state, "review"); assert.match(next.closed!.reason, /rests on no words of its update/u)
 })
+
+test("the items of a revision going to review are written again in that delivery, so a field object it cut is whole again", async () => {
+  const { planCarry } = await import("../src/core/sdd-increment.js")
+  const items = ir({ "r-profile": 1, "r-verify": 1 })
+  const profile = { object: "profile JSON output", items: ["r-profile"], revisions: { "r-profile": 1 }, carried: false, fields: [{ field: "p05", type: "number", required: "yes", meaning: "" }] }
+  const open = (over: Partial<RevisionEntry>) => ({ ...change(), id: "r3-user-input#1", event_id: "r3-user-input", input: 3, revisions: { "r-profile": 1 }, state: "open", ...over }) as RevisionEntry
+  const previous = (r: RevisionEntry) => ({ fields: [profile], acceptance: [], effective: [], dropped: [], revisions: [r] }) as never
+  // Recorded before revisions had to rest on words: due at the next input.
+  const unworded = open({ items: ["r-profile"], wording: undefined })
+  assert.deepEqual(planCarry(previous(unworded), items, items, new Set(), 4).toWrite, ["r-profile"])
+  assert.deepEqual(planCarry(previous(unworded), items, items).toWrite, [], "without the input number nothing is due")
+  // A worded one is carried by two later updates, then due.
+  const worded = open({ items: ["r-profile"] })
+  assert.deepEqual(planCarry(previous(worded), items, items, new Set(), 5).toWrite, [])
+  assert.deepEqual(planCarry(previous(worded), items, items, new Set(), 6).toWrite, ["r-profile"])
+  assert.deepEqual(planCarry(previous({ ...worded, state: "review" }), items, items, new Set(), 7).toWrite, [], "already under review: written once, at the round it went")
+  // The entry itself is still carried until the rewritten one of the same name replaces it.
+  assert.equal(planCarry(previous(unworded), items, items, new Set(), 4).fields[0]!.object, "profile JSON output")
+})

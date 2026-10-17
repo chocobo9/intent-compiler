@@ -78,7 +78,8 @@ def round_section(root, record, store, number):
     cost = record.get('cost') or {}
     mg = (cost.get('management') or {}).get('budgeted') or {}
     resumes = config.get('resumes') or []
-    build = config['ic']['source_head'][:7] + (f" + harness 刷新 {len(resumes)} 次（最近：{resumes[-1].get('at', '')[:16]}）" if resumes else '')
+    # The series' resumes are counted over its whole life; each replaces the harness at its start, never during a round.
+    build = config['ic']['source_head'][:7] + (f"；本轮由第 {len(resumes)} 次续跑启动（{resumes[-1].get('at', '')[:16]}，续跑开始时替换 harness、重编 IC）" if resumes else '')
     lines = [f'## R{number}（代码生成，{dt.datetime.now().astimezone().isoformat(timespec="minutes")}）', '',
              f"- IC 构建：`{build}`",
              f"- 官方：SDD 交回 {_sdd_score(sdd_official)} → 采用 {official.get('passed')}/{official.get('total')}；晋级 {(record.get('promotion') or {}).get('mode')}",

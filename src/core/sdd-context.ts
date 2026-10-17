@@ -404,7 +404,7 @@ function deliveryRequestOf(s: SddSnapshot, b: SddBatch, report: Report, shown: R
   const change = changeView(s.ir, prepared)
   const view = sourceView(s, b.event_id, [{ in: "ir", ir: prepared }, { in: "previous_versions", ir: change.previous_versions }], ledgerOf(s, prepared, b), prepared, report)
   const referenced = completeReferences(s, [prepared, change.previous_versions], listedEvents(view), report)
-  const plan = planCarry(previousContract(s, b), s.ir, prepared)
+  const plan = planCarry(previousContract(s, b), s.ir, prepared, new Set(), inputOf(s, b.event_id))
   const show = new Set([...plan.toWrite, ...shown])
   const request: DeliveryRequest = { request_view: SDD_REQUEST_VIEW, ir: prepared, ir_change: change, sources: view, history: historyView(s, b.event_id, prepared, report), feedback: feedbackView(s, report),
     referenced_objects: referenced, issues: b.error ? [b.error] : [], to_write: plan.toWrite,

@@ -11,7 +11,7 @@ import { normalizeIrProposal, type IrNormalization } from "./sdd-ir-normalize.js
 import { decodeSdd, SDD_DELIVERY_SCHEMA, SDD_CHECK_SCHEMA, SDD_EXAMPLES_SCHEMA, SDD_DERIVE_SCHEMA, type ExamplesRequest, type SddModel, type SddCheck } from "../model/sdd-model.js"
 import { SDD_PROFILE, type CIDelivery, type DeliveryContract, type DeliveryDraft, type RemovedPassage, type SddBatch, type SddCheckFinding, type SddRun, type SddResult, type SddSnapshot } from "./sdd-contract.js"
 import { checkRequest, deliveryRequest, irRequest, type CheckRequest, type ContextReport, type DeliveryRequest } from "./sdd-context.js"
-import { currentRevisions, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
+import { currentRevisions, inputOf, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
 import { computeLedger, fedBack, ledgerSection } from "./sdd-ledger.js"
 import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
 import { carryExecutable, executableSection, itemOf, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
@@ -227,7 +227,7 @@ export class SddCompiler {
     const stale = purge(d.contract.revisions ?? [], [], [], carriedAll)
     const carried = stale.executable
     dropped.push(...stale.dropped)
-    const toWrite = [...new Set([...planCarry(previous, s.ir, ir).toWrite, ...rewrite, ...stale.rewrite])].filter(id => !excluded.has(id))
+    const toWrite = [...new Set([...planCarry(previous, s.ir, ir, new Set(), inputOf(s, batch.event_id)).toWrite, ...rewrite, ...stale.rewrite])].filter(id => !excluded.has(id))
     const counts = { verbatim: 0, derived_kept: 0, derived_dropped: 0, not_checkable: 0, invalid_input: 0, runs_kept: 0, runs_dropped: 0 }
     let kept: NonNullable<DeliveryContract["executable"]> = []
     let state: "written" | "failed" | "skipped" = "written", reason: string | undefined
@@ -276,7 +276,7 @@ export class SddCompiler {
     const segments = new Map(sourceSegments(s.events).map(x => [`${x.source_id}|${x.segment_id}`, x]))
     // What this round writes (to_write) and what code carries, as the CI request stated it.
     const previous = previousContract(s, b)
-    const plan = planCarry(previous, s.ir, ir)
+    const plan = planCarry(previous, s.ir, ir, new Set(), inputOf(s, b.event_id))
     const delivered: ContentItem[] = []
     const dispositions = new Map<ContentItem, string>()
     const effective: EffectivePlacement[] = []
@@ -320,7 +320,7 @@ export class SddCompiler {
     // The final carry: entries of requirements not delivered now are dropped too.
     const now = currentRevisions(ir)
     const excluded = new Set([...dispositions].filter(([, d]) => d !== "assigned" && d !== "supported").map(([item]) => item.item_id))
-    const final = planCarry(previous, s.ir, ir, excluded)
+    const final = planCarry(previous, s.ir, ir, excluded, inputOf(s, b.event_id))
     // Bookkeeping is code's: an entry naming items that are not current, or describing only requirements
     // carried unchanged, is left out and recorded; a written entry replaces a carried one of the same name.
     const sorted: DeliveryContract["dropped"] = []
@@ -362,7 +362,7 @@ export class SddCompiler {
     const taskOf = (itemId: string) => Object.values(ir).find(t => t.content.some(c => c.item_id === itemId))!.task_id
     const contract: DeliveryContract = { fields: [], acceptance: [], effective: [], dropped: [...final.dropped, ...sorted] }
     const index = segmentIndex(s.events)
-    const input = s.events.filter(e => e.kind === "user_input").findIndex(e => e.event_id === b.event_id) + 1
+    const input = inputOf(s, b.event_id)
     // A passage this delivery cuts in part or whole is not quoted.
     const cut = (q: { source_id: string; start: number; end: number }) => removed.some(r => r.source_id === q.source_id && r.start < q.end && q.start < r.end)
     // This round's change list (not in the first delivery, where everything is new): the model's entries settled by code against the IR change.

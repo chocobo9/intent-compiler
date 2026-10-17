@@ -38,12 +38,22 @@ export function narrowedItems(accepted: Record<string, TaskIntent>, current: Rec
   return new Set([...spans(current)].filter(([id, now]) => { const was = before.get(id); return was !== undefined && was.revision === now.revision && was.key !== now.key }).map(([id]) => id))
 }
 
-export function planCarry(previous: DeliveryContract | undefined, accepted: Record<string, TaskIntent>, current: Record<string, TaskIntent>, excluded: ReadonlySet<string> = new Set()): CarryPlan {
+/** Later updates an open revision is carried by, unconfirmed, before it goes to review. */
+export const REVISION_REVIEW_AFTER = 2
+/** An open revision goes to review at this input when it rests on no words of its update, or REVISION_REVIEW_AFTER later updates carried it. */
+export const dueForReview = (r: { wording?: string; input: number }, input: number): boolean => !r.wording || input - r.input > REVISION_REVIEW_AFTER
+/** A user update's input number, from 1. */
+export const inputOf = (s: SddSnapshot, eventId: string): number => s.events.filter(e => e.kind === "user_input").findIndex(e => e.event_id === eventId) + 1
+
+export function planCarry(previous: DeliveryContract | undefined, accepted: Record<string, TaskIntent>, current: Record<string, TaskIntent>, excluded: ReadonlySet<string> = new Set(), input?: number): CarryPlan {
   const now = currentRevisions(current), before = currentRevisions(accepted)
   const narrowed = narrowedItems(accepted, current)
   const toWrite = new Set([...now].filter(([id, revision]) => before.get(id) !== revision || narrowed.has(id)).map(([id]) => id))
   // Entries code dropped last round because a revision replaced a fact they stated are written again.
   for (const id of previous?.rewrite_next ?? []) toWrite.add(id)
+  // A revision going to review at this input no longer stands: its items are written again from the original,
+  // so entries it cut facts from (as replaced) are whole again.
+  if (input !== undefined) for (const r of previous?.revisions ?? []) if (r.state === "open" && dueForReview(r, input)) r.items.forEach(id => toWrite.add(id))
   const plan: CarryPlan = { fields: [], acceptance: [], effective: [], dropped: [], toWrite: [] }
   const judge = (revisions: ItemRevisions): { carry: true } | { carry: false; reason: string; rewrite: string[] } => {
     const ids = Object.keys(revisions)
