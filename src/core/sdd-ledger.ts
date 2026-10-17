@@ -50,6 +50,17 @@ export function computeLedger(s: SddSnapshot, current: Record<string, TaskIntent
       }
       for (const entry of entries.values()) if (entry.kind === "acceptance" && entry.state === "open" && !failing.has(entry.id)) { entry.state = "closed"; entry.last = { ...entry.last, event_id: run.event_id, run_id: run.run_id, passed: true } }
     }
+    // Findings IC records but never feeds back: opened and closed the same way, kept apart from what is sent.
+    if (acceptance) {
+      const recorded = new Set((acceptance.recorded ?? []).map(o => `recorded:${o.id}`))
+      for (const o of acceptance.recorded ?? []) {
+        const id = `recorded:${o.id}`
+        const last = { event_id: run.event_id, run_id: run.run_id, passed: false, observed: o.observed.slice(0, 600) }
+        const entry = entries.get(id)
+        if (entry) { entry.last = last; entry.state = "open" } else entries.set(id, { id, kind: "recorded", subject: o.subject, items: [], revisions: {}, first_failed: run.event_id, last, state: "open" })
+      }
+      for (const entry of entries.values()) if (entry.kind === "recorded" && entry.state === "open" && !recorded.has(entry.id)) { entry.state = "closed"; entry.last = { ...entry.last, event_id: run.event_id, run_id: run.run_id, passed: true } }
+    }
   }
   // An item a later update cut part of without revising it counts as revised: its entries no longer state what holds.
   const narrowed = narrowedItems(s.ir, current)
@@ -91,7 +102,8 @@ export const LEDGER_FEEDBACK = false
  * held-out code) always; example and PRD-check entries only with LEDGER_FEEDBACK.
  */
 export function fedBack(entries: LedgerEntry[]): LedgerEntry[] {
-  return entries.filter(e => e.kind === "acceptance" || LEDGER_FEEDBACK)
+  // Recorded findings are never fed back, whatever LEDGER_FEEDBACK says.
+  return entries.filter(e => e.kind !== "recorded" && (e.kind === "acceptance" || LEDGER_FEEDBACK))
 }
 
 export const LEDGER_NOTE = "Management checked the code this update starts from against the requirements (static checks and calls built from the requirement's own error rules). These earlier requirements are not met by that code. They are not new requirements: the original text below already states them, unchanged. Meeting them is part of this update."

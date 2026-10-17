@@ -93,7 +93,8 @@ def reconcile(items, log):
 
 
 def table(result):
-    lines = ['| 检查类 | 一致 | IC 误报 | IC 漏报 | 无法对应 | 闸门 |', '|---|---|---|---|---|---|']
+    # The last column is this round's calibration verdict; the series' frozen gate is set separately (by the user).
+    lines = ['| 检查类 | 一致 | IC 误报 | IC 漏报 | 无法对应 | 本轮对账结论 |', '|---|---|---|---|---|---|']
     for cls, c in result['summary'].items():
-        lines.append(f"| {cls} | {c.get('consistent', 0)} | {c.get('ic_false_positive', 0)} | {c.get('ic_missed', 0)} | {c.get('unmatched', 0)} | {result['gate'][cls]} |")
+        lines.append(f"| {cls} | {c.get('consistent', 0)} | {c.get('ic_false_positive', 0)} | {c.get('ic_missed', 0)} | {c.get('unmatched', 0)} | {'无误报' if result['gate'][cls] == 'open' else '有误报（不得回送）'} |")
     return '\n'.join(lines)

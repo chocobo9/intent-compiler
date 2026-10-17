@@ -103,3 +103,12 @@ test("facts are normalized names and values a text states", () => {
   const facts = factsOf("`verify --file` computes SHA-256; \"row_hash\" is 32-character MD5")
   for (const f of ["verify", "file", "sha256", "rowhash", "32character", "md5"]) assert.ok(facts.includes(f), f)
 })
+
+test("findings IC records are tracked in the ledger and never fed back", async () => {
+  const { computeLedger, fedBack } = await import("../src/core/sdd-ledger.js")
+  const run = (id: string, recorded: string[]) => ({ run_id: id, event_id: `${id}-input`, ci_ref: { id: "c" }, result: { acceptance: { outcome: "adopted", checks: 3, open: [], recorded: recorded.map(r => ({ id: r, subject: `p3_regression: ${r}`, observed: "out.json differs" })) } } })
+  const open = computeLedger({ batches: [], runs: [run("r1", ["p3:command:validate"])] } as never, {} as never)
+  assert.deepEqual(open.map(e => [e.id, e.kind, e.state]), [["recorded:p3:command:validate", "recorded", "open"]])
+  assert.deepEqual(fedBack(open), [])
+  assert.equal(computeLedger({ batches: [], runs: [run("r1", ["p3:command:validate"]), run("r2", [])] } as never, {} as never)[0]!.state, "closed")
+})

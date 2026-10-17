@@ -24,10 +24,16 @@ from error_probes import probes
 from example_runner import run_examples
 from static_units import missing, units
 import drift_labels
+import post_prd
 
 PRD = 'output/02-澄清后PRD.md'
 REPORT = 'output/08-验证结果.md'
 MAX_PASSES = 2
+# V2 gate per check class: 'open' sends failures to prd-fix, 'closed' records them only. The series freezes
+# its own gate (decided from earlier reconciliations, never from the official result of the round being repaired).
+DEFAULT_GATE = {'unit': 'open', 'probe': 'open', 'p1_stub': 'closed', 'p2_structure': 'closed'}
+# P5: the order failures of open classes are listed in the GAP report (the build failure, when there is one, first).
+FEEDBACK_ORDER = ('build', 'p1_stub', 'p2_structure', 'probe', 'unit')
 BUILD = 'build:requested'
 SKIP = ('.specart', '.specart-verify', '.system-design', '.verdict.md', '.coding-done', '.sdd-build', '.git')
 
@@ -56,6 +62,12 @@ def details(failures):
         elif f['kind'] == 'build':
             out[cid] = {'subject': 'the code does not pass the required build and tests (`go build -o dpipe ./... && go test ./...`)',
                         'observed': f['output'][-600:]}
+        elif f['kind'] == 'p1_stub':
+            out[cid] = {'subject': f"`{f['name']}` is dispatched but not implemented", 'unit': f['name'],
+                        'observed': f"{(f['static'] or {}).get('where', '')}; a run of it reports: {f['stderr'][:160]!r}" if f.get('stderr') else (f['static'] or {}).get('where', '')}
+        elif f['kind'] == 'p2_structure':
+            out[cid] = {'subject': f"`{f['name']}` output does not have the structure the requirement's sample shows", 'unit': f['name'],
+                        'observed': '; '.join(f.get('problems', [])[:12])}
         else:
             p, obs = f['probe'], f['observed'] or {}
             out[cid] = {'subject': f"error rule not met: {p['id']}", 'rule': p['rule'], 'args': p['run']['args'],
@@ -63,8 +75,20 @@ def details(failures):
     return out
 
 
-def accept(main, texts):
-    """Failing checks on the code at main: {check id: detail}."""
+def check_class(cid):
+    return 'build' if cid == BUILD else cid.split(':', 1)[0].replace('p1', 'p1_stub').replace('p2', 'p2_structure')
+
+
+def ordered(failures):
+    """Failures in the P5 order: build, P1, P2, probes, units; by id within a class."""
+    rank = {c: i for i, c in enumerate(FEEDBACK_ORDER)}
+    return dict(sorted(failures.items(), key=lambda kv: (rank.get(check_class(kv[0]), len(rank)), kv[0])))
+
+
+def accept(main, texts, gate=None):
+    """Failing checks on the code at main whose class the gate opens: {check id: detail}, in the P5 order.
+    P1/P2 run on code that builds; their results (and failures of closed classes) are in info['recorded']."""
+    gate = {**DEFAULT_GATE, **(gate or {})}
     named = units(texts)
     failures = {}
     for kind, name in missing(main, list(named)):
@@ -82,7 +106,15 @@ def accept(main, texts):
             bad.append('exit code 0 (expected non-zero)')
         if bad:
             failures[f"probe:{p['id']}"] = {'kind': 'probe', 'probe': p, 'failures': bad, 'observed': r['observed']}
-    return failures, {'build_exit': res['build_exit'], 'checks': len(named) + len(ps)}
+    post, _ = post_prd.p1_p2(main, texts)
+    for it in post:
+        if it['failed']:
+            prefix = 'p1' if it['class'] == 'p1_stub' else 'p2'
+            failures[f"{prefix}:{it['name']}"] = {'kind': it['class'], 'name': it['name'], 'static': it.get('static'), 'stderr': it.get('stderr', ''), 'problems': it.get('problems', [])}
+    recorded = [{k: it.get(k) for k in ('class', 'id', 'name', 'failed', 'run_state', 'agree', 'state', 'problems', 'input')} | {'static': (it.get('static') or {}).get('where')} for it in post]
+    withheld = {k: v for k, v in failures.items() if gate.get(check_class(k), 'open') != 'open'}
+    sent = ordered({k: v for k, v in failures.items() if k not in withheld})
+    return sent, {'build_exit': res['build_exit'], 'checks': len(named) + len(ps) + len(post), 'recorded': recorded, 'withheld': sorted(withheld), 'gate': gate}
 
 
 def _section(texts, name):
@@ -109,10 +141,39 @@ def judge(before, after):
     return fixed, sorted(comparable - set(before))
 
 
+def post_gap(k, f, texts, prd_text):
+    """A P1/P2 finding in the prd-check GAP format. It states what code observed in SDD's code; the code-built
+    inputs IC ran stay inside IC (D2 supplement) and are not part of the report."""
+    name = f['name']
+    rn, sec = _section(texts, name)
+    lines = _prd_lines(prd_text, name)
+    coords = '；'.join(f'`{PRD}#第{i}行`' for i, _ in lines) or f'`{PRD}`（未检索到）'
+    original = f"- 原始需求（第 {rn} 轮，逐字）：\n\n{sec}\n" if sec else ''
+    if f['kind'] == 'p1_stub':
+        return f"""#### GAP-{k:03d} `{name}` 已分派但未实现
+
+- PRD 坐标：{coords}
+- 代码证据：{(f.get('static') or {}).get('where') or '分派处之后的函数只返回"未实现"类错误'}
+- 差异类型：`PRD_ONLY`
+- 差异说明：需求定义了 `{name}`；代码为它设了分派，但实现只报告自己未实现，没有需求规定的行为。
+- PRD 原描述：{' / '.join(t for _, t in lines) or '（PRD 中未检索到）'}
+{original}- 评审建议方向：建议改代码（仅建议，不执行）。
+"""
+    return f"""#### GAP-{k:03d} `{name}` 的输出结构与需求样例不符
+
+- PRD 坐标：{coords}
+- 差异类型：`MISMATCH`
+- 差异说明：需求给出的输出样例规定了键、层级和类型；代码的实际输出与之不符（只比较结构，不比较数值）：{'；'.join(f.get('problems', [])[:12])}
+{original}- 评审建议方向：建议改代码（仅建议，不执行）。
+"""
+
+
 def report(failures, texts, prd_text):
     gaps = []
-    for k, (cid, f) in enumerate(sorted(failures.items()), 1):
-        if f['kind'] == 'unit':
+    for k, (cid, f) in enumerate(ordered(failures).items(), 1):
+        if f['kind'] in ('p1_stub', 'p2_structure'):
+            gaps.append(post_gap(k, f, texts, prd_text))
+        elif f['kind'] == 'unit':
             kind, name = f['unit']
             rn, sec = _section(texts, name)
             lines = _prd_lines(prd_text, name)
@@ -266,7 +327,7 @@ def pending_updates(main):
     return sum(p.read_text(encoding='utf-8', errors='replace').count('@pendingUpdate') for p in Path(main).rglob('*.go'))
 
 
-def repair_trial(trial, round_number, env, previous_failing=None):
+def repair_trial(trial, round_number, env, previous_failing=None, gate=None):
     """Run acceptance and repair on a returned trial; return the record written into completion.json."""
     trial = Path(trial)
     run = run_r1.run_directory(trial)
@@ -292,8 +353,17 @@ def repair_trial(trial, round_number, env, previous_failing=None):
         shutil.copytree(main, work / 'sdd-main-precoding')
         record.update(start='origin', precoding_pending_updates=pending_updates(main), origin_pending_updates=pending_updates(run / 'repos/origin'))
         restore(run / 'repos/origin', main)
-    before, info = accept(main, texts)
-    record.update(checks=info['checks'], failing_before=sorted(before), details=details(before))
+    before, info = accept(main, texts, gate)
+    record.update(checks=info['checks'], failing_before=sorted(before), details=details(before), gate=info.get('gate'),
+                  recorded_before=info.get('recorded', []), withheld_before=info.get('withheld', []))
+    # P3 (previous adopted code = repos/origin against this round's) and P4 (PRD vs SpecArt summary): recorded only (D3).
+    try:
+        p3_items, p3_skipped = post_prd.p3(run / 'repos/origin', main, texts, texts[-1]) if code_files(run / 'repos/origin') else ([], [])
+        p4_items, p4_why = post_prd.p4(run, texts, round_number - 1)
+        record['recorded_p3'] = {'items': [{k: v for k, v in it.items() if k != 'example'} for it in p3_items], 'touched_skipped': p3_skipped}
+        record['recorded_p4'] = {'items': p4_items, 'not_checked': p4_why}
+    except Exception as error:  # a recording check never stops the repair
+        record['recorded_error'] = repr(error)[:400]
     # P2: a failure whose unit carries PRD assumptions contradicting the requirement is not given to
     # prd-fix (it repairs toward the PRD); it stays open and goes to the next round's CI.
     candidates = drift_labels.p2_candidates(trial, before)
@@ -347,7 +417,8 @@ def repair_trial(trial, round_number, env, previous_failing=None):
         for f in deleted:
             shutil.copy2(work / 'sdd-main' / f, main / f)
         p['tests_restored'] = deleted
-        after, _ = accept(main, texts)  # builds and tests first; probes only when that passes
+        after, after_info = accept(main, texts, gate)  # builds and tests first; probes and P1/P2 only when that passes
+        p['recorded_after'] = after_info.get('recorded', [])
         record['details'].update(details(after))
         p['build_test_exit'] = 1 if BUILD in after else 0
         if BUILD in after:
@@ -402,13 +473,13 @@ def label(trial, round_number, texts, record, previous_failing):
     return out
 
 
-def apply(trial, round_number, previous_failing=None):
+def apply(trial, round_number, previous_failing=None, gate=None):
     """Acceptance + repair on a returned trial, then re-score; updates completion.json in place, archiving the old one."""
     trial = Path(trial)
     settings = json.loads((trial / 'environment.json').read_text(encoding='utf-8'))
     env = run_r1.execution_env(settings | (run_r1.posix_cp_settings(trial) if (trial / 'bin/posix_cp.sh').exists() else {}))
     complete = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))
-    record = repair_trial(trial, round_number, env, previous_failing)
+    record = repair_trial(trial, round_number, env, previous_failing, gate)
     # Rescored whenever the code differs from what the official verifier evaluated (a repair was adopted,
     # or acceptance started from the baseline because SDD stopped before coding).
     if record['outcome'] in ('adopted', 'adopted_with_regressions') or record.get('start') == 'origin':

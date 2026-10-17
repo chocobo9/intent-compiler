@@ -52,6 +52,12 @@ def free_port():
         return s.getsockname()[1]
 
 
+def check_gate():
+    """The V2 gate this series freezes: the acceptance default, overridden by an explicit, user-approved IC_CHECK_GATE (JSON)."""
+    import acceptance_repair
+    return {**acceptance_repair.DEFAULT_GATE, **json.loads(os.environ.get('IC_CHECK_GATE') or '{}')}
+
+
 def host_identity(native):
     """The management host launcher, and for one run from patched OpenCode source its revision and patch."""
     native = Path(native).resolve()
@@ -103,7 +109,7 @@ def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round
     run_r1.write_json(root / 'series.json', {
         'status': 'prepared', 'rounds': 15, 'arm': 'ic+sdd', 'model': run_r1.MODEL, 'variant': run_r1.VARIANT,
         'trial_prefix': trial_prefix, 'ledger_from_round': ledger_from_round, 'acceptance_repair': acceptance_repair, 'pause_below_floor': pause_below_floor, 'management_budget': MANAGEMENT_BUDGET, 'request_timeout_ms': 2147483647,
-        'native': str(Path(native).resolve()) if native else str(run_r1.resolve_opencode()), **({'native_frozen': host_identity(native)} if native else {}), 'reopen_calls': REOPEN_CALLS, 'node': NODE, 'python': str(run_r1.PYTHON), 'port': free_port(),
+        'native': str(Path(native).resolve()) if native else str(run_r1.resolve_opencode()), **({'native_frozen': host_identity(native)} if native else {}), 'reopen_calls': REOPEN_CALLS, 'check_gate': check_gate(), 'node': NODE, 'python': str(run_r1.PYTHON), 'port': free_port(),
         'adapter_digest': adapter_digest(adapter), 'frozen_files': frozen,
         'ic': {'dist': str(dist), 'files': ic_files, 'source_head': head, 'source_uncommitted': dirty},
         'original_instructions': {str(n): run_r1.sha(run_r1.OFFICIAL / f'steps/round-{n}/instruction.md') for n in range(1, 16)},
@@ -136,7 +142,7 @@ def upstream_spec_gap(promotion):
     return failure.get('stopped_stage') in ('specart', 'design') and 'SPEC_GAP' in (failure.get('stage_conclusion') or '')
 
 
-def accept_returned(trial, number, prior_completion, log):
+def accept_returned(trial, number, prior_completion, log, gate=None):
     """IC's in-round acceptance and targeted repair of a returned trial, before IC reads its code (once per trial)."""
     if json.loads((trial / 'completion.json').read_text(encoding='utf-8')).get('acceptance_repair'):
         return None
@@ -144,7 +150,7 @@ def accept_returned(trial, number, prior_completion, log):
     from ic_bridge import acceptance_result
     log(f'R{number} acceptance started')
     prior = acceptance_result(prior_completion) if prior_completion else None
-    accepted = acceptance_repair.apply(trial, number, {o['id'] for o in prior['open']} if prior else None)
+    accepted = acceptance_repair.apply(trial, number, {o['id'] for o in prior['open']} if prior else None, gate)
     # The checks the adopted code fixes (a later pass that did not hold returns to an earlier one).
     fixed = accepted.get('fixed', accepted['passes'][-1].get('fixed', []) if accepted.get('passes') else [])
     now = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))['results']['official'].get('passed')
@@ -494,7 +500,7 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
                     log(f"R{number}: SDD stopped before coding at {stop['stage']} with a tool/environment fault ({'; '.join(stop['tool_fault'])}); rerunning once (D1)")
                     continue
                 if config.get('acceptance_repair'):
-                    accept_returned(trial, number, records[-2].get('completion') if len(records) > 1 else None, log)
+                    accept_returned(trial, number, records[-2].get('completion') if len(records) > 1 else None, log, config.get('check_gate'))
                 command(f'r{number}-reconcile{suffix}', dict(common, command='reconcile', execution_id=run['run_id'], host=dict(host, round=number)))
                 completion = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))
                 record.update(stage='returned', completion=completion, promotion=promotion_record(trial, completion))
@@ -528,6 +534,14 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
             baseline = next_baseline(Path(record['root']), record['completion'])
             record['cost'] = round_cost(snapshot(), event['event_id'], record)
             record['stop'] = costs.stop_record(Path(record['root']), record['completion'], record['promotion'])
+            # V2: every IC check class against the official result of the same code (calibration only).
+            try:
+                import round_reconcile
+                record['reconcile'] = round_reconcile.reconcile_round(Path(record['root']), number)
+                log(f"R{number} reconcile: {json.dumps(record['reconcile'], ensure_ascii=False)[:600]}")
+            except Exception as error:
+                record['reconcile'] = {'error': repr(error)[:400]}
+                log(f'R{number} reconcile failed: {error!r}'[:400])
             record['checkpoint'] = write_checkpoint(root, number, event, snapshot(), record, baseline)
             publish(root, records, 'running')
             log(f"R{number} checkpoint written: {record['checkpoint']['path']}")

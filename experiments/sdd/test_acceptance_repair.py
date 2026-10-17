@@ -21,7 +21,9 @@ def wire(monkeypatch, run, results, edits):
     monkeypatch.setattr(ar.run_r1, 'run_directory', lambda t: run)
     monkeypatch.setattr(ar, 'texts_upto', lambda n: ['text'])
     kinds = lambda k: {'kind': 'build', 'output': 'main.go:3: undefined: x'} if k == ar.BUILD else {'kind': 'probe', 'probe': {'id': k[6:], 'rule': 'r', 'run': {'args': [], 'files': []}}, 'observed': {}} if k.startswith('probe:') else {'kind': 'unit', 'unit': ('op', k)}
-    monkeypatch.setattr(ar, 'accept', lambda main, texts: ({k: kinds(k) for k in next(calls)}, {'checks': 5, 'build_exit': '0'}))
+    monkeypatch.setattr(ar, 'accept', lambda main, texts, gate=None: ({k: kinds(k) for k in next(calls)}, {'checks': 5, 'build_exit': '0'}))
+    monkeypatch.setattr(ar.post_prd, 'p3', lambda *a, **k: ([], []))
+    monkeypatch.setattr(ar.post_prd, 'p4', lambda *a, **k: ([], 'no SpecArt summary'))
     monkeypatch.setattr(ar, 'report', lambda failures, texts, prd: 'IC report ' + ','.join(sorted(failures)))
     passes = iter(edits)
     def fix(t, env, log):
@@ -155,3 +157,22 @@ def test_accept_does_not_probe_code_that_fails_to_build(tmp_path, monkeypatch):
     monkeypatch.setattr(ar, 'run_examples', lambda *a, **k: (_ for _ in ()).throw(AssertionError('probes ran')))
     failures, info = ar.accept(tmp_path, ['### `clip`\n```json\n{"op": "clip"}\n```\n'])
     assert list(failures) == [ar.BUILD] and info['build_exit'] == '1'
+
+
+def test_only_classes_the_gate_opens_are_sent_and_in_the_p5_order(tmp_path, monkeypatch):
+    monkeypatch.setattr(ar, 'units', lambda texts: {('op', 'clip'): 0})
+    monkeypatch.setattr(ar, 'missing', lambda main, names: [('op', 'clip')])
+    monkeypatch.setattr(ar, 'build_and_test', lambda main: (0, 'ok'))
+    probe = {'id': 'x:missing-file', 'rule': 'r', 'run': {'args': [], 'files': []}}
+    monkeypatch.setattr(ar, 'probes', lambda texts, n: [probe])
+    monkeypatch.setattr(ar, 'run_examples', lambda main, ps: {'build_exit': '0', 'results': [{'failures': ['stderr lacks'], 'observed': {'exit_code': 0}}]})
+    post = [{'class': 'p1_stub', 'id': 'p1:join', 'name': 'join', 'failed': True, 'static': {'stub': True, 'where': 'f'}, 'stderr': ''},
+            {'class': 'p2_structure', 'id': 'p2:compare', 'name': 'compare', 'failed': True, 'problems': ['missing $.summary (object)']}]
+    monkeypatch.setattr(ar.post_prd, 'p1_p2', lambda main, texts: (post, '0'))
+    sent, info = ar.accept(tmp_path, ['t'])
+    assert list(sent) == ['probe:x:missing-file', 'unit:op:clip'] and info['withheld'] == ['p1:join', 'p2:compare']
+    sent, info = ar.accept(tmp_path, ['t'], {'p1_stub': 'open', 'p2_structure': 'open'})
+    assert list(sent) == ['p1:join', 'p2:compare', 'probe:x:missing-file', 'unit:op:clip'] and info['withheld'] == []
+    assert ar.check_class('p1:join') == 'p1_stub' and ar.check_class(ar.BUILD) == 'build'
+    text = ar.report(sent, ['## `join`\njoin rows'], '# PRD\n')
+    assert 'GAP-001 `join` 已分派但未实现' in text and 'GAP-002 `compare` 的输出结构与需求样例不符' in text

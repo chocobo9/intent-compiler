@@ -106,8 +106,17 @@ def acceptance_result(value):
     else:
         open_ids = a['failing_before']
     info = a.get('details', {})
+    # Recorded, never fed back: P1/P2 failures of classes the gate keeps closed, P3 suspected regressions, P4 summary gaps.
+    last = a['passes'][-1].get('recorded_after') if a.get('passes') and a['outcome'] in ('adopted', 'adopted_with_regressions') else None
+    post = last if last is not None else a.get('recorded_before', [])
+    closed = {c for c, state in (a.get('gate') or {}).items() if state != 'open'}
+    recorded = [{'id': it['id'], 'subject': f"{it['class']}: {it['name']}", 'observed': '; '.join(it.get('problems') or []) or (it.get('static') or it.get('run_state') or '')}
+                for it in post if it.get('failed') and it['class'] in closed]
+    recorded += [{'id': it['id'], 'subject': f"p3_regression: {it['name']}", 'observed': '; '.join(it.get('diffs', []))} for it in (a.get('recorded_p3') or {}).get('items', []) if it.get('failed')]
+    recorded += [{'id': it['id'], 'subject': f"p4_summary: {it['name']}", 'observed': 'named by the PRD, not by the SpecArt summary'} for it in (a.get('recorded_p4') or {}).get('items', []) if it.get('failed')]
     return {'outcome': a['outcome'], 'checks': a['checks'],
-            'open': [{'id': i, 'subject': info.get(i, {}).get('subject', i), 'observed': info.get(i, {}).get('observed', '')} for i in open_ids]}
+            'open': [{'id': i, 'subject': info.get(i, {}).get('subject', i), 'observed': info.get(i, {}).get('observed', '')} for i in open_ids],
+            **({'recorded': recorded} if recorded else {})}
 
 
 def example_results(delivery, code):
