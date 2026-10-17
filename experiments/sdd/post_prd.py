@@ -6,6 +6,11 @@ give, are a minimal CSV built by code: the column names the original sample name
 placeholder value with no requirement meaning. Such inputs stay inside IC's checks (never sent
 to SDD, never written into a CI), every record says 'code-built', and no value is judged:
 P1 asks whether the program runs the unit at all, P2 compares keys, nesting and types only.
+
+Calibration (user, 2026-10-17): every run is made twice, with an integer and with a decimal placeholder.
+A run that fails the same way both times (same exit code) fails whatever the values are: P1 counts it a
+failure, and P2 counts a missing output file the same way. Runs that differ are inconclusive. Error text
+is never parsed for this.
 """
 import json
 import re
@@ -16,6 +21,8 @@ import example_runner
 from static_units import IDENT, json_samples
 
 PLACEHOLDER = '1'
+# Two placeholder sets: an integer and a decimal. A failure that does not depend on the values shows in both.
+PLACEHOLDERS = ('1', '1.5')
 CODE_BUILT = 'code-built placeholder input (column names from the original sample, one row of a meaningless value)'
 # A body that only reports it is not written.
 STUB_RX = re.compile(r'not (?:yet )?implemented|unimplemented|implementation (?:is )?unavailable|\bTODO\b|not supported yet', re.I)
@@ -125,9 +132,9 @@ def identifiers(value, skip=()):
     return out
 
 
-def placeholder_csv(columns):
+def placeholder_csv(columns, value=PLACEHOLDER):
     columns = columns or ['id']
-    return ','.join(columns) + '\n' + ','.join(PLACEHOLDER for _ in columns) + '\n'
+    return ','.join(columns) + '\n' + ','.join(value for _ in columns) + '\n'
 
 
 def csv_files(value):
@@ -201,10 +208,10 @@ def static_stub(code_dir, name):
 
 # ---------- runs with placeholder inputs ----------
 
-def _transform_run(sample, synopsis):
+def _transform_run(sample, synopsis, value=PLACEHOLDER):
     cols = identifiers(sample, skip={sample.get('op')})
-    files = [{'path': 'in.csv', 'content': placeholder_csv(cols)}, {'path': 'recipe.json', 'content': json.dumps([sample])}]
-    files += [{'path': p, 'content': placeholder_csv(cols)} for p in csv_files(sample) if p not in ('in.csv',)]
+    files = [{'path': 'in.csv', 'content': placeholder_csv(cols, value)}, {'path': 'recipe.json', 'content': json.dumps([sample])}]
+    files += [{'path': p, 'content': placeholder_csv(cols, value)} for p in csv_files(sample) if p not in ('in.csv',)]
     args = ['transform']
     for opt, value, optional in synopsis['options']:
         if optional:
@@ -213,7 +220,7 @@ def _transform_run(sample, synopsis):
     return {'args': args, 'files': files, 'stdin': None}
 
 
-def command_run(command, synopsis, texts):
+def command_run(command, synopsis, texts, placeholder=PLACEHOLDER):
     """A run of a command with placeholder CSV inputs and its section's own JSON sample for JSON options; None when an option cannot be filled."""
     inputs = section_input_samples(texts, command)
     # The columns its own input samples name first (a schema's columns), then those its output sample names.
@@ -232,10 +239,10 @@ def command_run(command, synopsis, texts):
                 files.append({'path': f'{opt}.json', 'content': json.dumps(inputs[0])})
                 args += [f'--{opt}', f'{opt}.json']
             elif opt in ('dir',):
-                files.append({'path': 'data/a.csv', 'content': placeholder_csv(columns)})
+                files.append({'path': 'data/a.csv', 'content': placeholder_csv(columns, placeholder)})
                 args += ['--dir', 'data']
             else:
-                files.append({'path': f'{opt}.csv', 'content': placeholder_csv(columns)})
+                files.append({'path': f'{opt}.csv', 'content': placeholder_csv(columns, placeholder)})
                 args += [f'--{opt}', f'{opt}.csv']
         elif value.startswith('<col'):
             args += [f'--{opt}', (columns or ['id'])[0]]
@@ -244,43 +251,64 @@ def command_run(command, synopsis, texts):
     return {'args': args, 'files': files, 'stdin': None}
 
 
+def same_failure(observed):
+    """The exit code every placeholder run failed with, when they all failed the same way; else None."""
+    codes = [(o or {}).get('exit_code') for o in observed]
+    return codes[0] if len(codes) == len(PLACEHOLDERS) and all(observed) and codes[0] not in (0, None) and len(set(codes)) == 1 else None
+
+
 def p1_p2(code_dir, texts):
-    """P1 (static and run) for every unit, P2 for every command with an output sample. Records only."""
+    """P1 (static and runs) for every unit, P2 for every command with an output sample. Each run is made once per
+    placeholder set; which classes are sent back is the acceptance gate's decision."""
     synopses, _ = error_probes.parse(texts)
     units = unit_samples(texts)
     runs, meta = [], []
     for (key, name), samples in units.items():
         static = static_stub(code_dir, name)
-        run = _transform_run(samples[0], synopses['transform']) if key == 'op' and 'transform' in synopses else None
-        meta.append({'kind': 'unit', 'key': key, 'name': name, 'static': static, 'run': run})
-        if run:
-            runs.append({'id': f'p1:{key}:{name}', 'run': run, 'check': {}, 'asserts': [], 'exit_code': None})
+        made = [_transform_run(samples[0], synopses['transform'], v) for v in PLACEHOLDERS] if key == 'op' and 'transform' in synopses else None
+        meta.append({'kind': 'unit', 'key': key, 'name': name, 'static': static, 'runs': made, 'sample': samples[0]})
+        for i, run in enumerate(made or []):
+            runs.append({'id': f'p1:{key}:{name}#{i}', 'run': run, 'check': {}, 'asserts': [], 'exit_code': None})
     outputs = output_samples(texts)
     for command, synopsis in synopses.items():
-        run = command_run(command, synopsis, texts)
-        meta.append({'kind': 'command', 'name': command, 'static': static_stub(code_dir, command), 'run': run, 'expected': outputs.get(command)})
-        if run:
-            runs.append({'id': f'p1:command:{command}', 'run': run, 'check': {}, 'asserts': [], 'exit_code': None})
+        made = [command_run(command, synopsis, texts, v) for v in PLACEHOLDERS]
+        made = made if all(made) else None
+        meta.append({'kind': 'command', 'name': command, 'static': static_stub(code_dir, command), 'runs': made, 'expected': outputs.get(command)})
+        for i, run in enumerate(made or []):
+            runs.append({'id': f'p1:command:{command}#{i}', 'run': run, 'check': {}, 'asserts': [], 'exit_code': None})
     res = example_runner.run_examples(code_dir, runs) if runs else {'results': [], 'build_exit': None}
     observed = {r['id']: r for r in res['results']}
     items = []
     for m in meta:
         rid = f"p1:{m.get('key', 'command')}:{m['name']}"
-        r = observed.get(rid)
-        obs = (r or {}).get('observed') or {}
-        run_stub = bool(obs) and bool(STUB_RX.search((obs.get('stderr') or '') + (obs.get('stdout') or '')))
-        run_state = 'not run' if r is None else ('did not run' if not obs else ('stub' if run_stub else ('exit 0' if obs.get('exit_code') == 0 else f"exit {obs.get('exit_code')} (inconclusive)")))
+        rs = [observed.get(f'{rid}#{i}') for i in range(len(PLACEHOLDERS))] if m['runs'] else []
+        obs = [(r or {}).get('observed') or {} for r in rs]
+        first = obs[0] if obs else {}
+        run_stub = any(o and STUB_RX.search((o.get('stderr') or '') + (o.get('stdout') or '')) for o in obs)
+        failed_code = same_failure(obs) if obs else None
+        if not rs:
+            run_state = 'not run'
+        elif not all(obs):
+            run_state = 'did not run'
+        elif run_stub:
+            run_state = 'stub'
+        elif failed_code is not None:
+            run_state = f'exit {failed_code} under both placeholder sets'
+        elif all(o.get('exit_code') == 0 for o in obs):
+            run_state = 'exit 0'
+        else:
+            run_state = 'inconclusive (exit ' + ' / '.join(str(o.get('exit_code')) for o in obs) + ')'
         static = m['static']['stub']
         stub = bool(static) or run_stub
-        items.append({'class': 'p1_stub', 'id': f"p1:{m['name']}", 'name': m['name'], 'failed': stub, 'match': 'unit',
-                      'static': m['static'], 'run_state': run_state, 'agree': (static is None or r is None or not obs) or (bool(static) == run_stub),
-                      'input': CODE_BUILT if m['run'] else None, 'stderr': (obs.get('stderr') or '')[:200]})
+        reason = 'stub' if stub else ('sample_fails' if failed_code is not None else None)
+        items.append({'class': 'p1_stub', 'id': f"p1:{m['name']}", 'name': m['name'], 'failed': reason is not None, 'reason': reason, 'match': 'unit',
+                      'static': m['static'], 'run_state': run_state, 'agree': (static is None or not rs or not all(obs)) or (bool(static) == run_stub),
+                      'input': CODE_BUILT if m['runs'] else None, 'stderr': (first.get('stderr') or '')[:200], 'exit_code': failed_code,
+                      'sample': m.get('sample'), 'command': 'transform' if m['kind'] == 'unit' else m['name']})
         if m['kind'] == 'command' and m.get('expected') is not None:
-            out_name = next((m['run']['args'][i + 1] for i, a in enumerate(m['run']['args']) if a == '--output'), None) if m['run'] else None
-            actual_text = None
-            if r and obs and out_name:
-                actual_text = (r.get('files') or {}).get(out_name)
-            items.append(structure_item(m['name'], m['expected'], obs, out_name, r, m['run'] is not None))
+            args = m['runs'][0]['args'] if m['runs'] else []
+            out_name = next((args[i + 1] for i, a in enumerate(args) if a == '--output'), None)
+            items.append(structure_item(m['name'], m['expected'], obs, out_name, rs, m['runs'] is not None))
     return items, res.get('build_exit')
 
 
@@ -303,13 +331,37 @@ def shape(value, path='$'):
     return out
 
 
+def value_dependent(expected, path='$'):
+    """Key paths the sample shows on some of a set of like entries but not on all: whether such a key appears
+    depends on the entry's values (an enum only for a string column), so a placeholder run need not show it.
+    Like entries are the objects of a list, or the object values of an object whose values are all objects."""
+    out = set()
+    if isinstance(expected, dict):
+        entries = [(f'{path}.{k}', v) for k, v in expected.items()]
+        if len(entries) >= 2 and all(isinstance(v, dict) for _, v in entries):
+            common = set.intersection(*(set(v) for _, v in entries))
+            out.update(f'{p}.{k}' for p, v in entries for k in v if k not in common)
+        for p, v in entries:
+            out |= value_dependent(v, p)
+    elif isinstance(expected, list):
+        objects = [v for v in expected if isinstance(v, dict)]
+        if len(objects) >= 2:
+            common = set.intersection(*(set(v) for v in objects))
+            out.update(f'{path}[].{k}' for v in objects for k in v if k not in common)
+        for v in expected:
+            out |= value_dependent(v, f'{path}[]')
+    return out
+
+
 def compare_shape(expected, actual):
-    """Paths the sample shows that the output lacks or types differently; element paths only where the output has elements. Values are never compared."""
+    """Paths the sample shows that the output lacks or types differently; element paths only where the output has elements;
+    value-dependent paths (shown on some like entries only) are not required. Values are never compared."""
     want, got = shape(expected), shape(actual)
+    optional = value_dependent(expected)
     problems = []
     for p, t in want.items():
         parent_array = '[]' in p and not any(q.startswith(p.split('[]')[0] + '[]') for q in got)
-        if parent_array:
+        if parent_array or any(p == o or p.startswith(o + '.') or p.startswith(o + '[') for o in optional):
             continue
         if p not in got:
             problems.append(f'missing {p} ({t})')
@@ -318,22 +370,37 @@ def compare_shape(expected, actual):
     return problems
 
 
-def structure_item(command, expected, observed, out_name, result, ran):
+def structure_item(command, expected, observed, out_name, results, ran):
+    """P2 for one command from its placeholder runs. A structure problem counts when every run shows it; no output
+    file from every run, each failing the same way, counts as a failure too (the sample input should succeed)."""
     base = {'class': 'p2_structure', 'id': f'p2:{command}', 'name': command, 'match': 'name', 'input': CODE_BUILT}
-    files = (result or {}).get('files_content') or {}
-    text = files.get(out_name) if out_name else None
     if not ran:
         return {**base, 'failed': False, 'state': 'not run (an option could not be filled from the original)'}
-    if text is None:
-        return {**base, 'failed': False, 'state': f"no output file (exit {(observed or {}).get('exit_code')})"}
-    try:
-        actual = json.loads(text)
-    except ValueError:
+    observed = observed or []
+    texts = [((r or {}).get('files_content') or {}).get(out_name) if out_name else None for r in (results or [])]
+    written = [t for t in texts if t is not None]
+    codes = [(o or {}).get('exit_code') for o in observed]
+    if not written:
+        if len(texts) == len(PLACEHOLDERS) and all(observed) and len(set(codes)) == 1:
+            return {**base, 'failed': True, 'state': f'no output file under both placeholder sets (exit {codes[0]})',
+                    'problems': [f'no output file (exit {codes[0]})'], 'exit_code': codes[0], 'stderr': ((observed[0] or {}).get('stderr') or '')[:200]}
+        return {**base, 'failed': False, 'state': 'no output file (inconclusive: exit ' + ' / '.join(str(c) for c in codes) + ')'}
+    values = []
+    for t in written:
+        try:
+            values.append(json.loads(t))
+        except ValueError:
+            values.append(None)
+    if all(v is None for v in values):
         return {**base, 'failed': True, 'state': 'output is not JSON', 'problems': ['output is not JSON']}
-    problems = compare_shape(expected, actual)
+    per_run = [set(compare_shape(expected, v)) for v in values if v is not None]
+    complete = len(per_run) == len(PLACEHOLDERS)
+    problems = sorted(set.intersection(*per_run)) if complete else []
+    actual = next(v for v in values if v is not None)
     # The key names the output holds: what a revision that renames or adds keys is confirmed by (C2).
     keys = sorted({p.rsplit('.', 1)[-1].replace('[]', '') for p in shape(actual) if '.' in p})
-    return {**base, 'failed': bool(problems), 'state': 'compared', 'problems': problems, 'output_keys': keys}
+    return {**base, 'failed': bool(problems), 'state': 'compared' if complete else 'compared (inconclusive: JSON output from one placeholder set only)',
+            'problems': problems, 'output_keys': keys}
 
 
 # ---------- P3 cross-round regression ----------

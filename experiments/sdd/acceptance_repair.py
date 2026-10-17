@@ -58,16 +58,19 @@ def details(failures):
         if f['kind'] == 'unit':
             kind, name = f['unit']
             out[cid] = {'subject': f'`{name}` ({kind}) is not implemented', 'unit': name, 'round': f.get('round'),
-                        'observed': f'No non-test source dispatches on "{name}" (case, map key or comparison).'}
+                        'observed': f'No {kind} dispatch site in non-test source names "{name}" (a same-named entry of another kind, such as an expression function, does not count).'}
         elif f['kind'] == 'build':
             out[cid] = {'subject': 'the code does not pass the required build and tests (`go build -o dpipe ./... && go test ./...`)',
                         'observed': f['output'][-600:]}
+        elif f['kind'] == 'p1_stub' and f.get('reason') == 'sample_fails':
+            out[cid] = {'subject': f"`{f['name']}` fails on the requirement's own sample", 'unit': f['name'],
+                        'observed': f"exit {f.get('exit_code')} whatever the input values are; stderr {f.get('stderr', '')[:200]!r}"}
         elif f['kind'] == 'p1_stub':
             out[cid] = {'subject': f"`{f['name']}` is dispatched but not implemented", 'unit': f['name'],
                         'observed': f"{(f['static'] or {}).get('where', '')}; a run of it reports: {f['stderr'][:160]!r}" if f.get('stderr') else (f['static'] or {}).get('where', '')}
         elif f['kind'] == 'p2_structure':
             out[cid] = {'subject': f"`{f['name']}` output does not have the structure the requirement's sample shows", 'unit': f['name'],
-                        'observed': '; '.join(f.get('problems', [])[:12])}
+                        'observed': '; '.join(f.get('problems', [])[:12]) + (f"; stderr {f.get('stderr', '')[:200]!r}" if f.get('stderr') else '')}
         else:
             p, obs = f['probe'], f['observed'] or {}
             out[cid] = {'subject': f"error rule not met: {p['id']}", 'rule': p['rule'], 'args': p['run']['args'],
@@ -77,6 +80,14 @@ def details(failures):
 
 def check_class(cid):
     return 'build' if cid == BUILD else cid.split(':', 1)[0].replace('p1', 'p1_stub').replace('p2', 'p2_structure')
+
+
+def gate_state(gate, cid):
+    """'open' or 'closed' for one failing check: a per-command entry (class:name, e.g. p2_structure:profile)
+    overrides its class (user, 2026-10-17: a command whose checks matched the official result opens on its own)."""
+    cls = check_class(cid)
+    name = cid.split(':', 1)[1] if ':' in cid and cls in ('p1_stub', 'p2_structure') else None
+    return gate.get(f'{cls}:{name}', gate.get(cls, 'open')) if name else gate.get(cls, 'open')
 
 
 def ordered(failures):
@@ -110,9 +121,10 @@ def accept(main, texts, gate=None):
     for it in post:
         if it['failed']:
             prefix = 'p1' if it['class'] == 'p1_stub' else 'p2'
-            failures[f"{prefix}:{it['name']}"] = {'kind': it['class'], 'name': it['name'], 'static': it.get('static'), 'stderr': it.get('stderr', ''), 'problems': it.get('problems', [])}
-    recorded = [{k: it.get(k) for k in ('class', 'id', 'name', 'failed', 'run_state', 'agree', 'state', 'problems', 'input', 'output_keys')} | {'static': (it.get('static') or {}).get('where')} for it in post]
-    withheld = {k: v for k, v in failures.items() if gate.get(check_class(k), 'open') != 'open'}
+            failures[f"{prefix}:{it['name']}"] = {'kind': it['class'], 'name': it['name'], 'static': it.get('static'), 'stderr': it.get('stderr', ''), 'problems': it.get('problems', []),
+                                                  'reason': it.get('reason'), 'exit_code': it.get('exit_code'), 'sample': it.get('sample'), 'command': it.get('command'), 'state': it.get('state')}
+    recorded = [{k: it.get(k) for k in ('class', 'id', 'name', 'failed', 'reason', 'run_state', 'agree', 'state', 'problems', 'input', 'output_keys')} | {'static': (it.get('static') or {}).get('where')} for it in post]
+    withheld = {k: v for k, v in failures.items() if gate_state(gate, k) != 'open'}
     sent = ordered({k: v for k, v in failures.items() if k not in withheld})
     return sent, {'build_exit': res['build_exit'], 'checks': len(named) + len(ps) + len(post), 'recorded': recorded, 'withheld': sorted(withheld), 'gate': gate}
 
@@ -149,6 +161,26 @@ def post_gap(k, f, texts, prd_text):
     lines = _prd_lines(prd_text, name)
     coords = '；'.join(f'`{PRD}#第{i}行`' for i, _ in lines) or f'`{PRD}`（未检索到）'
     original = f"- 原始需求（第 {rn} 轮，逐字）：\n\n{sec}\n" if sec else ''
+    if f['kind'] == 'p1_stub' and f.get('reason') == 'sample_fails':
+        sample = f"`{json.dumps(f['sample'], ensure_ascii=False)}`" if f.get('sample') else f"`{name}` 一节给出的样例"
+        return f"""#### GAP-{k:03d} `{name}` 用需求自带的样例运行即失败
+
+- PRD 坐标：{coords}
+- 代码证据：以需求原文的样例 {sample} 运行 `dpipe {f.get('command') or name}`，程序以退出码 {f.get('exit_code')} 失败，stderr：`{(f.get('stderr') or '').strip()[:200]}`。换用不同的输入取值，失败方式相同，所以失败与输入数值无关。
+- 差异类型：`MISMATCH`
+- 差异说明：需求给出的样例是合法输入，代码却不能执行它；请对照原文核对样例中的字段名与取值（例如输出列、参数名）在代码中的读取方式。
+- PRD 原描述：{' / '.join(t for _, t in lines) or '（PRD 中未检索到）'}
+{original}- 评审建议方向：建议改代码（仅建议，不执行）。
+"""
+    if f['kind'] == 'p2_structure' and (f.get('state') or '').startswith('no output file'):
+        return f"""#### GAP-{k:03d} `{name}` 用需求自带的样例输入运行，没有写出输出
+
+- PRD 坐标：{coords}
+- 代码证据：以需求原文中 `{name}` 一节的样例作为输入运行，程序以退出码 {f.get('exit_code')} 结束，没有写出输出文件，stderr：`{(f.get('stderr') or '').strip()[:200]}`。换用不同的输入取值，结果相同，所以与输入数值无关。
+- 差异类型：`MISMATCH`
+- 差异说明：需求样例对应的输入应当成功并写出输出；请对照原文核对配置字段（哪些必填、字段名）在代码中的校验与读取方式。
+{original}- 评审建议方向：建议改代码（仅建议，不执行）。
+"""
     if f['kind'] == 'p1_stub':
         return f"""#### GAP-{k:03d} `{name}` 已分派但未实现
 
@@ -180,7 +212,7 @@ def report(failures, texts, prd_text):
             gaps.append(f"""#### GAP-{k:03d} `{name}`（{kind}）未实现
 
 - PRD 坐标：{'；'.join(f'`{PRD}#第{i}行`' for i, _ in lines) or f'`{PRD}`（未检索到）'}
-- 代码证据：`repos/main/**/*.go`（不含测试）中没有在任何分派位置（case、映射键、比较）出现 `"{name}"`。
+- 代码证据：`repos/main/**/*.go`（不含测试）中，`{kind}` 的分派位置（与其他 `{kind}` 同列的 case、映射键、比较）没有 `"{name}"`；只出现在其他种类的同名位置（如表达式函数表）不算实现。
 - 差异类型：`PRD_ONLY`
 - 差异说明：需求定义了 `{name}`，更新后代码没有实现。
 - PRD 原描述：{' / '.join(t for _, t in lines) or '（PRD 中未检索到）'}
@@ -188,7 +220,7 @@ def report(failures, texts, prd_text):
 
 {sec}
 
-- PRD_ONLY 二次核验：检索 `"{name}"` 的分派位置，范围 `repos/main/**/*.go`（排除测试），无命中。
+- PRD_ONLY 二次核验：检索 `{kind}` 分派位置中的 `"{name}"`，范围 `repos/main/**/*.go`（排除测试），无命中。
 - 评审建议方向：建议改代码（仅建议，不执行）。
 """)
         elif f['kind'] == 'build':
