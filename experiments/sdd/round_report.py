@@ -57,6 +57,13 @@ def mechanisms(record, batch, delivery, trial, attempts_trials):
     return rows
 
 
+def _sdd_score(official):
+    """The official count for SDD's code; when its build failed the cases did not run a program built from it."""
+    score = f"{official.get('passed')}/{official.get('total')}"
+    build = official.get('build_exit_code')
+    return score if build in (None, 0) else f"构建失败（官方构建 exit {build}；{score} 不是由该代码构建的程序得出）"
+
+
 def round_section(root, record, store, number):
     root = Path(root)
     config = _read(root / 'series.json') or {}
@@ -74,7 +81,7 @@ def round_section(root, record, store, number):
     build = config['ic']['source_head'][:7] + (f" + harness 刷新 {len(resumes)} 次（最近：{resumes[-1].get('at', '')[:16]}）" if resumes else '')
     lines = [f'## R{number}（代码生成，{dt.datetime.now().astimezone().isoformat(timespec="minutes")}）', '',
              f"- IC 构建：`{build}`",
-             f"- 官方：SDD 交回 {sdd_official.get('passed')}/{sdd_official.get('total')} → 采用 {official.get('passed')}/{official.get('total')}；晋级 {(record.get('promotion') or {}).get('mode')}",
+             f"- 官方：SDD 交回 {_sdd_score(sdd_official)} → 采用 {official.get('passed')}/{official.get('total')}；晋级 {(record.get('promotion') or {}).get('mode')}",
              f"- SDD 停在：{stop.get('stage') or '未停（全流程）'}；分类 {stop.get('class', '—')}；{'；'.join(stop.get('tool_fault') or []) or ''}",
              f"- 停顿理由（原文末尾）：{(stop.get('reason') or '').strip().replace(chr(10), ' ')[-300:] or '—'}",
              f"- 尝试：{len(record.get('attempts', [])) + 1}（{'；'.join(str(a.get('rule'))[:80] for a in record.get('attempts', [])) or '一次'}）",

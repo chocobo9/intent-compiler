@@ -18,6 +18,9 @@ Item verdicts: consistent (both pass, or IC fails and a matched case fails), ic_
 kind fails; only for kind-matched classes), unmatched (no official case, or a probe matched
 only to the generic error-handling cases: those exercise another command, so the item is not
 comparable; the row keeps how='generic kind' and the case ids, with a note).
+When the official build of the reconciled code failed, its cases did not run a program built from
+that code (they ran whatever dpipe was left in the directory, or were skipped): every row is then
+unmatched, with the matched cases kept and a note.
 """
 import re
 from collections import Counter, defaultdict
@@ -73,9 +76,11 @@ def verdict(ic_failed, matched, kind_matched):
     return 'ic_missed' if official_failed and kind_matched else 'consistent'
 
 
-def reconcile(items, log):
-    """items: [{class, id, failed, match: 'unit'|'probe'|'name', name?}] -> {rows, summary, gate}."""
+def reconcile(items, log, official_build_exit=None):
+    """items: [{class, id, failed, match: 'unit'|'probe'|'name', name?}] -> {rows, summary, gate}.
+    official_build_exit: the official build's exit code for this code (None when not recorded)."""
     cases = official_cases(log)
+    not_this_code = official_build_exit not in (None, 0)
     rows = []
     for it in items:
         note = None
@@ -85,7 +90,9 @@ def reconcile(items, log):
         else:
             matched, how = match_unit(it['name'], cases), 'name'
             kind_matched = it['match'] == 'unit_kind'
-        if how == 'generic kind':
+        if not_this_code:
+            result, note = 'unmatched', f'official build failed (exit {official_build_exit}): its cases did not run this code'
+        elif how == 'generic kind':
             # The generic cases run another command: shown, but not comparable with this probe.
             result, note = 'unmatched', 'generic cases only (other command)'
         else:
@@ -99,7 +106,7 @@ def reconcile(items, log):
     for r in rows:
         summary[r['class']][r['verdict']] += 1
     gate = {cls: ('closed' if counts['ic_false_positive'] else 'open') for cls, counts in summary.items()}
-    return {'rows': rows, 'summary': {k: dict(v) for k, v in summary.items()}, 'gate': gate}
+    return {'rows': rows, 'summary': {k: dict(v) for k, v in summary.items()}, 'gate': gate, 'official_build_exit': official_build_exit}
 
 
 def table(result):

@@ -14,6 +14,15 @@ import ic_checks
 import post_prd
 
 
+def official_build_exit(log):
+    """The official build's exit code, recorded next to its log (`official-verifier/build-exit-code.txt`); None if absent."""
+    path = Path(log).with_suffix('') / 'build-exit-code.txt'
+    try:
+        return int(path.read_text().strip())
+    except (OSError, ValueError):
+        return None
+
+
 def _reconcile_code(code, log, texts, upto, extra=()):
     with tempfile.TemporaryDirectory(prefix='ic-reconcile-') as tmp:
         copy = Path(tmp) / 'code'
@@ -21,7 +30,7 @@ def _reconcile_code(code, log, texts, upto, extra=()):
         probes, build = ic_checks.probe_items(copy, texts, upto)
         post, _ = post_prd.p1_p2(copy, texts)
         items = ic_checks.unit_items(copy, texts) + probes + post + list(extra)
-        result = check_reconcile.reconcile(items, log)
+        result = check_reconcile.reconcile(items, log, official_build_exit(log))
         result['build_exit'] = build
         return result
 
@@ -41,7 +50,7 @@ def reconcile_round(trial, round_number):
         out['final_code'] = _reconcile_code(trial / 'official-app', trial / 'official-verifier.log', texts, round_number, extra)
     lines = [f'# R{round_number} IC 检查与官方结果对账', '', '对账只用于判定检查器是否可信，不用于改写需求或示例。', '']
     for label, r in out.items():
-        lines += [f"## {'SDD 交回的代码' if label == 'sdd_code' else '本轮最终代码'}（构建 {r['build_exit']}）", '', check_reconcile.table(r), '']
+        lines += [f"## {'SDD 交回的代码' if label == 'sdd_code' else '本轮最终代码'}（构建 {r['build_exit']}；官方构建 {r.get('official_build_exit')}）", '', check_reconcile.table(r), '']
         lines += ['| 检查项 | IC | 官方失败/匹配 | 结论 |', '|---|---|---|---|']
         lines += [f"| {x['id']} | {'失败' if x['failed'] else '通过'} | {x['official_failed']}/{x['official_total']} | {x['verdict']}{'（' + x['note'] + '）' if x.get('note') else ''} |" for x in r['rows'] if x['failed'] or x['verdict'] != 'consistent']
         lines.append('')

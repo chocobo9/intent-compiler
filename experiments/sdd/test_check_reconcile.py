@@ -72,3 +72,35 @@ def test_command_and_kind_match_keeps_consistent_and_missed(tmp_path):
     log = _log(tmp_path, MANIFEST_OWN.format(s='failed'))
     assert check_reconcile.reconcile(_probe(True), log)['rows'][0]['verdict'] == 'consistent'
     assert check_reconcile.reconcile(_probe(False), log)['rows'][0]['verdict'] == 'ic_missed'
+
+
+def test_official_build_failed_makes_every_row_not_comparable(tmp_path):
+    # v6 R9: SDD returned a SpecArt skeleton that does not build; the official cases ran the previous
+    # round's dpipe left in the directory, so they say nothing about this code.
+    log = _log(tmp_path, MANIFEST_OWN.format(s='success'))
+    items = _probe(True) + [{'class': 'unit', 'id': 'unit:command:manifest', 'failed': True, 'match': 'unit', 'name': 'manifest'}]
+    result = check_reconcile.reconcile(items, log, official_build_exit=1)
+    assert [r['verdict'] for r in result['rows']] == ['unmatched', 'unmatched']
+    assert all(r['note'] == 'official build failed (exit 1): its cases did not run this code' for r in result['rows'])
+    assert result['rows'][0]['how'] == 'command and kind' and result['rows'][0]['official'] == ['c200:pass']
+    assert result['gate'] == {'probe': 'open', 'unit': 'open'}
+    assert result['official_build_exit'] == 1
+    assert '| probe | 0 | 0 | 0 | 1 | 无可比项 |' in check_reconcile.table(result)
+    # A build that succeeded, or one not recorded, keeps the usual verdicts.
+    for build in (0, None):
+        assert check_reconcile.reconcile(_probe(True), log, official_build_exit=build)['rows'][0]['verdict'] == 'ic_false_positive'
+
+
+def test_round_reconcile_reads_the_official_build_exit(tmp_path):
+    import round_reconcile
+    log = _log(tmp_path, '')
+    assert round_reconcile.official_build_exit(log) is None
+    (tmp_path / 'official-verifier').mkdir()
+    (tmp_path / 'official-verifier' / 'build-exit-code.txt').write_text('1\n')
+    assert round_reconcile.official_build_exit(log) == 1
+
+
+def test_round_report_marks_a_score_without_a_build():
+    import round_report
+    assert round_report._sdd_score({'build_exit_code': 0, 'passed': 711, 'total': 816}) == '711/816'
+    assert round_report._sdd_score({'build_exit_code': 1, 'passed': 671, 'total': 816}) == '构建失败（官方构建 exit 1；671/816 不是由该代码构建的程序得出）'
