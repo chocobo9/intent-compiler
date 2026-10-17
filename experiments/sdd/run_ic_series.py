@@ -291,7 +291,9 @@ def restore_checkpoint(root, k, reason):
             later = False
         if later:
             (archive / 'requests-host').mkdir(exist_ok=True)
-            shutil.move(str(request), str(archive / 'requests-host' / request.name))
+            # With its sidecars (.pid, .prepared, .requirement.md): the bridge reads .prepared as "already started".
+            for part in [request, *host.glob(request.name + '.*')]:
+                shutil.move(str(part), str(archive / 'requests-host' / part.name))
     (root / 'store').mkdir()
     shutil.copy2(folder / 'store.json', root / 'store' / 'ci-sdd.json')
     state = json.loads((archive / 'series-results.json').read_text(encoding='utf-8'))
