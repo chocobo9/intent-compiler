@@ -71,7 +71,7 @@ def host_identity(native):
     return identity
 
 
-def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round=1, acceptance_repair=False, pause_below_floor=True, native=None):
+def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round=1, acceptance_repair=False, pause_below_floor=True, native=None, pause_each_round=False):
     root = run_r1.BASE / 'harbor_runs' / (f'{trial_prefix}-15round-' + dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%Sz-') + uuid.uuid4().hex[:8])
     root.mkdir(parents=True)
     source = Path(__file__).parent
@@ -108,7 +108,7 @@ def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round
     ic_files = {p.relative_to(dist).as_posix(): run_r1.sha(p) for p in dist.rglob('*') if p.is_file()}
     run_r1.write_json(root / 'series.json', {
         'status': 'prepared', 'rounds': 15, 'arm': 'ic+sdd', 'model': run_r1.MODEL, 'variant': run_r1.VARIANT,
-        'trial_prefix': trial_prefix, 'ledger_from_round': ledger_from_round, 'acceptance_repair': acceptance_repair, 'pause_below_floor': pause_below_floor, 'management_budget': MANAGEMENT_BUDGET, 'request_timeout_ms': 2147483647,
+        'trial_prefix': trial_prefix, 'ledger_from_round': ledger_from_round, 'acceptance_repair': acceptance_repair, 'pause_below_floor': pause_below_floor, 'pause_each_round': pause_each_round, 'management_budget': MANAGEMENT_BUDGET, 'request_timeout_ms': 2147483647,
         'native': str(Path(native).resolve()) if native else str(run_r1.resolve_opencode()), **({'native_frozen': host_identity(native)} if native else {}), 'reopen_calls': REOPEN_CALLS, 'check_gate': check_gate(), 'node': NODE, 'python': str(run_r1.PYTHON), 'port': free_port(),
         'adapter_digest': adapter_digest(adapter), 'frozen_files': frozen,
         'ic': {'dist': str(dist), 'files': ic_files, 'source_head': head, 'source_uncommitted': dirty},
@@ -545,6 +545,11 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
             record['checkpoint'] = write_checkpoint(root, number, event, snapshot(), record, baseline)
             publish(root, records, 'running')
             log(f"R{number} checkpoint written: {record['checkpoint']['path']}")
+            if config.get('pause_each_round') and number < config['rounds']:
+                # Pilot (V3): stop after every round for the reconciliation report; --resume --keep-ic continues with the next.
+                publish(root, records, 'paused_round')
+                log(f'SERIES PAUSED after R{number} (pause_each_round): report, then resume with --resume --keep-ic')
+                return
         publish(root, records, 'completed')
         log('SERIES FINISHED: all 15 round records saved; see series-report.md and series-results.json')
     except Exception as error:
@@ -617,6 +622,7 @@ if __name__ == '__main__':
     parser.add_argument('--ledger-from-round', type=int, default=1, help='first round whose returned code is run against the examples (an adopted R1 before it is not)')
     parser.add_argument('--keep-ic', action='store_true', help='resume with the frozen IC build and bridge of the series (only the harness files are replaced)')
     parser.add_argument('--no-pause', action='store_true', help='rounds below the pass floor go on instead of pausing (recorded as below_floor)')
+    parser.add_argument('--pause-each-round', action='store_true', help='freeze: stop after every round (pilot)')
     parser.add_argument('--reopen', type=int, help='extra management calls for a rejected batch (only after user approval)')
     parser.add_argument('--acceptance-repair', action='store_true', help='freeze: after SDD returns, IC accepts the code and has SDD prd-fix what failed (acceptance_repair.py)')
     parser.add_argument('--native', help='freeze: the management host launcher (v5: the strict OpenCode build)')
@@ -639,4 +645,4 @@ if __name__ == '__main__':
             raise SystemExit(subprocess.call([sys.executable, str(runner), '--launch', str(Path(args.launch).resolve())]))
         execute_ic_series(args.launch)
     else:
-        freeze_ic_series(args.adopt_r1, args.trial_prefix, args.ledger_from_round, args.acceptance_repair, not args.no_pause, args.native)
+        freeze_ic_series(args.adopt_r1, args.trial_prefix, args.ledger_from_round, args.acceptance_repair, not args.no_pause, args.native, args.pause_each_round)
