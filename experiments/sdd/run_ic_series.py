@@ -554,6 +554,14 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
             record['checkpoint'] = write_checkpoint(root, number, event, snapshot(), record, baseline)
             publish(root, records, 'running')
             log(f"R{number} checkpoint written: {record['checkpoint']['path']}")
+            if config.get('pilot_report'):
+                # Overnight mode: the round's reconciliation tables and mechanism states, by code, into the pilot document.
+                try:
+                    import round_report
+                    round_report.append(root, record, snapshot(), number, config['pilot_report'])
+                    log(f"R{number} report appended to {config['pilot_report']}")
+                except Exception as error:
+                    log(f'R{number} report failed: {error!r}'[:300])
             if config.get('pause_each_round') and number < config['rounds']:
                 # Pilot (V3): stop after every round for the reconciliation report; --resume --keep-ic continues with the next.
                 publish(root, records, 'paused_round')
@@ -570,7 +578,7 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
             subprocess.run(['taskkill', '/PID', str(server.pid), '/T', '/F'], capture_output=True)
 
 
-def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False):
+def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False, overnight_report=None):
     """Continue a blocked series with the current IC build and promotion rules; recorded in series.json."""
     root = Path(root).resolve()
     state = json.loads((root / 'series-results.json').read_text(encoding='utf-8'))
@@ -591,7 +599,7 @@ def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False):
     harness = ['run_series.py', 'run_results.py', 'run_ic_series.py', 'run_r1.py', 'execution-context.md',
                'acceptance_repair.py', 'static_units.py', 'error_probes.py', 'drift_labels.py',
                # v6: post-PRD checks, V2 reconciliation and cost records go with the other harness files.
-               'post_prd.py', 'check_reconcile.py', 'ic_checks.py', 'round_reconcile.py', 'costs.py', 'watchdog.py']
+               'post_prd.py', 'check_reconcile.py', 'ic_checks.py', 'round_reconcile.py', 'costs.py', 'watchdog.py', 'round_report.py']
     for name in harness + ([] if keep_ic else ['ic_bridge.py', 'example_runner.py']):
         before = run_r1.sha(root / 'adapter' / name) if (root / 'adapter' / name).exists() else None
         shutil.copy2(source / name, root / 'adapter' / name)
@@ -604,6 +612,11 @@ def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False):
         'previous_adapter_digest': config['adapter_digest'], 'previous_ic': config['ic']})
     if no_pause:
         config['pause_below_floor'] = False
+    if overnight_report:
+        # Unattended (user, 2026-10-17): no stop after each round; each round's report goes into this document.
+        config['pause_each_round'] = False
+        config['pilot_report'] = str(Path(overnight_report).resolve())
+        config['resumes'][-1]['overnight'] = {'pause_each_round': False, 'pilot_report': config['pilot_report']}
     config['adapter_digest'] = adapter_digest(root / 'adapter')
     config['frozen_files'] = {p.relative_to(root).as_posix(): run_r1.sha(p) for folder in [root / 'adapter', root / 'sdd-source'] for p in folder.rglob('*') if p.is_file()}
     config['ic'] = config['ic'] if keep_ic else {'dist': str(dist), 'files': {p.relative_to(dist).as_posix(): run_r1.sha(p) for p in dist.rglob('*') if p.is_file()},
@@ -632,6 +645,7 @@ if __name__ == '__main__':
     parser.add_argument('--keep-ic', action='store_true', help='resume with the frozen IC build and bridge of the series (only the harness files are replaced)')
     parser.add_argument('--no-pause', action='store_true', help='rounds below the pass floor go on instead of pausing (recorded as below_floor)')
     parser.add_argument('--pause-each-round', action='store_true', help='freeze: stop after every round (pilot)')
+    parser.add_argument('--overnight-report', help='with --resume: run on without stopping after each round, appending each round report to this document')
     parser.add_argument('--reopen', type=int, help='extra management calls for a rejected batch (only after user approval)')
     parser.add_argument('--acceptance-repair', action='store_true', help='freeze: after SDD returns, IC accepts the code and has SDD prd-fix what failed (acceptance_repair.py)')
     parser.add_argument('--native', help='freeze: the management host launcher (v5: the strict OpenCode build)')
@@ -645,7 +659,7 @@ if __name__ == '__main__':
         shutil.move(str(Path(args.resume) / 'checkpoints' / f'r{args.retry_round:02d}'), str(archive / f'r{args.retry_round:02d}'))
     if args.resume:
         root = Path(args.resume).resolve()
-        number = resume_ic_series(root, args.reason or 'unspecified', args.reopen, args.keep_ic, args.no_pause)
+        number = resume_ic_series(root, args.reason or 'unspecified', args.reopen, args.keep_ic, args.no_pause, args.overnight_report)
         raise SystemExit(subprocess.call([sys.executable, str(root / 'adapter/run_ic_series.py'), '--continue', str(root), str(number)]
                                          + (['--retry-paused'] if args.retry_paused else []) + (['--retry-round', str(args.retry_round)] if args.retry_round else [])))
     if args.launch:
