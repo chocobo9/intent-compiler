@@ -43,7 +43,7 @@ def reconcile_round(trial, round_number):
     for label, r in out.items():
         lines += [f"## {'SDD 交回的代码' if label == 'sdd_code' else '本轮最终代码'}（构建 {r['build_exit']}）", '', check_reconcile.table(r), '']
         lines += ['| 检查项 | IC | 官方失败/匹配 | 结论 |', '|---|---|---|---|']
-        lines += [f"| {x['id']} | {'失败' if x['failed'] else '通过'} | {x['official_failed']}/{x['official_total']} | {x['verdict']} |" for x in r['rows'] if x['failed'] or x['verdict'] != 'consistent']
+        lines += [f"| {x['id']} | {'失败' if x['failed'] else '通过'} | {x['official_failed']}/{x['official_total']} | {x['verdict']}{'（' + x['note'] + '）' if x.get('note') else ''} |" for x in r['rows'] if x['failed'] or x['verdict'] != 'consistent']
         lines.append('')
     (trial / 'acceptance').mkdir(exist_ok=True)
     (trial / 'acceptance/reconcile.json').write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding='utf-8')

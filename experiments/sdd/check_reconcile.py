@@ -15,7 +15,9 @@ Each IC check item is matched to official cases by code:
 
 Item verdicts: consistent (both pass, or IC fails and a matched case fails), ic_false_positive
 (IC fails, every matched case passes), ic_missed (IC passes, a matched case of the same
-kind fails; only for kind-matched classes), unmatched (no official case).
+kind fails; only for kind-matched classes), unmatched (no official case, or a probe matched
+only to the generic error-handling cases: those exercise another command, so the item is not
+comparable; the row keeps how='generic kind' and the case ids, with a note).
 """
 import re
 from collections import Counter, defaultdict
@@ -76,15 +78,23 @@ def reconcile(items, log):
     cases = official_cases(log)
     rows = []
     for it in items:
+        note = None
         if it['match'] == 'probe':
             matched, how = match_probe(it['id'], cases)
             kind_matched = True
         else:
             matched, how = match_unit(it['name'], cases), 'name'
             kind_matched = it['match'] == 'unit_kind'
-        rows.append({**{k: it[k] for k in ('class', 'id', 'failed')}, 'how': how, 'official': [f"{c['id']}:{'pass' if c['passed'] else 'fail'}" for c in matched][:8],
-                     'official_failed': sum(not c['passed'] for c in matched), 'official_total': len(matched),
-                     'verdict': verdict(it['failed'], matched, kind_matched)})
+        if how == 'generic kind':
+            # The generic cases run another command: shown, but not comparable with this probe.
+            result, note = 'unmatched', 'generic cases only (other command)'
+        else:
+            result = verdict(it['failed'], matched, kind_matched)
+        row = {**{k: it[k] for k in ('class', 'id', 'failed')}, 'how': how, 'official': [f"{c['id']}:{'pass' if c['passed'] else 'fail'}" for c in matched][:8],
+               'official_failed': sum(not c['passed'] for c in matched), 'official_total': len(matched), 'verdict': result}
+        if note:
+            row['note'] = note
+        rows.append(row)
     summary = defaultdict(Counter)
     for r in rows:
         summary[r['class']][r['verdict']] += 1
@@ -96,5 +106,11 @@ def table(result):
     # The last column is this round's calibration verdict; the series' frozen gate is set separately (by the user).
     lines = ['| 检查类 | 一致 | IC 误报 | IC 漏报 | 无法对应 | 本轮对账结论 |', '|---|---|---|---|---|---|']
     for cls, c in result['summary'].items():
-        lines.append(f"| {cls} | {c.get('consistent', 0)} | {c.get('ic_false_positive', 0)} | {c.get('ic_missed', 0)} | {c.get('unmatched', 0)} | {'无误报' if result['gate'][cls] == 'open' else '有误报（不得回送）'} |")
+        if c.get('ic_false_positive', 0):
+            conclusion = '有误报（不得回送）'
+        elif not c.get('consistent', 0) + c.get('ic_missed', 0):
+            conclusion = '无可比项'
+        else:
+            conclusion = '无误报'
+        lines.append(f"| {cls} | {c.get('consistent', 0)} | {c.get('ic_false_positive', 0)} | {c.get('ic_missed', 0)} | {c.get('unmatched', 0)} | {conclusion} |")
     return '\n'.join(lines)
