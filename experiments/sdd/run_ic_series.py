@@ -483,9 +483,18 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
                 publish(root, records, 'running')
                 log(f'R{number} SDD started{" (attempt " + str(len(record["attempts"]) + 1) + ", same CI and baseline)" if record["attempts"] else ""}: {trial}; IC calls={batch["requests_used"]}; CI chars={len(batch["delivery"]["text"])}')
                 deadline = time.monotonic() + ROUND_WAIT_SECONDS
+                import watchdog
                 while not (trial / 'completion.json').exists():
                     if time.monotonic() > deadline:
                         raise RuntimeError(f'R{number}: no completion within {ROUND_WAIT_SECONDS}s; inspect {trial}')
+                    # A model request that never returns stops the round forever: the watchdog stops it (a T fault).
+                    try:
+                        fired = watchdog.check(trial)
+                    except Exception as error:
+                        fired = None
+                        log(f'R{number} watchdog check failed: {error!r}'[:300])
+                    if fired:
+                        log(f"R{number} WATCHDOG: {fired['reason']}; last activity {fired['last_activity']} ({fired['last_activity_at']}); stopped {fired['stopped_pids']}")
                     time.sleep(30)
                 returned = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))
                 stop = costs.stop_record(trial, returned, promotion_record(trial, returned))
@@ -582,7 +591,7 @@ def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False):
     harness = ['run_series.py', 'run_results.py', 'run_ic_series.py', 'run_r1.py', 'execution-context.md',
                'acceptance_repair.py', 'static_units.py', 'error_probes.py', 'drift_labels.py',
                # v6: post-PRD checks, V2 reconciliation and cost records go with the other harness files.
-               'post_prd.py', 'check_reconcile.py', 'ic_checks.py', 'round_reconcile.py', 'costs.py']
+               'post_prd.py', 'check_reconcile.py', 'ic_checks.py', 'round_reconcile.py', 'costs.py', 'watchdog.py']
     for name in harness + ([] if keep_ic else ['ic_bridge.py', 'example_runner.py']):
         before = run_r1.sha(root / 'adapter' / name) if (root / 'adapter' / name).exists() else None
         shutil.copy2(source / name, root / 'adapter' / name)

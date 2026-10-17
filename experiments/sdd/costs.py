@@ -100,6 +100,10 @@ def stop_record(trial, completion, promotion):
     # A tool or environment fault the stage itself names (any stage, coding included).
     for marker in TOOL_MARKERS.findall(failure.get('stage_conclusion') or ''):
         tool.append(f'stage reports: {marker}')
+    # The IC watchdog stopped a model request that never returned.
+    marker = Path(trial) / 'watchdog.json'
+    if marker.exists():
+        tool.append('watchdog: ' + json.loads(marker.read_text(encoding='utf-8')).get('reason', 'request hang'))
     log = run / 'flow.log'
     text = log.read_text(encoding='utf-8', errors='replace') if log.exists() else ''
     if re.search(r'timed? ?out|timeout|killed|terminated', text, re.I):
