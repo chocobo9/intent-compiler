@@ -578,7 +578,7 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
             subprocess.run(['taskkill', '/PID', str(server.pid), '/T', '/F'], capture_output=True)
 
 
-def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False, overnight_report=None):
+def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False, overnight_report=None, gate=None, pause_each_round=False):
     """Continue a blocked series with the current IC build and promotion rules; recorded in series.json."""
     root = Path(root).resolve()
     state = json.loads((root / 'series-results.json').read_text(encoding='utf-8'))
@@ -617,6 +617,14 @@ def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False, o
         config['pause_each_round'] = False
         config['pilot_report'] = str(Path(overnight_report).resolve())
         config['resumes'][-1]['overnight'] = {'pause_each_round': False, 'pilot_report': config['pilot_report']}
+    if pause_each_round:
+        # A pilot of one round: stop after it (user, 2026-10-17: R2, R4, R12 from their checkpoints).
+        config['pause_each_round'] = True
+        config['resumes'][-1]['pause_each_round'] = True
+    if gate is not None:
+        # The gate this resumed run freezes, as the user decided it (never from the official result of the round it runs).
+        config['resumes'][-1]['check_gate'] = {'before': config.get('check_gate'), 'after': gate}
+        config['check_gate'] = gate
     config['adapter_digest'] = adapter_digest(root / 'adapter')
     config['frozen_files'] = {p.relative_to(root).as_posix(): run_r1.sha(p) for folder in [root / 'adapter', root / 'sdd-source'] for p in folder.rglob('*') if p.is_file()}
     config['ic'] = config['ic'] if keep_ic else {'dist': str(dist), 'files': {p.relative_to(dist).as_posix(): run_r1.sha(p) for p in dist.rglob('*') if p.is_file()},
@@ -644,7 +652,8 @@ if __name__ == '__main__':
     parser.add_argument('--ledger-from-round', type=int, default=1, help='first round whose returned code is run against the examples (an adopted R1 before it is not)')
     parser.add_argument('--keep-ic', action='store_true', help='resume with the frozen IC build and bridge of the series (only the harness files are replaced)')
     parser.add_argument('--no-pause', action='store_true', help='rounds below the pass floor go on instead of pausing (recorded as below_floor)')
-    parser.add_argument('--pause-each-round', action='store_true', help='freeze: stop after every round (pilot)')
+    parser.add_argument('--pause-each-round', action='store_true', help='freeze, or with --resume: stop after every round (pilot)')
+    parser.add_argument('--gate', help='with --resume: the check gate to freeze from here, as JSON over the default (e.g. {"p1_stub": "open", "p2_structure:profile": "open"}); user decision only')
     parser.add_argument('--overnight-report', help='with --resume: run on without stopping after each round, appending each round report to this document')
     parser.add_argument('--reopen', type=int, help='extra management calls for a rejected batch (only after user approval)')
     parser.add_argument('--acceptance-repair', action='store_true', help='freeze: after SDD returns, IC accepts the code and has SDD prd-fix what failed (acceptance_repair.py)')
@@ -659,7 +668,9 @@ if __name__ == '__main__':
         shutil.move(str(Path(args.resume) / 'checkpoints' / f'r{args.retry_round:02d}'), str(archive / f'r{args.retry_round:02d}'))
     if args.resume:
         root = Path(args.resume).resolve()
-        number = resume_ic_series(root, args.reason or 'unspecified', args.reopen, args.keep_ic, args.no_pause, args.overnight_report)
+        import acceptance_repair
+        gate = {**acceptance_repair.DEFAULT_GATE, **json.loads(args.gate)} if args.gate else None
+        number = resume_ic_series(root, args.reason or 'unspecified', args.reopen, args.keep_ic, args.no_pause, args.overnight_report, gate, args.pause_each_round)
         raise SystemExit(subprocess.call([sys.executable, str(root / 'adapter/run_ic_series.py'), '--continue', str(root), str(number)]
                                          + (['--retry-paused'] if args.retry_paused else []) + (['--retry-round', str(args.retry_round)] if args.retry_round else [])))
     if args.launch:

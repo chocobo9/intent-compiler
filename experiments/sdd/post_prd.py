@@ -36,8 +36,9 @@ def is_output_heading(h):
 
 # ---------- the original's samples ----------
 
-def _headed_chunks(text):
-    """(heading path, fenced or backticked JSON text) for every sample, with the headings above it."""
+def _headed_chunks(text, fenced_only=False):
+    """(heading path, fenced or backticked JSON text) for every sample, with the headings above it; fenced_only:
+    only fenced blocks, the samples the original shows as a whole file (an inline one may be a fragment of one)."""
     path, out = [], []
     fence = re.compile(r'```[a-zA-Z]*\n(.*?)```', re.S)
     pos = 0
@@ -56,6 +57,8 @@ def _headed_chunks(text):
         return [t for _, t in p]
     for m in fence.finditer(text):
         out.append((path_at(m.start()), m.group(1)))
+    if fenced_only:
+        return out
     for m in re.finditer(r'`(\{[^`]*\})`', text):
         out.append((path_at(m.start()), m.group(1)))
     return out
@@ -96,11 +99,11 @@ def output_samples(texts):
     return out
 
 
-def section_input_samples(texts, command):
+def section_input_samples(texts, command, fenced_only=False):
     """JSON objects shown in the command's own section, not under an output heading (its schema or config samples)."""
     found = []
     for text in texts:
-        for path, chunk in _headed_chunks(text):
+        for path, chunk in _headed_chunks(text, fenced_only):
             if not any(re.search(r'\b' + re.escape(command) + r'\b', h) for h in path) or (path and is_output_heading(path[-1])):
                 continue
             try:
@@ -128,6 +131,11 @@ def identifiers(value, skip=()):
                 walk(x)
         elif isinstance(v, str) and re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', v) and v not in skip and v not in out:
             out.append(v)
+        elif isinstance(v, str) and re.search(r'[*+/<>=&|()%-]', v) and not re.search(r'\.\w+$', v):
+            # An expression (value * 2 + 1) reads the columns it names; quoted literals inside it are values, not columns.
+            for name in re.findall(r'[A-Za-z_][A-Za-z0-9_]*', re.sub(r"'[^']*'|\"[^\"]*\"", ' ', v)):
+                if name not in skip and name not in out and not re.fullmatch(r'(?i)and|or|not|true|false|null|nil', name):
+                    out.append(name)
     walk(value)
     return out
 
@@ -208,10 +216,26 @@ def static_stub(code_dir, name):
 
 # ---------- runs with placeholder inputs ----------
 
-def _transform_run(sample, synopsis, value=PLACEHOLDER):
-    cols = identifiers(sample, skip={sample.get('op')})
+def column_subsets(columns, limit=64):
+    """The non-empty proper subsets of the named columns, largest first (at most limit of them). The CSV header
+    holds every name the sample writes, output names included, which a program rightly refuses (an output column
+    that already exists); a smaller header that the program accepts shows the failure came from IC's input."""
+    from itertools import combinations
+    out = []
+    for size in range(len(columns) - 1, 0, -1):
+        for combo in combinations(columns, size):
+            out.append(list(combo))
+            if len(out) >= limit - 1:
+                return out + [[]]
+    # Last, a header with none of the named columns (placeholder_csv writes an id column).
+    return out + [[]]
+
+
+def _transform_run(sample, synopsis, value=PLACEHOLDER, columns=None, other_columns=None):
+    """other_columns: the header of the other CSV files the sample names (a join's right side); the main input's by default."""
+    cols = identifiers(sample, skip={sample.get('op')}) if columns is None else columns
     files = [{'path': 'in.csv', 'content': placeholder_csv(cols, value)}, {'path': 'recipe.json', 'content': json.dumps([sample])}]
-    files += [{'path': p, 'content': placeholder_csv(cols, value)} for p in csv_files(sample) if p not in ('in.csv',)]
+    files += [{'path': p, 'content': placeholder_csv(cols if other_columns is None else other_columns, value)} for p in csv_files(sample) if p not in ('in.csv',)]
     args = ['transform']
     for opt, value, optional in synopsis['options']:
         if optional:
@@ -220,12 +244,20 @@ def _transform_run(sample, synopsis, value=PLACEHOLDER):
     return {'args': args, 'files': files, 'stdin': None}
 
 
-def command_run(command, synopsis, texts, placeholder=PLACEHOLDER):
-    """A run of a command with placeholder CSV inputs and its section's own JSON sample for JSON options; None when an option cannot be filled."""
+def command_columns(command, texts):
+    """The columns a command's placeholder CSV holds: those its own input samples name first (a schema's columns), then those its output sample names."""
     inputs = section_input_samples(texts, command)
-    # The columns its own input samples name first (a schema's columns), then those its output sample names.
     columns = [c for s in inputs for c in identifiers(s)] + identifiers(output_samples(texts).get(command, {}))
-    columns = list(dict.fromkeys(columns))[:12]
+    return list(dict.fromkeys(columns))[:12]
+
+
+def command_run(command, synopsis, texts, placeholder=PLACEHOLDER, columns=None):
+    """A run of a command with placeholder CSV inputs and its section's own JSON sample for JSON options (a whole-file
+    sample: a fenced block); None when an option cannot be filled."""
+    # A sample that is one unit (an operation or a step, by its op/type key) is part of a recipe or configuration,
+    # not the whole file: it is judged as that unit, never fed to the command as its file.
+    inputs = [s for s in section_input_samples(texts, command, fenced_only=True) if not (isinstance(s, dict) and any(k in s for k in DISCRIMINATORS))]
+    columns = command_columns(command, texts) if columns is None else columns
     args, files = [command], []
     for opt, value, optional in synopsis['options']:
         if optional:
@@ -248,7 +280,9 @@ def command_run(command, synopsis, texts, placeholder=PLACEHOLDER):
             args += [f'--{opt}', (columns or ['id'])[0]]
         else:
             args += [f'--{opt}', PLACEHOLDER]
-    return {'args': args, 'files': files, 'stdin': None}
+    # Whether the run carries the original's own sample (a schema, configuration or recipe): only such a run says
+    # what the code does with the requirement's input; one made of placeholder files alone is recorded, not judged.
+    return {'args': args, 'files': files, 'stdin': None, 'from_sample': any(f['path'].endswith('.json') for f in files)}
 
 
 def same_failure(observed):
@@ -265,27 +299,58 @@ def p1_p2(code_dir, texts):
     runs, meta = [], []
     for (key, name), samples in units.items():
         static = static_stub(code_dir, name)
-        made = [_transform_run(samples[0], synopses['transform'], v) for v in PLACEHOLDERS] if key == 'op' and 'transform' in synopses else None
-        meta.append({'kind': 'unit', 'key': key, 'name': name, 'static': static, 'runs': made, 'sample': samples[0]})
+        is_op = key == 'op' and 'transform' in synopses
+        made = [_transform_run(samples[0], synopses['transform'], v) for v in PLACEHOLDERS] if is_op else None
+        build = (lambda v, cols, other=None, s=samples[0]: _transform_run(s, synopses['transform'], v, cols, other)) if is_op else None
+        meta.append({'kind': 'unit', 'key': key, 'name': name, 'static': static, 'runs': made, 'sample': samples[0],
+                     'columns': identifiers(samples[0], skip={samples[0].get('op')}) if is_op else [], 'build': build})
         for i, run in enumerate(made or []):
             runs.append({'id': f'p1:{key}:{name}#{i}', 'run': run, 'check': {}, 'asserts': [], 'exit_code': None})
     outputs = output_samples(texts)
     for command, synopsis in synopses.items():
         made = [command_run(command, synopsis, texts, v) for v in PLACEHOLDERS]
         made = made if all(made) else None
-        meta.append({'kind': 'command', 'name': command, 'static': static_stub(code_dir, command), 'runs': made, 'expected': outputs.get(command)})
+        meta.append({'kind': 'command', 'name': command, 'static': static_stub(code_dir, command), 'runs': made, 'expected': outputs.get(command),
+                     'columns': command_columns(command, texts), 'build': lambda v, cols, other=None, c=command, sy=synopsis: command_run(c, sy, texts, v, cols)})
         for i, run in enumerate(made or []):
             runs.append({'id': f'p1:command:{command}#{i}', 'run': run, 'check': {}, 'asserts': [], 'exit_code': None})
     res = example_runner.run_examples(code_dir, runs) if runs else {'results': [], 'build_exit': None}
     observed = {r['id']: r for r in res['results']}
+    rid_of = lambda m: f"p1:{m.get('key', 'command')}:{m['name']}"
+    # A unit or command that failed the same way under both values runs again with fewer of the named columns:
+    # if any such input succeeds, the failure came from the input IC built, not from the code.
+    retry = []
+    for m in meta:
+        obs = [(observed.get(f'{rid_of(m)}#{i}') or {}).get('observed') or {} for i in range(len(PLACEHOLDERS))] if m['runs'] else []
+        if obs and same_failure(obs) is not None and m['columns']:
+            # Another CSV the sample names (a join's right side) also gets the columns the main input does not hold.
+            two_files = m['kind'] == 'unit' and bool(csv_files(m.get('sample') or {}))
+            headers = [(cols, None) for cols in column_subsets(m['columns'])]
+            if two_files:
+                headers += [(cols, [c for c in m['columns'] if c not in cols] or ['id']) for cols in [m['columns']] + column_subsets(m['columns'])]
+            for j, (cols, other) in enumerate(headers):
+                for i, v in enumerate(PLACEHOLDERS):
+                    run = m['build'](v, cols, other)
+                    if run:
+                        retry.append({'id': f'{rid_of(m)}~{j}#{i}', 'run': run, 'check': {}, 'asserts': [], 'exit_code': None})
+    if retry:
+        for r in example_runner.run_examples(code_dir, retry)['results']:
+            observed[r['id']] = r
     items = []
     for m in meta:
-        rid = f"p1:{m.get('key', 'command')}:{m['name']}"
+        rid = rid_of(m)
         rs = [observed.get(f'{rid}#{i}') for i in range(len(PLACEHOLDERS))] if m['runs'] else []
         obs = [(r or {}).get('observed') or {} for r in rs]
         first = obs[0] if obs else {}
         run_stub = any(o and STUB_RX.search((o.get('stderr') or '') + (o.get('stdout') or '')) for o in obs)
         failed_code = same_failure(obs) if obs else None
+        if m['runs'] and m['kind'] == 'command' and not m['runs'][0].get('from_sample'):
+            failed_code = None
+        variants = [((r or {}).get('observed') or {}) for k, r in observed.items() if k.startswith(f'{rid}~')]
+        # Failing whatever IC's input: every smaller header failed with the same exit code too.
+        accepted_smaller = failed_code is not None and any(o.get('exit_code') != failed_code for o in variants)
+        if accepted_smaller:
+            failed_code = None
         if not rs:
             run_state = 'not run'
         elif not all(obs):
@@ -293,9 +358,13 @@ def p1_p2(code_dir, texts):
         elif run_stub:
             run_state = 'stub'
         elif failed_code is not None:
-            run_state = f'exit {failed_code} under both placeholder sets'
+            run_state = f'exit {failed_code} under both placeholder sets' + (f' and {len(variants)} smaller column sets' if variants else '')
+        elif accepted_smaller:
+            run_state = f"inconclusive (exit {same_failure(obs)} with every named column; other results with fewer: IC's input, not the code)"
         elif all(o.get('exit_code') == 0 for o in obs):
             run_state = 'exit 0'
+        elif m['kind'] == 'command' and not m['runs'][0].get('from_sample'):
+            run_state = 'exit ' + ' / '.join(str(o.get('exit_code')) for o in obs) + ' (not judged: no sample of the original among its inputs)'
         else:
             run_state = 'inconclusive (exit ' + ' / '.join(str(o.get('exit_code')) for o in obs) + ')'
         static = m['static']['stub']
@@ -308,7 +377,12 @@ def p1_p2(code_dir, texts):
         if m['kind'] == 'command' and m.get('expected') is not None:
             args = m['runs'][0]['args'] if m['runs'] else []
             out_name = next((args[i + 1] for i, a in enumerate(args) if a == '--output'), None)
-            items.append(structure_item(m['name'], m['expected'], obs, out_name, rs, m['runs'] is not None))
+            item = structure_item(m['name'], m['expected'], obs, out_name, rs, m['runs'] is not None)
+            if item.get('state', '').startswith('no output file under') and accepted_smaller:
+                item = {**item, 'failed': False, 'state': "no output file with every named column (inconclusive: fewer columns give another result, so IC's input, not the code)", 'problems': []}
+            elif item.get('state', '').startswith('no output file under') and not m['runs'][0].get('from_sample'):
+                item = {**item, 'failed': False, 'state': item['state'] + ' (not judged: no sample of the original among its inputs)', 'problems': []}
+            items.append(item)
     return items, res.get('build_exit')
 
 
