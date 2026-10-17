@@ -382,8 +382,15 @@ def official_phase(root, env, records):
     run = run_directory(root)
     round_number = int(run.name[1:])
     app = root / 'official-app'
-    shutil.copytree(run / 'repos/main', app, ignore=shutil.ignore_patterns(
-        '.git', '.specart*', '.system-design', '.verdict.md', '.coding-done'))
+    main = (run / 'repos/main').resolve()
+    tools = shutil.ignore_patterns('.git', '.specart*', '.system-design', '.verdict.md', '.coding-done')
+
+    def ignore(directory, names):
+        # A program left at the root by an earlier build is not copied: the official tests run whatever /app/dpipe
+        # is there, so a failed build would otherwise be scored with the old program (user, 2026-10-17).
+        stale = [n for n in names if Path(directory).resolve() == main and n in ('dpipe', 'dpipe.exe') and (Path(directory) / n).is_file()]
+        return set(tools(directory, names)) | set(stale)
+    shutil.copytree(main, app, ignore=ignore)
     logs = root / 'official-verifier'
     logs.mkdir()
     args = ['docker', 'run', '--rm', '--name', root.name.lower(), '--network', 'none',
