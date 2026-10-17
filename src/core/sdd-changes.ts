@@ -41,12 +41,14 @@ function itemQuotes(ir: Record<string, TaskIntent>, itemId: string, inputs: (inp
  * from this update and before from earlier ones (others left out); old and new
  * values stay only where the quotes write them, and subjects only where now
  * writes them as a word. Every changed item no entry covers gets an entry from
- * code quoting its passages.
+ * code quoting its passages. A revised entry rests on its wording: the update's
+ * own words, written in its now quotes; one without them is rejected (the kind
+ * is the model's judgment from those words, never code's from old and new names).
  */
 export function settleChanges(entries: ChangeEntry[], changed: Map<string, { existed: boolean; text: string }>, context: {
   index: Index; cut: Cut; input: number; previous: Record<string, TaskIntent>; current: Record<string, TaskIntent> }): { changes: SettledChange[]; dropped: DeliveryContract["dropped"] } {
   const ids = new Map([...changed.keys()].map(id => [id, 0]))
-  const changes: SettledChange[] = [], dropped: DeliveryContract["dropped"] = []
+  const changes: SettledChange[] = [], dropped: DeliveryContract["dropped"] = [], unworded: string[] = []
   for (const e of entries) {
     const items = [...new Set(e.items.map(id => itemOf(id, ids)).filter((id): id is string => id !== undefined))]
     if (!items.length) { dropped.push({ kind: "change", name: e.subject, reason: `names no item this update added or revised (${e.items.join(", ") || "none"})` }); continue }
@@ -65,6 +67,12 @@ export function settleChanges(entries: ChangeEntry[], changed: Map<string, { exi
       ...e.new_values.filter(v => !newValues.includes(v)).map(v => `new value ${JSON.stringify(v)} is not written in now`),
       ...e.subjects.filter(x => !subjects.includes(x)).map(x => `subject ${JSON.stringify(x)} is not written in now`))
     if (!nowQuotes.length) nowQuotes.push(...items.flatMap(id => itemQuotes(context.current, id, n => n === context.input, context.index, context.cut)))
+    const wording = e.wording?.trim() ?? ""
+    if (e.kind === "revised") {
+      const flat = (t: string) => t.replace(/\s+/gu, " ").trim()
+      if (!wording) { unworded.push(`${JSON.stringify(e.subject)}: kind revised gives no wording`); continue }
+      if (!flat(nowQuotes.map(q => q.text).join(" ")).includes(flat(wording))) { unworded.push(`${JSON.stringify(e.subject)}: wording ${JSON.stringify(wording.slice(0, 160))} is not written in its now passages`); continue }
+    }
     // M3 (v6): a revision whose answer cites no earlier passage gets it from code: the previous versions of its items,
     // only the passages that name its subjects (or the words of its title), at most BEFORE_LIMIT.
     let beforeByCode = false
@@ -80,8 +88,10 @@ export function settleChanges(entries: ChangeEntry[], changed: Map<string, { exi
     const missing = e.kind !== "revised" ? [] : [...(beforeQuotes.length ? [] : ["before"]), ...(oldValues.length ? [] : ["old_values"]), ...(subjects.length ? [] : ["subjects"])]
     if (notes.length) dropped.push({ kind: "change", name: e.subject, reason: `kept with parts left out: ${notes.join("; ")}` })
     changes.push({ kind: e.kind, subject: e.subject, items, subjects, before: beforeQuotes, now: nowQuotes, old_values: oldValues, new_values: newValues, parameters: e.parameters,
-      ...(beforeByCode ? { before_by_code: true } : {}), ...(missing.length ? { missing } : {}) })
+      ...(e.kind === "revised" ? { wording } : {}), ...(beforeByCode ? { before_by_code: true } : {}), ...(missing.length ? { missing } : {}) })
   }
+  // Rejected, not settled by code: the model judges again, from the update's words, whether each is a revision.
+  if (unworded.length) throw new Error(`Change entries of kind revised must copy the words of this update that say an existing rule is replaced, changed or removed, as written in their now passages; an update that adds alongside what exists is added: ${unworded.join("; ")}`)
   const covered = new Set(changes.flatMap(c => c.items))
   for (const [id, { existed, text }] of changed) {
     if (covered.has(id)) continue
@@ -102,7 +112,8 @@ export function changeSection(changes: SettledChange[], revisions: RevisionEntry
   const excerpt = (t: string) => t.trim().split("\n").slice(0, 8).join("\n")
   const body = (c: SettledChange) => [
     ...(c.filled_by_code ? ["Listed by code from this update's IR change; quotes the original."] : []),
-    ...(c.old_values.length || c.new_values.length ? [`Replaced: ${c.old_values.map(v => `\`${v}\``).join(", ") || "-"} → ${c.new_values.map(v => `\`${v}\``).join(", ") || "-"}`] : []),
+    ...(c.kind === "revised" && (c.old_values.length || c.new_values.length) ? [`Replaced: ${c.old_values.map(v => `\`${v}\``).join(", ") || "-"} → ${c.new_values.map(v => `\`${v}\``).join(", ") || "-"}`] : []),
+    ...(c.wording ? [`As the update says: "${c.wording}"`] : []),
     ...(c.parameters.length ? [`Parameters: ${c.parameters.join(", ")}`] : []),
     ...(c.before.length ? [`Before (original passages):\n${refList(c.before, deliveredFrom)}`] : []),
     // A new command or operation is the update's own text, delivered below; a revision names where it now holds.

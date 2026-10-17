@@ -557,7 +557,7 @@ test("the change list quotes the cited passages, keeps only values and subjects 
   const changed = changedItems(before, after, new Set())
   const context = { index: segmentIndex(events), cut: () => false, input: 2, previous: before, current: after }
   const { changes, dropped } = settleChanges([{ kind: "revised", subject: "verify digest", items: ["r-verify"], subjects: ["verify", "manifest"], before: [{ source_id: "r1", segment_id: "s1" }], now: [{ source_id: "r2", segment_id: "s1" }, { source_id: "r1", segment_id: "s2" }],
-    old_values: ["SHA256", "MD5"], new_values: ["BLAKE2b-256"], parameters: [] }], changed, context)
+    old_values: ["SHA256", "MD5"], new_values: ["BLAKE2b-256"], parameters: [], wording: "`verify`  now uses\nBLAKE2b-256 instead" }], changed, context)
   assert.deepEqual(changes.map(c => [c.subject, c.items, !!c.filled_by_code]), [["verify digest", ["r-verify"], false], ["clip", ["r-clip"], true]])
   assert.deepEqual([changes[0]!.subjects, changes[0]!.old_values, changes[0]!.new_values], [["verify"], ["SHA256"], ["BLAKE2b-256"]])
   assert.deepEqual(changes[0]!.now.map(q => q.segment_id), ["s1"])
@@ -565,10 +565,18 @@ test("the change list quotes the cited passages, keeps only values and subjects 
   const ledger = [{ id: "x#1", kind: "acceptance", subject: "verify mismatch", items: [], revisions: {}, first_failed: "r1", last: { event_id: "r1", run_id: "run", passed: false, observed: "printed nothing" }, state: "open" }] as never
   const section = changeSection(changes, [], ledger, after, "r2")
   assert.match(section, /^# Changes in this update\n/u)
-  assert.match(section, /## Changed: verify digest\nReplaced: `SHA256` → `BLAKE2b-256`\nBefore \(original passages\):\n- update 1, paragraph «### verify Computes SHA-256 of `--file`\.»\nNow:\n- update 2, paragraph «Behavior change/u)
+  assert.match(section, /## Changed: verify digest\nReplaced: `SHA256` → `BLAKE2b-256`\nAs the update says: "`verify`  now uses\nBLAKE2b-256 instead"\nBefore \(original passages\):\n- update 1, paragraph «### verify Computes SHA-256 of `--file`\.»\nNow:\n- update 2, paragraph «Behavior change/u)
   // With a PRD baseline standing for update 1, its passage is named, not attached (D1).
   assert.match(changeSection(changes, [], [], after, "r2", 2), /Before \(original passages\):\n- update 1 \(stands in the PRD baseline\)/u)
   assert.match(section, /## New: clip\nListed by code/u); assert.match(section, /## Not yet met: verify mismatch[\s\S]*printed nothing/u)
+  // The kind rests on the update's words: a revision without them, or with words its now passages do not write, is rejected.
+  const entry = { kind: "revised" as const, subject: "verify digest", items: ["r-verify"], subjects: ["verify"], before: [], now: [{ source_id: "r2", segment_id: "s1" }], old_values: ["SHA-256"], new_values: ["BLAKE2b-256"], parameters: [] }
+  assert.throws(() => settleChanges([entry], changed, context), /"verify digest": kind revised gives no wording/u)
+  assert.throws(() => settleChanges([{ ...entry, wording: "replaces SHA-256" }], changed, context), /"verify digest": wording "replaces SHA-256" is not written in its now passages/u)
+  // An added entry shows no replacement, whatever new values it names.
+  const added = settleChanges([{ ...entry, kind: "added", wording: "" }], changed, context).changes
+  assert.equal(added[0]!.wording, undefined)
+  assert.doesNotMatch(changeSection(added, [], [], after, "r2"), /Replaced:|As the update says/u)
 })
 test("a runs example is kept only when it uses the requirement's own sample, and asserts that it runs", async () => {
   const { keepExamples, usesSample } = await import("../src/core/sdd-executable.js")

@@ -8,11 +8,16 @@ import { factsOf, holdsValue, normValue } from "./sdd-quotes.js"
  * the previous delivery's entries, this update's revised changes as new open
  * entries, and each older open entry closed when a later input replaces it
  * (all its subjects and a value it set) or withdraws its items, or when code
- * confirms the returned code meets it.
+ * confirms the returned code meets it. Only a revision the model rests on the
+ * update's own words opens an entry; an open entry still unconfirmed after
+ * REVISION_REVIEW_AFTER later updates carried it (or one without such words,
+ * recorded earlier) goes to review: the revision itself is to be checked, and
+ * it is no longer delivered.
  */
+export const REVISION_REVIEW_AFTER = 2
 export function ledgerRevisions(previous: RevisionEntry[] | undefined, settled: SettledChange[], s: SddSnapshot, current: Record<string, TaskIntent>, eventId: string, input: number): RevisionEntry[] {
   const now = currentRevisions(current)
-  const fresh: RevisionEntry[] = settled.filter(c => c.kind === "revised").map((c, k) => ({ ...c, id: `${eventId}#${k + 1}`, event_id: eventId, input,
+  const fresh: RevisionEntry[] = settled.filter(c => c.kind === "revised" && c.wording && !c.filled_by_code).map((c, k) => ({ ...c, id: `${eventId}#${k + 1}`, event_id: eventId, input,
     revisions: Object.fromEntries(c.items.filter(id => now.has(id)).map(id => [id, now.get(id)!])), state: "open" as const }))
   const out = (previous ?? []).filter(r => r.event_id !== eventId).map(r => structuredClone(r))
   for (const r of out) {
@@ -22,7 +27,9 @@ export function ledgerRevisions(previous: RevisionEntry[] | undefined, settled: 
       && f.old_values.some(v => r.new_values.some(w => normValue(v) === normValue(w))))
     if (by) { r.state = "superseded"; r.closed = { event_id: eventId, reason: `replaced by ${by.id} (${by.subject})` }; continue }
     const confirmed = confirmation(r, s)
-    if (confirmed) { r.state = "confirmed"; r.closed = { event_id: eventId, reason: confirmed } }
+    if (confirmed) { r.state = "confirmed"; r.closed = { event_id: eventId, reason: confirmed }; continue }
+    if (!r.wording) { r.state = "review"; r.closed = { event_id: eventId, reason: "it rests on no words of its update saying a rule is replaced; the revision itself is to be checked" }; continue }
+    if (input - r.input > REVISION_REVIEW_AFTER) { r.state = "review"; r.closed = { event_id: eventId, reason: `not confirmed in the code after ${input - r.input - 1} later updates carried it; the revision itself is to be checked` } }
   }
   return [...out, ...fresh]
 }

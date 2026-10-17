@@ -10,7 +10,7 @@ import { factsOf } from "../src/core/sdd-quotes.js"
 const ev = (id: string, text: string) => ({ schema_version: 2, run_id: "r", event_id: id, kind: "user_input", source: { channel: "user", producer_id: "t" }, payload: { text } }) as CompilerEvent
 const quote = (input: number, text: string) => ({ source_id: `r${input}`, segment_id: "s1", input, text })
 const change = (over: Partial<SettledChange> = {}): SettledChange => ({ kind: "revised", subject: "verify digest", items: ["r-verify"], subjects: ["verify"], before: [quote(1, "verify computes SHA-256")],
-  now: [quote(5, "verify now uses BLAKE2b-256 (previously SHA256)")], old_values: ["SHA256"], new_values: ["BLAKE2b-256"], parameters: [], ...over })
+  now: [quote(5, "verify now uses BLAKE2b-256 (previously SHA256)")], old_values: ["SHA256"], new_values: ["BLAKE2b-256"], parameters: [], wording: "verify now uses BLAKE2b-256 (previously SHA256)", ...over })
 const ir = (items: Record<string, number>) => ({ t: { task_id: "t", content: Object.entries(items).map(([item_id, revision]) => ({ item_id, revision, text: item_id })) } }) as never
 
 test("a revision opens, is carried, and closes only when a gate-open structure check passes with a new value among its keys", () => {
@@ -110,4 +110,23 @@ test("findings IC records are tracked in the ledger and never fed back", async (
   assert.deepEqual(open.map(e => [e.id, e.kind, e.state]), [["recorded:p3:command:validate", "recorded", "open"]])
   assert.deepEqual(fedBack(open), [])
   assert.equal(computeLedger({ batches: [], runs: [run("r1", ["p3:command:validate"]), run("r2", [])] } as never, {} as never)[0]!.state, "closed")
+})
+
+test("only a worded revision opens an entry; one unconfirmed after two later updates, or recorded without words, goes to review and is no longer delivered", async () => {
+  const { changeSection } = await import("../src/core/sdd-changes.js")
+  const empty = { runs: [], batches: [] } as never
+  const items = ir({ "r-verify": 1 })
+  // An entry code filled from the IR change, or one without words, is not a revision on the ledger.
+  assert.deepEqual(ledgerRevisions(undefined, [change({ filled_by_code: true }), change({ wording: undefined })], empty, items, "r3-user-input", 3), [])
+  const r3 = ledgerRevisions(undefined, [change()], empty, items, "r3-user-input", 3)
+  const r4 = ledgerRevisions(r3, [], empty, items, "r4-user-input", 4), r5 = ledgerRevisions(r4, [], empty, items, "r5-user-input", 5)
+  assert.deepEqual([r4[0]!.state, r5[0]!.state], ["open", "open"], "carried by two later updates")
+  const r6 = ledgerRevisions(r5, [], empty, items, "r6-user-input", 6)[0]!
+  assert.equal(r6.state, "review"); assert.match(r6.closed!.reason, /after 2 later updates carried it/u)
+  assert.equal(changeSection([], [r6], [], items, "r6-user-input"), "", "a revision under review is not delivered")
+  assert.equal(ledgerRevisions([r6], [], empty, items, "r7-user-input", 7)[0]!.closed!.event_id, "r6-user-input", "review stays closed")
+  // An entry recorded before revisions had to rest on words (the R3 profile percentiles) goes to review at once.
+  const old = r3.map(r => ({ ...r, subject: "profile percentiles", wording: undefined }))
+  const next = ledgerRevisions(old, [], empty, items, "r4-user-input", 4)[0]!
+  assert.equal(next.state, "review"); assert.match(next.closed!.reason, /rests on no words of its update/u)
 })

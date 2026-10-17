@@ -74,6 +74,12 @@ export interface ChangeEntry {
   old_values: string[]
   new_values: string[]
   parameters: string[]
+  /**
+   * For revised: the words of this update, copied exactly, that say an existing rule is replaced, changed or
+   * removed. The kind is the model's judgment from the update's wording, never from a difference between old
+   * and new names (an update that adds fields alongside existing ones is added).
+   */
+  wording?: string
 }
 /** A change entry as delivered: references resolved to verbatim quotes, values and subjects code found written. */
 export interface SettledChange {
@@ -87,6 +93,8 @@ export interface SettledChange {
   new_values: string[]
   parameters: string[]
   filled_by_code?: boolean
+  /** For a revision: the update's own words it rests on (verbatim in now). */
+  wording?: string
   /** before taken by code from the previous versions of the items (the answer cited none). */
   before_by_code?: boolean
   /** What a revision lacks (before, old_values, subjects): recorded for tracing, never asked of the model. */
@@ -103,7 +111,8 @@ export interface RevisionEntry extends SettledChange {
   event_id: string
   input: number
   revisions: ItemRevisions
-  state: "open" | "confirmed" | "superseded"
+  /** review: not confirmed after REVISION_REVIEW_AFTER later updates; the revision itself is to be checked, and it is no longer delivered. */
+  state: "open" | "confirmed" | "superseded" | "review"
   closed?: { event_id: string; reason: string }
 }
 /** verbatim: every expected value written by the requirements; derived: worked out from their rules; runs: the requirement's own sample input runs. */

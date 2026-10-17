@@ -50,7 +50,7 @@ def mechanisms(record, batch, delivery, trial, attempts_trials):
     revisions = (delivery.get('contract') or {}).get('revisions') or []
     mine = [r for r in revisions if r.get('event_id') == batch.get('event_id')]
     closed_now = [r for r in revisions if (r.get('closed') or {}).get('event_id') == batch.get('event_id')]
-    rows.append(('修订台账（M5a）', '起作用' if revisions else '未触发', f"本轮新开 {len(mine)}，在册未关闭 {sum(1 for r in revisions if r['state'] == 'open')}，本轮关闭 {[(r['id'], r['state']) for r in closed_now]}"))
+    rows.append(('修订台账（M5a）', '起作用' if revisions else '未触发', f"本轮新开 {len(mine)}，在册未关闭 {sum(1 for r in revisions if r['state'] == 'open')}，待核对修订 {sum(1 for r in revisions if r['state'] == 'review')}，本轮关闭 {[(r['id'], r['state']) for r in closed_now]}"))
     rows.append(('before 由代码取（M3）', '触发' if any(r.get('before_by_code') for r in mine) else '未触发', f"缺项 {[(r['subject'][:30], r.get('missing')) for r in mine if r.get('missing')]}"))
     rows.append(('修订确认（C2）', '起作用' if any(r['state'] == 'confirmed' for r in closed_now) else '未触发', '—'))
     rows.append(('原文只交一遍（C1）', f"CI {len(delivery.get('text', ''))} 字符", f"基线 PRD：第 {(delivery.get('baseline_prd') or {}).get('input', '—')} 轮"))
