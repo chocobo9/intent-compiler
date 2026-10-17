@@ -380,6 +380,8 @@ def repair_trial(trial, round_number, env, previous_failing=None):
             record['outcome'] = 'adopted_with_regressions' if ok else 'reverted'
             if ok:
                 record['failing_final'] = sorted(after)
+    # What the code this round ends with fixes, whichever pass it came from.
+    record['fixed'] = sorted(set(before) - set(record['failing_final']))
     shutil.copy2(work / f"report-pass{len(record['passes'])}.md", work / 'last-ic-report.md')
     if (work / '08-sdd-report.md').exists():
         shutil.copy2(work / '08-sdd-report.md', run / REPORT)

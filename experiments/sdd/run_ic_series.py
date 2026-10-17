@@ -145,7 +145,8 @@ def accept_returned(trial, number, prior_completion, log):
     log(f'R{number} acceptance started')
     prior = acceptance_result(prior_completion) if prior_completion else None
     accepted = acceptance_repair.apply(trial, number, {o['id'] for o in prior['open']} if prior else None)
-    fixed = accepted['passes'][-1].get('fixed', []) if accepted.get('passes') else []
+    # The checks the adopted code fixes (a later pass that did not hold returns to an earlier one).
+    fixed = accepted.get('fixed', accepted['passes'][-1].get('fixed', []) if accepted.get('passes') else [])
     now = json.loads((trial / 'completion.json').read_text(encoding='utf-8'))['results']['official'].get('passed')
     log(f"R{number} acceptance: {accepted['outcome']}; failing before {len(accepted['failing_before'])}, fixed {len(fixed)}, excluded as P2 {len(accepted.get('excluded_p2', []))}"
         + (f"; official {accepted['sdd_official'].get('passed')} -> {now}" if accepted.get('sdd_official') else ''))

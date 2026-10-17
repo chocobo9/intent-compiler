@@ -20,3 +20,17 @@ def test_whole_json_lines_compare_by_value_and_partial_lines_stay_textual():
     assert evaluate_asserts(None, whole, out(files={'r.json': '{"y": 2, "x": 1}'})) == []
     part = [{'where': 'stdout', 'mode': 'lines', 'value': json.dumps(['~MISMATCH'])}]
     assert evaluate_asserts(None, part, out(stdout='MISMATCH expected=a actual=b')) == []
+
+
+def test_a_source_directory_named_like_the_program_is_copied_and_only_the_root_binary_is_skipped(tmp_path):
+    import shutil
+    from example_runner import copy_ignore
+    (tmp_path / 'cmd' / 'dpipe').mkdir(parents=True)
+    (tmp_path / 'cmd' / 'dpipe' / 'main.go').write_text('package main')
+    (tmp_path / 'dpipe').write_text('binary')
+    (tmp_path / '.specart').mkdir()
+    (tmp_path / 'cmd' / '.git').mkdir()
+    dst = tmp_path.parent / (tmp_path.name + '-copy')
+    shutil.copytree(tmp_path, dst, ignore=copy_ignore(tmp_path))
+    assert (dst / 'cmd' / 'dpipe' / 'main.go').exists()
+    assert not (dst / 'dpipe').exists() and not (dst / '.specart').exists() and not (dst / 'cmd' / '.git').exists()

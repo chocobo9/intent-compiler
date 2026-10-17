@@ -89,9 +89,8 @@ def failure_summary(trial, completion):
         stage = 'coding' if results.get('coding', {}).get('status') != 'pass' else 'prdcheck'
     flow_log = run / 'flow.log'
     errors = [line for line in flow_log.read_text(encoding='utf-8', errors='replace').splitlines() if 'ERROR' in line] if flow_log.exists() else []
-    artifact = run / STAGE_ARTIFACTS[stage]
-    if stage == 'coding' and (run / 'repos/main.bak/.verdict.md').is_file():
-        artifact = run / 'repos/main.bak/.verdict.md'
+    from run_results import coding_verdict_path
+    artifact = coding_verdict_path(run) if stage == 'coding' else run / STAGE_ARTIFACTS[stage]
     conclusion = artifact.read_text(encoding='utf-8', errors='replace')[-1500:] if artifact.is_file() else ''
     return {'stopped_stage': stage, 'flow_errors': errors[-3:], 'stage_artifact': str(artifact), 'stage_conclusion': conclusion,
             'prd_state': results.get('prd', {}).get('state'), 'official': {k: results.get('official', {}).get(k) for k in ['status', 'passed', 'total']}}

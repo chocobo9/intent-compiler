@@ -42,14 +42,22 @@ def state(run, stage_id):
     return json.loads(path.read_text(encoding='utf-8')).get('status') if path.exists() else None
 
 
+def coding_verdict_path(run):
+    """Where SDD's own coding verdict is. A PRD fix rewrites repos/main/.verdict.md with its own
+    verdict: upstream backs coding's output up to main.bak before its first fix, and IC's in-round
+    acceptance archives the code SDD returned under the trial's acceptance/sdd-main before its own."""
+    run = Path(run)
+    for candidate in (run / 'repos/main.bak/.verdict.md', run.parent.parent / 'acceptance/sdd-main/.verdict.md'):
+        if candidate.is_file():
+            return candidate
+    return run / 'repos/main/.verdict.md'
+
+
 def stage_result(run, stage):
     """Upstream gate outcome of one stage, read from the run's own records."""
     run = Path(run)
     if stage == 'coding':
-        # PRD fix later rewrites .verdict.md with its own verdict; upstream backs
-        # up coding's original output to main.bak before the first fix.
-        backup = run / 'repos/main.bak/.verdict.md'
-        source = backup if backup.is_file() else run / 'repos/main/.verdict.md'
+        source = coding_verdict_path(run)
         result = verdict(source, 'coding')
         result['spec_gap'] = reports_spec_gap(source, result)
         result['state'] = state(run, 'main-coding')

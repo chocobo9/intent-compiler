@@ -12,6 +12,8 @@ import run_r1
 
 STEP = re.compile(r'"type":"step-finish","tokens":(\{"total":[^{}]*(?:\{[^{}]*\}[^{}]*)?\})')
 KEYS = ('input', 'output', 'reasoning', 'cache_read', 'cache_write')
+# Tool or environment faults a stage's own conclusion names (D4: recorded; only stops before coding are rerun).
+TOOL_MARKERS = re.compile(r'no Go proof adapter[^.;\n]*|lacked specart-validate|specart-validate[^.;\n]{0,40}(?:not found|missing|unavailable)|not a git (?:repository|work tree)|未纳入 Git', re.I)
 # Stages known to spawn sessions outside their root stream.
 PARTIAL = ('specart',)
 
@@ -95,6 +97,9 @@ def stop_record(trial, completion, promotion):
         tool.append('SpecArt exited without a verdict')
     if stage in ('prd', 'sd', 'change') and not failure.get('stage_conclusion'):
         tool.append(f'{stage} wrote no conclusion')
+    # A tool or environment fault the stage itself names (any stage, coding included).
+    for marker in TOOL_MARKERS.findall(failure.get('stage_conclusion') or ''):
+        tool.append(f'stage reports: {marker}')
     log = run / 'flow.log'
     text = log.read_text(encoding='utf-8', errors='replace') if log.exists() else ''
     if re.search(r'timed? ?out|timeout|killed|terminated', text, re.I):

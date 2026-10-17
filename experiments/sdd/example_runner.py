@@ -15,7 +15,20 @@ import tempfile
 IMAGE = 'sdd-unattended-preflight:latest'
 # Short local path (docker mounts it); temporary directories under it are removed after each run.
 WORK_ROOT = Path(os.environ.get('IC_EXAMPLE_WORK') or Path(__file__).resolve().parent / '.example-runs')
-SKIP = {'.git', '.specart', '.specart-verify', '.system-design', 'dpipe', 'dpipe.exe'}
+# Tool directories are skipped wherever they are; the built program only as a file at the root
+# (a source directory may share its name, e.g. cmd/dpipe).
+SKIP_DIRS = {'.git', '.specart', '.specart-verify', '.system-design'}
+BUILD_OUTPUTS = {'dpipe', 'dpipe.exe'}
+
+
+def copy_ignore(root):
+    """The shutil.copytree ignore for a code directory: tool directories anywhere, build outputs only at its root."""
+    root = Path(root).resolve()
+
+    def ignore(directory, names):
+        here = Path(directory).resolve()
+        return [n for n in names if n in SKIP_DIRS or (here == root and n in BUILD_OUTPUTS and (here / n).is_file())]
+    return ignore
 
 
 def norm(text):
@@ -126,7 +139,7 @@ def run_examples(code_dir, examples, timeout=900):
     WORK_ROOT.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='ic-examples-', dir=WORK_ROOT) as tmp:
         tmp = Path(tmp)
-        shutil.copytree(code_dir, tmp / 'src', ignore=lambda d, names: [n for n in names if n in SKIP])
+        shutil.copytree(code_dir, tmp / 'src', ignore=copy_ignore(code_dir))
         lines = ['set -u', 'cd /app/src && go build -o /tmp/dpipe ./... > /app/build.log 2>&1; echo $? > /app/build.exit']
         for i, ex in enumerate(examples):
             work = tmp / 'ex' / str(i) / 'work'

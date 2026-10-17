@@ -79,6 +79,7 @@ def test_a_second_pass_that_regresses_goes_back_to_the_adopted_first_pass(tmp_pa
     r = ar.repair_trial(t, 2, {})
     assert r['outcome'] == 'adopted' and r['passes'][1]['regressed'] == ['scale'] and r['passes'][1]['reverted_to'] == 'adopted-pass1'
     assert r['failing_final'] == ['tag'] and (run / 'repos/main/clip.go').exists()
+    assert r['fixed'] == ['clip'], 'the adopted first pass, not the reverted second'
     assert (run / 'repos/main/main.go').read_text() == 'package main\n'
 
 
