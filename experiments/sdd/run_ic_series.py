@@ -281,6 +281,17 @@ def restore_checkpoint(root, k, reason):
     for later in sorted((root / 'checkpoints').glob('r*')):
         if int(later.name[1:]) >= k:
             shutil.move(str(later), str(archive / later.name))
+    # The SDD host's start requests of the rounds rolled back go too: they are write-once and named by the run of the
+    # CI, which a rerun of the same update has again (the v6 R12 pilot rerun hit EEXIST on the original R12's file).
+    host = root / 'requests' / 'host'
+    for request in sorted(host.glob('*.json')) if host.exists() else []:
+        try:
+            later = json.loads(request.read_text(encoding='utf-8')).get('round', 0) >= k
+        except (OSError, ValueError):
+            later = False
+        if later:
+            (archive / 'requests-host').mkdir(exist_ok=True)
+            shutil.move(str(request), str(archive / 'requests-host' / request.name))
     (root / 'store').mkdir()
     shutil.copy2(folder / 'store.json', root / 'store' / 'ci-sdd.json')
     state = json.loads((archive / 'series-results.json').read_text(encoding='utf-8'))
