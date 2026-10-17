@@ -3,7 +3,7 @@ import type { SddCheckFinding } from "../core/sdd-contract.js"
 import type { CheckRequest, DeliveryRequest } from "../core/sdd-context.js"
 import type { CompilerModelV2, CompilerModelV2Call } from "./compiler-model-v2.js"
 import { createCompilerModelV2 } from "./compiler-model-v2.js"
-import { createOpenCodeModelTransportV2, createOpenCodeStructuredTransport, type OpenCodeModelTransportOptions } from "./opencode-transport.js"
+import { createOpenCodeModelTransportV2, createOpenCodeStructuredTransport, narrowEnums, requestIds, type OpenCodeModelTransportOptions } from "./opencode-transport.js"
 
 const text = { type: "string" }
 const list = (items: unknown) => ({ type: "array", items })
@@ -78,11 +78,17 @@ previous_draft, when present, is your earlier answer that issues rejected: retur
 A deliver decision needs delivered requirements and allowed task scope. Use hold with a concrete reason when there is nothing approved to deliver. Read prior statements and their updates together. SDD owns design, implementation and internal repair.
 ir_change states what this update changed and the previous versions of exactly those objects. history gives the latest delivery's decisions, each current requirement's latest delivery record and those deliveries' runs. feedback gives SDD's own PRD consistency check of delivered code. Feedback is SDD's judgment, not a user requirement: never turn it into a new requirement or an extra development run.`
 
+/** A structured transport whose schema enumerates the ids each request lists. */
+function perRequest<Request>(options: OpenCodeModelTransportOptions, instruction: string, schema: object): (request: Request) => Promise<CompilerModelV2Call> {
+  return request => createOpenCodeStructuredTransport<Request>(options, instruction, narrowEnums(schema, requestIds(request)))(request)
+}
+
 export function createSddModel(options: OpenCodeModelTransportOptions): SddModel {
   return {
-    ir: createCompilerModelV2(createOpenCodeModelTransportV2(options)),
-    deliver: createOpenCodeStructuredTransport<DeliveryInput>(options, SDD_DELIVERY_INSTRUCTION, SDD_DELIVERY_SCHEMA),
-    examples: createOpenCodeStructuredTransport<ExamplesRequest>(options, SDD_EXAMPLES_INSTRUCTION, SDD_EXAMPLES_SCHEMA),
+    ir: createCompilerModelV2(createOpenCodeModelTransportV2({ ...options, narrowIds: true })),
+    // M1 (v6): ids in an answer are the ones this request lists (strict output enforces the enum).
+    deliver: perRequest<DeliveryInput>(options, SDD_DELIVERY_INSTRUCTION, SDD_DELIVERY_SCHEMA),
+    examples: perRequest<ExamplesRequest>(options, SDD_EXAMPLES_INSTRUCTION, SDD_EXAMPLES_SCHEMA),
     derive: createOpenCodeStructuredTransport<DeriveRequest>(options, SDD_DERIVE_INSTRUCTION, SDD_DERIVE_SCHEMA),
     check: createOpenCodeStructuredTransport(options,
       `Independently check what this round's CI wrote and decided. The delivered text is built by code: every user input verbatim in order (delivery.text says so instead of repeating the inputs), minus delivery.removed (each cut passage with the earlier IR items that selected it and what the current IR does with it), plus the contract: entries code carried unchanged from the accepted delivery (delivery.contract entries with carried true, already checked when written; their items are unchanged) and the entries delivery.draft wrote this round for to_write. Sources show the new input, the passages of the requirements written this round and of the cuts; other requirements are shown by id only. Judge: each cut (truly withdrawn, superseded or not delivered now; nothing still required cut), whether something withdrawn or replaced still stands uncut, the dispositions, every effective statement written this round (it states in new words exactly what the later input makes hold and adds nothing), and the field-dictionary objects and acceptance examples written this round (exact names of their own command or operation, expectations as the requirement states them, nothing withdrawn). Completeness of names is code's: never report an omitted object, field, subject or example. Give every finding a severity. blocking only for: (1) a name, key, value or behaviour the requirement does not give, (2) withdrawn, superseded or paused content presented as current, (3) a statement that contradicts the requirement, (4) a wrong cut (required text cut, or withdrawn text left standing). Everything else (wording, precision, placement, a missing but not contradicted detail) is a note. Only resolved blocking findings send the CI back; notes are recorded. Return consistent when there is no blocking finding, with repair_stage none; otherwise name whether the prepared ir or just ci needs repair. Give each finding refs to the material it rests on: a listed input's source_id with revision 0 and an exact quote of that input, or an IR object (task, content, binding, output) or the CI with its id and revision (quote may be empty or an exact excerpt).`, SDD_CHECK_SCHEMA),

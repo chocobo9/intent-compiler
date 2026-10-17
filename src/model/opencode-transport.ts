@@ -62,6 +62,8 @@ export interface OpenCodeModelTransportOptions {
   readonly onSessionCreated?: (sessionId: string) => void
   /** Total time for one v2 management prompt, including a continuously flowing response. */
   readonly timeoutMs?: number
+  /** v6 M1: enumerate in the schema the source, segment and item ids each request lists (SDD management only). */
+  readonly narrowIds?: boolean
 }
 
 export type OpenCodeModelTransportV2Options = OpenCodeModelTransportOptions
@@ -195,7 +197,9 @@ export function createOpenCodeModelTransportV2(
     const transport = createOpenCodeStructuredTransport<CompilerModelV2Input | CompilerModelV2CheckInput>(
       options,
       `${generationStageInstruction(stage, assessing, generation.checkRequired, active)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
-      buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing, activeExecutions: active }),
+      // M1 (v6): with narrowIds, source and segment ids are the ones this request lists.
+      options.narrowIds ? narrowEnums(buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing, activeExecutions: active }), requestIds(request))
+        : buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing, activeExecutions: active }),
       () => ({ ...request, contract: generationContract(request.contract, stage, "openai", assessing, generation.checkRequired, active) }),
     )
     return transport(request)
@@ -270,6 +274,75 @@ export function createOpenCodeStructuredTransport<Request>(
 }
 
 type Schema = Record<string, unknown>
+
+/** OpenAI strict output's documented ceiling on enum values in one schema; above it a field stays a free string. */
+export const STRICT_ENUM_LIMIT = 1000
+
+/**
+ * The ids a request lists, by the property names answers use for them: source_id and segment_id from
+ * the inputs and segments it shows, item_id (and an entry's items) from the content items of its IR.
+ */
+export function requestIds(request: unknown): Record<string, string[]> {
+  const sources = new Set<string>(), segments = new Set<string>(), items = new Set<string>(), tasks = new Set<string>()
+  const walk = (v: unknown, key = ""): void => {
+    if (Array.isArray(v)) { v.forEach(x => walk(x, key)); return }
+    if (!isRecord(v)) return
+    if (typeof v.source_id === "string") sources.add(v.source_id)
+    if (typeof v.event_id === "string" && (key === "inputs" || key === "events" || key === "source_events")) sources.add(v.event_id)
+    if (typeof v.segment_id === "string") segments.add(v.segment_id)
+    for (const k of ["from", "to"]) if (typeof v[k] === "string" && /^s\d+$/u.test(v[k] as string)) segments.add(v[k] as string)
+    if ((key === "content" || key === "requirements") && typeof v.item_id === "string") items.add(v.item_id)
+    if (Array.isArray(v.content) && typeof v.task_id === "string") tasks.add(v.task_id)
+    for (const [k, x] of Object.entries(v)) walk(x, k)
+  }
+  walk(request)
+  // A run of segments ("from" s3 "to" s7) lists every segment between.
+  const numbers = [...segments].map(x => Number(x.slice(1))).filter(Number.isFinite)
+  const max = numbers.length ? Math.max(...numbers) : 0
+  const allSegments = Array.from({ length: max }, (_, i) => `s${i + 1}`)
+  return { source_id: [...sources].sort(), segment_id: allSegments, item_id: [...items].sort(), task_id: [...tasks].sort() }
+}
+
+/**
+ * The schema with an enum on every string property named in values (and on the string items of an
+ * `items` array, when item ids are given). Nothing changes when a list is empty or the schema's enum
+ * values would pass STRICT_ENUM_LIMIT; the canonical validation then keeps checking the values.
+ */
+export function narrowEnums(schema: unknown, values: Record<string, string[]>): Schema {
+  const out = structuredClone(schema) as Schema
+  let total = 0
+  const count = (node: unknown): void => { if (Array.isArray(node)) node.forEach(count); else if (isRecord(node)) { if (Array.isArray(node.enum)) total += node.enum.length; Object.values(node).forEach(count) } }
+  count(out)
+  // Schemas share node objects (one {type: "string"} for every text field): a narrowed field gets a new node, never a mutated one.
+  const isString = (n: unknown) => isRecord(n) && n.type === "string" && !n.enum
+  const narrowed = (prop: Schema, list: string[], asItems: boolean): Schema | undefined => {
+    if (asItems) return prop.type === "array" && isString(prop.items) ? { ...prop, items: { ...(prop.items as Schema), enum: list } } : undefined
+    if (isString(prop)) return { ...prop, enum: list }
+    if (Array.isArray(prop.anyOf) && prop.anyOf.some(isString)) return { ...prop, anyOf: prop.anyOf.map(b => isString(b) ? { ...(b as Schema), enum: list } : b) }
+    return undefined
+  }
+  const pending: Array<{ properties: Schema; name: string; value: Schema; size: number }> = []
+  const seen = new Set<unknown>()
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) { node.forEach(walk); return }
+    if (!isRecord(node) || seen.has(node)) return
+    seen.add(node)
+    if (isRecord(node.properties)) {
+      for (const [name, prop] of Object.entries(node.properties)) {
+        const list = values[name === "items" ? "item_id" : name]
+        if (!list?.length || !isRecord(prop)) continue
+        const value = narrowed(prop, list, name === "items")
+        if (value) pending.push({ properties: node.properties as Schema, name, value, size: list.length })
+      }
+    }
+    Object.values(node).forEach(walk)
+  }
+  walk(out)
+  // Every narrowed field carries its own copy of the list; past the ceiling nothing is narrowed.
+  if (total + pending.reduce((n, p) => n + p.size, 0) > STRICT_ENUM_LIMIT) return out
+  for (const { properties, name, value } of pending) properties[name] = value
+  return out
+}
 
 /**
  * The schema as OpenAI strict structured output accepts it, with the same
