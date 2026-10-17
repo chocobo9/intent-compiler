@@ -173,5 +173,7 @@ def run_examples(code_dir, examples, timeout=900):
             failures = evaluate_asserts(ex.get('exit_code'), ex['asserts'], out) if 'asserts' in ex else evaluate(ex['check'], out)
             results.append({'id': ex['id'], 'passed': not failures, 'failures': failures,
                             'observed': {'exit_code': out['exit_code'], 'stdout': out['stdout'][:300], 'stderr': out['stderr'][:300],
-                                         'new_files': sorted(set(files) - before)}})
+                                         'new_files': sorted(set(files) - before)},
+                            # What the run wrote, for checks that read the output itself (P2 structure, P3 regression).
+                            'files_content': {k: v[:200000] for k, v in files.items() if k not in before}})
         return {'build_exit': build_exit, 'docker_exit': done.returncode, 'docker_stderr': done.stderr[-500:], 'results': results}
