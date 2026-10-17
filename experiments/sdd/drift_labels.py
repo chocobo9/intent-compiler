@@ -128,36 +128,49 @@ CASES:
 """
 
 
+# The prompt goes to the model as one command-line argument; Windows caps a command line at 32767 characters.
+PROMPT_LIMIT = 24000
+
+
 def judge_p2(trial, env, candidates, texts, log):
-    """One model call for all candidates of the round; {check id: {'contradicts': bool, 'reason': str}}."""
+    """{check id: {'contradicts': bool, 'reason': str}} for every candidate of the round: one model call, or as many as
+    keep each prompt within PROMPT_LIMIT (the v6 R2 calibration pilot hit the command-line limit with one)."""
     if not candidates:
         return {}
     cases = []
     for cid, c in candidates.items():
         original = c['rule'] or unit_section(texts, c['unit'])
         cases.append(f"## {cid}\nOriginal requirement (verbatim excerpt):\n{original.strip()}\nPRD assumption lines:\n" + '\n'.join(c['assumptions']))
+    groups = [[]]
+    for case in cases:
+        if groups[-1] and len(P2_PROMPT) + sum(len(x) + 2 for x in groups[-1]) + len(case) > PROMPT_LIMIT:
+            groups.append([])
+        groups[-1].append(case)
     run = run_r1.run_directory(Path(trial))
-    # The read-only plan agent: the judgement needs no tool and may change nothing.
-    args = ['C:/Program Files/Git/usr/bin/sh.exe', env['OPENCODE_BIN'], 'run', '--agent', 'plan', '--dir', str(run).replace('\\', '/'),
-            '--format', 'json', '--auto', '--model', run_r1.MODEL, '--variant', run_r1.VARIANT, '--', P2_PROMPT + '\n\n'.join(cases)]
-    with open(log, 'w', encoding='utf-8') as out:
-        subprocess.call(args, stdout=out, stderr=subprocess.STDOUT, env=env, cwd=str(run), timeout=1200)
-    text = ''
-    for line in Path(log).read_text(encoding='utf-8', errors='replace').splitlines():
+    answers = []
+    for k, group in enumerate(groups):
+        path = Path(log) if k == 0 else Path(log).with_name(f'{Path(log).stem}-{k + 1}{Path(log).suffix}')
+        # The read-only plan agent: the judgement needs no tool and may change nothing.
+        args = ['C:/Program Files/Git/usr/bin/sh.exe', env['OPENCODE_BIN'], 'run', '--agent', 'plan', '--dir', str(run).replace('\\', '/'),
+                '--format', 'json', '--auto', '--model', run_r1.MODEL, '--variant', run_r1.VARIANT, '--', P2_PROMPT + '\n\n'.join(group)]
+        with open(path, 'w', encoding='utf-8') as out:
+            subprocess.call(args, stdout=out, stderr=subprocess.STDOUT, env=env, cwd=str(run), timeout=1200)
+        text = ''
+        for line in path.read_text(encoding='utf-8', errors='replace').splitlines():
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            if event.get('type') == 'text':
+                text += event.get('part', {}).get('text', '')
+        m = re.search(r'\{.*"cases".*\}', text, re.S)
         try:
-            event = json.loads(line)
+            answers += (json.loads(m.group(0)) if m else {}).get('cases', [])
         except ValueError:
-            continue
-        if event.get('type') == 'text':
-            text += event.get('part', {}).get('text', '')
-    m = re.search(r'\{.*"cases".*\}', text, re.S)
-    try:
-        answer = json.loads(m.group(0)) if m else {}
-    except ValueError:
-        answer = {}
+            pass
     # The model may shorten a case id (e.g. drop its "unit:" prefix): match on the unique candidate it ends.
     out = {}
-    for c in answer.get('cases', []):
+    for c in answers:
         cid = str(c.get('id', ''))
         match = [k for k in candidates if k == cid or k.endswith(':' + cid) or k.endswith(cid)]
         if len(match) == 1:

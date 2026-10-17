@@ -47,3 +47,21 @@ def test_the_p2_excerpt_is_the_unit_s_own_section():
     texts = ['# T\n### `sort`\nsorts\n### `resample`\nStratified.\n#### Rules\n- groups\n### `clip`\nclips\n']
     got = dl.unit_section(texts, 'resample')
     assert got.startswith('### `resample`') and '- groups' in got and 'clip' not in got
+
+
+def test_candidates_beyond_one_command_line_are_judged_in_several_calls(tmp_path, monkeypatch):
+    t = run_dir(tmp_path, monkeypatch)
+    candidates = {f'unit:op:u{i}': {'unit': f'u{i}', 'assumptions': ['a'], 'rule': 'x' * 9000} for i in range(5)}
+    prompts = []
+
+    def call(args, **k):
+        prompts.append(args[-1])
+        ids = [line[3:] for line in args[-1].splitlines() if line.startswith('## unit:')]
+        cases = [{'id': i, 'contradicts': False, 'reason': 'ok'} for i in ids]
+        k['stdout'].write(json.dumps({'type': 'text', 'part': {'text': json.dumps({'cases': cases})}}) + '\n')
+        return 0
+    monkeypatch.setattr(dl.subprocess, 'call', call)
+    got = dl.judge_p2(t, {'OPENCODE_BIN': 'x'}, candidates, [''], tmp_path / 'j.stream')
+    assert len(prompts) == 3 and all(len(p) <= dl.PROMPT_LIMIT for p in prompts)
+    assert sorted(got) == sorted(candidates)
+    assert (tmp_path / 'j.stream').exists() and (tmp_path / 'j-3.stream').exists()
