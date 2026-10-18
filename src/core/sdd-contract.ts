@@ -122,7 +122,8 @@ export interface FieldObject {
   object: string
   /** IR content items this object describes; code carries it to later rounds while they stay unchanged. */
   items: string[]
-  fields: Array<{ field: string; type: string; required: string; meaning: string }>
+  /** required_wording: for yes or no, the requirements' own words saying so (code checks they are written). */
+  fields: Array<{ field: string; type: string; required: string; required_wording?: string; meaning: string }>
   /** Set by code: the facts (names, values) the entry states, normalized; a revision of one of them drops it. */
   facts?: string[]
 }
@@ -182,7 +183,14 @@ export interface DeliveryContract {
   revisions?: RevisionEntry[]
   /** Items whose entries code dropped because a revision replaced a fact they state: written again next round. */
   rewrite_next?: string[]
+  /**
+   * Rulings on inconsistencies in the original, kept by management: delivered every round while the items they rule
+   * on are unchanged and their passages stand, so a ruling does not depend on SDD's PRD to reach later rounds.
+   */
+  conflicts?: Array<SettledConflict & { revisions: ItemRevisions; carried: boolean }>
 }
+/** A conflict as delivered: the model's ruling and basis, its passages quoted by code. */
+export interface SettledConflict { subject: string; items: string[]; quotes: Quote[]; ruling: string; basis: string }
 export interface ExecutableExample extends AcceptanceExample {
   id: string
   subject: string
@@ -210,6 +218,8 @@ export interface CIDelivery {
   field_objects_left_out?: string[]
   /** Interface names the delivered text writes that no dictionary object listed; code added them under one object. */
   field_names_added?: string[]
+  /** Fields written or carried as required yes/no without the requirements' own words saying so: delivered as not stated. */
+  required_not_stated?: Array<{ object: string; field: string; was: string }>
   /** Carried and newly written contract entries; the next round carries from here. */
   contract: DeliveryContract
   /** This round's change list as delivered: the model's entries that rest on this round's IR change, and entries code filled for changed items none covered. */

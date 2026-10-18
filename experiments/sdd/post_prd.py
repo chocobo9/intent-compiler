@@ -100,11 +100,12 @@ def output_samples(texts):
 
 
 def section_input_samples(texts, command, fenced_only=False):
-    """JSON objects shown in the command's own section, not under an output heading (its schema or config samples)."""
+    """JSON objects shown in the command's own section, not under an output heading (its schema or config samples).
+    A heading names the command in any case ("### Pipeline" is the pipeline command's section)."""
     found = []
     for text in texts:
         for path, chunk in _headed_chunks(text, fenced_only):
-            if not any(re.search(r'\b' + re.escape(command) + r'\b', h) for h in path) or (path and is_output_heading(path[-1])):
+            if not any(re.search(r'\b' + re.escape(command) + r'\b', h, re.I) for h in path) or (path and is_output_heading(path[-1])):
                 continue
             try:
                 value = json.loads(chunk)
@@ -285,6 +286,32 @@ def command_run(command, synopsis, texts, placeholder=PLACEHOLDER, columns=None)
     return {'args': args, 'files': files, 'stdin': None, 'from_sample': any(f['path'].endswith('.json') for f in files)}
 
 
+FILE_NAME = re.compile(r'^[\w./-]+\.[A-Za-z0-9]{1,8}$')
+
+
+def unprovided_files(run):
+    """File names the run's own JSON inputs (a configuration sample) name that the run does not create: a run that
+    fails on one of them fails on IC's input (the sample's ingest step reads raw.csv), not on the code."""
+    given = {f['path'] for f in run.get('files', [])}
+    names = []
+    def walk(v):
+        if isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+        elif isinstance(v, str) and FILE_NAME.match(v) and v not in given and v not in names:
+            names.append(v)
+    for f in run.get('files', []):
+        if f['path'].endswith('.json'):
+            try:
+                walk(json.loads(f['content']))
+            except ValueError:
+                pass
+    return names
+
+
 def same_failure(observed):
     """The exit code every placeholder run failed with, when they all failed the same way; else None."""
     codes = [(o or {}).get('exit_code') for o in observed]
@@ -351,6 +378,11 @@ def p1_p2(code_dir, texts):
         accepted_smaller = failed_code is not None and any(o.get('exit_code') != failed_code for o in variants)
         if accepted_smaller:
             failed_code = None
+        # Failing on a file the sample names and IC did not create: every run's output names one of them.
+        missing = unprovided_files(m['runs'][0]) if m['runs'] else []
+        input_fault = [n for n in missing if obs and all(n in (o.get('stderr') or '') + (o.get('stdout') or '') for o in obs)]
+        if failed_code is not None and input_fault:
+            failed_code = None
         if not rs:
             run_state = 'not run'
         elif not all(obs):
@@ -361,6 +393,8 @@ def p1_p2(code_dir, texts):
             run_state = f'exit {failed_code} under both placeholder sets' + (f' and {len(variants)} smaller column sets' if variants else '')
         elif accepted_smaller:
             run_state = f"inconclusive (exit {same_failure(obs)} with every named column; other results with fewer: IC's input, not the code)"
+        elif input_fault and same_failure(obs) is not None:
+            run_state = f"inconclusive (exit {same_failure(obs)} on {', '.join(input_fault)}, which the original's sample names and IC does not create: IC's input, not the code)"
         elif all(o.get('exit_code') == 0 for o in obs):
             run_state = 'exit 0'
         elif m['kind'] == 'command' and not m['runs'][0].get('from_sample'):
@@ -378,7 +412,9 @@ def p1_p2(code_dir, texts):
             args = m['runs'][0]['args'] if m['runs'] else []
             out_name = next((args[i + 1] for i, a in enumerate(args) if a == '--output'), None)
             item = structure_item(m['name'], m['expected'], obs, out_name, rs, m['runs'] is not None)
-            if item.get('state', '').startswith('no output file under') and accepted_smaller:
+            if item.get('state', '').startswith('no output file under') and input_fault:
+                item = {**item, 'failed': False, 'state': f"no output file, failing on {', '.join(input_fault)} (inconclusive: the original's sample names it and IC does not create it)", 'problems': []}
+            elif item.get('state', '').startswith('no output file under') and accepted_smaller:
                 item = {**item, 'failed': False, 'state': "no output file with every named column (inconclusive: fewer columns give another result, so IC's input, not the code)", 'problems': []}
             elif item.get('state', '').startswith('no output file under') and not m['runs'][0].get('from_sample'):
                 item = {**item, 'failed': False, 'state': item['state'] + ' (not judged: no sample of the original among its inputs)', 'problems': []}

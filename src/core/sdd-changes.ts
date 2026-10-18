@@ -2,7 +2,7 @@ import type { TaskIntent } from "./intent-contract.js"
 import type { ChangeEntry, DeliveryContract, LedgerEntry, Quote, RevisionEntry, SettledChange } from "./sdd-contract.js"
 import { itemOf } from "./sdd-executable.js"
 import { currentRevisions } from "./sdd-increment.js"
-import { holdsValue, normValue, refList, resolveQuotes, type segmentIndex } from "./sdd-quotes.js"
+import { holdsValue, normValue, refList, resolveQuotes, writtenIn, type segmentIndex } from "./sdd-quotes.js"
 
 type Index = ReturnType<typeof segmentIndex>
 /** Earlier passages code takes for a revision's before. */
@@ -69,9 +69,8 @@ export function settleChanges(entries: ChangeEntry[], changed: Map<string, { exi
     if (!nowQuotes.length) nowQuotes.push(...items.flatMap(id => itemQuotes(context.current, id, n => n === context.input, context.index, context.cut)))
     const wording = e.wording?.trim() ?? ""
     if (e.kind === "revised") {
-      const flat = (t: string) => t.replace(/\s+/gu, " ").trim()
       if (!wording) { unworded.push(`${JSON.stringify(e.subject)}: kind revised gives no wording`); continue }
-      if (!flat(nowQuotes.map(q => q.text).join(" ")).includes(flat(wording))) { unworded.push(`${JSON.stringify(e.subject)}: wording ${JSON.stringify(wording.slice(0, 160))} is not written in its now passages`); continue }
+      if (!writtenIn(nowQuotes.map(q => q.text).join(" "), wording)) { unworded.push(`${JSON.stringify(e.subject)}: wording ${JSON.stringify(wording.slice(0, 160))} is not written in its now passages`); continue }
     }
     // M3 (v6): a revision whose answer cites no earlier passage gets it from code: the previous versions of its items,
     // only the passages that name its subjects (or the words of its title), at most BEFORE_LIMIT.

@@ -5,6 +5,17 @@ import type { Quote, SegmentRef } from "./sdd-contract.js"
 /** A value as compared: lower case, letters and digits only ("SHA-256" and "sha256" are the same value). */
 export const normValue = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/gu, "")
 
+/**
+ * Whether words a model copied are written in a text: compared with whitespace collapsed and markdown emphasis
+ * and code marks (`*`, backtick) removed on both sides, since a copy drops them ("now uses sample standard
+ * deviation" is written in "now uses **sample standard deviation**").
+ */
+export function writtenIn(text: string, words: string): boolean {
+  const plain = (t: string) => t.replace(/[`*]/gu, "").replace(/\s+/gu, " ").trim()
+  const w = plain(words)
+  return w.length > 0 && plain(text).includes(w)
+}
+
 /** Every segment of the recorded inputs by "source_id|segment_id", with its 1-based input number. */
 export function segmentIndex(events: readonly CompilerEvent[]): Map<string, Quote & { start: number; end: number }> {
   const order = new Map(events.filter(e => e.kind === "user_input").map((e, i) => [e.event_id, i + 1]))

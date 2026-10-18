@@ -24,7 +24,7 @@ function fixture() {
     deliver: async input => ({ text: JSON.stringify({ decision: "deliver", reason: "Current user update", tasks: Object.values(input.ir).map(t => ({
       task_id: t.task_id, effective: [],
       coverage: t.content.map(c => ({ item_id: c.item_id, disposition: "assigned", explanation: "Included" })),
-    })), fields: [{ object: "tool", items: itemsOf(input.ir), fields: [{ field: "items", type: "array", required: "yes", meaning: "bundled items" }] }], acceptance: [acceptanceFor(event, itemsOf(input.ir))], changes: [] }) }),
+    })), fields: [{ object: "tool", items: itemsOf(input.ir), fields: [{ field: "items", type: "array", required: "yes", required_wording: "", meaning: "bundled items" }] }], acceptance: [acceptanceFor(event, itemsOf(input.ir))], changes: [] }) }),
     check: async () => ({ text: JSON.stringify({ verdict: "consistent", findings: [], repair_stage: "none" }) }),
   }
   const compiler = new SddCompiler(directory, event.run_id, model)
@@ -302,14 +302,16 @@ test("a quoted passage this delivery cuts is not delivered; an example left with
 test("the field dictionary precedes the examples; a field the requirements never write is rejected", async () => {
   const { checkFields } = await import("../src/core/sdd-compiler.js")
   const original = 'Run with --input <path>; the recipe uses {"op": "filter", "condition": "gt"}.'
-  const dict = (field: string) => [{ object: "filter", items: [], fields: [{ field, type: "string", required: "yes", meaning: "m" }] }]
+  const dict = (field: string) => [{ object: "filter", items: [], fields: [{ field, type: "string", required: "yes", required_wording: "", meaning: "m" }] }]
   assert.doesNotThrow(() => checkFields(dict("condition"), original, original))
   assert.doesNotThrow(() => checkFields(dict("--input"), original, original))
   assert.throws(() => checkFields(dict("operator"), original, original), /field "operator" is not a name the requirements write/)
   assert.throws(() => checkFields(dict("condition"), "cut", original), /occurs only in text this delivery cuts/)
   const f = fixture(), d = await compile(f)
   assert.ok(d.text.indexOf("# Interface and data: field dictionary\n") < d.text.indexOf("# Acceptance examples\n"))
-  assert.ok(d.text.includes("| `items` | array | yes | bundled items |"))
+  // The fake model gives required yes without the requirements' words: delivered as not stated, and recorded.
+  assert.ok(d.text.includes("| `items` | array | not stated in the original (a sample value is not a constraint) | bundled items |"))
+  assert.deepEqual(d.required_not_stated, [{ object: "tool", field: "items", was: "yes" }])
 })
 test("an earlier attempt can be adopted; later attempts are superseded and the next round continues from the adopted code", async () => {
   const f = fixture(); await compile(f)
@@ -352,10 +354,10 @@ test("code completes the field dictionary with every key and option the text wri
   const { completeFields, OTHER_NAMES } = await import("../src/core/sdd-compiler.js")
   const text = 'Run `dpipe compare --left a --tolerance 0`. Recipe: {"op": "aggregate", "column": "v", "having": {"column": "n", "condition": "gt"}}'
   const out = completeFields([
-    { object: "aggregate", items: [], fields: [{ field: "column", type: "string", required: "yes", meaning: "outer" }, { field: "column", type: "string", required: "yes", meaning: "inside having" }] },
+    { object: "aggregate", items: [], fields: [{ field: "column", type: "string", required: "yes", required_wording: "", meaning: "outer" }, { field: "column", type: "string", required: "yes", required_wording: "", meaning: "inside having" }] },
     { object: "plain CSV", items: [], fields: [] },
   ], text)
-  assert.deepEqual(out.fields[0]!.fields, [{ field: "column", type: "string", required: "yes", meaning: "outer; inside having" }])
+  assert.deepEqual(out.fields[0]!.fields, [{ field: "column", type: "string", required: "yes", required_wording: "", meaning: "outer; inside having" }])
   assert.deepEqual(out.leftOut, ["plain CSV"])
   assert.deepEqual(out.added.sort(), ["--left", "--tolerance", "condition", "having", "op"].sort())
   assert.equal(out.fields.at(-1)!.object, OTHER_NAMES)
@@ -363,7 +365,7 @@ test("code completes the field dictionary with every key and option the text wri
 test("a field written only as a command-line option is rejected with the option to use", async () => {
   const { checkFields } = await import("../src/core/sdd-compiler.js")
   const text = "Compare with --tolerance <number>."
-  assert.throws(() => checkFields([{ object: "pipeline config", items: [], fields: [{ field: "tolerance", type: "number", required: "no", meaning: "m" }] }], text, text), /the requirements write --tolerance, a command-line option/)
+  assert.throws(() => checkFields([{ object: "pipeline config", items: [], fields: [{ field: "tolerance", type: "number", required: "no", required_wording: "", meaning: "m" }] }], text, text), /the requirements write --tolerance, a command-line option/)
 })
 test("a CI repair receives the rejected draft with the issue and revises it, also after a reopen", async () => {
   const f = fixture(), deliver = f.model.deliver
@@ -371,7 +373,7 @@ test("a CI repair receives the rejected draft with the issue and revises it, als
   f.model.deliver = async input => {
     seen.push({ previous: input.previous_draft !== undefined, issues: input.issues })
     const answer = JSON.parse((await deliver(input)).text)
-    if (seen.length === 1) answer.fields[0].fields.push({ field: "not-in-the-input", type: "number", required: "no", meaning: "m" })
+    if (seen.length === 1) answer.fields[0].fields.push({ field: "not-in-the-input", type: "number", required: "no", required_wording: "", meaning: "m" })
     return { text: JSON.stringify(answer) }
   }
   await f.compiler.accept(event, 3)

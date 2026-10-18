@@ -9,13 +9,13 @@ import { createCompilerModelV2, V2_COMPILER_CONTRACT, type CompilerModelV2Input,
 import { buildGenerationSchema } from "../model/generation-schema.js"
 import { normalizeIrProposal, type IrNormalization } from "./sdd-ir-normalize.js"
 import { decodeSdd, SDD_DELIVERY_SCHEMA, SDD_CHECK_SCHEMA, SDD_EXAMPLES_SCHEMA, SDD_DERIVE_SCHEMA, type ExamplesRequest, type SddModel, type SddCheck } from "../model/sdd-model.js"
-import { SDD_PROFILE, type CIDelivery, type DeliveryContract, type DeliveryDraft, type RemovedPassage, type SddBatch, type SddCheckFinding, type SddRun, type SddResult, type SddSnapshot } from "./sdd-contract.js"
+import { SDD_PROFILE, type CIDelivery, type DeliveryContract, type SettledConflict, type DeliveryDraft, type RemovedPassage, type SddBatch, type SddCheckFinding, type SddRun, type SddResult, type SddSnapshot } from "./sdd-contract.js"
 import { checkRequest, deliveryRequest, irRequest, type CheckRequest, type ContextReport, type DeliveryRequest } from "./sdd-context.js"
 import { currentRevisions, inputOf, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
 import { computeLedger, fedBack, ledgerSection } from "./sdd-ledger.js"
 import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
 import { carryExecutable, executableSection, itemOf, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
-import { quoteBlock, refList, resolveQuotes, segmentIndex } from "./sdd-quotes.js"
+import { quoteBlock, refList, resolveQuotes, segmentIndex, writtenIn } from "./sdd-quotes.js"
 import { ledgerRevisions, markFactsValid, purge } from "./sdd-revisions.js"
 import type { AcceptanceSubject, ConflictEntry, DraftAcceptance, Quote } from "./sdd-contract.js"
 
@@ -357,7 +357,7 @@ export class SddCompiler {
     const baseline = delivered.length === 0 ? undefined : prdBaseline(s, b.event_id)
     const shown = baseline ? accumulatedText(s.events, earlier, ir, delivered, dispositions, effective, baseline.input + 1).text : reference
     let text = ""
-    const emptyObjects: string[] = [], namesAdded: string[] = []
+    const emptyObjects: string[] = [], namesAdded: string[] = [], requiredNotStated: NonNullable<CIDelivery["required_not_stated"]> = []
     const revisionsOf = (items: string[]) => Object.fromEntries(items.map(id => [id, now.get(id)!]))
     const taskOf = (itemId: string) => Object.values(ir).find(t => t.content.some(c => c.item_id === itemId))!.task_id
     const contract: DeliveryContract = { fields: [], acceptance: [], effective: [], dropped: [...final.dropped, ...sorted] }
@@ -389,7 +389,10 @@ export class SddCompiler {
       const purged = purge(revisions,
         [...carriedFields, ...writtenFields.map(o => ({ ...o, revisions: revisionsOf(o.items), carried: false }))],
         [...carriedSubjects, ...written.map(a => ({ ...a, revisions: revisionsOf(a.items), carried: false }))])
-      contract.fields = purged.fields
+      // Required yes or no stands only on the requirements' own words, written or carried alike.
+      const required = settleRequired(purged.fields, reference)
+      contract.fields = required.fields
+      requiredNotStated.push(...required.unsupported)
       contract.acceptance = purged.acceptance
       contract.dropped.push(...purged.dropped)
       purged.rewrite.forEach(id => rewrite.add(id))
@@ -397,18 +400,20 @@ export class SddCompiler {
       contract.effective = [...final.effective.filter(c => !excluded.has(c.entry.item_id)),
         ...draft.tasks.flatMap(t => t.effective.map(entry => ({ task_id: taskOf(entry.item_id), revision: now.get(entry.item_id)!, entry, carried: false })))]
       contract.revisions = revisions
+      contract.conflicts = carryConflicts(previous?.conflicts ?? [], conflicts, now, excluded, q => { const at = index.get(`${q.source_id}|${q.segment_id}`); return !at || cut(at) }, contract.dropped)
+        .concat(conflicts.map(c => ({ ...c, revisions: revisionsOf(c.items), carried: false })))
       // Code merges repeated rows, leaves out objects without fields, and adds every name the requirements write that no object lists.
       const completed = completeFields(contract.fields, reference)
       emptyObjects.push(...completed.leftOut)
       namesAdded.push(...completed.added)
       const head = baseline ? `${INCREMENTAL_HEADER}\n` : `${ACCUMULATED_HEADER}\n`
       const body = baseline ? `${baselineSection(baseline)}${shown.slice(ACCUMULATED_HEADER.length)}` : reference.slice(ACCUMULATED_HEADER.length)
-      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${conflictSection(conflicts)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
+      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${conflictSection(contract.conflicts)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
     }
     const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract,
       ...(delivered.length ? { reference_text: reference } : {}),
       ...(baseline ? { baseline_prd: { run_id: baseline.run_id, event_id: baseline.event_id, input: baseline.input, digest: baseline.digest, chars: baseline.text.length } } : {}),
-      ...(settled.changes.length ? { changes: settled.changes } : {}), ...(conflicts.length ? { conflicts } : {}), ...(Object.keys(s.ir).length && draft.changes === undefined ? { changes_not_given: true } : {}), ...(ledger.length ? { ledger } : {}), ...(emptyObjects.length ? { field_objects_left_out: emptyObjects } : {}), ...(namesAdded.length ? { field_names_added: namesAdded } : {}) }
+      ...(settled.changes.length ? { changes: settled.changes } : {}), ...(conflicts.length ? { conflicts } : {}), ...(Object.keys(s.ir).length && draft.changes === undefined ? { changes_not_given: true } : {}), ...(ledger.length ? { ledger } : {}), ...(emptyObjects.length ? { field_objects_left_out: emptyObjects } : {}), ...(namesAdded.length ? { field_names_added: namesAdded } : {}), ...(requiredNotStated.length ? { required_not_stated: requiredNotStated } : {}) }
     return { ...content, ref: { id: `ci-${digestText(this.runId + ":" + b.event_id).slice(0, 24)}`, revision: 1, digest: digestOf(content) } }
   }
   /** Durable claim precedes any external preparation. Repeating a claim never grants a second launch. */
@@ -631,8 +636,22 @@ export function completeFields(fields: DeliveryDraft["fields"], delivered: strin
 
 export const OTHER_NAMES = "Other names the requirements write (listed by code)"
 
-/** A conflict as delivered: the model's ruling and basis, its passages quoted by code. */
-export interface SettledConflict { subject: string; items: string[]; quotes: Quote[]; ruling: string; basis: string }
+/**
+ * A field is delivered as required yes or no only with the requirements' own words saying so, written in the
+ * delivered text; otherwise as not stated, and recorded. This holds for carried rows too, so a requiredness an
+ * earlier round wrote from a sample value (a seed shown in one configuration) is not carried on.
+ */
+export function settleRequired<T extends DeliveryDraft["fields"][number]>(fields: T[], delivered: string): { fields: T[]; unsupported: Array<{ object: string; field: string; was: string }> } {
+  const unsupported: Array<{ object: string; field: string; was: string }> = []
+  const out = fields.map(o => ({ ...o, fields: o.fields.map(f => {
+    if (f.required === "not stated" || writtenIn(delivered, f.required_wording ?? "")) return f
+    unsupported.push({ object: o.object, field: f.field, was: f.required })
+    return { ...f, required: "not stated", required_wording: "" }
+  }) }))
+  return { fields: out, unsupported }
+}
+
+export type { SettledConflict } from "./sdd-contract.js"
 
 /**
  * The model's conflict entries, settled by code. Ruling and basis are required (a ruling without its basis is
@@ -652,6 +671,21 @@ export function settleConflicts(entries: readonly ConflictEntry[], index: Return
   })
 }
 
+/**
+ * Earlier rulings carried into this delivery: kept while every item they rule on is current at the same revision
+ * and every passage they quote stands. A ruling written this round on any of the same items replaces it.
+ */
+export function carryConflicts(previous: NonNullable<DeliveryContract["conflicts"]>, written: readonly SettledConflict[], now: ReturnType<typeof currentRevisions>,
+  excluded: ReadonlySet<string>, gone: (q: Quote) => boolean, dropped: DeliveryContract["dropped"]): NonNullable<DeliveryContract["conflicts"]> {
+  return previous.flatMap(c => {
+    const why = written.some(w => w.items.some(id => c.items.includes(id))) ? "replaced by a ruling written this round on the same items"
+      : Object.entries(c.revisions).some(([id, r]) => now.get(id) !== r || excluded.has(id)) ? "an item it rules on was revised, withdrawn or is not delivered now"
+      : c.quotes.some(gone) ? "a passage it quotes is cut from this delivery" : undefined
+    if (why) { dropped.push({ kind: "conflict", name: c.subject, reason: why }); return [] }
+    return [{ ...c, carried: true }]
+  })
+}
+
 export function conflictSection(conflicts: readonly SettledConflict[]): string {
   if (!conflicts.length) return ""
   const body = conflicts.map(c => `## ${c.subject}\n${quoteBlock(c.quotes)}\n\n- Ruling: ${c.ruling}\n- Basis: ${c.basis}`).join("\n\n")
@@ -662,8 +696,9 @@ export const CONFLICT_NOTE = "The original requirements say different things in 
 
 export function fieldSection(fields: DeliveryDraft["fields"]): string {
   const cell = (v: string) => v.replace(/\|/gu, "\\|").replace(/\r?\n/gu, " ").trim()
-  const required = (v: string) => v === "not stated" ? "not stated in the original (a sample value is not a constraint)" : v
-  const body = fields.map(o => `## ${o.object.trim()}\n| Field | Type | Required | Meaning |\n|---|---|---|---|\n${o.fields.map(f => `| \`${cell(f.field)}\` | ${cell(f.type)} | ${cell(required(f.required))} | ${cell(f.meaning)} |`).join("\n")}`).join("\n\n")
+  const required = (f: DeliveryDraft["fields"][number]["fields"][number]) => f.required === "not stated" ? "not stated in the original (a sample value is not a constraint)"
+    : f.required_wording ? `${f.required} ("${f.required_wording}")` : f.required
+  const body = fields.map(o => `## ${o.object.trim()}\n| Field | Type | Required | Meaning |\n|---|---|---|---|\n${o.fields.map(f => `| \`${cell(f.field)}\` | ${cell(f.type)} | ${cell(required(f))} | ${cell(f.meaning)} |`).join("\n")}`).join("\n\n")
   return `# Interface and data: field dictionary\n${FIELD_NOTE}\n\n${body}\n\n`
 }
 

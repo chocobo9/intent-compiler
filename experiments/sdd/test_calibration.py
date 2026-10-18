@@ -1,5 +1,7 @@
 """The 2026-10-17 calibration of IC's intent checks: a failure counts when it does not depend on the values (or on
 the extra columns IC's own input carries); keys only some like entries show are value-dependent; per-command gates."""
+import json
+
 import acceptance_repair
 import post_prd
 
@@ -52,3 +54,17 @@ def test_a_command_gate_overrides_its_class():
     assert acceptance_repair.gate_state(gate, 'p2:profile') == 'open'
     assert acceptance_repair.gate_state(gate, 'p2:schema') == 'closed'
     assert acceptance_repair.gate_state(gate, 'unit:op:round') == 'open'
+
+
+def test_a_command_section_is_found_whatever_the_case_of_its_heading():
+    text = '## Original user update 1\n\n### Pipeline\n\n`dpipe pipeline --config <path>`\n\n```json\n{"seed": 12345, "steps": []}\n```\n'
+    assert post_prd.section_input_samples([text], 'pipeline', fenced_only=True) == [{'seed': 12345, 'steps': []}]
+
+
+def test_files_a_configuration_sample_names_and_the_run_does_not_create_are_listed():
+    config = {'seed': 1, 'steps': [{'type': 'ingest', 'input': 'raw.csv', 'schema': 'schema.json', 'output': 'clean.csv'},
+                                   {'type': 'transform', 'input': 'clean.csv', 'recipe': 'recipe.json', 'output': 'out.csv'}]}
+    run = {'args': ['pipeline', '--config', 'config.json'], 'files': [{'path': 'config.json', 'content': json.dumps(config)},
+                                                                      {'path': 'recipe.json', 'content': '[]'}]}
+    assert post_prd.unprovided_files(run) == ['raw.csv', 'schema.json', 'clean.csv', 'out.csv']
+    assert post_prd.unprovided_files({'args': [], 'files': [{'path': 'in.csv', 'content': 'a\n1\n'}]}) == []

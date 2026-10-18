@@ -1,6 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { conflictSection, fieldSection, settleConflicts } from "../src/core/sdd-compiler.js"
+import { carryConflicts, conflictSection, fieldSection, settleConflicts, settleRequired } from "../src/core/sdd-compiler.js"
+import { writtenIn } from "../src/core/sdd-quotes.js"
 import type { DeliveryContract } from "../src/core/sdd-contract.js"
 
 const at = (source_id: string, segment_id: string, input: number, text: string, start: number) =>
@@ -46,4 +47,40 @@ test("a field whose requirement is not stated says so, and that a sample value i
     { field: "steps", type: "array", required: "yes", meaning: "the steps in order" }] }])
   assert.ok(text.includes("| `seed` | integer | not stated in the original (a sample value is not a constraint) |"))
   assert.ok(text.includes("| `steps` | array | yes |"))
+})
+
+test("a required yes or no stands only on the requirements' own words; written or carried, otherwise it is not stated", () => {
+  const delivered = 'Reads a pipeline config (JSON): {"seed": 12345, "steps": [...]}\n- `--config` is **required**.'
+  const fields = [{ object: "pipeline configuration", items: ["c-pipeline"], revisions: { "c-pipeline": 2 }, carried: true, fields: [
+    { field: "seed", type: "uint64", required: "yes", meaning: "carried from an earlier round, no words" },
+    { field: "--config", type: "path", required: "yes", required_wording: "`--config` is required.", meaning: "config path" },
+    { field: "steps", type: "array", required: "no", required_wording: "steps may be omitted", meaning: "words not written" },
+    { field: "name", type: "string", required: "not stated", meaning: "m" }] }]
+  const out = settleRequired(fields, delivered)
+  assert.deepEqual(out.fields[0]!.fields.map(f => f.required), ["not stated", "yes", "not stated", "not stated"])
+  assert.deepEqual(out.unsupported, [{ object: "pipeline configuration", field: "seed", was: "yes" }, { object: "pipeline configuration", field: "steps", was: "no" }])
+  assert.equal(out.fields[0]!.carried, true)
+  const text = fieldSection(out.fields)
+  assert.ok(text.includes('| `--config` | path | yes ("`--config` is required.") |'))
+  assert.ok(text.includes("| `seed` | uint64 | not stated in the original (a sample value is not a constraint) |"))
+})
+
+test("copied words match with markdown emphasis and code marks dropped, never when absent", () => {
+  assert.ok(writtenIn("now uses **sample standard deviation** (Bessel's correction)", "now uses sample standard deviation"))
+  assert.ok(writtenIn('The `fill` transform with `"strategy": "linear"` now handles', 'The fill transform with "strategy": "linear" now handles'))
+  assert.ok(!writtenIn("two additional percentile fields", "replaced"))
+  assert.ok(!writtenIn("anything", "  "))
+})
+
+test("a ruling is carried while its items are unchanged and its passages stand; revised, cut or ruled again it is dropped", () => {
+  const ruling = { ...settleConflicts([entry], index, () => false, now, ["c-lineage"], [])[0]!, revisions: { "c-lineage": 1 }, carried: false }
+  const dropped: DeliveryContract["dropped"] = []
+  const none = () => false
+  assert.deepEqual(carryConflicts([ruling], [], now, new Set(), none, dropped).map(c => [c.subject, c.carried]), [["ingest step input field", true]])
+  assert.deepEqual(carryConflicts([ruling], [], new Map([["c-lineage", 2]]), new Set(), none, dropped), [])
+  assert.deepEqual(carryConflicts([ruling], [], now, new Set(["c-lineage"]), none, dropped), [])
+  assert.deepEqual(carryConflicts([ruling], [], now, new Set(), q => q.source_id === "r1", dropped), [])
+  assert.deepEqual(carryConflicts([ruling], [{ ...ruling, subject: "again" }], now, new Set(), none, dropped), [])
+  assert.deepEqual(dropped.map(d => d.reason), ["an item it rules on was revised, withdrawn or is not delivered now", "an item it rules on was revised, withdrawn or is not delivered now",
+    "a passage it quotes is cut from this delivery", "replaced by a ruling written this round on the same items"])
 })

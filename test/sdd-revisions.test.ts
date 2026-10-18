@@ -41,8 +41,8 @@ test("a later revision of the same subjects replacing a value it set supersedes 
 test("an open revision drops field rows, quoted examples and executable examples that state a value it replaced", () => {
   const open = [{ ...change(), id: "r5#1", event_id: "r5", input: 5, revisions: {}, state: "open" }] as RevisionEntry[]
   const fields = [{ object: "verify command", items: ["r-verify"], revisions: {}, carried: true, fields: [
-    { field: "--file", type: "path", required: "yes", meaning: "File whose SHA-256 is computed" }, { field: "--checksum", type: "path", required: "yes", meaning: "Checksum file" }] },
-    { object: "snapshot", items: ["r-snap"], revisions: {}, carried: true, fields: [{ field: "row_hash", type: "string", required: "yes", meaning: "SHA-256 of the row" }] }]
+    { field: "--file", type: "path", required: "yes", required_wording: "", meaning: "File whose SHA-256 is computed" }, { field: "--checksum", type: "path", required: "yes", required_wording: "", meaning: "Checksum file" }] },
+    { object: "snapshot", items: ["r-snap"], revisions: {}, carried: true, fields: [{ field: "row_hash", type: "string", required: "yes", required_wording: "", meaning: "SHA-256 of the row" }] }]
   const acceptance = [{ subject: "verify", items: ["r-verify"], revisions: {}, carried: true, examples: [
     { given: "", expect: "", given_quotes: [quote(1, "`dpipe verify` computes the SHA-256")], expect_quotes: [] },
     { given: "", expect: "", given_quotes: [quote(5, "verify now uses BLAKE2b-256 instead of SHA256")], expect_quotes: [] }] }]
@@ -134,7 +134,7 @@ test("only a worded revision opens an entry; one unconfirmed after two later upd
 test("the items of a revision going to review are written again in that delivery, so a field object it cut is whole again", async () => {
   const { planCarry } = await import("../src/core/sdd-increment.js")
   const items = ir({ "r-profile": 1, "r-verify": 1 })
-  const profile = { object: "profile JSON output", items: ["r-profile"], revisions: { "r-profile": 1 }, carried: false, fields: [{ field: "p05", type: "number", required: "yes", meaning: "" }] }
+  const profile = { object: "profile JSON output", items: ["r-profile"], revisions: { "r-profile": 1 }, carried: false, fields: [{ field: "p05", type: "number", required: "yes", required_wording: "", meaning: "" }] }
   const open = (over: Partial<RevisionEntry>) => ({ ...change(), id: "r3-user-input#1", event_id: "r3-user-input", input: 3, revisions: { "r-profile": 1 }, state: "open", ...over }) as RevisionEntry
   const previous = (r: RevisionEntry) => ({ fields: [profile], acceptance: [], effective: [], dropped: [], revisions: [r] }) as never
   // Recorded before revisions had to rest on words: due at the next input.
