@@ -46,6 +46,24 @@ MAX_ATTEMPTS = 2
 PASS_FLOOR = 0.9
 
 
+def management_config(series_name):
+    """IC's management OpenCode config. Each management call still opens its own session (no shared history);
+    the prompt cache key and session headers are fixed per series, because OpenCode keys the provider's prompt
+    cache by session id (provider/transform.ts:1321, and the session-id / x-session-affinity headers), so a fresh
+    session never reused the identical opening of a retry or a later stage (v6: 0 cache reads). The model input
+    is unchanged; only the provider's reuse of an identical prefix is allowed. Probe 2026-10-18: a second call in
+    a new session read 8,576 of 8,683 input tokens from cache."""
+    key = f'ic-mgmt-{series_name}'
+    cache = {'promptCacheKey': key}
+    return {
+        '$schema': 'https://opencode.ai/config.json', 'model': run_r1.MODEL, 'small_model': run_r1.MODEL,
+        'plugin': [], 'instructions': [], 'mcp': {}, 'share': 'disabled', 'agent': {},
+        'provider': {'openai': {'models': {'gpt-6-luna-fast': {
+            'options': {'reasoningEffort': 'high', 'serviceTier': 'priority', **cache},
+            'variants': {run_r1.VARIANT: {'reasoningEffort': 'high', 'serviceTier': 'priority', **cache}},
+            'headers': {'session-id': key, 'x-session-affinity': key, 'X-Session-Id': key}}}}}}
+
+
 def free_port():
     with socket.socket() as s:
         s.bind(('127.0.0.1', 0))
@@ -98,12 +116,7 @@ def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round
     (root / 'management').mkdir()
     (root / 'requests').mkdir()
     (root / 'baseline-r0').mkdir()
-    run_r1.write_json(root / 'management-config.json', {
-        '$schema': 'https://opencode.ai/config.json', 'model': run_r1.MODEL, 'small_model': run_r1.MODEL,
-        'plugin': [], 'instructions': [], 'mcp': {}, 'share': 'disabled', 'agent': {},
-        'provider': {'openai': {'models': {'gpt-6-luna-fast': {
-            'options': {'reasoningEffort': 'high', 'serviceTier': 'priority'},
-            'variants': {run_r1.VARIANT: {'reasoningEffort': 'high', 'serviceTier': 'priority'}}}}}}})
+    run_r1.write_json(root / 'management-config.json', management_config(root.name))
     frozen = {p.relative_to(root).as_posix(): run_r1.sha(p) for folder in [adapter, upstream] for p in folder.rglob('*') if p.is_file()}
     ic_files = {p.relative_to(dist).as_posix(): run_r1.sha(p) for p in dist.rglob('*') if p.is_file()}
     run_r1.write_json(root / 'series.json', {

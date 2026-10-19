@@ -139,7 +139,7 @@ export function createOpenCodeModelTransport(options: OpenCodeModelTransportOpti
   return async (request: Readonly<CompilerModelRequest>): Promise<string> => {
     let serializedRequest: string
     try {
-      serializedRequest = stableJson(request)
+      serializedRequest = requestJson(request)
     } catch (error: unknown) {
       throw new OpenCodeModelTransportError(
         "REQUEST_SERIALIZATION_FAILED",
@@ -228,7 +228,7 @@ export function createOpenCodeStructuredTransport<Request>(
   return async (request: Request): Promise<CompilerModelV2Call> => {
     let serializedRequest: string
     try {
-      serializedRequest = stableJson(prepareRequest(request))
+      serializedRequest = requestJson(prepareRequest(request))
     } catch (error: unknown) {
       throw new OpenCodeModelTransportError(
         "REQUEST_SERIALIZATION_FAILED",
@@ -848,6 +848,24 @@ function sanitizeProviderMessage(message: string): string {
 
 function finiteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value)
+}
+
+/**
+ * Request fields that change between attempts of the same request (the attempt count, the issues a rejected
+ * attempt raised, the rejected draft). They are written last, after every stable field, so that a retry or a
+ * later stage repeats the same opening text and the provider's prompt cache can reuse it. Every other field
+ * keeps the sorted order; the model receives the same content either way.
+ */
+export const VOLATILE_REQUEST_FIELDS = ["budget", "validation_errors", "issues", "previous_draft"] as const
+
+export function requestJson(value: unknown): string {
+  if (!isRecord(value)) return stableJson(value)
+  const sorted = sortValue(value) as Record<string, unknown>
+  const late = VOLATILE_REQUEST_FIELDS.filter(key => key in sorted)
+  const ordered = Object.fromEntries([...Object.entries(sorted).filter(([key]) => !late.includes(key as typeof late[number])), ...late.map(key => [key, sorted[key]])])
+  const encoded = JSON.stringify(ordered)
+  if (encoded === undefined) throw new Error("value is not JSON-serializable")
+  return encoded
 }
 
 function stableJson(value: unknown): string {
