@@ -112,7 +112,7 @@ test("findings IC records are tracked in the ledger and never fed back", async (
   assert.equal(computeLedger({ batches: [], runs: [run("r1", ["p3:command:validate"]), run("r2", [])] } as never, {} as never)[0]!.state, "closed")
 })
 
-test("only a worded revision opens an entry; one unconfirmed after two later updates, or recorded without words, goes to review and is no longer delivered", async () => {
+test("only a worded revision opens an entry and is delivered however many updates carry it; one recorded without words goes to review and is no longer delivered", async () => {
   const { changeSection } = await import("../src/core/sdd-changes.js")
   const empty = { runs: [], batches: [] } as never
   const items = ir({ "r-verify": 1 })
@@ -121,14 +121,17 @@ test("only a worded revision opens an entry; one unconfirmed after two later upd
   const r3 = ledgerRevisions(undefined, [change()], empty, items, "r3-user-input", 3)
   const r4 = ledgerRevisions(r3, [], empty, items, "r4-user-input", 4), r5 = ledgerRevisions(r4, [], empty, items, "r5-user-input", 5)
   assert.deepEqual([r4[0]!.state, r5[0]!.state], ["open", "open"], "carried by two later updates")
-  const r6 = ledgerRevisions(r5, [], empty, items, "r6-user-input", 6)[0]!
-  assert.equal(r6.state, "review"); assert.match(r6.closed!.reason, /after 2 later updates carried it/u)
-  assert.equal(changeSection([], [r6], [], items, "r6-user-input"), "", "a revision under review is not delivered")
-  assert.equal(ledgerRevisions([r6], [], empty, items, "r7-user-input", 7)[0]!.closed!.event_id, "r6-user-input", "review stays closed")
+  // v7 0.4: a worded revision stays open however many later updates carry it, and is delivered each time.
+  let carried = r5
+  for (let n = 6; n <= 15; n++) carried = ledgerRevisions(carried, [], empty, items, `r${n}-user-input`, n)
+  assert.equal(carried[0]!.state, "open")
+  assert.match(changeSection([], carried, [], items, "r15-user-input"), /## Changed in update 3, not yet confirmed in the code: verify digest/u)
   // An entry recorded before revisions had to rest on words (the R3 profile percentiles) goes to review at once.
   const old = r3.map(r => ({ ...r, subject: "profile percentiles", wording: undefined }))
   const next = ledgerRevisions(old, [], empty, items, "r4-user-input", 4)[0]!
   assert.equal(next.state, "review"); assert.match(next.closed!.reason, /rests on no words of its update/u)
+  assert.equal(changeSection([], [next], [], items, "r4-user-input"), "", "a revision under review is not delivered")
+  assert.equal(ledgerRevisions([next], [], empty, items, "r5-user-input", 5)[0]!.closed!.event_id, "r4-user-input", "review stays closed")
 })
 
 test("the items of a revision going to review are written again in that delivery, so a field object it cut is whole again", async () => {
@@ -141,11 +144,11 @@ test("the items of a revision going to review are written again in that delivery
   const unworded = open({ items: ["r-profile"], wording: undefined })
   assert.deepEqual(planCarry(previous(unworded), items, items, new Set(), 4).toWrite, ["r-profile"])
   assert.deepEqual(planCarry(previous(unworded), items, items).toWrite, [], "without the input number nothing is due")
-  // A worded one is carried by two later updates, then due.
+  // A worded one is never due (v7 0.4): its items are not rewritten on account of it.
   const worded = open({ items: ["r-profile"] })
-  assert.deepEqual(planCarry(previous(worded), items, items, new Set(), 5).toWrite, [])
-  assert.deepEqual(planCarry(previous(worded), items, items, new Set(), 6).toWrite, ["r-profile"])
-  assert.deepEqual(planCarry(previous({ ...worded, state: "review" }), items, items, new Set(), 7).toWrite, [], "already under review: written once, at the round it went")
+  assert.deepEqual(planCarry(previous(worded), items, items, new Set(), 6).toWrite, [])
+  assert.deepEqual(planCarry(previous(worded), items, items, new Set(), 15).toWrite, [])
+  assert.deepEqual(planCarry(previous({ ...unworded, state: "review" }), items, items, new Set(), 5).toWrite, [], "already under review: written once, at the round it went")
   // The entry itself is still carried until the rewritten one of the same name replaces it.
   assert.equal(planCarry(previous(unworded), items, items, new Set(), 4).fields[0]!.object, "profile JSON output")
 })

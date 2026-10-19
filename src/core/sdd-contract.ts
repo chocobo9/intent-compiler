@@ -111,7 +111,7 @@ export interface RevisionEntry extends SettledChange {
   event_id: string
   input: number
   revisions: ItemRevisions
-  /** review: not confirmed after REVISION_REVIEW_AFTER later updates; the revision itself is to be checked, and it is no longer delivered. */
+  /** review: it rests on no words of its update; the revision itself is to be checked, and it is no longer delivered. */
   state: "open" | "confirmed" | "superseded" | "review"
   closed?: { event_id: string; reason: string }
 }

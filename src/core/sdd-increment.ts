@@ -39,9 +39,12 @@ export function narrowedItems(accepted: Record<string, TaskIntent>, current: Rec
 }
 
 /** Later updates an open revision is carried by, unconfirmed, before it goes to review. */
-export const REVISION_REVIEW_AFTER = 2
-/** An open revision goes to review at this input when it rests on no words of its update, or REVISION_REVIEW_AFTER later updates carried it. */
-export const dueForReview = (r: { wording?: string; input: number }, input: number): boolean => !r.wording || input - r.input > REVISION_REVIEW_AFTER
+/**
+ * An open revision goes to review when it rests on no words of its update (v7 0.4: a worded revision is delivered
+ * until it is confirmed, superseded or withdrawn, however many later updates carry it; the input is kept for the
+ * landing-state rule that is to replace this).
+ */
+export const dueForReview = (r: { wording?: string; input: number }, _input: number): boolean => !r.wording
 /** A user update's input number, from 1. */
 export const inputOf = (s: SddSnapshot, eventId: string): number => s.events.filter(e => e.kind === "user_input").findIndex(e => e.event_id === eventId) + 1
 
