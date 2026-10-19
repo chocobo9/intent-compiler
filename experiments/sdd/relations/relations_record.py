@@ -196,9 +196,14 @@ def i1(texts, delivery):
             'names': len(names), 'errors': len(errors)}
 
 
+def mentions(text, name):
+    """Named anywhere as a word: SDD's PRD writes names in its own way (table cells, prose), not always quoted."""
+    return re.search(r'(?<![\w-])' + re.escape(name) + r'(?![\w-])', text) is not None
+
+
 def i2(delivery, prd):
     names, errors = obligations(delivery.get('text', ''))
-    return {'names_missing': sorted(n for n in names if not writes(prd, n)), 'errors_missing': sorted(e for e in errors if fragment(e) not in prd),
+    return {'names_missing': sorted(n for n in names if not mentions(prd, n)), 'errors_missing': sorted(e for e in errors if fragment(e) not in prd),
             'names': len(names), 'errors': len(errors)}
 
 
