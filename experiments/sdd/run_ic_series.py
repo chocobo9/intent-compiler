@@ -71,7 +71,7 @@ def host_identity(native):
     return identity
 
 
-def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round=1, acceptance_repair=False, pause_below_floor=True, native=None, pause_each_round=False):
+def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round=1, acceptance_repair=False, pause_below_floor=True, native=None, pause_each_round=False, overnight_report=None):
     root = run_r1.BASE / 'harbor_runs' / (f'{trial_prefix}-15round-' + dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%Sz-') + uuid.uuid4().hex[:8])
     root.mkdir(parents=True)
     source = Path(__file__).parent
@@ -113,7 +113,9 @@ def freeze_ic_series(adopt_r1=None, trial_prefix=TRIAL_PREFIX, ledger_from_round
         'adapter_digest': adapter_digest(adapter), 'frozen_files': frozen,
         'ic': {'dist': str(dist), 'files': ic_files, 'source_head': head, 'source_uncommitted': dirty},
         'original_instructions': {str(n): run_r1.sha(run_r1.OFFICIAL / f'steps/round-{n}/instruction.md') for n in range(1, 16)},
-        **({'adopt_r1': adopted_trial(adopt_r1)} if adopt_r1 else {})})
+        **({'adopt_r1': adopted_trial(adopt_r1)} if adopt_r1 else {}),
+        # Unattended from R1 (user, 2026-10-18): each round's report goes into this document.
+        **({'pilot_report': str(Path(overnight_report).resolve())} if overnight_report else {})})
     print(root, flush=True)
     return root
 
@@ -667,7 +669,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-pause', action='store_true', help='rounds below the pass floor go on instead of pausing (recorded as below_floor)')
     parser.add_argument('--pause-each-round', action='store_true', help='freeze, or with --resume: stop after every round (pilot)')
     parser.add_argument('--gate', help='with --resume: the check gate to freeze from here, as JSON over the default (e.g. {"p1_stub": "open", "p2_structure:profile": "open"}); user decision only')
-    parser.add_argument('--overnight-report', help='with --resume: run on without stopping after each round, appending each round report to this document')
+    parser.add_argument('--overnight-report', help='freeze or --resume: run on without stopping after each round, appending each round report to this document')
     parser.add_argument('--reopen', type=int, help='extra management calls for a rejected batch (only after user approval)')
     parser.add_argument('--acceptance-repair', action='store_true', help='freeze: after SDD returns, IC accepts the code and has SDD prd-fix what failed (acceptance_repair.py)')
     parser.add_argument('--native', help='freeze: the management host launcher (v5: the strict OpenCode build)')
@@ -692,4 +694,4 @@ if __name__ == '__main__':
             raise SystemExit(subprocess.call([sys.executable, str(runner), '--launch', str(Path(args.launch).resolve())]))
         execute_ic_series(args.launch)
     else:
-        freeze_ic_series(args.adopt_r1, args.trial_prefix, args.ledger_from_round, args.acceptance_repair, not args.no_pause, args.native, args.pause_each_round)
+        freeze_ic_series(args.adopt_r1, args.trial_prefix, args.ledger_from_round, args.acceptance_repair, not args.no_pause, args.native, args.pause_each_round, args.overnight_report)
