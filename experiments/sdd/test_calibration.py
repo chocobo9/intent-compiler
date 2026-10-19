@@ -68,3 +68,17 @@ def test_files_a_configuration_sample_names_and_the_run_does_not_create_are_list
                                                                       {'path': 'recipe.json', 'content': '[]'}]}
     assert post_prd.unprovided_files(run) == ['raw.csv', 'schema.json', 'clean.csv', 'out.csv']
     assert post_prd.unprovided_files({'args': [], 'files': [{'path': 'in.csv', 'content': 'a\n1\n'}]}) == []
+
+
+def test_a_placeholder_csv_carries_a_column_no_sample_names():
+    # v7 R2: drop's sample names the columns it drops; a CSV of only those columns made the program refuse correctly.
+    csv = post_prd.placeholder_csv(['a', 'b'], 'x')
+    assert csv.splitlines()[0] == 'a,b,' + post_prd.EXTRA_COLUMN and csv.splitlines()[1] == 'x,x,x'
+    assert post_prd.placeholder_csv([], 'x').splitlines()[0] == 'id,' + post_prd.EXTRA_COLUMN
+
+
+def test_each_csv_of_a_unit_run_has_its_own_unnamed_column():
+    # A join's right side must not share the extra column with the left side (same-named non-key columns are refused).
+    run = post_prd._transform_run({'op': 'join', 'right': 'other.csv', 'on': 'id'}, {'options': [('input', '<path>', False), ('recipe', '<path>', False), ('output', '<path>', False)]})
+    heads = {f['path']: f['content'].splitlines()[0] for f in run['files'] if f['path'].endswith('.csv')}
+    assert heads['in.csv'].endswith(',' + post_prd.EXTRA_COLUMN) and heads['other.csv'].endswith(',' + post_prd.EXTRA_COLUMN + '_2')

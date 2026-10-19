@@ -164,10 +164,12 @@ def kind_sites(sites, kind, names):
     overlap = [len(s & names) for _, s in sites]
     best = max(overlap, default=0)
     floor = max(2, -(-best * KIND_SITE_SHARE // 1))
-    named = any(sel == kind.lower() for sel, _ in sites)
+    # A site under a subject of the kind's name counts only when it holds some of the kind's names: an expression
+    # evaluator's `switch op` over "==", "<" is not the operation dispatch (v7 R2).
+    named = any(sel == kind.lower() and s & names for sel, s in sites)
     # Where the code names the kind's subject, a site under another subject is another kind's whatever it holds.
     own = [s for (sel, s), n in zip(sites, overlap)
-           if sel == kind.lower() or (best >= 2 and n >= floor and (not named or sel is None))]
+           if (sel == kind.lower() and n) or (best >= 2 and n >= floor and (not named or sel is None))]
     return own or None
 
 

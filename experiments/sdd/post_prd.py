@@ -141,8 +141,15 @@ def identifiers(value, skip=()):
     return out
 
 
-def placeholder_csv(columns, value=PLACEHOLDER):
-    columns = columns or ['id']
+# A column no sample names: an operation that removes the named columns (drop) never removes them all (v7 R2).
+# Each file gets its own, so two files (a join's sides) never share it.
+EXTRA_COLUMN = 'ic_unnamed'
+
+
+def placeholder_csv(columns, value=PLACEHOLDER, extra=EXTRA_COLUMN):
+    columns = list(columns or ['id'])
+    if extra not in columns:
+        columns.append(extra)
     return ','.join(columns) + '\n' + ','.join(value for _ in columns) + '\n'
 
 
@@ -236,7 +243,8 @@ def _transform_run(sample, synopsis, value=PLACEHOLDER, columns=None, other_colu
     """other_columns: the header of the other CSV files the sample names (a join's right side); the main input's by default."""
     cols = identifiers(sample, skip={sample.get('op')}) if columns is None else columns
     files = [{'path': 'in.csv', 'content': placeholder_csv(cols, value)}, {'path': 'recipe.json', 'content': json.dumps([sample])}]
-    files += [{'path': p, 'content': placeholder_csv(cols if other_columns is None else other_columns, value)} for p in csv_files(sample) if p not in ('in.csv',)]
+    files += [{'path': p, 'content': placeholder_csv(cols if other_columns is None else other_columns, value, f'{EXTRA_COLUMN}_{k}')}
+              for k, p in enumerate((p for p in csv_files(sample) if p not in ('in.csv',)), 2)]
     args = ['transform']
     for opt, value, optional in synopsis['options']:
         if optional:

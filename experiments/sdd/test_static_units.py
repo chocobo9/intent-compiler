@@ -50,3 +50,27 @@ def test_nested_samples_and_two_valued_headed_keys_are_units():
     found = units([r1, r2])
     assert ('op', 'rollup') in found and ('strategy', 'linear') in found
     assert ('function', 'sum') not in found, 'a value without its own heading is not a unit'
+
+
+def test_a_same_named_switch_over_other_values_is_not_the_kinds_dispatch(tmp_path):
+    # v7 R2: an expression evaluator's `switch op` over comparison operators hid the real operation dispatch.
+    (tmp_path / 'main.go').write_text('''package main
+func apply(name string) {
+	switch name {
+	case "upper", "lower", "trim":
+		run(name)
+	}
+}
+func compare(op string, a, b float64) bool {
+	switch op {
+	case "==":
+		return a == b
+	case "<":
+		return a < b
+	}
+	return false
+}
+''', encoding='utf-8')
+    assert missing(tmp_path, [('op', 'upper'), ('op', 'lower'), ('op', 'trim')]) == []
+    (tmp_path / 'main.go').write_text((tmp_path / 'main.go').read_text(encoding='utf-8').replace('"upper", "lower", "trim"', '"upper", "lower"'), encoding='utf-8')
+    assert missing(tmp_path, [('op', 'upper'), ('op', 'lower'), ('op', 'trim')]) == [('op', 'trim')]
