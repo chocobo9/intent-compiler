@@ -13,11 +13,12 @@ import { SDD_PROFILE, type CIDelivery, type DeliveryContract, type SettledConfli
 import { checkRequest, deliveryRequest, irRequest, type CheckRequest, type ContextReport, type DeliveryRequest } from "./sdd-context.js"
 import { currentRevisions, inputOf, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
 import { computeLedger, fedBack, ledgerSection } from "./sdd-ledger.js"
-import { changeSection, changedItems, settleChanges } from "./sdd-changes.js"
+import { changeSection, changedItems, RulingNeeded, settleChanges } from "./sdd-changes.js"
+import { answerRevisions, carryRulings, rulingQuestions, rulingSection, rulingView, settleRulings } from "./sdd-rulings.js"
 import { carryExecutable, executableSection, itemOf, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
 import { quoteBlock, refList, resolveQuotes, segmentIndex, writtenIn } from "./sdd-quotes.js"
 import { ledgerRevisions, markFactsValid, purge } from "./sdd-revisions.js"
-import type { AcceptanceSubject, ConflictEntry, DraftAcceptance, Quote } from "./sdd-contract.js"
+import type { AcceptanceSubject, ConflictEntry, DraftAcceptance, Quote, RulingEntry } from "./sdd-contract.js"
 
 const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b)
 function requireThat(value: unknown, message: string): asserts value { if (!value) throw Error(message) }
@@ -115,11 +116,15 @@ export class SddCompiler {
         // Code keeps the full input for preparation; the model receives the
         // request built from the store.  A request that cannot be built
         // completely is a deterministic defect: it is reported, never sent.
+        const last = previousContract(s, batch)
+        const questions = rulingQuestions(last?.revisions, s.ir)
         const input: CompilerModelV2Input | undefined = stage !== "ir" ? undefined : {
           generation_stage: "ir", run_id: this.runId, events: [event], source_events: s.events.filter(e => e.event_id !== eventId),
           source_segments: sourceSegments(s.events), event_source_refs: [{ source_id: eventId, digest: digestText(userText(event) ?? "") }],
           ir: s.ir, budget: { requests_used: batch.requests_used + 1, max_requests: batch.max_requests }, contract: V2_COMPILER_CONTRACT,
           ...(batch.error ? { validation_errors: [batch.error] } : {}),
+          // Management state the IR rules with (v7 R10 fix): the rulings kept so far, and the open revisions whose old values are to be ruled.
+          ...({ current_rulings: rulingView(last?.conflicts), ruling_questions: questions.map(q => ({ ...q, before: q.before.map(({ source_id, segment_id, input, text }) => ({ source_id, segment_id, input, text })), now: q.now.map(({ source_id, segment_id }) => ({ source_id, segment_id })) })) } as object),
         }
         let built: { request: unknown; report: ContextReport }
         try {
@@ -144,9 +149,13 @@ export class SddCompiler {
             const repaired = proposed.ok ? undefined : await reproposeNormalized(proposed, input!)
             if (repaired) { record.normalized = repaired.changes; proposed = repaired.result }
             requireThat(proposed.ok && proposed.ir_proposal, proposed.error?.message ?? "No IR proposal")
-            batch.parent = prepareIntentIR(input!, proposed.ir_proposal, candidate => resolveSourceRefs(candidate, s.events), candidate => ({
+            const parent = prepareIntentIR(input!, proposed.ir_proposal, candidate => resolveSourceRefs(candidate, s.events), candidate => ({
               ok: same(candidate.basis.event_ids, [eventId]), message: "IR basis must name this user update exactly",
             }), undefined, undefined, normativeHistoryOf(s))
+            // The rulings the answer gives with its IR, settled by code against the prepared IR.
+            const extension = (proposed.call as { ir_extension?: { rulings?: RulingEntry[]; withdraw_rulings?: Array<{ ruling_id: string; reason: string }> } } | undefined)?.ir_extension
+            const ruled = settleRulings(extension?.rulings ?? [], extension?.withdraw_rulings ?? [], { eventId, index: segmentIndex(s.events), ir: parent.ir, questions, current: last?.conflicts ?? [] })
+            batch.parent = { ...parent, ...(ruled.rulings.length ? { rulings: ruled.rulings } : {}), ...(ruled.withdrawn.length ? { withdrawn_rulings: ruled.withdrawn } : {}) }
             batch.state = "ci"
           } else if (stage === "ci") {
             record.call = await this.model.deliver(built.request as DeliveryRequest)
@@ -177,7 +186,11 @@ export class SddCompiler {
             else this.acceptBatch(s, batch)
           }
           delete batch.error
-        } catch (error) { batch.error = error instanceof Error ? error.message : String(error); record.error = batch.error }
+        } catch (error) {
+          batch.error = error instanceof Error ? error.message : String(error); record.error = batch.error
+          // An earlier state the update names in its own words is the IR's to rule on: back to the IR stage with the question.
+          if (error instanceof RulingNeeded) { batch.state = "ir"; delete batch.parent; delete batch.delivery; delete batch.last_draft }
+        }
         this.save(s)
       }
       // The examples stage has its own two calls, outside the management budget, so it runs however many calls the CI took.
@@ -332,7 +345,9 @@ export class SddCompiler {
       if (!items.some(id => plan.toWrite.includes(id))) { sorted.push({ kind, name: name(e), reason: `describes only requirements carried unchanged (${items.join(", ")})` }); return [] }
       return [{ ...e, items: [...new Set(items)] }]
     })
-    const writtenFields = admissible("field", o => o.object, draft.fields), writtenSubjects = admissible("acceptance", a => a.subject, draft.acceptance)
+    // A field object whose items changed is edited on its accepted version (v7 R10 fix): rows the answer does not touch stay.
+    const edits = mergeFieldEdits(admissible("field", o => o.object, draft.fields), final.revisedFields.map(o => ({ ...o, items: o.items.filter(id => now.has(id)) })).filter(o => o.items.length), sorted)
+    const writtenFields = edits.fields, writtenSubjects = admissible("acceptance", a => a.subject, draft.acceptance)
     const replaced = (carried: string[], written: string[], kind: "field" | "acceptance") => new Set(carried.filter(n => written.includes(n)).map(n => { sorted.push({ kind, name: n, reason: "replaced by the entry of the same name written this round" }); return n }))
     const replacedFields = replaced(final.fields.map(o => o.object), writtenFields.map(o => o.object), "field")
     const replacedSubjects = replaced(final.acceptance.map(a => a.subject), writtenSubjects.map(a => a.subject), "acceptance")
@@ -365,18 +380,24 @@ export class SddCompiler {
     const input = inputOf(s, b.event_id)
     // A passage this delivery cuts in part or whole is not quoted.
     const cut = (q: { source_id: string; start: number; end: number }) => removed.some(r => r.source_id === q.source_id && r.start < q.end && q.start < r.end)
+    // Management's rulings (the IR's, kept across rounds): the earlier ones still standing and this update's.
+    const conflicts = b.parent!.rulings ?? []
+    const rulings = carryRulings(previous?.conflicts ?? [], conflicts, b.parent!.withdrawn_rulings ?? [], ir, contract.dropped)
     // This round's change list (not in the first delivery, where everything is new): the model's entries settled by code against the IR change.
-    const settled = Object.keys(s.ir).length ? settleChanges(draft.changes ?? [], changedItems(s.ir, ir, excluded), { index, cut, input, previous: s.ir, current: ir }) : { changes: [], dropped: [] }
+    const settled = Object.keys(s.ir).length ? settleChanges(draft.changes ?? [], changedItems(s.ir, ir, excluded), { index, cut, input, previous: s.ir, current: ir, rulings }) : { changes: [], dropped: [] }
     contract.dropped.push(...settled.dropped)
-    // Inconsistencies in the original the model rules on: its ruling and basis, the passages as code quotes them.
-    const conflicts = delivered.length ? settleConflicts(draft.conflicts ?? [], index, cut, now, plan.toWrite, contract.dropped) : []
-    // The revision ledger: earlier revisions still open, and this update's.
-    const revisions = ledgerRevisions(previous?.revisions, settled.changes, s, ir, b.event_id, input)
+    // The revision ledger: earlier revisions still open (those a ruling answered now with their old values), and this update's.
+    const revisions = answerRevisions(ledgerRevisions(previous?.revisions, settled.changes, s, ir, b.event_id, input), rulings)
     // Requirements the starting code does not meet, from the store's run results (code, not model).
     const ledger = markFactsValid(computeLedger(s, ir), revisions)
     if (delivered.length) {
-      // Newly written entries must hold; a carried entry whose names the requirements no longer write is dropped.
-      checkFields(writtenFields, reference, original)
+      // Newly written rows must hold; a carried entry, or a row of an edited object's base, whose names the requirements no longer write is dropped.
+      checkFields(edits.written, reference, original)
+      for (const o of writtenFields) o.fields = o.fields.filter(f => {
+        if (!edits.base.has(`${o.object}|${f.field}`) || writes(reference, f.field)) return true
+        contract.dropped.push({ kind: "field", name: `${o.object}: ${f.field}`, reason: "a row of the accepted object that the delivered requirements no longer write" })
+        return false
+      })
       const carriedFields = final.fields.filter(o => { try { checkFields([o], reference, original); return true } catch (e) { contract.dropped.push({ kind: "field", name: o.object, reason: (e as Error).message }); return false } })
       const rewrite = new Set<string>()
       // A carried example whose passage this delivery now cuts no longer states what holds.
@@ -400,15 +421,14 @@ export class SddCompiler {
       contract.effective = [...final.effective.filter(c => !excluded.has(c.entry.item_id)),
         ...draft.tasks.flatMap(t => t.effective.map(entry => ({ task_id: taskOf(entry.item_id), revision: now.get(entry.item_id)!, entry, carried: false })))]
       contract.revisions = revisions
-      contract.conflicts = carryConflicts(previous?.conflicts ?? [], conflicts, now, excluded, q => { const at = index.get(`${q.source_id}|${q.segment_id}`); return !at || cut(at) }, contract.dropped)
-        .concat(conflicts.map(c => ({ ...c, revisions: revisionsOf(c.items), carried: false })))
+      contract.conflicts = rulings
       // Code merges repeated rows, leaves out objects without fields, and adds every name the requirements write that no object lists.
       const completed = completeFields(contract.fields, reference)
       emptyObjects.push(...completed.leftOut)
       namesAdded.push(...completed.added)
       const head = baseline ? `${INCREMENTAL_HEADER}\n` : `${ACCUMULATED_HEADER}\n`
       const body = baseline ? `${baselineSection(baseline)}${shown.slice(ACCUMULATED_HEADER.length)}` : reference.slice(ACCUMULATED_HEADER.length)
-      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${conflictSection(contract.conflicts)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
+      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${rulingSection(contract.conflicts)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
     }
     const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract,
       ...(delivered.length ? { reference_text: reference } : {}),
@@ -604,6 +624,38 @@ export function checkFields(fields: DeliveryDraft["fields"], delivered: string, 
     }
   }
   requireThat(!problems.length, `Field dictionary does not hold: ${problems.join("; ")}`)
+}
+
+/**
+ * The CI's field objects with each edit merged onto its accepted version (v7 R10 fix): an entry naming an object of
+ * fields_to_revise (by revises, or by the same name) keeps every row of that object it does not change or remove;
+ * a row of the same field name replaces the old one. An object of fields_to_revise no entry edits stands as it was.
+ * written: the objects with only the rows the answer wrote (checked strictly); base: "object|field" of rows kept
+ * from the accepted versions.
+ */
+export function mergeFieldEdits(written: DeliveryDraft["fields"], bases: readonly DeliveryDraft["fields"][number][], dropped: DeliveryContract["dropped"]):
+  { fields: DeliveryDraft["fields"]; written: DeliveryDraft["fields"]; base: Set<string> } {
+  const byName = new Map(bases.map(o => [o.object, o]))
+  const unknown = written.filter(w => w.revises?.trim() && !byName.has(w.revises.trim())).map(w => `${w.object} revises ${JSON.stringify(w.revises)}`)
+  requireThat(!unknown.length, `Field dictionary edits name objects fields_to_revise does not list: ${unknown.join("; ")}; revises names one of ${[...byName.keys()].map(n => JSON.stringify(n)).join(", ") || "none"}, or is empty for a new object`)
+  const used = new Set<string>(), base = new Set<string>()
+  const fields = written.map(w => {
+    const from = byName.get(w.revises?.trim() || w.object)
+    const { revises: _revises, removed = [], ...rest } = w
+    if (!from || used.has(from.object)) return rest
+    used.add(from.object)
+    const gone = removed.filter(name => !from.fields.some(f => f.field === name))
+    if (gone.length) dropped.push({ kind: "field", name: w.object, reason: `removed names fields its accepted version does not have: ${gone.join(", ")}` })
+    const kept = from.fields.filter(f => !removed.includes(f.field) && !w.fields.some(n => n.field === f.field))
+    kept.forEach(f => base.add(`${w.object}|${f.field}`))
+    return { ...rest, items: [...new Set([...from.items, ...w.items])], fields: [...kept, ...w.fields] }
+  })
+  for (const o of bases) if (!used.has(o.object)) {
+    o.fields.forEach(f => base.add(`${o.object}|${f.field}`))
+    fields.push({ object: o.object, items: o.items, fields: o.fields })
+    dropped.push({ kind: "field", name: o.object, reason: "its items changed and the answer gave no edit: kept as accepted" })
+  }
+  return { fields, written: written.map(({ revises: _r, removed: _x, ...o }) => o), base }
 }
 
 /** JSON keys ("key":) and command-line options (--option) the text writes: the interface names code can read. */

@@ -31,7 +31,7 @@ test("CI generation uses its new strict schema, fresh session, no business tools
       return { info: { structured: { decision: "hold", reason: "No approved work", tasks: [] } }, parts: [] }
     },
   } } })
-  const call = await model.deliver({ request_view: "", ir: {}, ir_change: { previous_ir_digest: "", tasks: [], previous_versions: {} }, sources: { inputs: [], unplaced: [], unprocessed_inputs: [] }, history: { coverage: [], runs: [] }, feedback: { runs: [] }, referenced_objects: [], issues: [], to_write: [], carried: { fields: [], acceptance: [], effective: [] } })
+  const call = await model.deliver({ request_view: "", ir: {}, ir_change: { previous_ir_digest: "", tasks: [], previous_versions: {} }, sources: { inputs: [], unplaced: [], unprocessed_inputs: [] }, history: { coverage: [], runs: [] }, feedback: { runs: [] }, referenced_objects: [], issues: [], to_write: [], carried: { fields: [], acceptance: [], effective: [] }, fields_to_revise: [], rulings: [] })
   assert.equal(JSON.parse(call.text).decision, "hold")
   assert.equal(sessions, 1); assert.equal(calls, 1)
 })

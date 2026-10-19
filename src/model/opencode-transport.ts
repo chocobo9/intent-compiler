@@ -64,6 +64,11 @@ export interface OpenCodeModelTransportOptions {
   readonly timeoutMs?: number
   /** v6 M1: enumerate in the schema the source, segment and item ids each request lists (SDD management only). */
   readonly narrowIds?: boolean
+  /**
+   * v7 R10 fix (SDD management only): root properties added to the IR-stage answer schema, and the instruction
+   * describing them. The SDD model splits them from the answer before the generic IR validation reads it.
+   */
+  readonly irExtension?: { readonly properties: Record<string, unknown>; readonly instruction: string }
 }
 
 export type OpenCodeModelTransportV2Options = OpenCodeModelTransportOptions
@@ -194,12 +199,14 @@ export function createOpenCodeModelTransportV2(
     if (stage !== "ir" && stage !== "ci") return legacy(request)
     const assessing = stage === "ci" && "assessment_batch" in request && request.assessment_batch === true
     const active = stage === "ci" && !assessing && hasActiveExecution(request)
+    const extension = stage === "ir" ? options.irExtension : undefined
+    const base = buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing, activeExecutions: active })
+    const schema = extension ? { ...base, properties: { ...(base.properties as Record<string, unknown>), ...extension.properties }, required: [...(base.required as string[]), ...Object.keys(extension.properties)] } : base
     const transport = createOpenCodeStructuredTransport<CompilerModelV2Input | CompilerModelV2CheckInput>(
       options,
-      `${generationStageInstruction(stage, assessing, generation.checkRequired, active)} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
+      `${generationStageInstruction(stage, assessing, generation.checkRequired, active)}${extension ? `\n${extension.instruction}` : ""} Return this result through OpenCode's StructuredOutput response channel; that internal submission is the only allowed tool.`,
       // M1 (v6): with narrowIds, source and segment ids are the ones this request lists.
-      options.narrowIds ? narrowEnums(buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing, activeExecutions: active }), requestIds(request))
-        : buildGenerationSchema(stage, "openai", { ...generation, assessment: assessing, activeExecutions: active }),
+      options.narrowIds ? narrowEnums(schema, requestIds(request)) : schema,
       () => ({ ...request, contract: generationContract(request.contract, stage, "openai", assessing, generation.checkRequired, active) }),
     )
     return transport(request)

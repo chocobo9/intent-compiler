@@ -558,12 +558,24 @@ test("the change list quotes the cited passages, keeps only values and subjects 
   const after = task([["r-verify", 1, "verify now BLAKE2b", [at("r1", "### verify\nComputes SHA-256 of `--file`.", 0), at("r2", "Behavior change: `verify` now uses BLAKE2b-256 instead.", 0)]], ["r-clip", 0, "### clip", [at("r2", "### clip\n`{\"op\": \"clip\"}`", r2.indexOf("### clip"))]]])
   const changed = changedItems(before, after, new Set())
   const context = { index: segmentIndex(events), cut: () => false, input: 2, previous: before, current: after }
-  const { changes, dropped } = settleChanges([{ kind: "revised", subject: "verify digest", items: ["r-verify"], subjects: ["verify", "manifest"], before: [{ source_id: "r1", segment_id: "s1" }], now: [{ source_id: "r2", segment_id: "s1" }, { source_id: "r1", segment_id: "s2" }],
-    old_values: ["SHA256", "MD5"], new_values: ["BLAKE2b-256"], parameters: [], wording: "`verify`  now uses\nBLAKE2b-256 instead" }], changed, context)
+  const verify = { kind: "revised" as const, subject: "verify digest", items: ["r-verify"], subjects: ["verify", "manifest"], before: [{ source_id: "r1", segment_id: "s1" }], now: [{ source_id: "r2", segment_id: "s1" }, { source_id: "r1", segment_id: "s2" }],
+    old_values: ["SHA256", "MD5"], new_values: ["BLAKE2b-256"], parameters: [], wording: "`verify`  now uses\nBLAKE2b-256 instead" }
+  // An old value no earlier passage of the items writes is a question for the IR (v7 R10 fix), not left out silently.
+  const { RulingNeeded } = await import("../src/core/sdd-changes.js")
+  assert.throws(() => settleChanges([verify], changed, context), (e: unknown) => e instanceof RulingNeeded && /"verify digest" \(items r-verify\) replaces "MD5"/u.test((e as Error).message))
+  // An unstated ruling answers it: the original does not write the earlier state.
+  const unstated = { id: "r2#R1", kind: "unstated" as const, subject: "MD5", items: ["r-verify"], quotes: [], ruling: "not written", basis: "b", values: [{ said: "MD5", written: "" }] }
+  const ruledUnstated = settleChanges([verify], changed, { ...context, rulings: [unstated] }).changes[0]!
+  assert.deepEqual([ruledUnstated.old_values, ruledUnstated.ruled], [["SHA256"], { ruling: "r2#R1", stated: false }])
+  // An identity ruling gives the earlier name as written.
+  const identity = { ...unstated, kind: "identity" as const, values: [{ said: "MD5", written: "SHA-256" }] }
+  const ruledIdentity = settleChanges([verify], changed, { ...context, rulings: [identity] }).changes[0]!
+  assert.deepEqual([ruledIdentity.old_values, ruledIdentity.ruled], [["SHA256", "SHA-256"], { ruling: "r2#R1", stated: true }])
+  const { changes, dropped } = settleChanges([{ ...verify, old_values: ["SHA256"] }], changed, context)
   assert.deepEqual(changes.map(c => [c.subject, c.items, !!c.filled_by_code]), [["verify digest", ["r-verify"], false], ["clip", ["r-clip"], true]])
   assert.deepEqual([changes[0]!.subjects, changes[0]!.old_values, changes[0]!.new_values], [["verify"], ["SHA256"], ["BLAKE2b-256"]])
   assert.deepEqual(changes[0]!.now.map(q => q.segment_id), ["s1"])
-  assert.match(dropped[0]!.reason, /not from this update[\s\S]*"MD5" is not written in before[\s\S]*"manifest" is not written in now/u)
+  assert.match(dropped[0]!.reason, /not from this update[\s\S]*"manifest" is not written in now/u)
   const ledger = [{ id: "x#1", kind: "acceptance", subject: "verify mismatch", items: [], revisions: {}, first_failed: "r1", last: { event_id: "r1", run_id: "run", passed: false, observed: "printed nothing" }, state: "open" }] as never
   const section = changeSection(changes, [], ledger, after, "r2")
   assert.match(section, /^# Changes in this update\n/u)
@@ -574,7 +586,10 @@ test("the change list quotes the cited passages, keeps only values and subjects 
   // The kind rests on the update's words: a revision without them, or with words its now passages do not write, is rejected.
   const entry = { kind: "revised" as const, subject: "verify digest", items: ["r-verify"], subjects: ["verify"], before: [], now: [{ source_id: "r2", segment_id: "s1" }], old_values: ["SHA-256"], new_values: ["BLAKE2b-256"], parameters: [] }
   assert.throws(() => settleChanges([entry], changed, context), /"verify digest": kind revised gives no wording/u)
-  assert.throws(() => settleChanges([{ ...entry, wording: "replaces SHA-256" }], changed, context), /"verify digest": wording "replaces SHA-256" is not written in its now passages/u)
+  assert.throws(() => settleChanges([{ ...entry, wording: "replaces SHA-256" }], changed, context), /"verify digest": wording "replaces SHA-256" is not written in this update/u)
+  // Words of this update its now passages leave out: the segment that writes them joins now (v7 R10 fix).
+  const joined = settleChanges([{ ...entry, now: [{ source_id: "r2", segment_id: "s2" }], wording: "now uses BLAKE2b-256 instead" }], changed, context)
+  assert.deepEqual(joined.changes[0]!.now.map(q => q.segment_id), ["s2", "s1"])
   // An added entry shows no replacement, whatever new values it names.
   const added = settleChanges([{ ...entry, kind: "added", wording: "" }], changed, context).changes
   assert.equal(added[0]!.wording, undefined)

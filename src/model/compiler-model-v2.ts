@@ -256,6 +256,12 @@ export interface CompilerModelV2Call {
   usage?: CompilerModelV2Usage
   /** Exact submitted generation-schema violations, before optional-null removal. */
   structured_schema_errors?: string[]
+  /**
+   * SDD management (v7 R10 fix): root properties of an IR answer outside the generic IR shape (the rulings), split
+   * from text before the generic validation reads it; text_returned keeps the answer exactly as returned.
+   */
+  ir_extension?: Record<string, unknown>
+  text_returned?: string
 }
 
 export interface CompilerModelV2Result {

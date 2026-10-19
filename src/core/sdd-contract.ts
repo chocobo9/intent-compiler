@@ -46,14 +46,35 @@ export interface DeliveryDraft {
    */
   changes?: ChangeEntry[]
   /**
-   * Where the original requirements say different things about the same thing (two inputs, or a general rule
-   * and a specific one): the passages that disagree, the ruling, and the basis for it. Code delivers the
-   * passages verbatim with the update each comes from. Not carried: each round writes its own.
+   * Written by CI answers before rulings moved to the IR stage (v7 R10 fix); read for old stores only.
+   * Rulings are the IR's (RulingEntry), and the CI no longer writes its own.
    */
   conflicts?: ConflictEntry[]
 }
 /** One inconsistency in the original requirements as the model reads it. */
 export interface ConflictEntry { subject: string; items: string[]; passages: SegmentRef[]; ruling: string; basis: string }
+/**
+ * How the original requirements are read where their text alone does not settle it, as the IR answer gives it
+ * (v7 R10 fix): two passages that disagree (conflict); an update naming something of the earlier requirements by
+ * a name or description the earlier passages do not write (identity); an update changing part of a passage whose
+ * rest stands (partial); or, answering a ruling question, the earlier state an update describes not being written
+ * in the original (unstated). Code quotes the passages and keeps the ruling as management state across rounds.
+ */
+export interface RulingEntry {
+  kind: "conflict" | "identity" | "partial" | "unstated"
+  subject: string
+  item_ids: string[]
+  passages: SegmentRef[]
+  /** What now holds, in the model's words. */
+  holds: string
+  basis: string
+  /** identity: said is the name as the later update writes it, written as an earlier passage writes it (unstated: empty). */
+  values: Array<{ said: string; written: string }>
+  /** The ruling question (an open revision's id) this answers; empty otherwise. */
+  question: string
+  /** The id of a current ruling this one replaces; empty otherwise. */
+  replaces: string
+}
 /** An original passage, by the segment ids the request lists. */
 export interface SegmentRef { source_id: string; segment_id: string }
 /** An original passage as delivered: the segment's verbatim text and the user input (1-based) it comes from. */
@@ -97,8 +118,10 @@ export interface SettledChange {
   wording?: string
   /** before taken by code from the previous versions of the items (the answer cited none). */
   before_by_code?: boolean
-  /** What a revision lacks (before, old_values, subjects): recorded for tracing, never asked of the model. */
+  /** What a revision lacks (before, subjects): recorded for tracing. Missing old values are asked of the IR as a ruling question. */
   missing?: string[]
+  /** The ruling a revision's old values rest on: stated (identity, the earlier name as written) or not stated in the original. */
+  ruled?: { ruling: string; stated: boolean }
 }
 /**
  * A revision carried with every delivery until code confirms the code meets it
@@ -126,6 +149,12 @@ export interface FieldObject {
   fields: Array<{ field: string; type: string; required: string; required_wording?: string; meaning: string }>
   /** Set by code: the facts (names, values) the entry states, normalized; a revision of one of them drops it. */
   facts?: string[]
+  /**
+   * In a CI answer: the object of fields_to_revise this entry edits (its rows are the ones added or changed) and
+   * the field names it removes; code merges the edit onto that object, keeping every other row.
+   */
+  revises?: string
+  removed?: string[]
 }
 export interface AcceptanceSubject {
   subject: string
@@ -184,13 +213,32 @@ export interface DeliveryContract {
   /** Items whose entries code dropped because a revision replaced a fact they state: written again next round. */
   rewrite_next?: string[]
   /**
-   * Rulings on inconsistencies in the original, kept by management: delivered every round while the items they rule
-   * on are unchanged and their passages stand, so a ruling does not depend on SDD's PRD to reach later rounds.
+   * Management's rulings on the original requirements (made at the IR stage), kept as state: delivered every round
+   * until a later IR replaces or withdraws one, or every item it rules on is withdrawn, so a ruling does not depend
+   * on SDD's PRD to reach later rounds.
    */
   conflicts?: Array<SettledConflict & { revisions: ItemRevisions; carried: boolean }>
 }
-/** A conflict as delivered: the model's ruling and basis, its passages quoted by code. */
-export interface SettledConflict { subject: string; items: string[]; quotes: Quote[]; ruling: string; basis: string }
+/**
+ * A ruling as delivered: the IR's reading and basis, its passages quoted by code. Entries written by a CI answer
+ * before the R10 fix have no id or kind (read as conflicts).
+ */
+export interface SettledConflict {
+  subject: string
+  items: string[]
+  quotes: Quote[]
+  ruling: string
+  basis: string
+  id?: string
+  kind?: RulingEntry["kind"]
+  /** identity: the update's name and the earlier name as written; unstated: said only. */
+  values?: Array<{ said: string; written: string }>
+  /** The open revision this ruling answers. */
+  question?: string
+  /** The earlier ruling this one replaces. */
+  replaces?: string
+  event_id?: string
+}
 export interface ExecutableExample extends AcceptanceExample {
   id: string
   subject: string
@@ -322,7 +370,8 @@ export interface SddBatch {
   requests_used: number
   max_requests: number
   state: "ir" | "ci" | "check" | "examples" | "accepted" | "rejected"
-  parent?: { ir: Record<string, TaskIntent>; candidate: Candidate; digest: string }
+  /** rulings: this update's rulings as settled from the IR answer; withdrawn: ids of current rulings the IR withdrew. */
+  parent?: { ir: Record<string, TaskIntent>; candidate: Candidate; digest: string; rulings?: SettledConflict[]; withdrawn_rulings?: Array<{ id: string; reason: string }> }
   delivery?: CIDelivery
   /** The latest CI answer that decoded, kept for a repair to revise (see DeliveryRequest.previous_draft). */
   last_draft?: DeliveryDraft

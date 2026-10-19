@@ -16,6 +16,11 @@ export interface CarryPlan {
   effective: DeliveryContract["effective"]
   dropped: DeliveryContract["dropped"]
   toWrite: string[]
+  /**
+   * Field objects not carried because an item of theirs was revised or delivers other passages now, with a current
+   * item: the base the CI edits (v7 R10 fix), instead of writing the object again from the current text.
+   */
+  revisedFields: DeliveryContract["fields"]
 }
 
 export function currentRevisions(ir: Record<string, TaskIntent>): Map<string, number> {
@@ -57,23 +62,27 @@ export function planCarry(previous: DeliveryContract | undefined, accepted: Reco
   // A revision going to review at this input no longer stands: its items are written again from the original,
   // so entries it cut facts from (as replaced) are whole again.
   if (input !== undefined) for (const r of previous?.revisions ?? []) if (r.state === "open" && dueForReview(r, input)) r.items.forEach(id => toWrite.add(id))
-  const plan: CarryPlan = { fields: [], acceptance: [], effective: [], dropped: [], toWrite: [] }
-  const judge = (revisions: ItemRevisions): { carry: true } | { carry: false; reason: string; rewrite: string[] } => {
+  const plan: CarryPlan = { fields: [], acceptance: [], effective: [], dropped: [], toWrite: [], revisedFields: [] }
+  const judge = (revisions: ItemRevisions): { carry: true } | { carry: false; reason: string; rewrite: string[]; edit: boolean } => {
     const ids = Object.keys(revisions)
     const gone = ids.filter(id => !now.has(id))
-    if (gone.length) return { carry: false, reason: `item ${gone.join(", ")} withdrawn`, rewrite: ids.filter(id => now.has(id)) }
+    if (gone.length) return { carry: false, reason: `item ${gone.join(", ")} withdrawn`, rewrite: ids.filter(id => now.has(id)), edit: false }
     const changed = ids.filter(id => now.get(id) !== revisions[id])
-    if (changed.length) return { carry: false, reason: `item ${changed.map(id => `${id}@${revisions[id]}→${now.get(id)}`).join(", ")} revised`, rewrite: ids }
+    if (changed.length) return { carry: false, reason: `item ${changed.map(id => `${id}@${revisions[id]}→${now.get(id)}`).join(", ")} revised`, rewrite: ids, edit: true }
     const cut = ids.filter(id => narrowed.has(id))
-    if (cut.length) return { carry: false, reason: `item ${cut.join(", ")} delivers other passages now (a later update cut or moved part of it)`, rewrite: ids }
+    if (cut.length) return { carry: false, reason: `item ${cut.join(", ")} delivers other passages now (a later update cut or moved part of it)`, rewrite: ids, edit: true }
     const held = ids.filter(id => excluded.has(id))
-    if (held.length) return { carry: false, reason: `item ${held.join(", ")} not delivered now`, rewrite: ids.filter(id => !excluded.has(id)) }
+    if (held.length) return { carry: false, reason: `item ${held.join(", ")} not delivered now`, rewrite: ids.filter(id => !excluded.has(id)), edit: false }
     return { carry: true }
   }
   for (const entry of previous?.fields ?? []) {
     const verdict = judge(entry.revisions)
     if (verdict.carry) plan.fields.push({ ...entry, carried: true })
-    else { plan.dropped.push({ kind: "field", name: entry.object, reason: verdict.reason }); verdict.rewrite.forEach(id => toWrite.add(id)) }
+    else {
+      plan.dropped.push({ kind: "field", name: entry.object, reason: verdict.edit ? `${verdict.reason}; given to the CI to edit` : verdict.reason })
+      verdict.rewrite.forEach(id => toWrite.add(id))
+      if (verdict.edit && !Object.keys(entry.revisions).some(id => excluded.has(id))) plan.revisedFields.push({ ...entry, carried: false })
+    }
   }
   for (const entry of previous?.acceptance ?? []) {
     const verdict = judge(entry.revisions)

@@ -2,8 +2,9 @@ import { LEDGER_FEEDBACK } from "./sdd-ledger.js"
 import { canonicalJson, digestOf, digestText, type CompilerEvent, type ContentItem, type Ref, type SourceRef, type SourceSegment, type TaskIntent } from "./intent-contract.js"
 import { changedPriorState } from "./request-projection.js"
 import { SourceLedger, recordedDispositions, selectedSourceHistory, sourceSegments, userText } from "./source-payload.js"
-import type { CIDelivery, DeliveryDraft, PrdCheckSummary, SddBatch, SddResult, SddRun, SddSnapshot } from "./sdd-contract.js"
+import type { CIDelivery, DeliveryContract, DeliveryDraft, PrdCheckSummary, SddBatch, SddResult, SddRun, SddSnapshot } from "./sdd-contract.js"
 import { planCarry, previousContract } from "./sdd-increment.js"
+import { carryRulings, rulingView } from "./sdd-rulings.js"
 
 /**
  * What each SDD management request shows of the store.  The store keeps every
@@ -106,6 +107,13 @@ export interface DeliveryRequest {
   to_write: string[]
   /** What code carries unchanged from the accepted delivery, by name only. */
   carried: { fields: Array<{ object: string; fields: string[] }>; acceptance: string[]; effective: string[] }
+  /**
+   * Field objects of the accepted delivery whose items changed: the base each edit starts from, with every original
+   * passage their items selected in any round (v7 R10 fix).
+   */
+  fields_to_revise: Array<{ object: string; items: string[]; fields: DeliveryContract["fields"][number]["fields"]; passages: Array<{ source_id: string; segment_id: string }> }>
+  /** Management's rulings this delivery holds (made at the IR stage, kept across rounds). */
+  rulings: ReturnType<typeof rulingView>
   /** On a repair: the rejected CI answer, to revise where issues point and keep otherwise. */
   previous_draft?: DeliveryDraft
 }
@@ -210,7 +218,7 @@ function carrier(segment: SourceSegment, eventId: string, digest: string, irs: R
 /** The check is shown how the delivered text was built instead of a second copy of every input. */
 const withoutReference = ({ reference_text: _r, ...rest }: CIDelivery) => rest
 const DELIVERY_TEXT_REST = " from the second update the PRD SDD clarified for an earlier update (delivery.baseline_prd) in place of the inputs up to it, then every later user input verbatim and in input order, minus each passage in delivery.removed, with each effective statement of delivery.contract placed after the paragraph its requirement was changed in; the store keeps the exact text)"
-export const DELIVERY_TEXT_VIEW = "(not repeated here: the delivered text is this update's change list (delivery.changes, then the open ledger entries fed back), the conflicts in the original with their rulings (delivery.conflicts), the field dictionary and acceptance examples of delivery.contract (carried and newly written entries), the section code writes for the open ledger entries fed back (" + (LEDGER_FEEDBACK ? "all open entries of delivery.ledger" : "the open acceptance entries of delivery.ledger") + ": earlier requirements the starting code does not meet; code's, not to be judged), then" + DELIVERY_TEXT_REST
+export const DELIVERY_TEXT_VIEW = "(not repeated here: the delivered text is this update's change list (delivery.changes, then the open ledger entries fed back), management's rulings on the original requirements (delivery.contract.conflicts), the field dictionary and acceptance examples of delivery.contract (carried and newly written entries), the section code writes for the open ledger entries fed back (" + (LEDGER_FEEDBACK ? "all open entries of delivery.ledger" : "the open acceptance entries of delivery.ledger") + ": earlier requirements the starting code does not meet; code's, not to be judged), then" + DELIVERY_TEXT_REST
 
 function changeView(previous: Record<string, TaskIntent>, prepared: Record<string, TaskIntent>): IrChangeView {
   const ids = [...new Set([...Object.keys(previous), ...Object.keys(prepared)])]
@@ -404,13 +412,26 @@ function deliveryRequestOf(s: SddSnapshot, b: SddBatch, report: Report, shown: R
   const change = changeView(s.ir, prepared)
   const view = sourceView(s, b.event_id, [{ in: "ir", ir: prepared }, { in: "previous_versions", ir: change.previous_versions }], ledgerOf(s, prepared, b), prepared, report)
   const referenced = completeReferences(s, [prepared, change.previous_versions], listedEvents(view), report)
-  const plan = planCarry(previousContract(s, b), s.ir, prepared, new Set(), inputOf(s, b.event_id))
+  const previous = previousContract(s, b)
+  const plan = planCarry(previous, s.ir, prepared, new Set(), inputOf(s, b.event_id))
   const show = new Set([...plan.toWrite, ...shown])
+  // Every passage an item selected in any accepted round or now: what an edited field object rests on.
+  const irs = [...accepted(s, b.event_id).flatMap(x => x.parent ? [x.parent.ir] : []), prepared]
+  const segments = sourceSegments(s.events)
+  const passagesOf = (items: string[]) => {
+    const spans = irs.flatMap(ir => Object.values(ir).flatMap(t => t.content.filter(c => items.includes(c.item_id)).flatMap(c => c.sources.flatMap(x => x.span ? [{ source_id: x.source_id, ...x.span }] : []))))
+    return { spans, refs: segments.filter(g => spans.some(x => x.source_id === g.source_id && x.start < g.span.end && g.span.start < x.end)).map(g => ({ source_id: g.source_id, segment_id: g.segment_id })) }
+  }
+  const revise = plan.revisedFields.map(o => { const items = o.items.filter(id => currentIds(prepared).has(id)); return { o, items, ...passagesOf(items) } }).filter(x => x.items.length)
+  const rulings = carryRulings(previous?.conflicts ?? [], b.parent.rulings ?? [], b.parent.withdrawn_rulings ?? [], prepared, [])
   const request: DeliveryRequest = { request_view: SDD_REQUEST_VIEW, ir: prepared, ir_change: change, sources: view, history: historyView(s, b.event_id, prepared, report), feedback: feedbackView(s, report),
     referenced_objects: referenced, issues: b.error ? [b.error] : [], to_write: plan.toWrite,
-    carried: { fields: plan.fields.map(o => ({ object: o.object, fields: o.fields.map(f => f.field) })), acceptance: plan.acceptance.map(a => a.subject), effective: plan.effective.map(e => e.entry.item_id) } }
-  return slim(request, b.event_id, show, spans, report)
+    carried: { fields: plan.fields.map(o => ({ object: o.object, fields: o.fields.map(f => f.field) })), acceptance: plan.acceptance.map(a => a.subject), effective: plan.effective.map(e => e.entry.item_id) },
+    fields_to_revise: revise.map(x => ({ object: x.o.object, items: x.items, fields: x.o.fields, passages: x.refs })), rulings: rulingView(rulings) }
+  return slim(request, b.event_id, show, [...spans, ...revise.flatMap(x => x.spans), ...rulings.flatMap(r => r.quotes.flatMap(q => { const g = segments.find(x => x.source_id === q.source_id && x.segment_id === q.segment_id); return g ? [{ source_id: q.source_id, start: g.span.start, end: g.span.end }] : [] }))], report)
 }
+
+const currentIds = (ir: Record<string, TaskIntent>) => new Set(Object.values(ir).flatMap(t => t.content.map(c => c.item_id)))
 
 const NOT_SHOWN = "(text not shown: this requirement is unchanged since the accepted delivery and is delivered verbatim; it needs only a disposition)"
 
