@@ -1,0 +1,457 @@
+import { createHash } from "node:crypto"
+import { annotate, parseRef, roundOf, type RoundSource, type SourceBlock } from "./source.js"
+import { isWithin, nameKey, type Assignment, type AttributionAnswer, type Override, type Reference, type Registry, type RoundAcceptance } from "./registry.js"
+
+/**
+ * Exp2 attribution step (DESIGN §4.2–§4.4): the model reads the full source and gives each block of the new round
+ * an object and a change type; the code checks only what is certain (ids exist, each block covered once, ranges
+ * valid, new names free) and sends the concrete problems back for a patch of the same answer, a bounded number of
+ * times. Which object a block belongs to, and whether it revises or adds, is never second-guessed here.
+ */
+
+export interface ObjectBrief {
+  id: string
+  name: string
+  version: number
+  /** Blocks the object currently holds (active or partially modified). */
+  blocks: string[]
+  /** Parts of those blocks already replaced or overridden by later text; cite the newer text instead. */
+  modified?: string[]
+}
+
+export interface AttributionRequest {
+  task: "attribute"
+  round: number
+  /** All rounds so far, annotated with block ids; the new round is last. */
+  sources: string
+  /** The new round's sections and paragraphs, with unit counts, to cover. */
+  outline: string[]
+  objects: ObjectBrief[]
+  /** Existing objects whose name the new round's text mentions, and where (found by name only). */
+  candidates: { object: string; name: string; mentioned_in: string[] }[]
+}
+
+export interface RepairRequest extends Omit<AttributionRequest, "task"> {
+  task: "repair"
+  previous_draft: AttributionAnswer
+  issues: Issue[]
+}
+
+export type ModelRequest = AttributionRequest | RepairRequest
+
+export interface RepairPatch {
+  /** Replace the assignment of the same block, or add it. */
+  upsert: Assignment[]
+  /** Blocks whose assignment is removed. */
+  remove: string[]
+  references_add: Reference[]
+  references_remove: Reference[]
+}
+
+export interface TokenUsage {
+  input_tokens: number
+  cache_read_tokens: number
+  cache_write_tokens: number
+  output_tokens: number
+  reasoning_tokens: number
+}
+
+export interface ModelReply {
+  text: string
+  usage?: Partial<TokenUsage>
+  /** True for a fixed offline answer; its usage is zero and not a measurement. */
+  stub?: boolean
+  model?: string
+  provider?: string
+  started_at?: string
+  completed_at?: string
+  schema_errors?: string[]
+}
+
+export type AttributionTransport = (request: ModelRequest) => Promise<ModelReply>
+
+export type IssueCode =
+  | "unparseable" | "shape" | "unknown_block" | "not_this_round" | "hash_mismatch" | "duplicate" | "overlap" | "uncovered"
+  | "object_choice" | "unknown_object" | "name_taken" | "change_shape" | "range_invalid" | "target_unknown"
+  | "target_not_earlier" | "target_unowned" | "target_replaced" | "by_outside_block" | "reference_invalid" | "transport"
+
+export interface Issue { code: IssueCode; block?: string; message: string }
+
+export interface ModelCallRecord {
+  id: string
+  round: number
+  stage: "understand"
+  step: "attribution"
+  kind: "attribute" | "repair"
+  attempt: number
+  request: ModelRequest
+  request_chars: number
+  request_sha256: string
+  response_text: string
+  issues: Issue[]
+  usage: TokenUsage
+  stub: boolean
+  model?: string
+  provider?: string
+  started_at?: string
+  completed_at?: string
+  schema_errors?: string[]
+  /** The transport failed; nothing was answered. */
+  error?: string
+}
+
+export interface AttributionOutcome {
+  status: "accepted" | "failed"
+  acceptance?: RoundAcceptance
+  calls: ModelCallRecord[]
+  issues: Issue[]
+}
+
+const CHANGES = ["add", "revise", "withdraw", "partial", "none"] as const
+
+// ---------------------------------------------------------------- request
+
+export function buildRequest(registry: Registry, round: number): AttributionRequest {
+  const source = registry.sources.get(round)
+  if (!source) throw new Error(`Round ${round} has no source`)
+  const rounds = [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)
+  const sources = rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n")
+  const objects = [...registry.objects.values()].map((o): ObjectBrief => {
+    const live = o.blocks.filter(b => b.state === "active" || b.state === "partially_modified")
+    const modified = live.flatMap(b => b.modifications.flatMap(m => m.parts))
+    return { id: o.id, name: o.name, version: o.version, blocks: live.map(b => b.block), ...(modified.length ? { modified } : {}) }
+  })
+  return { task: "attribute", round, sources, outline: outline(source), objects, candidates: candidates(registry, source) }
+}
+
+function outline(source: RoundSource): string[] {
+  const byId = new Map(source.blocks.map(b => [b.id, b]))
+  return source.blocks.filter(b => b.level === "section").map(s => {
+    const paras = s.children.map(id => byId.get(id)!).filter(b => b.level === "paragraph")
+    const head = s.heading ?? "(text before the first heading)"
+    return `${s.id} ${head}${paras.length ? ": " + paras.map(p => `${p.id.slice(s.id.length + 1)}(${p.children.length})`).join(" ") : ""}`
+  })
+}
+
+/** Existing objects whose name occurs as a word in a paragraph of the new round. Matching is by name only. */
+export function candidates(registry: Registry, source: RoundSource): AttributionRequest["candidates"] {
+  const paragraphs = source.blocks.filter(b => b.level === "paragraph" || (b.level === "section" && b.heading))
+  return [...registry.objects.values()].flatMap(o => {
+    const pattern = namePattern(o.name)
+    if (!pattern) return []
+    const hits = paragraphs.filter(b => pattern.test(b.level === "section" ? b.heading! : b.text)).map(b => b.id)
+    return hits.length ? [{ object: o.id, name: o.name, mentioned_in: hits }] : []
+  })
+}
+
+function namePattern(name: string): RegExp | null {
+  const words = name.trim().split(/\s+/u).filter(Boolean).map(w => w.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+  if (!words.length) return null
+  return new RegExp(`(?<![\\p{L}\\p{N}_-])${words.join("[\\s`\"']+")}(?![\\p{L}\\p{N}_])`, "iu")
+}
+
+// ---------------------------------------------------------------- check
+
+/**
+ * Checks an answer against the registry before this round. Returns the issues and, if there are none, the answer
+ * with refs normalised (hash suffixes dropped, ranges expanded) and the new objects' ids allocated.
+ */
+export function checkAnswer(registry: Registry, round: number, answer: AttributionAnswer): { issues: Issue[]; acceptance?: RoundAcceptance } {
+  const issues: Issue[] = []
+  const source = registry.sources.get(round)!
+  const add = (code: IssueCode, message: string, block?: string) => issues.push({ code, message, ...(block ? { block } : {}) })
+  const resolve = (ref: string, where: string): string[] | null => {
+    const range = /^(.*\.)([sc])(\d+)\.\.(?:\2)?(\d+)$/u.exec(ref.trim())
+    if (range) {
+      const [, base, letter, a, b] = range
+      const from = Number(a), to = Number(b)
+      const ids = Array.from({ length: Math.max(0, to - from + 1) }, (_, k) => `${base}${letter}${from + k}`)
+      const missing = ids.filter(id => !registry.block(id))
+      if (from > to || !ids.length) { add("range_invalid", `${where}: range ${ref} is empty or reversed`); return null }
+      if (missing.length) {
+        const parent = registry.block(base.slice(0, -1))
+        const count = parent ? parent.children.length : 0
+        add("range_invalid", `${where}: range ${ref} runs past the last unit (${parent ? `${parent.id} has ${letter}1..${letter}${count}` : `${base.slice(0, -1)} does not exist`})`)
+        return null
+      }
+      return ids
+    }
+    const { id, hash } = parseRef(ref)
+    const block = registry.block(id)
+    if (!block) { add("unknown_block", `${where}: ${id} does not exist${nearest(registry, id)}`); return null }
+    if (hash !== undefined && hash !== block.hash) { add("hash_mismatch", `${where}: ${id} has hash ${block.hash}, not ${hash}`); return null }
+    return [id]
+  }
+
+  // Assignments: ids, duplicates, objects, change shape.
+  const assignments: Assignment[] = []
+  const seen = new Map<string, number>()
+  const newNames = new Map<string, string>()
+  for (const [i, a] of answer.assignments.entries()) {
+    const where = `assignment ${i + 1} (${a.block})`
+    const ids = resolve(a.block, where)
+    if (!ids) continue
+    if (ids.length !== 1) { add("shape", `${where}: an assignment names one block, not a range`, a.block); continue }
+    const id = ids[0]
+    if (roundOf(id) !== round) { add("not_this_round", `${where}: ${id} is not a block of round ${round}; assign only this round's blocks`, id); continue }
+    if (seen.has(id)) { add("duplicate", `${id} is assigned twice (assignments ${seen.get(id)! + 1} and ${i + 1}); keep one`, id); continue }
+    seen.set(id, i)
+    if (!CHANGES.includes(a.change)) { add("change_shape", `${where}: change must be one of ${CHANGES.join(", ")}`, id); continue }
+    if (a.change === "none") {
+      if (a.object_id || a.new_object || a.replaces.length || a.overrides.length) add("change_shape", `${where}: change "none" takes no object and no targets`, id)
+    } else if (!!a.object_id === !!a.new_object) {
+      add("object_choice", `${where}: give exactly one of object_id or new_object`, id)
+    } else if (a.object_id && !registry.objects.has(a.object_id)) {
+      add("unknown_object", `${where}: object ${a.object_id} does not exist`, id)
+    } else if (a.new_object) {
+      const taken = registry.objectByName(a.new_object)
+      if (!a.new_object.trim()) add("object_choice", `${where}: new_object needs a name`, id)
+      else if (taken) add("name_taken", `${where}: an object named "${taken.name}" already exists (${taken.id}); use object_id ${taken.id} or a different name`, id)
+      else if (!newNames.has(nameKey(a.new_object))) newNames.set(nameKey(a.new_object), a.new_object.trim())
+    }
+    const targets = a.replaces.length + a.overrides.length
+    if (a.change === "add" && targets) add("change_shape", `${where}: change "add" replaces nothing; use revise, withdraw or partial, or drop the targets`, id)
+    if ((a.change === "revise" || a.change === "withdraw") && !targets) add("change_shape", `${where}: change "${a.change}" must name the earlier units it replaces`, id)
+    if (a.change === "partial" && !a.overrides.length) add("change_shape", `${where}: change "partial" must give overrides (old units → new units)`, id)
+    const replaces = a.replaces.flatMap(r => resolve(r, `${where} replaces`) ?? [])
+    const overrides: Override[] = a.overrides.map((o, k) => {
+      const w = `${where} override ${k + 1}`
+      if (!o.old.length || !o.by.length) add("change_shape", `${w}: old and by must both be non-empty`, id)
+      const by = o.by.flatMap(r => resolve(r, `${w} by`) ?? [])
+      for (const b of by) if (!isWithin(registry, b, id)) add("by_outside_block", `${w}: ${b} is not inside ${id}; by must cite units of this assignment's block`, id)
+      return { old: o.old.flatMap(r => resolve(r, `${w} old`) ?? []), by }
+    })
+    for (const t of [...replaces, ...overrides.flatMap(o => o.old)]) targetProblems(registry, round, t, where, add, id)
+    assignments.push({ ...a, block: id, object_id: a.object_id || null, new_object: a.new_object?.trim() || null, replaces, overrides })
+  }
+
+  // Coverage: every block of the round exactly once.
+  const assigned = new Set(assignments.map(a => a.block))
+  const byId = new Map(source.blocks.map(b => [b.id, b]))
+  for (const id of assigned) {
+    const above = registry.lineage(id).slice(1).find(b => assigned.has(b.id))
+    if (above) add("overlap", `${id} is inside ${above.id}, which is also assigned; a block is covered once, so drop one of them`, id)
+  }
+  const hasAssigned = (b: SourceBlock): boolean => assigned.has(b.id) || b.children.some(c => hasAssigned(byId.get(c)!))
+  const uncovered = (b: SourceBlock): void => {
+    if (assigned.has(b.id)) return
+    if (!b.children.length || !hasAssigned(b)) { add("uncovered", `${b.id} is not covered${b.heading ? ` (${b.heading.trim()})` : ""}: assign it or the units inside it`, b.id); return }
+    for (const c of b.children) uncovered(byId.get(c)!)
+  }
+  for (const b of source.blocks.filter(x => x.parent === null)) uncovered(b)
+
+  // References: both ends exist; the citing end is in this round.
+  const references: Reference[] = []
+  for (const [i, r] of answer.references.entries()) {
+    const from = resolve(r.from, `reference ${i + 1} from`), to = resolve(r.to, `reference ${i + 1} to`)
+    if (!from || !to) continue
+    if (from.length !== 1 || to.length !== 1) { add("reference_invalid", `reference ${i + 1}: each end names one block`); continue }
+    if (roundOf(from[0]) !== round) { add("reference_invalid", `reference ${i + 1}: ${from[0]} is not in round ${round}; the citing block is this round's`); continue }
+    if (roundOf(to[0]) > round) { add("reference_invalid", `reference ${i + 1}: ${to[0]} is in a later round`); continue }
+    if (!references.some(x => x.from === from[0] && x.to === to[0])) references.push({ from: from[0], to: to[0] })
+  }
+  const interpretations = answer.interpretations.map((n, i) => ({ blocks: n.blocks.flatMap(b => resolve(b, `interpretation ${i + 1}`) ?? []), text: n.text }))
+
+  if (issues.length) return { issues }
+  // Ids for new objects: next free numbers, in document order of their first block.
+  const order = source.blocks.map(b => b.id)
+  const firsts = [...newNames.entries()].map(([key, name]) => ({ key, name, at: Math.min(...assignments.filter(a => a.new_object && nameKey(a.new_object) === key).map(a => order.indexOf(a.block))) }))
+  firsts.sort((a, b) => a.at - b.at)
+  const allocated = firsts.map((f, k) => ({ name: f.name, id: `O${registry.allocatedCount + k + 1}` }))
+  assignments.sort((a, b) => order.indexOf(a.block) - order.indexOf(b.block))
+  return { issues, acceptance: { round, answer: { assignments, references, interpretations }, allocated } }
+}
+
+function targetProblems(registry: Registry, round: number, target: string, where: string, add: (c: IssueCode, m: string, b?: string) => void, block: string): void {
+  if (roundOf(target) >= round) { add("target_not_earlier", `${where}: ${target} is not from an earlier round; only earlier text can be replaced`, block); return }
+  const own = registry.ownership(target)
+  if (!own) { add("target_unowned", `${where}: ${target} belongs to no object, so there is nothing to replace`, block); return }
+  if (own.state === "superseded" || own.state === "withdrawn") {
+    add("target_replaced", `${where}: ${target} lies in ${own.block}, already ${own.state} in round ${own.modifications.at(-1)!.round}; cite the current text instead`, block)
+    return
+  }
+  const clash = own.modifications.find(m => m.parts.some(p => isWithin(registry, target, p) || isWithin(registry, p, target)))
+  if (clash) add("target_replaced", `${where}: ${target} overlaps ${clash.parts.join(", ")}, already replaced in round ${clash.round} by ${clash.by.join(", ")}; cite the current text instead`, block)
+}
+
+function nearest(registry: Registry, id: string): string {
+  const parent = id.slice(0, id.lastIndexOf("."))
+  const block = registry.block(parent)
+  if (!block) return ""
+  return `; ${parent} has ${block.children.length} part(s): ${block.children.map(c => c.slice(parent.length + 1)).join(", ")}`
+}
+
+// ---------------------------------------------------------------- shape and patch
+
+/** Structural shape only (the schema's job); content problems are left to checkAnswer. */
+export function shapeProblems(value: unknown, kind: "attribute" | "repair"): string[] {
+  const problems: string[] = []
+  const obj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
+  const strs = (v: unknown) => Array.isArray(v) && v.every(x => typeof x === "string")
+  const assignment = (a: unknown, at: string) => {
+    if (!obj(a)) return problems.push(`${at}: not an object`)
+    if (typeof a.block !== "string") problems.push(`${at}.block: not a string`)
+    for (const k of ["object_id", "new_object", "note"]) if (a[k] !== null && typeof a[k] !== "string") problems.push(`${at}.${k}: not a string or null`)
+    if (typeof a.change !== "string") problems.push(`${at}.change: not a string`)
+    if (!strs(a.replaces)) problems.push(`${at}.replaces: not a string array`)
+    if (!Array.isArray(a.overrides) || !a.overrides.every(o => obj(o) && strs(o.old) && strs(o.by))) problems.push(`${at}.overrides: not an array of {old, by}`)
+  }
+  const refs = (v: unknown, at: string) => { if (!Array.isArray(v) || !v.every(r => obj(r) && typeof r.from === "string" && typeof r.to === "string")) problems.push(`${at}: not an array of {from, to}`) }
+  if (!obj(value)) return ["answer: not an object"]
+  if (kind === "attribute") {
+    if (!Array.isArray(value.assignments)) problems.push("assignments: not an array"); else value.assignments.forEach((a, i) => assignment(a, `assignments[${i}]`))
+    refs(value.references, "references")
+    if (!Array.isArray(value.interpretations) || !value.interpretations.every(n => obj(n) && strs(n.blocks) && typeof n.text === "string")) problems.push("interpretations: not an array of {blocks, text}")
+  } else {
+    if (!Array.isArray(value.upsert)) problems.push("upsert: not an array"); else value.upsert.forEach((a, i) => assignment(a, `upsert[${i}]`))
+    if (!strs(value.remove)) problems.push("remove: not a string array")
+    refs(value.references_add, "references_add")
+    refs(value.references_remove, "references_remove")
+  }
+  return problems
+}
+
+/** Applies a repair patch to the previous answer; everything the patch does not name stays as it was. */
+export function applyPatch(previous: AttributionAnswer, patch: RepairPatch): AttributionAnswer {
+  const key = (block: string) => parseRef(block).id
+  const removed = new Set(patch.remove.map(key))
+  const upserts = new Map(patch.upsert.map(a => [key(a.block), a]))
+  const assignments: Assignment[] = []
+  const placed = new Set<string>()
+  for (const a of previous.assignments) {
+    const k = key(a.block)
+    if (removed.has(k) && !upserts.has(k)) continue
+    if (upserts.has(k)) { if (!placed.has(k)) assignments.push(upserts.get(k)!); placed.add(k); continue }
+    assignments.push(a)
+  }
+  for (const [k, a] of upserts) if (!placed.has(k)) assignments.push(a)
+  const same = (a: Reference, b: Reference) => key(a.from) === key(b.from) && key(a.to) === key(b.to)
+  const references = [...previous.references.filter(r => !patch.references_remove.some(x => same(x, r))), ...patch.references_add]
+  return { assignments, references, interpretations: previous.interpretations }
+}
+
+// ---------------------------------------------------------------- loop
+
+export interface AttributionOptions {
+  /** Repairs after the first answer; each repair is one more model call. */
+  maxRepairs: number
+  callId: (n: number) => string
+}
+
+export async function attributeRound(registry: Registry, round: number, transport: AttributionTransport, options: AttributionOptions): Promise<AttributionOutcome> {
+  if (!Number.isSafeInteger(options.maxRepairs) || options.maxRepairs < 0) throw new Error("maxRepairs must be a non-negative integer")
+  const base = buildRequest(registry, round)
+  const calls: ModelCallRecord[] = []
+  let previous: AttributionAnswer | undefined
+  let issues: Issue[] = []
+  for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
+    // A repair needs an answer to patch; after an unreadable reply the next call asks afresh.
+    const request: ModelRequest = previous && issues.length ? { ...base, task: "repair", previous_draft: previous, issues } : base
+    const text = JSON.stringify(request)
+    const sha = createHash("sha256").update(text).digest("hex")
+    let reply: ModelReply
+    try { reply = await transport(request) } catch (e) {
+      // Keep the record of a failed call; the round is failed and can be ingested again.
+      issues = [{ code: "transport", message: `The model call failed: ${(e as Error).message}` }]
+      calls.push({ id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind: request.task === "repair" ? "repair" : "attribute", attempt,
+        request, request_chars: text.length, request_sha256: sha, response_text: "", issues, usage: usageOf({ text: "" }), stub: false, error: (e as Error).message })
+      return { status: "failed", calls, issues }
+    }
+    const record: ModelCallRecord = {
+      id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind: request.task === "repair" ? "repair" : "attribute", attempt,
+      request, request_chars: text.length, request_sha256: sha,
+      response_text: reply.text, issues: [], usage: usageOf(reply), stub: reply.stub === true,
+      ...(reply.model ? { model: reply.model } : {}), ...(reply.provider ? { provider: reply.provider } : {}),
+      ...(reply.started_at ? { started_at: reply.started_at } : {}), ...(reply.completed_at ? { completed_at: reply.completed_at } : {}),
+      ...(reply.schema_errors?.length ? { schema_errors: reply.schema_errors } : {}),
+    }
+    calls.push(record)
+    let parsed: unknown
+    try { parsed = JSON.parse(reply.text) } catch (e) {
+      issues = [{ code: "unparseable", message: `The reply is not JSON: ${(e as Error).message}` }]
+      record.issues = issues
+      previous = undefined
+      continue
+    }
+    const shape = shapeProblems(parsed, record.kind)
+    if (shape.length) {
+      issues = shape.map(message => ({ code: "shape" as const, message }))
+      record.issues = issues
+      if (record.kind === "attribute") previous = undefined
+      continue
+    }
+    const answer = record.kind === "repair" ? applyPatch(previous!, parsed as RepairPatch) : parsed as AttributionAnswer
+    const checked = checkAnswer(registry, round, answer)
+    issues = checked.issues
+    record.issues = issues
+    previous = answer
+    if (checked.acceptance) return { status: "accepted", acceptance: checked.acceptance, calls, issues: [] }
+  }
+  return { status: "failed", calls, issues }
+}
+
+function usageOf(reply: ModelReply): TokenUsage {
+  const u = reply.usage ?? {}
+  return {
+    input_tokens: u.input_tokens ?? 0, cache_read_tokens: u.cache_read_tokens ?? 0, cache_write_tokens: u.cache_write_tokens ?? 0,
+    output_tokens: u.output_tokens ?? 0, reasoning_tokens: u.reasoning_tokens ?? 0,
+  }
+}
+
+// ---------------------------------------------------------------- schemas and prompt
+
+const nullableString = { type: ["string", "null"] }
+const stringArray = { type: "array", items: { type: "string" } }
+const assignmentSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["block", "object_id", "new_object", "change", "replaces", "overrides", "note"],
+  properties: {
+    block: { type: "string" },
+    object_id: nullableString,
+    new_object: nullableString,
+    change: { type: "string", enum: [...CHANGES] },
+    replaces: stringArray,
+    overrides: { type: "array", items: { type: "object", additionalProperties: false, required: ["old", "by"], properties: { old: stringArray, by: stringArray } } },
+    note: nullableString,
+  },
+}
+const referenceSchema = { type: "object", additionalProperties: false, required: ["from", "to"], properties: { from: { type: "string" }, to: { type: "string" } } }
+
+export const ATTRIBUTION_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["assignments", "references", "interpretations"],
+  properties: {
+    assignments: { type: "array", items: assignmentSchema },
+    references: { type: "array", items: referenceSchema },
+    interpretations: { type: "array", items: { type: "object", additionalProperties: false, required: ["blocks", "text"], properties: { blocks: stringArray, text: { type: "string" } } } },
+  },
+}
+
+export const REPAIR_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["upsert", "remove", "references_add", "references_remove"],
+  properties: {
+    upsert: { type: "array", items: assignmentSchema },
+    remove: stringArray,
+    references_add: { type: "array", items: referenceSchema },
+    references_remove: { type: "array", items: referenceSchema },
+  },
+}
+
+export const ATTRIBUTION_SYSTEM_PROMPT = [
+  "You register requirement text into objects. The request holds every round of the original requirements so far (`sources`, the new round last); the original text is the only authority, and newer text overrides older text.",
+  "Block ids: ⟦R3.S2⟧ marks a section (a heading and everything under it, subsections included), ⟦R3.S2.P1⟧ a paragraph, ‹s2› a unit inside the paragraph (a sentence, a list item, a code block or a table) and ‹s2.c1› a clause of a sentence; the full id of a unit is R3.S2.P1.s2, of a clause R3.S2.P1.s2.c1. Ids may carry the shown hash (R3.S2.P1#ab12cd34). Units are marked only where a paragraph has more than one, clauses only where a sentence has more than one.",
+  "An object is a unit of requirement that the text names with a stable name and whose parts are revised together: a command, an operation, a pipeline step, a shared convention. Parameters, fields and options are never objects; a change to them is a change to their object.",
+  "For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; split into paragraphs only where a section talks about several objects, into units or clauses only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only; the code assigns ids). Every block of the new round must be covered exactly once: a section covers everything inside it, so do not also assign its paragraphs. Text that states no requirement (a round's preface, a horizontal rule) takes change \"none\" with no object.",
+  "change: \"add\" for new content; \"revise\" when the block replaces earlier units wholesale (list them in replaces); \"withdraw\" when it removes earlier behaviour (replaces lists what is removed); \"partial\" when it overrides only some earlier units (overrides: old = the earlier units or clauses that no longer hold, by = the units of this block that override them). Cite ids only; never copy text. The earlier units may belong to another object; cite them anyway. Ranges like R2.S9.P4.s2..s4 are allowed.",
+  "references: when a block's own wording explicitly names another object (\"the same condition operators as filter\", \"as produced by the manifest command\"), give an edge from that block to the block it names. `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself refers to it, not whether it ought to. Never infer references from patterns across rounds.",
+  "interpretations: only when two blocks of the same round disagree, or the extent of a partial override is unclear, write a short reading citing the blocks; it is marked as interpretation, not source.",
+].join("\n")
+
+export const REPAIR_SYSTEM_PROMPT = [
+  ATTRIBUTION_SYSTEM_PROMPT,
+  "The code checked your previous answer (`previous_draft`) and found the listed `issues`. Fix exactly these issues by patching the answer: upsert replaces or adds the assignment of a block, remove drops a block's assignment, references_add/references_remove edit the edges. Do not restate assignments that need no change.",
+].join("\n")

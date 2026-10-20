@@ -18,7 +18,7 @@
     "clean:test": "node -e \"require('node:fs').rmSync('.test-dist',{recursive:true,force:true})\"",
     "build": "npm run clean:dist && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "npm run build && npm run clean:test && tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js && npm run clean:test",
+    "test": "npm run build && npm run clean:test && tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js .test-dist/test/exp2/*.test.js && npm run clean:test",
     "gate:replay": "node experiments/evocode/gate-replay.mjs",
     "replay:recorded": "npm run build && node experiments/evocode/harbor/dpipe/replay-recorded.mjs",
     "check": "npm run typecheck"
