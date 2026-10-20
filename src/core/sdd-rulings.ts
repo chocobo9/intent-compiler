@@ -135,7 +135,8 @@ const KIND_LABEL: Record<string, string> = { conflict: "the passages disagree", 
 export function rulingSection(rulings: readonly SettledConflict[]): string {
   if (!rulings.length) return ""
   const body = rulings.map(c => {
-    const names = (c.values ?? []).filter(v => v.said).map(v => v.written ? `\`${v.said}\` in the later update is what earlier passages write as \`${v.written}\`` : `\`${v.said}\`: the earlier state is not written in the original requirements`)
+    const code = (t: string) => `\`${t.replace(/`/gu, "")}\``
+    const names = (c.values ?? []).filter(v => v.said).map(v => v.written ? `${code(v.said)} in the later update is what earlier passages write as ${code(v.written)}` : `${code(v.said)}: the earlier state is not written in the original requirements`)
     return [`## ${c.subject} (${KIND_LABEL[c.kind ?? "conflict"]})`, quoteBlock(c.quotes), "", ...(names.length ? [`- Names: ${names.join("; ")}`] : []), `- Holds now: ${c.ruling}`, `- Basis: ${c.basis}`].join("\n")
   }).join("\n\n")
   return `# Management rulings on the original requirements\n${RULING_NOTE}\n\n${body}\n\n`
