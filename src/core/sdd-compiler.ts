@@ -117,7 +117,9 @@ export class SddCompiler {
         // request built from the store.  A request that cannot be built
         // completely is a deterministic defect: it is reported, never sent.
         const last = previousContract(s, batch)
-        const questions = rulingQuestions(last?.revisions, s.ir)
+        // A′: open revisions of earlier updates are not put to the IR again (no backfill, not even internally); only this
+        // update's revisions whose old values code cannot find are asked, through RulingNeeded.
+        const questions: ReturnType<typeof rulingQuestions> = []
         const input: CompilerModelV2Input | undefined = stage !== "ir" ? undefined : {
           generation_stage: "ir", run_id: this.runId, events: [event], source_events: s.events.filter(e => e.event_id !== eventId),
           source_segments: sourceSegments(s.events), event_source_refs: [{ source_id: eventId, digest: digestText(userText(event) ?? "") }],
@@ -428,7 +430,7 @@ export class SddCompiler {
       namesAdded.push(...completed.added)
       const head = baseline ? `${INCREMENTAL_HEADER}\n` : `${ACCUMULATED_HEADER}\n`
       const body = baseline ? `${baselineSection(baseline)}${shown.slice(ACCUMULATED_HEADER.length)}` : reference.slice(ACCUMULATED_HEADER.length)
-      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${rulingSection(contract.conflicts)}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
+      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${rulingSection(deliveredRulings(contract.conflicts ?? [], changedItems(s.ir, ir, excluded), previous?.revisions ?? []))}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
     }
     const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract,
       ...(delivered.length ? { reference_text: reference } : {}),
@@ -513,6 +515,16 @@ export class SddCompiler {
       r.result = structuredClone(result); r.state = "returned"; this.save(s)
     })
   }
+}
+
+/**
+ * The rulings the delivered text shows (A′): those written this round on an item this update added or revised, and not
+ * answering a revision of an earlier update. Every ruling stays in the contract (IC state, used by the ledger); carried
+ * ones and those about earlier revisions are not delivered again.
+ */
+export function deliveredRulings(rulings: NonNullable<DeliveryContract["conflicts"]>, changed: ReadonlyMap<string, unknown>, earlier: ReadonlyArray<{ id: string }>): NonNullable<DeliveryContract["conflicts"]> {
+  const old = new Set(earlier.map(r => r.id))
+  return rulings.filter(c => !c.carried && c.items.some(id => changed.has(id)) && !(c.question && old.has(c.question)))
 }
 
 /**

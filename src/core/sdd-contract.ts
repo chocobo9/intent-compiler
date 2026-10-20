@@ -237,6 +237,8 @@ export interface SettledConflict {
   question?: string
   /** The earlier ruling this one replaces. */
   replaces?: string
+  /** A′: said/written values code did not find as written in the passages (recorded, not rejected). */
+  unverified?: string[]
   event_id?: string
 }
 export interface ExecutableExample extends AcceptanceExample {

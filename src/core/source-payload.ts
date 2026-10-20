@@ -298,8 +298,7 @@ export function validateSourceCoverage(candidate: Candidate, currentEvents: read
       if (entry.requirements.length > 0) throw new Error(`non-normative source_coverage[${index}] cannot assign an IR requirement`)
       // Heading lines inside the overlap are layout and do not count.
       const headings = markdownHeadings(text)
-      // An overlap holding no letter or digit (a list marker, a fence, punctuation) is layout, like a heading (v7 R10 fix).
-      const substantive = (from: number, to: number) => from < to && residualRanges(text, from, to, headings).some(range => /[\p{L}\p{N}]/u.test(text.slice(range.start, range.end)))
+      const substantive = (from: number, to: number) => from < to && residualRanges(text, from, to, headings).length > 0
       const overlapping = spansFor(activeSources, entry.source.source_id).some(active => substantive(Math.max(active.start, span.start), Math.min(active.end, span.end)))
       if (overlapping) {
         const adopted = items.flatMap(item => item.sources.filter(source => source.source_id === entry.source.source_id).flatMap(source => {

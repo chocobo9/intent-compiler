@@ -32,10 +32,12 @@ test("an identity ruling is settled with its passages quoted and each name where
   assert.ok(text.includes("`blake2b` in the later update is what earlier passages write as `sha256`") && text.includes("- Holds now: the R1 sha256 key") && text.includes("(user update 1)\n> Writes a manifest"))
 })
 
-test("a ruling whose names its passages do not write, in the wrong order, or on no current item is rejected", () => {
+test("a ruling on no current item, with too few passages or a wrong question is rejected; names its passages do not write are recorded", () => {
   const settle = (r: RulingEntry, questions = [] as ReturnType<typeof rulingQuestions>) => settleRulings([r], [], { eventId: "r10", index, ir: ir(2), questions, current: [] })
-  assert.throws(() => settle(ruling({ values: [{ said: "blake2b", written: "md5" }] })), /written "md5" is not written in a passage of an update before/u)
-  assert.throws(() => settle(ruling({ values: [{ said: "sha256", written: "blake2b" }] })), /written "blake2b" is not written in a passage of an update before/u)
+  // A′: a said or written value not found as written is recorded on the ruling, not rejected.
+  assert.deepEqual(settle(ruling({ values: [{ said: "blake2b", written: "md5" }] })).rulings[0]!.unverified, ['written "md5" is not written in a passage of an update before the one that says "blake2b"'])
+  assert.deepEqual(settle(ruling({ values: [{ said: "sha256", written: "blake2b" }] })).rulings[0]!.unverified, ['written "blake2b" is not written in a passage of an update before the one that says "sha256"'])
+  assert.equal(settle(ruling()).rulings[0]!.unverified, undefined)
   assert.throws(() => settle(ruling({ item_ids: ["r-gone"] })), /not current: r-gone/u)
   assert.throws(() => settle(ruling({ passages: [{ source_id: "r10", segment_id: "s2" }] })), /at least two passages/u)
   assert.throws(() => settle(ruling({ kind: "unstated", values: [{ said: "SHA256", written: "SHA-256" }] })), /give said only, written empty/u)
@@ -99,4 +101,12 @@ test("the IR answer's rulings are split from the text the generic IR validation 
   assert.equal(call.text_returned, JSON.stringify(answer))
   const ci = await transport({ generation_stage: "ci" } as never)
   assert.equal(ci.ir_extension, undefined)
+})
+
+test("the delivered text shows only rulings written this round on an item this update changed, not answers about earlier revisions", async () => {
+  const { deliveredRulings } = await import("../src/core/sdd-compiler.js")
+  const r = (id: string, items: string[], over = {}) => ({ id, kind: "identity" as const, subject: id, items, quotes: [], ruling: "h", basis: "b", revisions: {}, carried: false, ...over })
+  const rulings = [r("new-manifest", ["r-manifest"]), r("old-revision", ["r-manifest"], { question: "r5-user-input#4" }), r("carried", ["r-manifest"], { carried: true }), r("untouched", ["r-transform"])]
+  const shown = deliveredRulings(rulings, new Map([["r-manifest", {}]]), [{ id: "r5-user-input#4" }])
+  assert.deepEqual(shown.map(x => x.id), ["new-manifest"])
 })

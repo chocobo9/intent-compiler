@@ -59,19 +59,21 @@ export function settleRulings(entries: readonly RulingEntry[], withdraw: Readonl
     if (e.question && !asked.has(e.question)) return wrong(`question ${e.question} is not one this request asked`)
     if (e.replaces && !known.has(e.replaces)) return wrong(`replaces ${e.replaces}, which is not a current ruling`)
     const values = e.values.filter(v => v.said.trim() || v.written.trim())
+    // A′: a said or written value not found as written in the passages is recorded on the ruling, not rejected.
+    const unverified: string[] = []
     if (e.kind === "identity") {
       if (!values.length) return wrong("an identity gives values: said (the name as the later update writes it) and written (as the earlier passage writes it)")
       for (const v of values) {
         const saidAt = quotes.filter(q => holdsValue(q.text, v.said)).map(q => q.input)
         const writtenAt = quotes.filter(q => holdsValue(q.text, v.written)).map(q => q.input)
-        if (!saidAt.length) problems.push(`${name}: said ${JSON.stringify(v.said)} is not written in its passages`)
-        else if (!writtenAt.some(i => i < Math.max(...saidAt))) problems.push(`${name}: written ${JSON.stringify(v.written)} is not written in a passage of an update before the one that says ${JSON.stringify(v.said)}`)
+        if (!saidAt.length) unverified.push(`said ${JSON.stringify(v.said)} is not written in its passages`)
+        else if (!writtenAt.some(i => i < Math.max(...saidAt))) unverified.push(`written ${JSON.stringify(v.written)} is not written in a passage of an update before the one that says ${JSON.stringify(v.said)}`)
       }
     }
     if (e.kind === "unstated" && values.some(v => v.written.trim())) return wrong("an unstated ruling says the earlier passages do not write the earlier state: give said only, written empty")
     return [{ id: `${context.eventId}#R${k + 1}`, kind: e.kind, subject: e.subject.trim(), items, quotes, ruling: e.holds.trim(), basis: e.basis.trim(),
       ...(values.length ? { values: values.map(v => ({ said: v.said.trim(), written: v.written.trim() })) } : {}),
-      ...(e.question ? { question: e.question } : {}), ...(e.replaces ? { replaces: e.replaces } : {}), event_id: context.eventId }]
+      ...(e.question ? { question: e.question } : {}), ...(e.replaces ? { replaces: e.replaces } : {}), ...(unverified.length ? { unverified } : {}), event_id: context.eventId }]
   })
   const answered = new Set(rulings.filter(r => r.kind === "identity" || r.kind === "unstated").flatMap(r => r.question ? [r.question] : []))
   const open = context.questions.filter(q => !answered.has(q.question))
