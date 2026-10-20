@@ -144,7 +144,7 @@ export class Exp2Store {
       const retired: string[] = [], rejected: { check: string; reason: string }[] = []
       for (const r of outcome.draft!.retire) {
         const k = s.checks.find(c => c.id === r.check)!
-        if (replacedBasis(registry, basisOf(k), k.round, round).length) { s.check_events.push({ check: r.check, round, status: "retired", reason: r.reason, by: "model" }); retired.push(r.check) }
+        if (replacedBasis(registry, basisOf(registry, k), k.round, round).length) { s.check_events.push({ check: r.check, round, status: "retired", reason: r.reason, by: "model", cause: { kind: "proposal", source: r.check } }); retired.push(r.check) }
         else rejected.push(r)
       }
       const record: CheckRoundRecord = { round, status: "accepted", calls, entered, retired, rejected_retire: rejected }
@@ -169,7 +169,7 @@ export class Exp2Store {
         if (run.failure?.class !== "unknown" || run.failure.reason === "timeout") continue
         const before = s.check_runs.filter(r => r.check === run.check && r.verdict && r.round === round - 1).at(-1)
         if (before?.failure?.class === "unknown" && before.failure.reason !== "timeout") {
-          s.check_events.push({ check: run.check, round, status: "retired", by: "code", reason: `input suspect in rounds ${round - 1} and ${round} (${run.failure.reason})` })
+          s.check_events.push({ check: run.check, round, status: "retired", by: "code", cause: { kind: "suspect", source: run.check }, reason: `input suspect in rounds ${round - 1} and ${round} (${run.failure.reason})` })
         }
       }
       return { runs, statuses: objectStatuses(registry, s.checks, s.check_events, runs, round) }

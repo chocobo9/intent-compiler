@@ -16,13 +16,15 @@ export interface TaskEntry {
   object: string
   name: string
   version: number
-  why: ("changed" | "not_landed" | "carried")[]
+  why: ("changed" | "not_landed" | "carried" | "convention")[]
   /** This round's change record, when changed. */
   change: string | null
   /** Failing checks judged not landed: the input and what the program did, against what was expected. */
   evidence: { check: string; reason: string; args: string[]; files: string[]; mismatches: { assertion: string; expected: unknown; actual: unknown }[] }[]
   /** The step of a previous round that did not finish this object. */
   carried_from: string | null
+  /** "Affected by a convention revision" (DESIGN §4.5): the revised conventions and this object's checks they staled. */
+  conventions: { convention: string; checks: string[] }[]
 }
 
 export interface WorkOrder {
@@ -75,7 +77,7 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   const tasks = new Map<string, TaskEntry>()
   const entry = (object: string): TaskEntry => {
     const o = registry.objects.get(object)!
-    const t = tasks.get(object) ?? { object, name: o.name, version: o.version, why: [], change: null, evidence: [], carried_from: null }
+    const t = tasks.get(object) ?? { object, name: o.name, version: o.version, why: [], change: null, evidence: [], carried_from: null, conventions: [] }
     tasks.set(object, t)
     return t
   }
@@ -93,6 +95,15 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
         mismatches: run.assertions.filter(a => !a.ok).map(a => ({ assertion: a.id, expected: k.assertions.find(x => x.id === a.id)?.expect, actual: a.actual })),
       })
     }
+  }
+  // Objects whose checks went stale because a convention they use was revised this round.
+  for (const e of input.events.filter(x => x.round === round && x.status === "stale" && x.cause?.kind === "convention")) {
+    const k = checks.get(e.check)
+    if (!k || !registry.objects.has(k.object)) continue
+    const t = entry(k.object)
+    if (!t.why.includes("convention")) t.why.push("convention")
+    const c = t.conventions.find(x => x.convention === e.cause!.source) ?? (t.conventions.push({ convention: e.cause!.source, checks: [] }), t.conventions.at(-1)!)
+    c.checks.push(e.check)
   }
   // Work a previous round left undone: in its task zone, no committed step covered it fully, and not landed.
   const done = new Set(input.steps.filter(s => s.round === round - 1 && s.status === "committed").flatMap(s => s.objects.filter(o => o.coverage === "full").map(o => o.object)))
@@ -154,6 +165,7 @@ export function renderWorkOrder(w: WorkOrder): string {
   out.push("## Task zone (must do)", "")
   for (const t of w.task) {
     out.push(`- ${t.object} ${t.name} @v${t.version}: ${t.why.join(", ")}${t.change ? ` (${t.change})` : ""}${t.carried_from ? ` (left undone by ${t.carried_from})` : ""}`)
+    for (const c of t.conventions) out.push(`  - affected by the revision of convention ${c.convention} (checks ${c.checks.join(", ")} to be derived again)`)
     for (const e of t.evidence) out.push(`  - failing ${e.check} (${e.reason}): args ${JSON.stringify(e.args)}; ${e.mismatches.map(m => `${m.assertion} expected ${JSON.stringify(m.expected)}, got ${JSON.stringify(m.actual)}`).join("; ")}`)
   }
   out.push("", "## Protection zone (must not break; these checks are rerun)", "")
