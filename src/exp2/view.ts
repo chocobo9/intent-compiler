@@ -5,7 +5,8 @@ import type { SourceBlock } from "./source.js"
  * Object view: every source block an object holds, in round order. Text is always shown as a whole section or
  * paragraph with the headings above it; when the object holds only some units of a paragraph, those units are
  * marked «…», never cut out. Units that later text replaced are marked ⟦…⟧, and each replacement is shown as a
- * pair: the old context and the new context side by side.
+ * pair side by side: the paragraph that holds the changed unit, and the paragraph that holds the new text, each with
+ * its heading path.
  */
 
 export interface ViewSide {
@@ -23,7 +24,8 @@ export interface ViewPair {
   kind: Modification["kind"]
   by_object: string
   by_object_name: string
-  old: ViewSide
+  /** The paragraphs (with heading paths) that hold the changed units; a whole section when a section is the unit. */
+  old: ViewSide[]
   new: ViewSide[]
 }
 
@@ -85,15 +87,16 @@ export function objectView(registry: Registry, objectId: string): ObjectView {
     const replacedSpans = [...labels.entries()].map(([id, l]) => ({ id, open: "⟦", close: `⟧(${l.join(", ")})` }))
     const ownedSpans = owns.map(o => ({ id: o.block, open: "«", close: "»" }))
     const base = side(registry, context, [...ownedSpans, ...replacedSpans])
-    const pairs = owns.flatMap(o => o.modifications.map((m): ViewPair => {
-      const newGroups = new Map<string, string[]>()
-      for (const id of m.by) { const c = contextOf(registry, id).id; newGroups.set(c, [...(newGroups.get(c) ?? []), id]) }
-      return {
-        round: m.round, change: m.change, kind: m.kind, by_object: m.by_object, by_object_name: registry.objects.get(m.by_object)!.name,
-        old: side(registry, context, m.parts.map(p => ({ id: p, open: "⟦", close: "⟧" }))),
-        new: [...newGroups.entries()].map(([c, ids]) => side(registry, registry.block(c)!, ids.map(id => ({ id, open: "«", close: "»" })))),
-      }
-    }))
+    const grouped = (ids: string[], open: string, close: string) => {
+      const groups = new Map<string, string[]>()
+      for (const id of ids) { const c = contextOf(registry, id).id; groups.set(c, [...(groups.get(c) ?? []), id]) }
+      return [...groups.entries()].map(([c, members]) => side(registry, registry.block(c)!, members.map(id => ({ id, open, close }))))
+    }
+    const pairs = owns.flatMap(o => o.modifications.map((m): ViewPair => ({
+      round: m.round, change: m.change, kind: m.kind, by_object: m.by_object, by_object_name: registry.objects.get(m.by_object)!.name,
+      old: grouped(m.parts, "⟦", "⟧"),
+      new: grouped(m.by, "«", "»"),
+    })))
     return { ...base, owned: owns.map(o => o.block), states: owns.map(o => ({ block: o.block, state: o.state })), pairs }
   })
   entries.sort((a, b) => a.round - b.round || registry.block(a.context)!.start - registry.block(b.context)!.start)
@@ -108,8 +111,10 @@ export function renderObjectView(view: ObjectView): string {
     const states = e.states.filter(s => s.state !== "active").map(s => `${s.block} ${s.state}`)
     out.push(`\n## R${e.round} · ${e.context}${e.heading_path.length ? ` · ${e.heading_path.join(" › ")}` : ""}${states.length ? ` · [${states.join("; ")}]` : ""}`, "", e.text.trimEnd())
     for (const p of e.pairs) {
-      out.push("", `### R${p.round} ${p.kind} (${p.change}; new text in ${p.by_object} ${p.by_object_name})`, "", `| old (R${p.old.round}, ${p.old.context}) | new (${p.new.map(n => `R${n.round}, ${n.context}`).join("; ")}) |`, "|---|---|")
-      out.push(`| ${cell(p.old.text)} | ${p.new.map(n => cell([...n.heading_path.map(h => h), n.text].join("\n"))).join("<br><br>")} |`)
+      const both = (sides: ViewSide[]) => sides.map(n => cell([...n.heading_path, n.text].join("\n"))).join("<br><br>")
+      const label = (sides: ViewSide[]) => sides.map(n => `R${n.round}, ${n.context}`).join("; ")
+      out.push("", `### R${p.round} ${p.kind} (${p.change}; new text in ${p.by_object} ${p.by_object_name})`, "", `| old (${label(p.old)}) | new (${label(p.new)}) |`, "|---|---|")
+      out.push(`| ${both(p.old)} | ${both(p.new)} |`)
     }
   }
   return out.join("\n") + "\n"

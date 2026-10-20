@@ -142,3 +142,26 @@ interpretations: [{ blocks, text }]
 **4.11 规则替身。** R4、R6、R8、R9、R11、R14 用规则替身：每个顶层小节（有轮标题时取二级小节）一个对象，按标题里的反引号名字或标题文字取名，名字与已有对象相同就归给它，标为 `stub:rule`。它只用来验证跨轮不漂移，不代表合理的归属，例如它把 R8 的 Pipeline/Lineage extension 子节归给了 quality。
 
 **4.12 OpenCode 接入。** `createOpenCodeAttributionTransport` 按首答和修补各建一个结构化传输，返回 usage 和 schema 错误。本次没有调用，真实运行前需要在本地验证一次。
+
+## 5. 评审后的修改
+
+依据设计会话的决定（`exp2-pure-ic` 提交 ae1fa6d，已合并进本分支）。上面第 2–4 节中与下列各条冲突的描述，以本节为准。
+
+1. **列表项切到子句。** 列表项现在和散文句子一样按逗号、分号、括号切出子句，行内代码和项内的围栏代码里都不切；代码块和表格仍然没有子块。子句只用于部分修订指明改了哪里，默认归属仍取最粗的一层（替身答案没有改归属层级）。R1 transform 的结尾项切成 `- After all transformations, ` / `write the result CSV to <output>, ` / `its SHA-256 to <output>.sha256.` 三个子句。R5 现在只撤回第三个子句，前两个仍有效，在对象视图里能直接看出来。
+2. **两种边。** 边带上 `kind`：
+   - `refers_to`：只登记，被引用的对象不产生改动；
+   - `applies_to`：`to` 可以是另一个对象的某一块或对象编号（包括本轮新建对象的块）。被指向的对象得到一条改动记录，记录里的 `applied` 列出来源块和来源块的归属对象，类型集合里有 `applies_to`，版本升一，进入本轮范围。归属仍然只有一个。
+
+   代码只拦确定的错：类型不对；来源块属于 none；指向 none；指向来源块自己的对象；对象不存在。schema 的边说明和系统提示里都写明，两种边都只能标原文措辞本身点到的对象。R5 的替身答案把 "ingest and transform must remove it"（`R5.S1.P2.s5`）归给 ingest，再用 `applies_to` 指向 transform，测试断言 transform 的 R5 改动记录里有这一条。
+3. **none**：保持原样。
+4. **版本号**：fill 到 v3，测试原本就是这样断言的。
+5. **改动类型的定义**写进了 schema 中 `change` 字段的说明，按对旧原文的影响下定义，不带判断规则。代码仍不拦这类判断。
+6. **target_replaced** 仍是硬错误，报错时指出现在有效的是哪一块。例如："…already replaced in round 3 by R3.S2.P2, R3.S2.P3; the text in force is R3.S2.P2, R3.S2.P3 (round 3), cite that instead"。被撤回、没有替代的，说明"nothing replaced it"。
+7. **宽松列表**：保持原样。
+8. **对象视图**：并排时旧的一侧改为被改单元所在的整段加标题路径（`ViewPair.old` 现在是若干段的数组）；只有被改单元本身是整节时才给整节。R3 的例子：旧侧现在是 `R2.S13.P4`（第 1–5 条那一段），标题路径为 `## Extended transforms › ### Fill linear strategy`。
+9. **一个 schema、一个系统提示。** 修补专用的 schema 和系统提示已删除。每次调用的请求形状相同：`sources`、`candidates`、`objects`、`outline`、`round`、`issues`、`previous_draft`。回答一律是对 `previous_draft` 的补丁（`upsert`、`remove`、`edges_add`、`edges_remove`、`interpretations_add`），首答就是对空草稿打补丁。用 `requestJson` 序列化后，原文在最前，`issues` 和 `previous_draft` 在最后。回答读不出来时草稿不变，下一次调用带着 `unparseable` 问题对同一份草稿再打补丁。
+
+   新增测试：同一轮的首答请求和修补请求，在 `"issues"` 之前逐字节相同（R1 约 22K 字符）。另外用一个只记录、不回答的假 OpenCode 客户端经 `createOpenCodeAttributionTransport` 发出这两次请求，断言两次的系统提示和 schema 相同，发出的正文前缀也相同。
+10. **OpenCode 接入**：未改动，由本地验证。
+
+验证：`npm test` 共 745 项，738 通过，1 项失败仍是原有的 `repair-batch`。exp2 共 57 项全部通过。新增的 3 项：列表项子句、修补前缀与提示/schema 一致、applies_to 的核对。原有断言随之更新：R5 改为子句撤回加 applies_to，R3 和 R15 的旧侧改为整段加标题路径。

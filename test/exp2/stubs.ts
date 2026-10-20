@@ -1,4 +1,4 @@
-import type { AttributionTransport, ModelRequest, RepairPatch } from "../../src/exp2/attribution.js"
+import type { AnswerPatch, AttributionTransport, ModelRequest } from "../../src/exp2/attribution.js"
 import type { Assignment, AttributionAnswer, Override, Reference } from "../../src/exp2/registry.js"
 
 /**
@@ -9,7 +9,7 @@ import type { Assignment, AttributionAnswer, Override, Reference } from "../../s
  * rule (one object per top-level section, named after its heading) that is plainly not a model.
  */
 
-type Reply = (request: ModelRequest) => AttributionAnswer | RepairPatch | string
+type Reply = (request: ModelRequest) => AttributionAnswer | AnswerPatch | string
 
 function helpers(request: ModelRequest) {
   const id = (name: string): string => {
@@ -31,7 +31,14 @@ function helpers(request: ModelRequest) {
 
 const answer = (assignments: Assignment[], references: Reference[] = [], interpretations: AttributionAnswer["interpretations"] = []): AttributionAnswer =>
   ({ assignments, references, interpretations })
-const patch = (p: Partial<RepairPatch>): RepairPatch => ({ upsert: [], remove: [], references_add: [], references_remove: [], ...p })
+const patch = (p: Partial<AnswerPatch>): AnswerPatch => ({ upsert: [], remove: [], edges_add: [], edges_remove: [], interpretations_add: [], ...p })
+const refers = (from: string, to: string): Reference => ({ from, to, kind: "refers_to" })
+const applies = (from: string, to: string): Reference => ({ from, to, kind: "applies_to" })
+
+/** The model answers in patch form; a first answer is a patch on the empty draft. */
+export function asPatch(a: AttributionAnswer): AnswerPatch {
+  return patch({ upsert: a.assignments, edges_add: a.references, interpretations_add: a.interpretations })
+}
 
 // ------------------------------------------------------------------ R1: long initial requirement, ops split by paragraph
 
@@ -67,7 +74,7 @@ function r1(request: ModelRequest, complete: boolean): AttributionAnswer {
     fresh("R1.S8.P2", "tool"),
   ], [
     // "The `having` object uses the same condition operators as `filter`".
-    { from: `${T}.P11.s4`, to: `${T}.P2.s4` },
+    refers(`${T}.P11.s4`, `${T}.P2.s4`),
   ])
 }
 
@@ -87,10 +94,10 @@ function r2(request: ModelRequest): AttributionAnswer {
     fresh("R2.S28", "hash"),
     to("R2.S29", "pipeline"),
   ], [
-    { from: "R2.S18.P3", to: "R2.S1" },
-    { from: "R2.S29.P3", to: "R2.S19" },
+    refers("R2.S18.P3", "R2.S1"),
+    refers("R2.S29.P3", "R2.S19"),
     // assert: "a boolean expression using the same syntax as derive".
-    { from: "R2.S10.P3", to: "R1.S3.P2.s5" },
+    refers("R2.S10.P3", "R1.S3.P2.s5"),
   ])
 }
 
@@ -108,16 +115,16 @@ function r3(request: ModelRequest, rangeTypo: boolean): AttributionAnswer {
     to("R3.S16", "pipeline"),
   ], [
     // "The `profile` command's `stddev` field is unaffected".
-    { from: "R3.S3.P4", to: "R2.S3.P5" },
-    { from: "R3.S8.P1", to: "R2.S2" },
-    { from: "R3.S16.P4", to: "R3.S6" },
+    refers("R3.S3.P4", "R2.S3.P5"),
+    refers("R3.S8.P1", "R2.S2"),
+    refers("R3.S16.P4", "R3.S6"),
   ])
 }
 
 // ------------------------------------------------------------------ R5: one passage changes four commands
 
 function r5(request: ModelRequest, typo: boolean): AttributionAnswer {
-  const { to, fresh, none, over } = helpers(request)
+  const { id, to, fresh, none, over } = helpers(request)
   const P2 = "R5.S1.P2", P3 = "R5.S1.P3"
   return answer([
     none("R5.S0"),
@@ -125,22 +132,23 @@ function r5(request: ModelRequest, typo: boolean): AttributionAnswer {
     to(`${P2}.s1`, "verify"),
     to(`${P2}.s2`, "manifest"),
     to(`${P2}.s3`, "manifest", "partial", { overrides: [over(["R1.S5.P2.s2"], [`${P2}.s3`])] }),
-    // The sidecar item: ingest's sentence is gone; transform's closing item keeps its first half, so it is overridden in part.
-    to(`${P2}.s4`, "ingest", "withdraw", { replaces: ["R1.S2.P6.s3"], overrides: [over(["R1.S3.P24.s1"], [`${P2}.s4`])] }),
+    // The sidecar item: ingest's sentence is gone, and so is the sidecar clause of transform's closing item.
+    to(`${P2}.s4`, "ingest", "withdraw", { replaces: ["R1.S2.P6.s3", "R1.S3.P24.s1.c3"] }),
     to(`${P2}.s5`, "ingest"),
     fresh(typo ? `${P2}.s7` : `${P2}.s6`, "blake2b-256 digest"),
     to(`${P3}.s1`, "verify"),
     to(`${P3}.s2`, "manifest"),
     to(`${P3}.s3`, "verify"),
     to(`${P3}.s4`, "ingest"),
-    to(`${P3}.s5`, "transform", "partial", { overrides: [over(["R1.S3.P24.s1"], [`${P3}.s5`])] }),
+    to(`${P3}.s5`, "transform", "withdraw", { replaces: ["R1.S3.P24.s1.c3"] }),
     fresh("R5.S2", "lineage"),
     to("R5.S8", "pipeline"),
   ], [
-    { from: `${P2}.s5`, to: "R1.S3.P24" },
-    { from: `${P2}.s3`, to: `${P2}.s6` },
-    { from: "R5.S3.P1", to: "R1.S6" },
-    { from: "R5.S8.P1", to: "R5.S2" },
+    // "If `<output>.sha256` exists …, `ingest` and `transform` must remove it": given to ingest, applies to transform.
+    applies(`${P2}.s5`, id("transform")),
+    refers(`${P2}.s3`, `${P2}.s6`),
+    refers("R5.S3.P1", "R1.S6"),
+    refers("R5.S8.P1", "R5.S2"),
   ])
 }
 
@@ -152,7 +160,7 @@ function r7(request: ModelRequest): AttributionAnswer {
     none("R7.S0"),
     to("R7.S1", "lineage", "partial", { overrides: [over(["R5.S4.P3.s5"], ["R7.S1.P3"])] }),
     fresh("R7.S3", "temporal"),
-  ], [{ from: "R7.S1.P2", to: "R1.S5.P2" }])
+  ], [refers("R7.S1.P2", "R1.S5.P2")])
 }
 
 // ------------------------------------------------------------------ R10: manifest field rename; reconcile reaches pipeline and lineage
@@ -168,10 +176,10 @@ function r10(request: ModelRequest, twice: boolean): AttributionAnswer {
     // The first answer also gives the lineage outputs item on its own, inside the section it already gave.
     ...(twice ? [to("R10.S8.P1.s3", "lineage")] : []),
   ], [
-    { from: "R10.S2.P2", to: "R1.S5.P2" },
-    { from: "R10.S4.P1.s6", to: "R10.S1.P2.s1" },
-    { from: "R10.S7.P1", to: "R10.S2" },
-    { from: "R10.S8.P1", to: "R10.S2" },
+    refers("R10.S2.P2", "R1.S5.P2"),
+    refers("R10.S4.P1.s6", "R10.S1.P2.s1"),
+    refers("R10.S7.P1", "R10.S2"),
+    refers("R10.S8.P1", "R10.S2"),
   ])
 }
 
@@ -197,8 +205,8 @@ function r13(request: ModelRequest, staleHash: boolean): AttributionAnswer {
     none("R13.S9.P4"),
     fresh("R13.S10", "clip"),
   ], [
-    { from: "R13.S9.P1", to: "R13.S2" },
-    { from: "R13.S9.P3", to: "R13.S2" },
+    refers("R13.S9.P1", "R13.S2"),
+    refers("R13.S9.P3", "R13.S2"),
   ])
 }
 
@@ -209,7 +217,7 @@ function r15(request: ModelRequest): AttributionAnswer {
     to("R15.S2.P2", "snapshot", "partial", { overrides: [over(["R13.S7.P1.s9"], ["R15.S2.P2.s1"])] }),
     none("R15.S2.P3"),
     fresh("R15.S3", "tag"),
-  ], [{ from: "R15.S3.P2", to: "R1.S3.P2.s5" }])
+  ], [refers("R15.S3.P2", "R1.S3.P2.s5")])
 }
 
 // ------------------------------------------------------------------ scripts
@@ -255,19 +263,20 @@ export function ruleStub(request: ModelRequest): AttributionAnswer {
   return { assignments, references: [], interpretations: [] }
 }
 
-export interface StubLog { round: number; task: ModelRequest["task"]; request: ModelRequest }
+export interface StubLog { round: number; task: "attribute" | "repair"; request: ModelRequest }
 
 /** A transport that replays the scripts per round (the last reply repeats) and falls back to the rule stub. */
 export function stubTransport(scripts: Record<number, Reply[]> = SCRIPTS, log: StubLog[] = []): AttributionTransport {
   const counts = new Map<number, number>()
   return async request => {
-    log.push({ round: request.round, task: request.task, request })
     const script = scripts[request.round]
     const n = counts.get(request.round) ?? 0
+    log.push({ round: request.round, task: n === 0 ? "attribute" : "repair", request })
     counts.set(request.round, n + 1)
     const reply = script ? script[Math.min(n, script.length - 1)](request) : ruleStub(request)
+    const shaped = typeof reply === "string" || !("assignments" in reply) ? reply : asPatch(reply)
     return {
-      text: typeof reply === "string" ? reply : JSON.stringify(reply),
+      text: typeof shaped === "string" ? shaped : JSON.stringify(shaped),
       usage: { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 },
       stub: true,
       model: script ? "stub:scripted" : "stub:rule",

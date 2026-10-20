@@ -3,11 +3,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { ATTRIBUTION_SCHEMA, REPAIR_SCHEMA, buildRequest, checkAnswer, type AttributionTransport, type ModelRequest } from "../../src/exp2/attribution.js"
+import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, attributeRound, buildRequest, checkAnswer, type AttributionTransport, type ModelRequest } from "../../src/exp2/attribution.js"
+import { createOpenCodeAttributionTransport } from "../../src/exp2/transport.js"
 import { materialize, type AttributionAnswer, type Registry } from "../../src/exp2/registry.js"
 import { contentHash } from "../../src/exp2/source.js"
 import { Exp2Store, appendOnly, type Exp2State } from "../../src/exp2/store.js"
-import { strictSchemaProblems } from "../../src/model/opencode-transport.js"
+import { requestJson, strictSchemaProblems } from "../../src/model/opencode-transport.js"
 import { roundText } from "./inputs.js"
 import { SCRIPTS, stubTransport } from "./stubs.js"
 
@@ -51,7 +52,7 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     assert.deepEqual(variant(a => { a.assignments[3].replaces = ["R2.S3.P5"] }), ["change_shape"], "add that replaces something")
     assert.deepEqual(variant(a => { a.assignments[1].change = "revise"; a.assignments[1].overrides = [] }), ["change_shape"], "revise without targets")
     assert.deepEqual(variant(a => { a.assignments[1].block = `R3.S2#${"0".repeat(8)}` }), ["hash_mismatch", "uncovered"], "a stale hash")
-    assert.deepEqual(variant(a => { a.references.push({ from: "R2.S1", to: "R1.S2" }) }), ["reference_invalid"], "a reference from an older block")
+    assert.deepEqual(variant(a => { a.references.push({ from: "R2.S1", to: "R1.S2", kind: "refers_to" }) }), ["reference_invalid"], "a reference from an older block")
 
     const name = checkAnswer(r3, 3, (() => { const a = structuredClone(good); a.assignments[4] = { ...a.assignments[4], object_id: null, new_object: "Fill" }; return a })()).issues[0]
     assert.match(name.message, /use object_id O\d+/u)
@@ -77,7 +78,7 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     answer.assignments[1] = { ...answer.assignments[1], change: "partial", overrides: [{ old: ["R2.S13.P4.s4"], by: [answer.assignments[1].block] }] }
     const issues = checkAnswer(r4, 4, answer).issues
     assert.deepEqual(issues.map(i => i.code), ["target_replaced"])
-    assert.match(issues[0].message, /already replaced in round 3 by R3\.S2\.P2, R3\.S2\.P3/u)
+    assert.match(issues[0].message, /already replaced in round 3 by R3\.S2\.P2, R3\.S2\.P3; the text in force is R3\.S2\.P2, R3\.S2\.P3 \(round 3\)/u)
   })
 
   it("an answer that does not converge stops at the repair limit, keeps every call, and the round can be ingested again", async () => {
@@ -85,7 +86,7 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     const store = new Exp2Store(dir, "t")
     await store.ingestRound(1, roundText(1), stubTransport())
     // The model keeps answering R2 without the profile section, and its patches change nothing.
-    const stuck = { 2: [(req: ModelRequest) => { const a = SCRIPTS[2][0](req) as AttributionAnswer; a.assignments.splice(1, 1); return a }, () => ({ upsert: [], remove: [], references_add: [], references_remove: [] })] }
+    const stuck = { 2: [(req: ModelRequest) => { const a = SCRIPTS[2][0](req) as AttributionAnswer; a.assignments.splice(1, 1); return a }, () => ({ upsert: [], remove: [], edges_add: [], edges_remove: [], interpretations_add: [] })] }
     const failed = await store.ingestRound(2, roundText(2), stubTransport(stuck), { maxRepairs: 2 })
     assert.equal(failed.status, "failed")
     assert.deepEqual(failed.issues!.map(i => [i.code, i.block]), [["uncovered", "R2.S1"]])
@@ -103,15 +104,17 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
 
   it("an unreadable reply leads to a fresh request, not a repair of nothing; a failed transport is recorded", async () => {
     const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-attr-")), "t")
-    const seen: string[] = []
+    const seen: ModelRequest[] = []
     const inner = stubTransport()
     const garbled: AttributionTransport = async request => {
-      seen.push(request.task)
+      seen.push(request)
       return seen.length === 1 ? { text: "{not json", stub: true } : inner(request)
     }
     const record = await store.ingestRound(1, roundText(1), garbled)
     assert.equal(record.status, "accepted")
-    assert.deepEqual(seen, ["attribute", "attribute", "repair"])
+    // The unreadable reply changed nothing: the second call patches the same empty draft, told why.
+    assert.deepEqual(seen.map(r => r.previous_draft.assignments.length > 0), [false, false, true])
+    assert.deepEqual(seen[1].issues.map(i => i.code), ["unparseable"])
     assert.equal(store.inspect().calls[0].issues[0].code, "unparseable")
 
     const broken = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-attr-")), "t")
@@ -132,9 +135,59 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     assert.ok(request.outline.some(l => l.startsWith("R3.S2 ### Fill linear: boundary extrapolation: P1(1) P2(4) P3(2)")))
   })
 
-  it("the output schemas satisfy strict structured output", () => {
+  it("the output schema satisfies strict structured output", () => {
     assert.deepEqual(strictSchemaProblems(ATTRIBUTION_SCHEMA), [])
-    assert.deepEqual(strictSchemaProblems(REPAIR_SCHEMA), [])
+  })
+
+  it("a repair repeats the first call byte for byte up to the draft and issues, with the same system prompt and schema", async () => {
+    const r1 = await registryBefore(1)
+    const requests: ModelRequest[] = []
+    const stub = stubTransport()
+    const outcome = await attributeRound(r1, 1, async req => { requests.push(req); return stub(req) }, { maxRepairs: 2, callId: n => `M${n}` })
+    assert.equal(outcome.status, "accepted")
+    assert.equal(requests.length, 2)
+    const [first, repair] = requests.map(r => requestJson(r))
+    const cut = (text: string) => text.slice(0, text.indexOf(`,"issues":`))
+    assert.ok(cut(first).length > 20_000)
+    assert.equal(cut(repair), cut(first))
+    assert.ok(first.indexOf(`"sources":`) < first.indexOf(`"objects":`) && first.indexOf(`"issues":`) < first.indexOf(`"previous_draft":`))
+    assert.ok(first.endsWith(`"issues":[],"previous_draft":{"assignments":[],"interpretations":[],"references":[]}}`))
+
+    // What OpenCode receives: one system prompt and one schema for both calls, and the same opening text.
+    const prompts: { system: string; schema: unknown; text: string }[] = []
+    const client = {
+      session: {
+        create: async () => ({ id: `s${prompts.length}` }),
+        prompt: async (req: { body: { system: string; format?: { schema: unknown }; parts: readonly [{ text: string }] } }) => {
+          prompts.push({ system: req.body.system, schema: req.body.format?.schema, text: req.body.parts[0].text })
+          throw new Error("offline")
+        },
+      },
+    }
+    const transport = createOpenCodeAttributionTransport({ client, directory: tmpdir(), providerId: "p", modelId: "m" })
+    for (const r of requests) await assert.rejects(transport(r))
+    assert.equal(prompts.length, 2)
+    assert.equal(prompts[0].system, prompts[1].system)
+    assert.equal(prompts[0].system, ATTRIBUTION_SYSTEM_PROMPT)
+    assert.deepEqual(prompts[0].schema, prompts[1].schema)
+    assert.equal(prompts[0].text, first)
+    assert.equal(cut(prompts[1].text), cut(prompts[0].text))
+  })
+
+  it("applies_to must come from an owned block and land on another object", async () => {
+    const r5 = await registryBefore(5)
+    const good = scripted(5, r5, 1 - 1)
+    const fix = good.assignments.find(a => a.block === "R5.S1.P2.s7")!
+    fix.block = "R5.S1.P2.s6"
+    assert.deepEqual(checkAnswer(r5, 5, good).issues, [])
+    const ingest = r5.objectByName("ingest")!.id
+    const variant = (edge: { from: string; to: string }) => codes({ ...good, references: [...good.references, { ...edge, kind: "applies_to" }] }, r5, 5)
+    assert.deepEqual(variant({ from: "R5.S0", to: r5.objectByName("transform")!.id }), ["reference_invalid"], "from text that belongs to no object")
+    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: ingest }), ["reference_invalid"], "to the block's own object")
+    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R1.S2.P1" }), ["reference_invalid"], "to a block of the same object")
+    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "O999" }), ["reference_invalid"])
+    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R1.S6.P2" }), [], "to a block of another object")
+    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R5.S2.P1" }), [], "to a block of an object new this round")
   })
 })
 

@@ -27,7 +27,13 @@ export interface Assignment {
   note: string | null
 }
 
-export interface Reference { from: string; to: string }
+/**
+ * An edge from a block of this round to what its wording names (DESIGN §4.3). refers_to: the block uses something
+ * another block defines (later: checks go stale when that block is revised); the named object gets no change.
+ * applies_to: the block's requirement also lands on another object, which gets a change record from this block.
+ * `to` is a block id; for applies_to it may also be an object id. The block keeps its one owner either way.
+ */
+export interface Reference { from: string; to: string; kind: "refers_to" | "applies_to" }
 export interface Interpretation { blocks: string[]; text: string }
 
 export interface AttributionAnswer {
@@ -80,11 +86,13 @@ export interface ChangeRecord {
   object: string
   from_version: number
   to_version: number
-  types: ChangeType[]
+  types: (ChangeType | "applies_to")[]
   /** Blocks of this round given to the object. */
   entries: ChangeEntry[]
   /** Earlier blocks of this object that this round replaced, removed or overrode, whoever owns the new text. */
   received: Modification[]
+  /** Blocks of this round, owned by another object, whose requirement also applies to this one. */
+  applied: { from: string; by_object: string }[]
 }
 
 export interface RoundAcceptance {
@@ -143,6 +151,13 @@ export class Registry {
     return this.objects.get(cover.owner)!.blocks.find(o => o.block === cover.block)
   }
 
+  /** The object an applies_to edge lands on: an object id, or the owner of the named block. */
+  appliesTo(to: string): string | undefined {
+    if (/^O\d+$/u.test(to)) return this.objects.has(to) ? to : undefined
+    const owner = this.coverOf(to)?.owner
+    return owner && owner !== "none" ? owner : undefined
+  }
+
   objectByName(name: string): ObjectRecord | undefined {
     const key = nameKey(name)
     return [...this.objects.values()].find(o => nameKey(o.name) === key)
@@ -187,7 +202,14 @@ export class Registry {
       if (!g.parts.includes(target)) g.parts.push(target)
       grouped.set(key, g)
     }
-    const touched = new Set([...entries.keys(), ...[...grouped.values()].map(g => g.own.object)])
+    const applied = new Map<string, { from: string; by_object: string }[]>()
+    for (const e of answer.references.filter(r => r.kind === "applies_to")) {
+      const target = this.appliesTo(e.to)
+      const by = this.coverOf(e.from)?.owner
+      if (!target || !by || by === "none" || target === by) throw new Error(`applies_to ${e.from} -> ${e.to} does not name another object`)
+      applied.set(target, [...(applied.get(target) ?? []), { from: e.from, by_object: by }])
+    }
+    const touched = new Set([...entries.keys(), ...[...grouped.values()].map(g => g.own.object), ...applied.keys()])
     const order = [...touched].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
     order.forEach((object, i) => {
       const record = this.objects.get(object)!
@@ -202,11 +224,11 @@ export class Registry {
       })
       received.set(object, mods)
       const own = entries.get(object) ?? []
-      const types = [...new Set<ChangeType>([...own.map(e => e.type), ...mods.map(m => m.kind)])].sort()
+      const types = [...new Set<ChangeType | "applies_to">([...own.map(e => e.type), ...mods.map(m => m.kind), ...(applied.has(object) ? ["applies_to" as const] : [])])].sort()
       const from = record.version
       record.version++
       record.history.push({ round, version: record.version, change: id })
-      this.changes.push({ id, round, object, from_version: from, to_version: record.version, types, entries: own, received: mods })
+      this.changes.push({ id, round, object, from_version: from, to_version: record.version, types, entries: own, received: mods, applied: applied.get(object) ?? [] })
     })
     for (const r of answer.references) this.references.push({ ...r, round })
     for (const n of answer.interpretations) this.interpretations.push({ ...n, round })

@@ -30,8 +30,14 @@ describe("exp2 source: three layers over the real dpipe rounds", () => {
 
     it(`R${round}: code blocks, JSON samples, tables and list items are never cut`, () => {
       for (const b of source.blocks) assert.equal(fences(b.text) % 2, 0, `${b.id} cuts a code block`)
-      for (const b of source.blocks.filter(x => x.level === "sentence" && x.kind !== "sentence")) {
-        assert.deepEqual(b.children, [], `${b.id} (${b.kind}) is cut further`)
+      for (const b of source.blocks.filter(x => x.kind === "code" || x.kind === "table")) {
+        if (b.level === "sentence") assert.deepEqual(b.children, [], `${b.id} (${b.kind}) is cut further`)
+      }
+      // A list item is one unit; it may be cut into clauses only, and those rejoin to the item.
+      for (const item of source.blocks.filter(b => b.kind === "item")) {
+        const kids = source.blocks.filter(b => b.parent === item.id)
+        assert.ok(kids.every(k => k.level === "clause"))
+        if (kids.length) assert.equal(kids.map(k => k.text).join(""), item.text)
       }
       for (const item of source.blocks.filter(b => b.kind === "item")) assert.match(item.text, /^\s*(?:[-*+]|\d+[.)]|[a-z][.)])\s/u)
       // Paragraphs end only at blank lines outside code: the paragraph's own content has no blank line in it.
@@ -75,6 +81,15 @@ describe("exp2 source: three layers over the real dpipe rounds", () => {
     assert.ok(clauses.length >= 2)
     assert.equal(clauses.join(""), r1.blocks.find(b => b.id === "R1.S2.P4.s2")!.text)
     for (const c of r1.blocks.filter(b => b.level === "clause")) assert.equal((c.text.match(/`/gu) ?? []).length % 2, 0, `${c.id} cuts inline code`)
+  })
+
+  it("list items are cut into clauses outside inline and fenced code", () => {
+    const r1 = splitRound(1, roundText(1))
+    const clauses = (id: string) => r1.blocks.filter(b => b.parent === id).map(b => b.text)
+    assert.deepEqual(clauses("R1.S3.P24.s1"), ["- After all transformations, ", "write the result CSV to `<output>`, ", "its SHA-256 to `<output>.sha256`.\n\n"])
+    // The recipe item holds a JSON sample full of commas; the sample stays whole inside one clause.
+    const recipe = r1.blocks.filter(b => b.parent === "R1.S3.P2.s2")
+    assert.ok(recipe.some(c => /```json[\s\S]*"op": "fill"[\s\S]*```/u.test(c.text)))
   })
 
   it("the annotated text for the model is the original plus id markers only", () => {

@@ -10,8 +10,9 @@ import { createHash } from "node:crypto"
  *   the first heading is section S0. Sections nest; their children are their own paragraphs, then subsections.
  * - paragraph: the section's own content cut at blank lines; a blank line inside a fenced code block does not cut.
  * - sentence layer ("s"): the paragraph's units. A fenced code block, a table and a list item (with its continuation
- *   lines and any code inside it) are each one unit and are not cut further; prose is cut into sentences.
- * - clause ("c"): a sentence cut at commas, semicolons and parenthesised groups.
+ *   lines and any code inside it) are each one unit; prose is cut into sentences.
+ * - clause ("c"): a sentence or a list item cut at commas, semicolons and parenthesised groups, never inside inline or
+ *   fenced code. Code blocks and tables have no clauses.
  */
 
 export type Level = "section" | "paragraph" | "sentence" | "clause"
@@ -166,7 +167,12 @@ export function splitRound(round: number, text: string): RoundSource {
     groups.forEach((g, gi) => {
       const start = gi === 0 ? p.start : g.lines[0].start
       const end = gi === groups.length - 1 ? p.end : groups[gi + 1].lines[0].start
-      if (g.kind !== "sentence") { make(`${p.id}.s${++count}`, "sentence", g.kind, p.id, start, end); return }
+      if (g.kind !== "sentence") {
+        const unit = make(`${p.id}.s${++count}`, "sentence", g.kind, p.id, start, end)
+        // A list item may be cut into clauses (to say which part a partial revision changes); code and tables are not.
+        if (g.kind === "item") clauses(unit)
+        return
+      }
       for (const [a, b] of sentences(start, end)) {
         const s = make(`${p.id}.s${++count}`, "sentence", "sentence", p.id, a, b)
         clauses(s)
@@ -220,12 +226,19 @@ export function splitRound(round: number, text: string): RoundSource {
     merged.forEach(([a, b], k) => make(`${s.id}.c${k + 1}`, "clause", "clause", s.id, a, b))
   }
 
-  /** Scans [start, end) outside inline code; `at` gets the bracket depth before the character and returns where a new piece starts, or null. */
+  /**
+   * Scans [start, end) outside inline code and fenced code; `at` gets the bracket depth before the character and
+   * returns where a new piece starts, or null.
+   */
   function boundaries(start: number, end: number, at: (i: number, depth: number) => number | null): number[] {
     const out: number[] = []
+    const range = linesOf(text, start, end)
+    const inFence = fenced(range)
+    const skip = new Map(range.filter((_, k) => inFence[k]).map(l => [l.start, l.end]))
     let depth = 0
     let tick = false
     for (let i = start; i < end; i++) {
+      if (skip.has(i)) { i = skip.get(i)! - 1; continue }
       const ch = text[i]
       if (ch === "`") { tick = !tick; continue }
       if (tick) continue

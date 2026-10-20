@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { requestJson } from "../model/opencode-transport.js"
 import { annotate, parseRef, roundOf, type RoundSource, type SourceBlock } from "./source.js"
 import { isWithin, nameKey, type Assignment, type AttributionAnswer, type Override, type Reference, type Registry, type RoundAcceptance } from "./registry.js"
 
@@ -19,8 +20,12 @@ export interface ObjectBrief {
   modified?: string[]
 }
 
+/**
+ * One request shape for the first answer and every repair (DESIGN §4.6): the first answer is a patch on an empty
+ * draft. Serialised with `requestJson`, the source comes first, then the stable parts, and the per-attempt fields
+ * (`issues`, `previous_draft`) last, so a repair repeats the first call's opening byte for byte.
+ */
 export interface AttributionRequest {
-  task: "attribute"
   round: number
   /** All rounds so far, annotated with block ids; the new round is last. */
   sources: string
@@ -29,24 +34,26 @@ export interface AttributionRequest {
   objects: ObjectBrief[]
   /** Existing objects whose name the new round's text mentions, and where (found by name only). */
   candidates: { object: string; name: string; mentioned_in: string[] }[]
-}
-
-export interface RepairRequest extends Omit<AttributionRequest, "task"> {
-  task: "repair"
-  previous_draft: AttributionAnswer
+  /** What the code found wrong with the draft; empty on the first call. */
   issues: Issue[]
+  /** The answer so far; empty on the first call. */
+  previous_draft: AttributionAnswer
 }
 
-export type ModelRequest = AttributionRequest | RepairRequest
+/** Kept as an alias: every call is the same request. */
+export type ModelRequest = AttributionRequest
 
-export interface RepairPatch {
+export interface AnswerPatch {
   /** Replace the assignment of the same block, or add it. */
   upsert: Assignment[]
   /** Blocks whose assignment is removed. */
   remove: string[]
-  references_add: Reference[]
-  references_remove: Reference[]
+  edges_add: Reference[]
+  edges_remove: Reference[]
+  interpretations_add: AttributionAnswer["interpretations"]
 }
+
+export const EMPTY_DRAFT: AttributionAnswer = { assignments: [], references: [], interpretations: [] }
 
 export interface TokenUsage {
   input_tokens: number
@@ -82,6 +89,7 @@ export interface ModelCallRecord {
   round: number
   stage: "understand"
   step: "attribution"
+  /** The first call (a patch on the empty draft) or a repair. */
   kind: "attribute" | "repair"
   attempt: number
   request: ModelRequest
@@ -111,7 +119,7 @@ const CHANGES = ["add", "revise", "withdraw", "partial", "none"] as const
 
 // ---------------------------------------------------------------- request
 
-export function buildRequest(registry: Registry, round: number): AttributionRequest {
+export function buildRequest(registry: Registry, round: number, previous: AttributionAnswer = EMPTY_DRAFT, issues: Issue[] = []): AttributionRequest {
   const source = registry.sources.get(round)
   if (!source) throw new Error(`Round ${round} has no source`)
   const rounds = [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)
@@ -121,7 +129,7 @@ export function buildRequest(registry: Registry, round: number): AttributionRequ
     const modified = live.flatMap(b => b.modifications.flatMap(m => m.parts))
     return { id: o.id, name: o.name, version: o.version, blocks: live.map(b => b.block), ...(modified.length ? { modified } : {}) }
   })
-  return { task: "attribute", round, sources, outline: outline(source), objects, candidates: candidates(registry, source) }
+  return { round, sources, outline: outline(source), objects, candidates: candidates(registry, source), issues, previous_draft: previous }
 }
 
 function outline(source: RoundSource): string[] {
@@ -240,15 +248,31 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   }
   for (const b of source.blocks.filter(x => x.parent === null)) uncovered(b)
 
-  // References: both ends exist; the citing end is in this round.
+  // Edges: both ends exist; the citing end is in this round; applies_to lands on another object.
   const references: Reference[] = []
+  const ownerNow = (id: string): string | undefined => {
+    if (/^O\d+$/u.test(id)) return registry.objects.has(id) ? id : undefined
+    const here = registry.lineage(id).map(b => assignments.find(x => x.block === b.id)).find(Boolean)
+    if (here) return here.change === "none" ? "none" : here.object_id ?? `new:${nameKey(here.new_object!)}`
+    return registry.appliesTo(id)
+  }
   for (const [i, r] of answer.references.entries()) {
-    const from = resolve(r.from, `reference ${i + 1} from`), to = resolve(r.to, `reference ${i + 1} to`)
+    const w = `edge ${i + 1} (${r.kind} ${r.from} -> ${r.to})`
+    if (r.kind !== "refers_to" && r.kind !== "applies_to") { add("reference_invalid", `${w}: kind must be refers_to or applies_to`); continue }
+    const objectTarget = r.kind === "applies_to" && /^O\d+$/u.test(r.to.trim())
+    if (objectTarget && !registry.objects.has(r.to.trim())) { add("reference_invalid", `${w}: object ${r.to} does not exist`); continue }
+    const from = resolve(r.from, `${w} from`), to = objectTarget ? [r.to.trim()] : resolve(r.to, `${w} to`)
     if (!from || !to) continue
-    if (from.length !== 1 || to.length !== 1) { add("reference_invalid", `reference ${i + 1}: each end names one block`); continue }
-    if (roundOf(from[0]) !== round) { add("reference_invalid", `reference ${i + 1}: ${from[0]} is not in round ${round}; the citing block is this round's`); continue }
-    if (roundOf(to[0]) > round) { add("reference_invalid", `reference ${i + 1}: ${to[0]} is in a later round`); continue }
-    if (!references.some(x => x.from === from[0] && x.to === to[0])) references.push({ from: from[0], to: to[0] })
+    if (from.length !== 1 || to.length !== 1) { add("reference_invalid", `${w}: each end names one block`); continue }
+    if (roundOf(from[0]) !== round) { add("reference_invalid", `${w}: ${from[0]} is not in round ${round}; the citing block is this round's`); continue }
+    if (!objectTarget && roundOf(to[0]) > round) { add("reference_invalid", `${w}: ${to[0]} is in a later round`); continue }
+    if (r.kind === "applies_to") {
+      const by = ownerNow(from[0]), target = ownerNow(to[0])
+      if (!by || by === "none") { add("reference_invalid", `${w}: ${from[0]} belongs to no object, so its requirement cannot apply elsewhere`); continue }
+      if (!target || target === "none") { add("reference_invalid", `${w}: ${to[0]} belongs to no object; point applies_to at a block of the object, or at its id`); continue }
+      if (target === by) { add("reference_invalid", `${w}: ${to[0]} belongs to the same object as ${from[0]}; applies_to names another object`); continue }
+    }
+    if (!references.some(x => x.from === from[0] && x.to === to[0] && x.kind === r.kind)) references.push({ from: from[0], to: to[0], kind: r.kind })
   }
   const interpretations = answer.interpretations.map((n, i) => ({ blocks: n.blocks.flatMap(b => resolve(b, `interpretation ${i + 1}`) ?? []), text: n.text }))
 
@@ -267,11 +291,16 @@ function targetProblems(registry: Registry, round: number, target: string, where
   const own = registry.ownership(target)
   if (!own) { add("target_unowned", `${where}: ${target} belongs to no object, so there is nothing to replace`, block); return }
   if (own.state === "superseded" || own.state === "withdrawn") {
-    add("target_replaced", `${where}: ${target} lies in ${own.block}, already ${own.state} in round ${own.modifications.at(-1)!.round}; cite the current text instead`, block)
+    const last = [...own.modifications].reverse().find(m => m.parts.includes(own.block))!
+    const now = own.state === "superseded" ? `the text in force is ${last.by.join(", ")} (round ${last.round})` : `nothing replaced it`
+    add("target_replaced", `${where}: ${target} lies in ${own.block}, ${own.state} in round ${last.round} by ${last.by.join(", ")}; ${now}${own.state === "superseded" ? ", cite that instead" : ""}`, block)
     return
   }
   const clash = own.modifications.find(m => m.parts.some(p => isWithin(registry, target, p) || isWithin(registry, p, target)))
-  if (clash) add("target_replaced", `${where}: ${target} overlaps ${clash.parts.join(", ")}, already replaced in round ${clash.round} by ${clash.by.join(", ")}; cite the current text instead`, block)
+  if (clash) {
+    const now = clash.kind === "withdraw" ? "it was withdrawn and nothing replaced it" : `the text in force is ${clash.by.join(", ")} (round ${clash.round}), cite that instead`
+    add("target_replaced", `${where}: ${target} overlaps ${clash.parts.join(", ")}, already replaced in round ${clash.round} by ${clash.by.join(", ")}; ${now}`, block)
+  }
 }
 
 function nearest(registry: Registry, id: string): string {
@@ -284,7 +313,7 @@ function nearest(registry: Registry, id: string): string {
 // ---------------------------------------------------------------- shape and patch
 
 /** Structural shape only (the schema's job); content problems are left to checkAnswer. */
-export function shapeProblems(value: unknown, kind: "attribute" | "repair"): string[] {
+export function shapeProblems(value: unknown): string[] {
   const problems: string[] = []
   const obj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v)
   const strs = (v: unknown) => Array.isArray(v) && v.every(x => typeof x === "string")
@@ -296,23 +325,20 @@ export function shapeProblems(value: unknown, kind: "attribute" | "repair"): str
     if (!strs(a.replaces)) problems.push(`${at}.replaces: not a string array`)
     if (!Array.isArray(a.overrides) || !a.overrides.every(o => obj(o) && strs(o.old) && strs(o.by))) problems.push(`${at}.overrides: not an array of {old, by}`)
   }
-  const refs = (v: unknown, at: string) => { if (!Array.isArray(v) || !v.every(r => obj(r) && typeof r.from === "string" && typeof r.to === "string")) problems.push(`${at}: not an array of {from, to}`) }
-  if (!obj(value)) return ["answer: not an object"]
-  if (kind === "attribute") {
-    if (!Array.isArray(value.assignments)) problems.push("assignments: not an array"); else value.assignments.forEach((a, i) => assignment(a, `assignments[${i}]`))
-    refs(value.references, "references")
-    if (!Array.isArray(value.interpretations) || !value.interpretations.every(n => obj(n) && strs(n.blocks) && typeof n.text === "string")) problems.push("interpretations: not an array of {blocks, text}")
-  } else {
-    if (!Array.isArray(value.upsert)) problems.push("upsert: not an array"); else value.upsert.forEach((a, i) => assignment(a, `upsert[${i}]`))
-    if (!strs(value.remove)) problems.push("remove: not a string array")
-    refs(value.references_add, "references_add")
-    refs(value.references_remove, "references_remove")
+  const edges = (v: unknown, at: string) => {
+    if (!Array.isArray(v) || !v.every(r => obj(r) && typeof r.from === "string" && typeof r.to === "string" && typeof r.kind === "string")) problems.push(`${at}: not an array of {from, to, kind}`)
   }
+  if (!obj(value)) return ["answer: not an object"]
+  if (!Array.isArray(value.upsert)) problems.push("upsert: not an array"); else value.upsert.forEach((a, i) => assignment(a, `upsert[${i}]`))
+  if (!strs(value.remove)) problems.push("remove: not a string array")
+  edges(value.edges_add, "edges_add")
+  edges(value.edges_remove, "edges_remove")
+  if (!Array.isArray(value.interpretations_add) || !value.interpretations_add.every(n => obj(n) && strs(n.blocks) && typeof n.text === "string")) problems.push("interpretations_add: not an array of {blocks, text}")
   return problems
 }
 
-/** Applies a repair patch to the previous answer; everything the patch does not name stays as it was. */
-export function applyPatch(previous: AttributionAnswer, patch: RepairPatch): AttributionAnswer {
+/** Applies a patch to the draft; everything the patch does not name stays as it was. */
+export function applyPatch(previous: AttributionAnswer, patch: AnswerPatch): AttributionAnswer {
   const key = (block: string) => parseRef(block).id
   const removed = new Set(patch.remove.map(key))
   const upserts = new Map(patch.upsert.map(a => [key(a.block), a]))
@@ -325,9 +351,9 @@ export function applyPatch(previous: AttributionAnswer, patch: RepairPatch): Att
     assignments.push(a)
   }
   for (const [k, a] of upserts) if (!placed.has(k)) assignments.push(a)
-  const same = (a: Reference, b: Reference) => key(a.from) === key(b.from) && key(a.to) === key(b.to)
-  const references = [...previous.references.filter(r => !patch.references_remove.some(x => same(x, r))), ...patch.references_add]
-  return { assignments, references, interpretations: previous.interpretations }
+  const same = (a: Reference, b: Reference) => key(a.from) === key(b.from) && key(a.to) === key(b.to) && a.kind === b.kind
+  const references = [...previous.references.filter(r => !patch.edges_remove.some(x => same(x, r))), ...patch.edges_add]
+  return { assignments, references, interpretations: [...previous.interpretations, ...patch.interpretations_add] }
 }
 
 // ---------------------------------------------------------------- loop
@@ -340,25 +366,24 @@ export interface AttributionOptions {
 
 export async function attributeRound(registry: Registry, round: number, transport: AttributionTransport, options: AttributionOptions): Promise<AttributionOutcome> {
   if (!Number.isSafeInteger(options.maxRepairs) || options.maxRepairs < 0) throw new Error("maxRepairs must be a non-negative integer")
-  const base = buildRequest(registry, round)
   const calls: ModelCallRecord[] = []
-  let previous: AttributionAnswer | undefined
+  let draft: AttributionAnswer = EMPTY_DRAFT
   let issues: Issue[] = []
   for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
-    // A repair needs an answer to patch; after an unreadable reply the next call asks afresh.
-    const request: ModelRequest = previous && issues.length ? { ...base, task: "repair", previous_draft: previous, issues } : base
-    const text = JSON.stringify(request)
+    const request = buildRequest(registry, round, draft, issues)
+    const kind = attempt === 1 ? "attribute" : "repair"
+    const text = requestJson(request)
     const sha = createHash("sha256").update(text).digest("hex")
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
       // Keep the record of a failed call; the round is failed and can be ingested again.
       issues = [{ code: "transport", message: `The model call failed: ${(e as Error).message}` }]
-      calls.push({ id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind: request.task === "repair" ? "repair" : "attribute", attempt,
+      calls.push({ id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind, attempt,
         request, request_chars: text.length, request_sha256: sha, response_text: "", issues, usage: usageOf({ text: "" }), stub: false, error: (e as Error).message })
       return { status: "failed", calls, issues }
     }
     const record: ModelCallRecord = {
-      id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind: request.task === "repair" ? "repair" : "attribute", attempt,
+      id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind, attempt,
       request, request_chars: text.length, request_sha256: sha,
       response_text: reply.text, issues: [], usage: usageOf(reply), stub: reply.stub === true,
       ...(reply.model ? { model: reply.model } : {}), ...(reply.provider ? { provider: reply.provider } : {}),
@@ -366,25 +391,23 @@ export async function attributeRound(registry: Registry, round: number, transpor
       ...(reply.schema_errors?.length ? { schema_errors: reply.schema_errors } : {}),
     }
     calls.push(record)
+    // An unreadable reply leaves the draft as it was; the next call patches the same draft again.
     let parsed: unknown
     try { parsed = JSON.parse(reply.text) } catch (e) {
       issues = [{ code: "unparseable", message: `The reply is not JSON: ${(e as Error).message}` }]
       record.issues = issues
-      previous = undefined
       continue
     }
-    const shape = shapeProblems(parsed, record.kind)
+    const shape = shapeProblems(parsed)
     if (shape.length) {
       issues = shape.map(message => ({ code: "shape" as const, message }))
       record.issues = issues
-      if (record.kind === "attribute") previous = undefined
       continue
     }
-    const answer = record.kind === "repair" ? applyPatch(previous!, parsed as RepairPatch) : parsed as AttributionAnswer
-    const checked = checkAnswer(registry, round, answer)
+    draft = applyPatch(draft, parsed as AnswerPatch)
+    const checked = checkAnswer(registry, round, draft)
     issues = checked.issues
     record.issues = issues
-    previous = answer
     if (checked.acceptance) return { status: "accepted", acceptance: checked.acceptance, calls, issues: [] }
   }
   return { status: "failed", calls, issues }
@@ -398,7 +421,7 @@ function usageOf(reply: ModelReply): TokenUsage {
   }
 }
 
-// ---------------------------------------------------------------- schemas and prompt
+// ---------------------------------------------------------------- schema and prompt
 
 const nullableString = { type: ["string", "null"] }
 const stringArray = { type: "array", items: { type: "string" } }
@@ -407,51 +430,58 @@ const assignmentSchema = {
   additionalProperties: false,
   required: ["block", "object_id", "new_object", "change", "replaces", "overrides", "note"],
   properties: {
-    block: { type: "string" },
-    object_id: nullableString,
-    new_object: nullableString,
-    change: { type: "string", enum: [...CHANGES] },
-    replaces: stringArray,
-    overrides: { type: "array", items: { type: "object", additionalProperties: false, required: ["old", "by"], properties: { old: stringArray, by: stringArray } } },
+    block: { type: "string", description: "A block of the new round, at the coarsest level that belongs to one object." },
+    object_id: { ...nullableString, description: "An existing object's id, or null." },
+    new_object: { ...nullableString, description: "A new object's name (the code assigns its id), or null. Exactly one of object_id and new_object, unless change is none." },
+    change: {
+      type: "string",
+      enum: [...CHANGES],
+      description: [
+        "What this block does to earlier text. add: no earlier text stops holding because of it.",
+        "revise: an earlier block as a whole is taken over by this text (list it in replaces).",
+        "withdraw: an earlier block as a whole no longer holds and nothing takes its place (list it in replaces).",
+        "partial: part of an earlier block no longer holds and the rest stands (give overrides).",
+        "none: the block states no requirement (a preface, a rule line); no object.",
+      ].join(" "),
+    },
+    replaces: { ...stringArray, description: "Earlier units that no longer hold as a whole (revise, withdraw)." },
+    overrides: {
+      type: "array",
+      description: "Partial revision: old = earlier units or clauses that no longer hold; by = units of this block that state what holds now. Ids only.",
+      items: { type: "object", additionalProperties: false, required: ["old", "by"], properties: { old: stringArray, by: stringArray } },
+    },
     note: nullableString,
   },
 }
-const referenceSchema = { type: "object", additionalProperties: false, required: ["from", "to"], properties: { from: { type: "string" }, to: { type: "string" } } }
+const edgeSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["from", "to", "kind"],
+  description: "Only for an object the block's own wording names. refers_to: the block uses what the target block defines; the target's object gets no change. applies_to: the block's requirement also lands on the named object (to = one of its blocks or its id); that object gets a change record. The block keeps its one owner.",
+  properties: { from: { type: "string" }, to: { type: "string" }, kind: { type: "string", enum: ["refers_to", "applies_to"] } },
+}
 
+/** First answer and repairs alike: a patch on `previous_draft` (empty on the first call). */
 export const ATTRIBUTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["assignments", "references", "interpretations"],
+  required: ["upsert", "remove", "edges_add", "edges_remove", "interpretations_add"],
   properties: {
-    assignments: { type: "array", items: assignmentSchema },
-    references: { type: "array", items: referenceSchema },
-    interpretations: { type: "array", items: { type: "object", additionalProperties: false, required: ["blocks", "text"], properties: { blocks: stringArray, text: { type: "string" } } } },
-  },
-}
-
-export const REPAIR_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: ["upsert", "remove", "references_add", "references_remove"],
-  properties: {
-    upsert: { type: "array", items: assignmentSchema },
-    remove: stringArray,
-    references_add: { type: "array", items: referenceSchema },
-    references_remove: { type: "array", items: referenceSchema },
+    upsert: { type: "array", items: assignmentSchema, description: "Assignments to add, or to replace the draft's assignment of the same block." },
+    remove: { ...stringArray, description: "Blocks whose assignment in the draft is dropped." },
+    edges_add: { type: "array", items: edgeSchema },
+    edges_remove: { type: "array", items: edgeSchema },
+    interpretations_add: { type: "array", items: { type: "object", additionalProperties: false, required: ["blocks", "text"], properties: { blocks: stringArray, text: { type: "string" } } } },
   },
 }
 
 export const ATTRIBUTION_SYSTEM_PROMPT = [
   "You register requirement text into objects. The request holds every round of the original requirements so far (`sources`, the new round last); the original text is the only authority, and newer text overrides older text.",
-  "Block ids: ⟦R3.S2⟧ marks a section (a heading and everything under it, subsections included), ⟦R3.S2.P1⟧ a paragraph, ‹s2› a unit inside the paragraph (a sentence, a list item, a code block or a table) and ‹s2.c1› a clause of a sentence; the full id of a unit is R3.S2.P1.s2, of a clause R3.S2.P1.s2.c1. Ids may carry the shown hash (R3.S2.P1#ab12cd34). Units are marked only where a paragraph has more than one, clauses only where a sentence has more than one.",
+  "Block ids: ⟦R3.S2⟧ marks a section (a heading and everything under it, subsections included), ⟦R3.S2.P1⟧ a paragraph, ‹s2› a unit inside the paragraph (a sentence, a list item, a code block or a table) and ‹s2.c1› a clause of a sentence or list item; the full id of a unit is R3.S2.P1.s2, of a clause R3.S2.P1.s2.c1. Ids may carry the shown hash (R3.S2.P1#ab12cd34). Units are marked only where a paragraph has more than one, clauses only where a unit has more than one.",
   "An object is a unit of requirement that the text names with a stable name and whose parts are revised together: a command, an operation, a pipeline step, a shared convention. Parameters, fields and options are never objects; a change to them is a change to their object.",
-  "For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; split into paragraphs only where a section talks about several objects, into units or clauses only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only; the code assigns ids). Every block of the new round must be covered exactly once: a section covers everything inside it, so do not also assign its paragraphs. Text that states no requirement (a round's preface, a horizontal rule) takes change \"none\" with no object.",
-  "change: \"add\" for new content; \"revise\" when the block replaces earlier units wholesale (list them in replaces); \"withdraw\" when it removes earlier behaviour (replaces lists what is removed); \"partial\" when it overrides only some earlier units (overrides: old = the earlier units or clauses that no longer hold, by = the units of this block that override them). Cite ids only; never copy text. The earlier units may belong to another object; cite them anyway. Ranges like R2.S9.P4.s2..s4 are allowed.",
-  "references: when a block's own wording explicitly names another object (\"the same condition operators as filter\", \"as produced by the manifest command\"), give an edge from that block to the block it names. `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself refers to it, not whether it ought to. Never infer references from patterns across rounds.",
-  "interpretations: only when two blocks of the same round disagree, or the extent of a partial override is unclear, write a short reading citing the blocks; it is marked as interpretation, not source.",
-].join("\n")
-
-export const REPAIR_SYSTEM_PROMPT = [
-  ATTRIBUTION_SYSTEM_PROMPT,
-  "The code checked your previous answer (`previous_draft`) and found the listed `issues`. Fix exactly these issues by patching the answer: upsert replaces or adds the assignment of a block, remove drops a block's assignment, references_add/references_remove edit the edges. Do not restate assignments that need no change.",
+  "For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round is covered exactly once: a section covers everything inside it, so do not also assign its paragraphs. Clauses serve to say which part of earlier text a partial revision changes.",
+  "The change field's values are defined by their effect on earlier text, as its description says. Cite ids only; never copy text. Earlier units may belong to another object; cite them anyway. Ranges like R2.S9.P4.s2..s4 are allowed. Cite only text still in force: what a later round replaced is cited through its replacement.",
+  "Edges: when a block's own wording names another object, add an edge (refers_to or applies_to, as the schema describes). `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself names it, not whether it ought to. Never infer edges from patterns across rounds.",
+  "interpretations: only when two blocks of the same round disagree, or the extent of a partial revision is unclear, write a short reading citing the blocks; it is marked as interpretation, not source.",
+  "Answer as a patch on `previous_draft` (empty on the first call): upsert adds or replaces a block's assignment, remove drops one, edges_add/edges_remove and interpretations_add edit the rest. When `issues` is not empty, the code found these problems in the draft: fix exactly these, and do not restate what needs no change.",
 ].join("\n")

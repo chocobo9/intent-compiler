@@ -1,16 +1,15 @@
 import { createOpenCodeStructuredTransport, type OpenCodeModelTransportV2Options } from "../model/opencode-transport.js"
-import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, REPAIR_SCHEMA, REPAIR_SYSTEM_PROMPT, type AttributionTransport, type ModelRequest } from "./attribution.js"
+import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, type AttributionTransport, type ModelRequest } from "./attribution.js"
 
 /**
- * The attribution step over OpenCode structured output. The first answer and a repair have different schemas and
- * prompts, so each gets its own transport (and its own session per call, as the shared transport does).
- * Not exercised in this block: offline tests use fixed answers.
+ * The attribution step over OpenCode structured output. The first answer and every repair use the same system
+ * prompt and schema (DESIGN §4.6), and the request repeats the same opening, so a repair can reuse the first call's
+ * cached prefix. Not exercised against a real model in this block: offline tests use fixed answers.
  */
 export function createOpenCodeAttributionTransport(options: OpenCodeModelTransportV2Options): AttributionTransport {
-  const attribute = createOpenCodeStructuredTransport<ModelRequest>(options, ATTRIBUTION_SYSTEM_PROMPT, ATTRIBUTION_SCHEMA)
-  const repair = createOpenCodeStructuredTransport<ModelRequest>(options, REPAIR_SYSTEM_PROMPT, REPAIR_SCHEMA)
+  const transport = createOpenCodeStructuredTransport<ModelRequest>(options, ATTRIBUTION_SYSTEM_PROMPT, ATTRIBUTION_SCHEMA)
   return async request => {
-    const call = await (request.task === "repair" ? repair : attribute)(request)
+    const call = await transport(request)
     return {
       text: call.text,
       usage: call.usage,

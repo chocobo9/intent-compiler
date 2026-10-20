@@ -56,7 +56,7 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     assert.ok(byName(r, "window").blocks.some(b => b.block === "R1.S3.P16"))
     assert.deepEqual(log.filter(l => l.round === 1).map(l => l.task), ["attribute", "repair"])
     const repair = log.find(l => l.round === 1 && l.task === "repair")!.request
-    assert.ok(repair.task === "repair" && repair.issues.length === 1 && repair.issues[0].code === "uncovered" && repair.issues[0].block === "R1.S3.P16")
+    assert.ok(repair.issues.length === 1 && repair.issues[0].code === "uncovered" && repair.issues[0].block === "R1.S3.P16")
     // Same-round reference: having uses filter's condition operators.
     assert.ok(r.references.some(e => e.from === "R1.S3.P11.s4" && e.to === "R1.S3.P2.s4"))
     assert.deepEqual(r.coverageProblems(1), [])
@@ -83,13 +83,16 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     assert.match(old.text, /^### Fill `linear` strategy/u, "a section is shown whole, heading included")
     assert.match(old.text, /⟦4\. If either anchor is \*\*missing\*\*[^⟧]*⟧\(R3 partial\)/u)
     const pair = old.pairs.find(p => p.round === 3)!
-    assert.match(pair.old.text, /⟦4\. If either anchor/u)
+    // The old side is the paragraph that holds the changed item, with its heading path, not the whole section.
+    assert.deepEqual(pair.old.map(o => o.context), ["R2.S13.P4"])
+    assert.deepEqual(pair.old[0].heading_path, ["## Extended transforms", "### Fill `linear` strategy"])
+    assert.match(pair.old[0].text, /^1\. Search upward[\s\S]*⟦4\. If either anchor[^⟧]*⟧\n5\. Non-empty/u)
     assert.ok(pair.new.some(n => n.context === "R3.S2.P2" && n.heading_path.at(-1) === "### Fill linear: boundary extrapolation" && /only a \*\*lower anchor\*\*/u.test(n.text)))
     const rendered = renderObjectView(view)
-    assert.match(rendered, /\| old \(R2, R2\.S13\) \| new \(R3, R3\.S2\.P2; R3, R3\.S2\.P3\) \|/u)
+    assert.match(rendered, /\| old \(R2, R2\.S13\.P4\) \| new \(R3, R3\.S2\.P2; R3, R3\.S2\.P3\) \|/u)
     // The first answer's override ran past the last item of the list; the issue named the real extent.
     const repair = log.find(l => l.round === 3 && l.task === "repair")!.request
-    assert.ok(repair.task === "repair" && repair.issues.some(i => i.code === "range_invalid" && /s1\.\.s5/u.test(i.message)))
+    assert.ok(repair.issues.some(i => i.code === "range_invalid" && /s1\.\.s5/u.test(i.message)))
   })
 
   it("R5: one passage changes verify, manifest, ingest and transform; each gets a change record, including transform through ingest's text", () => {
@@ -101,7 +104,12 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     assert.deepEqual(change.entries.map(e => e.block), ["R5.S1.P3.s5"])
     const closing = transform.blocks.find(b => b.block === "R1.S3.P24")!
     assert.equal(closing.state, "partially_modified", "the closing item keeps its first half, so it is not superseded")
-    assert.deepEqual(closing.modifications.map(m => r.objects.get(m.by_object)!.name).sort(), ["ingest", "transform"])
+    assert.deepEqual(closing.modifications.map(m => [r.objects.get(m.by_object)!.name, m.kind, m.parts]).sort(),
+      [["ingest", "withdraw", ["R1.S3.P24.s1.c3"]], ["transform", "withdraw", ["R1.S3.P24.s1.c3"]]], "only the sidecar clause is withdrawn")
+    // "ingest and transform must remove it" is given to ingest and applies to transform: transform's record names it.
+    assert.deepEqual(change.applied, [{ from: "R5.S1.P2.s5", by_object: byName(r, "ingest").id }])
+    assert.ok(change.types.includes("applies_to"))
+    assert.ok(r.references.some(e => e.kind === "applies_to" && e.from === "R5.S1.P2.s5"))
     const ingest = byName(r, "ingest")
     const sidecar = ingest.blocks.find(b => b.block === "R1.S2")!
     assert.deepEqual(sidecar.modifications.map(m => [m.kind, m.parts]), [["withdraw", ["R1.S2.P6.s3"]]])
@@ -110,9 +118,10 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     const pair = view.entries.find(e => e.context === "R1.S3.P24")!.pairs.find(p => p.by_object === ingest.id)!
     assert.equal(pair.by_object_name, "ingest")
     assert.ok(pair.new[0].context === "R5.S1.P2" && pair.new[0].marked.includes("R5.S1.P2.s4"), "the new text is the whole paragraph with the unit marked")
+    assert.match(pair.old[0].text, /^- After all transformations, write the result CSV to `<output>`, ⟦its SHA-256 to `<output>\.sha256`\.⟧/u)
     // The first answer had a wrong unit id; it was named with the real extent and fixed.
     const repair = log.find(l => l.round === 5 && l.task === "repair")!.request
-    assert.ok(repair.task === "repair" && repair.issues.some(i => i.code === "unknown_block" && /s1, s2, s3, s4, s5, s6/u.test(i.message)))
+    assert.ok(repair.issues.some(i => i.code === "unknown_block" && /s1, s2, s3, s4, s5, s6/u.test(i.message)))
   })
 
   it("R7: the lineage manifest-step mapping item is overridden in part", () => {
@@ -135,7 +144,7 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     // The first answer gave R10.S8 and an item inside it; the overlap was sent back and the item dropped.
     assert.deepEqual(byName(r, "lineage").blocks.filter(b => b.round === 10).map(b => b.block), ["R10.S8"])
     const repair = log.find(l => l.round === 10 && l.task === "repair")!.request
-    assert.ok(repair.task === "repair" && repair.issues.length === 1 && repair.issues[0].code === "overlap")
+    assert.ok(repair.issues.length === 1 && repair.issues[0].code === "overlap")
   })
 
   it("R12 and R13: normalize's default is a partial revision over R2; R13's pipeline-support section is split between snapshot, pipeline and lineage", () => {
@@ -151,7 +160,7 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     const entry = view.entries.find(e => e.round === 13)!
     assert.deepEqual(entry.heading_path, ["# Snapshot command and clip transform", "## Extension: New `snapshot` command", "### Pipeline support"])
     const repair = log.find(l => l.round === 13 && l.task === "repair")!.request
-    assert.ok(repair.task === "repair" && repair.issues.some(i => i.code === "hash_mismatch"))
+    assert.ok(repair.issues.some(i => i.code === "hash_mismatch"))
   })
 
   it("R15: the snapshot row_hash change overrides four R13 places; snapshot is v2 and every old place is paired with the new text", () => {
@@ -164,6 +173,7 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     const pairs = view.entries.flatMap(e => e.pairs)
     assert.equal(pairs.length, 4)
     for (const p of pairs) assert.ok(p.new.every(n => n.round === 15 && /SHA-256|64-character/u.test(n.text)))
+    for (const p of pairs) assert.ok(p.old.every(o => o.heading_path.at(-1)!.startsWith("### ")), "each old side carries its heading path")
     // A code block or table owned whole is shown whole, marked as modified.
     assert.match(view.entries.find(e => e.context === "R13.S4")!.text, /^### Output format \(JSON\)/u)
     assert.deepEqual(scopeNames(r, 15), ["snapshot", "tag"])
