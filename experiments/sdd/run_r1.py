@@ -446,6 +446,8 @@ def rescore(root, reason):
 
 
 CHANGE_DOCUMENT = 'output/05-变更说明书.md'
+SYSTEM_DESIGN = 'output/04-SystemDesign'
+DESIGN_NEXT = 'output/.system-design-next'
 
 
 def change_stage_retry(root, run, flow):
@@ -459,9 +461,17 @@ def change_stage_retry(root, run, flow):
         return None
     archive = root / 'change-retry'
     archive.mkdir()
-    shutil.move(run / CHANGE_DOCUMENT, archive / Path(CHANGE_DOCUMENT).name)
-    record = {'reason': 'change stage stopped with its verdict not passed; one retry with the same inputs (v8 item 8, harness)',
-              'first_flow_exit_code': flow.get('exit_code'), 'archived': (archive / Path(CHANGE_DOCUMENT).name).as_posix(),
+    # The change stage reads the system design SD wrote this round from the baseline code; when that design breaks the
+    # template (v8 R10: a 7-column API catalog), redoing the change alone repeats the stop. So the system design, its
+    # stage state and any target design the change stage left go too: the retry writes SD and the change again from
+    # the same code, PRD and requirement (the passed PRD stage is skipped by the upstream).
+    archived = []
+    for relative in [CHANGE_DOCUMENT, SYSTEM_DESIGN, DESIGN_NEXT, 'logs/sd.state.json']:
+        if (run / relative).exists():
+            shutil.move(run / relative, archive / Path(relative).name)
+            archived.append((archive / Path(relative).name).as_posix())
+    record = {'reason': 'change stage stopped with its verdict not passed; one retry of system design and change with the same inputs (v8 item 8, harness)',
+              'first_flow_exit_code': flow.get('exit_code'), 'archived': archived,
               'at': dt.datetime.now(dt.timezone.utc).isoformat()}
     write_json(root / 'change-retry.json', record)
     return record
@@ -483,8 +493,8 @@ def develop_and_evaluate(root, env, label, extra=None):
         retry = change_stage_retry(root, run, flow)
         if retry:
             # v8 item 8 (harness, reported apart): the change stage stopped with pass false; the same flow runs once more in
-            # the same run directory, where the upstream skips the passed PRD and SD stages and writes the change again
-            # from the same inputs. The first change document is archived.
+            # the same run directory, where the upstream skips the passed PRD stage and writes the system design and the
+            # change again from the same inputs. The first ones are archived.
             flow = run_phase(root, label + '-change-retry', command, env, records)
             from run_results import state
             write_json(root / 'change-retry.json', {**retry, 'retry_exit_code': flow.get('exit_code'),

@@ -177,8 +177,14 @@ def test_change_stage_retry_only_after_a_change_verdict_that_did_not_pass(tmp_pa
     failed = {'exit_code': 1, 'cleanup_confirmed': True}
     assert change_stage_retry(root, run, {'exit_code': 0, 'cleanup_confirmed': True}) is None
     assert change_stage_retry(root, run, {'exit_code': 1, 'cleanup_confirmed': False}) is None
+    (run / 'output/04-SystemDesign').mkdir()
+    (run / 'output/04-SystemDesign/MAP.md').write_text('7-column catalog', encoding='utf-8')
     record = change_stage_retry(root, run, failed)
     assert record and not (run / CHANGE_DOCUMENT).exists() and (root / 'change-retry' / '05-变更说明书.md').read_text(encoding='utf-8') == 'verdict: FAIL'
+    # The system design and its stage state go too, so the retry writes SD again; PRD stays passed and is skipped.
+    assert not (run / 'output/04-SystemDesign').exists() and (root / 'change-retry/04-SystemDesign/MAP.md').exists()
+    assert not (run / 'logs/sd.state.json').exists() and (run / 'logs/prd.state.json').exists()
+    assert len(record['archived']) == 3
     # Once per trial.
     (run / CHANGE_DOCUMENT).write_text('verdict: FAIL', encoding='utf-8')
     assert change_stage_retry(root, run, failed) is None
