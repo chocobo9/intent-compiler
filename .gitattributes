@@ -1,2 +1,4 @@
 *.sh text eol=lf
 *.sh.j2 text eol=lf
+# Requirement inputs are kept byte for byte: no line-ending conversion on checkout.
+exp2/inputs/** -text

@@ -92,6 +92,23 @@ describe("exp2 source: three layers over the real dpipe rounds", () => {
     assert.ok(recipe.some(c => /```json[\s\S]*"op": "fill"[\s\S]*```/u.test(c.text)))
   })
 
+  it("CRLF text splits to the same structure, joins back byte for byte, and hashes its own bytes", () => {
+    for (const round of [1, 5, 10]) {
+      const lf = splitRound(round, roundText(round))
+      const crlfText = roundText(round).replace(/\n/gu, "\r\n")
+      const crlf = splitRound(round, crlfText)
+      assert.deepEqual(tilingProblems(crlf), [])
+      for (const level of LEVELS) assert.equal(layer(crlf, level), crlfText, `R${round} CRLF ${level} layer`)
+      for (const b of crlf.blocks) assert.notEqual(b.text.trim(), "", `${b.id} is empty`)
+      const shape = (s: RoundSource) => s.blocks.map(b => ({ id: b.id, level: b.level, kind: b.kind, parent: b.parent, children: b.children, heading: b.heading }))
+      assert.deepEqual(shape(crlf), shape(lf))
+      crlf.blocks.forEach((b, i) => assert.equal(b.text, lf.blocks[i].text.replace(/\n/gu, "\r\n"), `${b.id} keeps its bytes`))
+      assert.notEqual(crlf.hash, lf.hash)
+      const stripped = annotate(crlf).replace(/⟦R\d+\.S\d+#[0-9a-f]{8}⟧ /gu, "").replace(/⟦R\d+\.S\d+\.P\d+#[0-9a-f]{8}⟧\r?\n/gu, "").replace(/‹s\d+(?:\.c\d+)?›/gu, "")
+      assert.equal(stripped, crlfText)
+    }
+  })
+
   it("the annotated text for the model is the original plus id markers only", () => {
     for (const round of ROUNDS) {
       const source = splitRound(round, roundText(round))

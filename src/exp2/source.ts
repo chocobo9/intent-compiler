@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 
 /**
  * Exp2 source log: each round's text is cut into three layers by text structure alone (DESIGN §4.2).
+ * Lines may end in \n or \r\n; either way no byte of the text is changed.
  * Every block is a slice [start, end) of its round's text, and each layer tiles its parent exactly, so joining
  * any layer gives back the original byte for byte. Ids are positional (round, section, paragraph, unit, clause)
  * and carry a content hash; the same text always yields the same ids.
@@ -289,7 +290,7 @@ export function tilingProblems(source: RoundSource): string[] {
     const kids = b.children.map(id => byId.get(id)!)
     // A section's heading line sits before its first child; everything else must be covered by the children.
     const head = b.level === "section" ? source.text.slice(b.start, kids[0].start) : ""
-    if (b.level === "section" && b.heading !== undefined && head.split("\n")[0] !== b.heading) problems.push(`${b.id}: heading not before children`)
+    if (b.level === "section" && b.heading !== undefined && head.split(/\r?\n/u)[0] !== b.heading) problems.push(`${b.id}: heading not before children`)
     if (head.trim() !== "" && b.heading === undefined) problems.push(`${b.id}: uncovered text before children`)
     if (b.level === "section" && head.replace(b.heading ?? "", "").trim() !== "") problems.push(`${b.id}: uncovered text after heading`)
     if (head + kids.map(k => k.text).join("") !== b.text) problems.push(`${b.id}: children do not tile it`)
@@ -304,10 +305,12 @@ export function tilingProblems(source: RoundSource): string[] {
 export function annotate(source: RoundSource): string {
   const byId = new Map(source.blocks.map(b => [b.id, b]))
   const marks = new Map<number, string[]>()
+  // A paragraph marker takes its own line, ended the way the text ends its lines.
+  const eol = source.text.includes("\r\n") ? "\r\n" : "\n"
   const put = (at: number, mark: string) => marks.set(at, [...(marks.get(at) ?? []), mark])
   for (const b of source.blocks) {
     if (b.level === "section") put(b.start, `⟦${b.id}#${b.hash}⟧ `)
-    else if (b.level === "paragraph") put(b.start, `⟦${b.id}#${b.hash}⟧\n`)
+    else if (b.level === "paragraph") put(b.start, `⟦${b.id}#${b.hash}⟧${eol}`)
     else {
       const parent = byId.get(b.parent!)!
       if (parent.children.length < 2) continue
