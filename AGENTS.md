@@ -1,5 +1,7 @@
 # Intent Compiler 工作规则
 
+**本分支（`exp2-pure-ic`）是实验 2：纯 IC。工作从 [exp2/README.md](exp2/README.md) 开始。** 下文的其余入口属于实验 1，只在需要参考时阅读。
+
 默认入口是 [README](README.md)。先核对实际 HEAD、分支、dirty diff 与未跟踪文件；不要按交接摘要 reset、切分支或覆盖已有修改。当前事实与产物入口在 [dpipe 状态](experiments/evocode/harbor/dpipe/README.md)，按任务读 [模块地图](development/README.md)，无需通读历史。
 
 ## 长期 policy
