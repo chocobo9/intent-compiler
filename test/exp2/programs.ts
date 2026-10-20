@@ -14,6 +14,8 @@ export interface Variant {
   /** "spec" prints `ERROR: file not found: <path>`; "wrong" prints another wording. */
   errors?: "spec" | "wrong"
   reconcile?: boolean
+  /** Whether transform writes the <output>.sha256 sidecar (R1 yes; R5 withdrew it). Default true. */
+  sidecar?: boolean
   /** A dispatcher that knows every command and option but does nothing and exits 0. */
   shell?: boolean
 }
@@ -34,7 +36,7 @@ const fail = (msg) => { process.stderr.write(msg + "\\n"); process.exit(1) }
 const read = (p) => { if (!existsSync(p)) fail(${notFound}); return readFileSync(p, "utf8") }
 const opts = (args) => { const o = {}; for (let i = 0; i < args.length; i += 2) o[args[i]] = args[i + 1]; return o }
 const csv = (text) => { const [h, ...rows] = text.trim().split("\\n").map(l => l.split(",")); return { header: h, rows } }
-const writeCsv = (p, t) => { const body = [t.header, ...t.rows].map(r => r.join(",")).join("\\n") + "\\n"; writeFileSync(p, body); writeFileSync(p + ".sha256", createHash("sha256").update(body).digest("hex") + "\\n") }
+const writeCsv = (p, t) => { const body = [t.header, ...t.rows].map(r => r.join(",")).join("\\n") + "\\n"; writeFileSync(p, body)${v.sidecar === false ? "" : `; writeFileSync(p + ".sha256", createHash("sha256").update(body).digest("hex") + "\\n")`} }
 const col = (t, name) => { const i = t.header.indexOf(name); if (i < 0) fail("ERROR: invalid recipe: column " + name + " not found"); return i }
 const fmt = (x) => String(x)
 const ops = {}

@@ -27,8 +27,9 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
   const status = (key: string, name: string) => statuses.get(key)!.find(s => s.object === named(name))!
   const check = (key: string): CheckRecord => store.inspect().checks.find(c => c.key === key)!
   const runOf = (key: string, checkKey: string) => runs.get(key)!.find(r => r.check === check(checkKey).id)!
-  const runOn = async (round: number, program: string) => {
-    const r = await store.runRoundChecks(round, programs[program], runner)
+  /** The first program of each round is that round's verdict run; the others are probes on other versions. */
+  const runOn = async (round: number, program: string, verdict = false) => {
+    const r = await store.runRoundChecks(round, programs[program], runner, { verdict })
     statuses.set(`${round}:${program}`, r.statuses)
     runs.set(`${round}:${program}`, r.runs)
   }
@@ -46,16 +47,25 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
 
     const checks = checkStubTransport(undefined, requests)
     assert.equal((await store.deriveRoundChecks(1, checks, { sandbox, runner, baseline: programs.null })).status, "accepted")
-    for (const p of ["r1", "shell", "badError"]) await runOn(1, p)
+    await runOn(1, "r1", true)
+    for (const p of ["shell", "badError"]) await runOn(1, p)
     assert.equal((await store.deriveRoundChecks(2, checks, { sandbox, runner, baseline: programs.r1 })).status, "accepted")
-    for (const p of ["r2", "noProfile"]) await runOn(2, p)
+    await runOn(2, "r2", true)
+    await runOn(2, "noProfile")
     assert.equal((await store.deriveRoundChecks(3, checks, { sandbox, runner, baseline: programs.r2 })).status, "accepted")
-    for (const p of ["r3", "r2", "shell"]) await runOn(3, p)
-    for (let round = 4; round <= 10; round++) assert.equal((await store.ingestRound(round, roundText(round), t)).status, "accepted")
-    programs.r10 = writeProgram(dir, "r10", "R10 with reconcile", { normalize: "sample", profile: true, reconcile: true })
+    await runOn(3, "r3", true)
+    for (const p of ["r2", "shell"]) await runOn(3, p)
+    for (const round of [4, 5]) assert.equal((await store.ingestRound(round, roundText(round), t)).status, "accepted")
+    programs.r5 = writeProgram(dir, "r5", "R5: no sidecar", { normalize: "sample", profile: true, sidecar: false })
+    assert.equal((await store.deriveRoundChecks(5, checks, { sandbox, runner, baseline: programs.r3 })).status, "accepted")
+    await runOn(5, "r5", true)
+    await runOn(5, "r3")
+    for (let round = 6; round <= 10; round++) assert.equal((await store.ingestRound(round, roundText(round), t)).status, "accepted")
+    programs.r10 = writeProgram(dir, "r10", "R10 with reconcile", { normalize: "sample", profile: true, reconcile: true, sidecar: false })
     programs.r10wrong = writeProgram(dir, "r10-wrong", "R10 with reconcile, wrong error format", { normalize: "sample", profile: true, reconcile: true, errors: "wrong" })
-    assert.equal((await store.deriveRoundChecks(10, checks, { sandbox, runner, baseline: programs.r3 })).status, "accepted")
-    for (const p of ["r10", "r3"]) await runOn(10, p)
+    assert.equal((await store.deriveRoundChecks(10, checks, { sandbox, runner, baseline: programs.r5 })).status, "accepted")
+    await runOn(10, "r10", true)
+    await runOn(10, "r5")
   })
 
   it("R1 first answer: an invented option, a quote not in its block and a convention left out of uses are sent back; the patch fixes them", () => {
@@ -83,7 +93,7 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.equal(check("filter-gt").strength!.strong, true, "fails on the null baseline and reads the output")
   })
 
-  it("on the correct R1 program, filter and the error convention land; the badly built verify input is unknown, not a defect", () => {
+  it("on the correct R1 program, filter and the error convention land; the badly built verify input is unknown and does not block landed", () => {
     assert.equal(status("1:r1", "filter").status, "landed")
     assert.equal(status("1:r1", "error handling").status, "landed", "the convention lands through the check that uses it")
     assert.equal(status("1:r1", "transform").status, "unknown", "its only own check is weak")
@@ -93,9 +103,22 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.equal(bad.failure!.reason, "other_error_rule")
     assert.match(bad.failure!.detail, /MISMATCH expected=<expected> actual=<actual>/u)
     const verify = status("1:r1", "verify")
-    assert.equal(verify.status, "unknown")
-    assert.deepEqual(verify.reasons, ["suspect_input"])
+    assert.equal(verify.status, "landed", "the suspect failure is shown but takes no part in the verdict")
+    assert.deepEqual(verify.unknown, [check("verify-match-2").id])
     assert.equal(runOf("1:r1", "verify-match").outcome, "pass")
+  })
+
+  it("a check judged input-suspect in two consecutive verdict runs is retired by the code", () => {
+    const e = store.inspect().check_events.find(x => x.check === check("verify-match-2").id)!
+    assert.deepEqual([e.status, e.by, e.round], ["retired", "code", 2])
+    assert.match(e.reason, /input suspect in rounds 1 and 2/u)
+    assert.ok(!runs.get("3:r3")!.some(r => r.check === e.check))
+  })
+
+  it("R2 first answer: a check without an expected exit code is sent back", () => {
+    const calls = store.inspect().check_calls.filter(c => c.round === 2)
+    assert.deepEqual(calls[0].issues.map(i => `${i.code}:${i.check}`), ["exit_missing:profile-numeric"])
+    assert.deepEqual(calls[1].issues, [])
   })
 
   it("a wrong error format fails the convention, not the business object", () => {
@@ -109,7 +132,7 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
 
   it("R2: derived values enter only where both methods agree; a disagreement is kept out as unknown with its reason", () => {
     const profile = check("profile-numeric")
-    assert.deepEqual(profile.assertions.map(a => a.id), ["rows", "mean", "sd"])
+    assert.deepEqual(profile.assertions.map(a => a.id), ["rows", "mean", "sd", "exit"])
     assert.equal(profile.unknown.length, 1)
     assert.equal(profile.unknown[0].assertion.id, "p25")
     assert.match(profile.unknown[0].reason, /methods disagree: A 2\.5, B 3/u)
@@ -127,11 +150,25 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.equal(status("2:noProfile", "profile").status, "not_landed")
   })
 
-  it("R3: the old z-score check is retired; with the wrong denominator normalize is not landed, as a wrong value", () => {
+  it("R3: checks resting on revised text go stale by code; a retire proposal is accepted only where the text changed", () => {
     const state = store.inspect()
-    const old = check("normalize-zscore")
-    assert.deepEqual(state.check_events.map(e => [e.check, e.status, e.by]), [[old.id, "retired", "model"]])
-    assert.ok(!runs.get("3:r3")!.some(r => r.check === old.id), "a retired check is not run")
+    const old = check("normalize-zscore"), minmax = check("normalize-minmax")
+    const r3 = state.check_events.filter(e => e.round === 3).map(e => [e.check, e.status, e.by].join(" ")).sort()
+    assert.deepEqual(r3, [`${old.id} retired model`, `${old.id} stale code`, `${minmax.id} stale code`].sort())
+    assert.match(state.check_events.find(e => e.check === old.id)!.reason, /basis R2\.S11\.P5: R2\.S11\.P5\.s3 partly revised in round 3/u)
+    // The proposal to retire the profile check is turned down: R3 only added to profile's text.
+    const record = state.check_rounds.find(r => r.round === 3)!
+    assert.deepEqual(record.rejected_retire.map(r => r.check), [check("profile-numeric").id])
+    assert.deepEqual(record.retired, [old.id])
+    assert.ok(!runs.get("3:r3")!.some(r => r.check === old.id || r.check === minmax.id), "stale checks are not run")
+    // The stale checks were listed to the model, which derived min-max again on its item.
+    const req = requests.filter(q => q.round === 3)[0]
+    assert.deepEqual(req.stale.map(x => x.id).sort(), [old.id, minmax.id].sort())
+    assert.equal(runOf("3:r3", "minmax-again").outcome, "pass")
+  })
+
+  it("R3: on the correct program normalize lands; with the wrong denominator it is not landed, as a wrong value", () => {
+    const state = store.inspect()
     assert.equal(status("3:r3", "normalize").status, "landed")
     const wrong = runOf("3:r2", "zscore-sample")
     assert.equal(wrong.failure!.class, "not_landed")
@@ -153,7 +190,7 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
 
   it("every round reruns the whole active library and computes status from those runs alone", () => {
     const state = store.inspect()
-    const active = state.checks.filter(c => c.round <= 3 && c.admission === "admitted" && !state.check_events.some(e => e.check === c.id)).map(c => c.id).sort()
+    const active = state.checks.filter(c => c.round <= 3 && c.admission === "admitted" && !state.check_events.some(e => e.check === c.id && e.round <= 3)).map(c => c.id).sort()
     assert.deepEqual(runs.get("3:r3")!.map(r => r.check).sort(), active)
     // Landed in R2 on the correct program; on the shell in R3 nothing carries over.
     assert.equal(status("2:r2", "profile").status, "landed")
@@ -164,16 +201,30 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
 
   it("R10: JSON fields are compared parsed; the command's own error rule is business; a missing command is not landed", () => {
     const diff = check("reconcile-diff")
-    assert.equal(diff.assertions.length, 4)
+    assert.equal(diff.assertions.length, 5)
     assert.equal(diff.strength!.strong, true)
     assert.equal(check("reconcile-invalid").strength!.strong, true, "the message carries the input file's name")
     assert.equal(status("10:r10", "reconcile").status, "landed")
-    assert.ok(runs.get("10:r10")!.every(r => r.outcome === "pass" || r.check === check("verify-match-2").id))
-    const missing = runOf("10:r3", "reconcile-diff")
+    assert.ok(runs.get("10:r10")!.every(r => r.outcome === "pass"))
+    const missing = runOf("10:r5", "reconcile-diff")
     assert.equal(missing.failure!.reason, "missing_name")
-    assert.equal(status("10:r3", "reconcile").status, "not_landed")
+    assert.equal(status("10:r5", "reconcile").status, "not_landed")
     // Earlier rounds' checks run again in R10 (the regression), against the R10 program.
     assert.equal(runOf("10:r10", "filter-gt").outcome, "pass")
+  })
+
+  it("R5 (constructed): a withdrawn behaviour is strong when the baseline still shows it, passes when it is gone, fails while it stays", () => {
+    const k = check("transform-no-sidecar")
+    assert.equal(k.direction, "withdrawn")
+    assert.equal(k.strength!.baseline, "r3")
+    assert.equal(k.strength!.baseline_ok, true, "the R3 program still writes the sidecar")
+    assert.equal(k.strength!.strong, true)
+    assert.equal(runOf("5:r5", "transform-no-sidecar").outcome, "pass")
+    const stays = runOf("5:r3", "transform-no-sidecar")
+    assert.equal(stays.outcome, "fail")
+    assert.deepEqual([stays.failure!.class, stays.failure!.reason], ["not_landed", "still_present"])
+    assert.equal(status("5:r3", "transform").status, "not_landed")
+    assert.equal(status("5:r5", "transform").status, "landed")
   })
 
   it("a repair repeats the first request byte for byte up to the issues and draft", () => {
@@ -203,7 +254,10 @@ describe("exp2 check admission: definite errors only", () => {
     const base: CheckDraft = {
       key: "k", object: id("filter"), blocks: ["R1.S3.P2.s4"], uses: [], direction: "holds", note: null, reference_script: null,
       input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [{ path: "data.csv", content: "id,value\n1,5\n" }, { path: "recipe.json", content: "[{\"op\": \"filter\", \"column\": \"value\", \"condition\": \"gt\", \"threshold\": 1}]" }] },
-      assertions: [{ id: "a", role: "business", target: { kind: "file_line", path: "out.csv", line: 2, pointer: null, column: null }, expect_json: "\"1,5\"", tolerance: null, source: { kind: "derived", block: null, quote: null } }],
+      assertions: [
+        { id: "a", role: "business", target: { kind: "file_line", path: "out.csv", line: 2, pointer: null, column: null }, expect_json: "\"1,5\"", tolerance: null, source: { kind: "derived", block: null, quote: null } },
+        { id: "x", role: "business", target: { kind: "exit_code", path: null, line: null, pointer: null, column: null }, expect_json: "0", tolerance: null, source: { kind: "derived", block: null, quote: null } },
+      ],
     }
     const codes = (edit: (k: CheckDraft) => void, retire: { check: string; reason: string }[] = []) => {
       const k = structuredClone(base); edit(k)
@@ -212,6 +266,7 @@ describe("exp2 check admission: definite errors only", () => {
     assert.deepEqual(codes(k => { k.reference_script = { language: "python", code: "print('{}')" } }), [], "a well-formed check")
     assert.deepEqual(codes(() => {}), ["script_missing"], "derived values without method B")
     const ok = (k: CheckDraft) => { k.reference_script = { language: "python", code: "print('{}')" } }
+    assert.deepEqual(codes(k => { ok(k); k.assertions.pop() }), ["exit_missing"], "no expected exit code")
     assert.deepEqual(codes(k => { ok(k); k.object = "O999" }), ["unknown_object"])
     assert.deepEqual(codes(k => { ok(k); k.blocks = ["R1.S4"] }), ["basis_not_object"], "basis that is another object's text")
     assert.deepEqual(codes(k => { ok(k); k.input.files[0].path = "../data.csv" }), ["input_invalid"])

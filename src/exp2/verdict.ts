@@ -32,6 +32,8 @@ export interface CheckRun {
   exit_code: number | null
   stderr_head: string
   failure: Failure | null
+  /** The round's verdict run (on the round's final program), as against a probe on another program. */
+  verdict?: boolean
 }
 
 const MISSING = Symbol("missing")
@@ -136,7 +138,7 @@ export function classify(check: CheckRecord, results: AssertionResult[], out: Ru
   const other = outputLines.flatMap(l => facts.templates.filter(t => t.regex.test(l) && !expected.some(e => t.regex.test(e))).map(t => ({ line: l, rule: t.text })))
   if (other.length) return { class: "unknown", reason: "other_error_rule", detail: `the output ${JSON.stringify(other[0].line)} matches another rule, \`${other[0].rule}\`; the input is suspect`, roles }
   const exitExpected = check.assertions.find(a => a.target.kind === "exit_code")?.expect
-  if ((exitExpected === 0 || exitExpected === undefined) && out.exit_code !== 0) {
+  if (exitExpected === 0 && out.exit_code !== 0) {
     return { class: "unknown", reason: "rejected", detail: `the call exited ${out.exit_code} (${out.stderr.trim().slice(0, 160) || "no stderr"}) where success was expected; the input is suspect`, roles }
   }
   return { class: "not_landed", reason: "value_mismatch", detail: failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; "), roles }
@@ -205,9 +207,9 @@ export interface ObjectStatus {
 }
 
 /**
- * Recomputed from the round's runs alone (never inherited). An object is landed when a strong check of its own (or,
- * for a convention, a strong check that uses it) passed and none failed; not landed when a failure was judged not
- * landed (business assertions count against the check's object, convention assertions against `uses`); otherwise
+ * Recomputed from the round's runs alone (never inherited). An object is not landed when a failure was judged not
+ * landed (business assertions count against the check's object, convention assertions against `uses`); landed when a
+ * strong check speaking for it passed and nothing was judged not landed (unknown-class failures do not count); otherwise
  * unknown, with the reasons.
  */
 export function objectStatuses(registry: Registry, library: readonly CheckRecord[], events: readonly CheckEvent[], runs: readonly CheckRun[], round: number): ObjectStatus[] {
@@ -244,10 +246,11 @@ export function objectStatuses(registry: Registry, library: readonly CheckRecord
   return [...byObject.entries()].map(([object, s]): ObjectStatus => {
     const base = { object, passing_strong: s.strong, not_landed: s.not, unknown: s.unk }
     if (s.not.length) return { ...base, status: "not_landed", reasons: [] }
-    if (s.strong.length && !s.unk.length) return { ...base, status: "landed", reasons: [] }
+    // Unknown-class failures are recorded and shown, but do not take part in the verdict (block 2 review item 2).
+    if (s.strong.length) return { ...base, status: "landed", reasons: [] }
     const reasons = new Set(s.reasons)
     if (!s.seen) reasons.add([...checks.values()].some(c => c.object === object) ? "not_run" : "no_checks")
-    else if (!s.strong.length && !s.unk.length) reasons.add("only_weak")
+    else if (s.weak.length) reasons.add("only_weak")
     return { ...base, status: "unknown", reasons: [...reasons].sort() }
   })
 }

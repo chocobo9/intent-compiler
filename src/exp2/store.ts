@@ -3,7 +3,7 @@ import { resolve } from "node:path"
 import { attributeRound, type AttributionTransport, type Issue, type ModelCallRecord } from "./attribution.js"
 import { materialize, type Registry, type RoundAcceptance, type Signal } from "./registry.js"
 import { contentHash } from "./source.js"
-import { activeChecks, codeFacts, deriveChecks, methodB, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport } from "./checks.js"
+import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport } from "./checks.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import { objectStatuses, runCheck, strength, type CheckRun, type ObjectStatus } from "./verdict.js"
 
@@ -46,6 +46,8 @@ export interface CheckRoundRecord {
   /** Checks entered this round (admitted or recorded as unknown), and checks retired. */
   entered: string[]
   retired: string[]
+  /** Retire proposals the code did not accept: the check's basis had not changed. */
+  rejected_retire: { check: string; reason: string }[]
   issues?: CheckIssue[]
 }
 
@@ -113,12 +115,13 @@ export class Exp2Store {
       if (!s.rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} has no accepted attribution`)
       if (s.check_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} already has its checks`)
       const registry = this.registry(s)
+      s.check_events.push(...staleChecks(registry, s.checks, s.check_events, round))
       const nextCall = () => s.calls.length + s.check_calls.length
       const outcome = await deriveChecks(registry, round, s.checks, s.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `M${nextCall() + n}` })
       s.check_calls.push(...outcome.calls)
       const calls = outcome.calls.map(c => c.id)
       if (outcome.status === "failed") {
-        const record: CheckRoundRecord = { round, status: "failed", calls, entered: [], retired: [], issues: outcome.issues }
+        const record: CheckRoundRecord = { round, status: "failed", calls, entered: [], retired: [], rejected_retire: [], issues: outcome.issues }
         s.check_rounds.push(record)
         return record
       }
@@ -137,22 +140,38 @@ export class Exp2Store {
         s.checks.push(record)
         entered.push(record.id)
       }
-      const retired = outcome.draft!.retire.map(r => { s.check_events.push({ check: r.check, round, status: "retired", reason: r.reason, by: "model" }); return r.check })
-      const record: CheckRoundRecord = { round, status: "accepted", calls, entered, retired }
+      // A retire proposal is accepted only when the check's basis was in fact revised after it entered.
+      const retired: string[] = [], rejected: { check: string; reason: string }[] = []
+      for (const r of outcome.draft!.retire) {
+        const k = s.checks.find(c => c.id === r.check)!
+        if (replacedBasis(registry, basisOf(k), k.round, round).length) { s.check_events.push({ check: r.check, round, status: "retired", reason: r.reason, by: "model" }); retired.push(r.check) }
+        else rejected.push(r)
+      }
+      const record: CheckRoundRecord = { round, status: "accepted", calls, entered, retired, rejected_retire: rejected }
       s.check_rounds.push(record)
       return record
     })
   }
 
   /** Reruns the whole active library on `program` (the regression), records the runs, and returns the statuses. */
-  async runRoundChecks(round: number, program: ProgramRef, runner: CheckRunner, timeoutMs = 10_000): Promise<{ runs: CheckRun[]; statuses: ObjectStatus[] }> {
+  async runRoundChecks(round: number, program: ProgramRef, runner: CheckRunner, options: { verdict?: boolean; timeoutMs?: number } = {}): Promise<{ runs: CheckRun[]; statuses: ObjectStatus[] }> {
+    const verdict = options.verdict ?? true, timeoutMs = options.timeoutMs ?? 10_000
     return this.transaction(async s => {
       const registry = this.registry(s)
+      s.check_events.push(...staleChecks(registry, s.checks.filter(c => c.round <= round), s.check_events, round))
       const facts = codeFacts(registry, round)
       const runs: CheckRun[] = []
       const library = activeChecks(s.checks.filter(c => c.round <= round), s.check_events.filter(e => e.round <= round))
-      for (const check of library) runs.push(await runCheck(check, program, runner, round, registry, facts, timeoutMs))
+      for (const check of library) runs.push({ ...await runCheck(check, program, runner, round, registry, facts, timeoutMs), verdict })
       s.check_runs.push(...runs)
+      // A check judged input-suspect in two consecutive rounds' verdict runs is retired (block 2 review item 2).
+      if (verdict) for (const run of runs) {
+        if (run.failure?.class !== "unknown" || run.failure.reason === "timeout") continue
+        const before = s.check_runs.filter(r => r.check === run.check && r.verdict && r.round === round - 1).at(-1)
+        if (before?.failure?.class === "unknown" && before.failure.reason !== "timeout") {
+          s.check_events.push({ check: run.check, round, status: "retired", by: "code", reason: `input suspect in rounds ${round - 1} and ${round} (${run.failure.reason})` })
+        }
+      }
       return { runs, statuses: objectStatuses(registry, s.checks, s.check_events, runs, round) }
     })
   }

@@ -117,8 +117,50 @@ export interface CheckEvent {
   round: number
   status: "stale" | "retired"
   reason: string
-  /** Who decided: the model's retire list, or (reserved) code propagation. */
-  by: "model" | "propagation"
+  /**
+   * Who decided. code: the check's basis was replaced (stale), or it was input-suspect two rounds running (retired).
+   * model: a retire proposal the code verified against the source.
+   */
+  by: "model" | "code"
+}
+
+// ---------------------------------------------------------------- staleness (DESIGN §8, block 2 review item 3)
+
+/** The source units a check rests on: its cited blocks and the blocks its verbatim expectations quote. */
+export function basisOf(check: Pick<CheckRecord, "blocks" | "assertions">): string[] {
+  return [...new Set([...check.blocks.map(b => parseRef(b).id), ...check.assertions.flatMap(a => a.source.kind === "verbatim" && a.source.block ? [parseRef(a.source.block).id] : [])])]
+}
+
+const within = (registry: Registry, inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
+
+/**
+ * Text that later rounds (after `since`, up to `round`) replaced or modified inside the given units: the modification
+ * parts that overlap a unit (either one inside the other). Empty when the basis still stands as written.
+ */
+export function replacedBasis(registry: Registry, units: readonly string[], since: number, round: number): { unit: string; round: number; kind: string; parts: string[]; by: string[] }[] {
+  const out: { unit: string; round: number; kind: string; parts: string[]; by: string[] }[] = []
+  const owns = [...registry.objects.values()].flatMap(o => o.blocks)
+  for (const unit of units) {
+    for (const own of owns) {
+      if (!within(registry, unit, own.block) && !within(registry, own.block, unit)) continue
+      for (const m of own.modifications) {
+        if (m.round <= since || m.round > round) continue
+        const hit = m.parts.filter(p => within(registry, p, unit) || within(registry, unit, p))
+        if (hit.length) out.push({ unit, round: m.round, kind: m.kind, parts: hit, by: m.by })
+      }
+    }
+  }
+  return out
+}
+
+/** Active checks whose basis a round after their entry replaced or modified: code marks them stale. */
+export function staleChecks(registry: Registry, library: readonly CheckRecord[], events: readonly CheckEvent[], round: number): CheckEvent[] {
+  return activeChecks(library, events).flatMap(c => {
+    const hit = replacedBasis(registry, basisOf(c), c.round, round)
+    if (!hit.length) return []
+    const h = hit[0]
+    return [{ check: c.id, round, status: "stale" as const, by: "code" as const, reason: `basis ${h.unit}: ${h.parts.join(", ")} ${h.kind === "partial" ? "partly revised" : h.kind === "withdraw" ? "withdrawn" : "replaced"} in round ${h.round} by ${h.by.join(", ")}` }]
+  })
 }
 
 // ---------------------------------------------------------------- source facts
@@ -185,6 +227,8 @@ export interface CheckRequest {
   objects: { id: string; name: string }[]
   /** Active checks of the scope objects already in the library. */
   checks: { id: string; object: string; blocks: string[]; uses: string[]; assertions: number }[]
+  /** Checks of these objects that code marked stale this round (their basis changed): candidates to derive again. */
+  stale: { id: string; object: string; blocks: string[]; reason: string }[]
   issues: CheckIssue[]
   previous_draft: ChecksDraft
 }
@@ -192,7 +236,7 @@ export interface CheckRequest {
 export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
-  | "script_missing" | "uses_missing" | "retire_invalid" | "transport"
+  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "transport"
 
 export interface CheckIssue { code: CheckIssueCode; check?: string; message: string }
 
@@ -205,9 +249,13 @@ export function buildCheckRequest(registry: Registry, round: number, library: re
   })
   const inScope = new Set(scope.map(s => s.id))
   const checks = activeChecks(library, events).filter(k => inScope.has(k.object)).map(k => ({ id: k.id, object: k.object, blocks: k.blocks, uses: k.uses, assertions: k.assertions.length }))
+  const stale = events.filter(e => e.status === "stale" && e.round === round).flatMap(e => {
+    const k = library.find(c => c.id === e.check)!
+    return inScope.has(k.object) ? [{ id: k.id, object: k.object, blocks: k.blocks, reason: e.reason }] : []
+  })
   return {
     round, sources: rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n"), scope,
-    objects: [...registry.objects.values()].map(o => ({ id: o.id, name: o.name })), checks, issues, previous_draft: previous,
+    objects: [...registry.objects.values()].map(o => ({ id: o.id, name: o.name })), checks, stale, issues, previous_draft: previous,
   }
 }
 
@@ -275,10 +323,12 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
       }
     }
     if (!k.assertions.length) add("shape", `${w}: a check needs at least one assertion`, k.key)
+    if (!k.assertions.some(a => a.target.kind === "exit_code")) add("exit_missing", `${w}: state the expected exit code (an exit_code assertion)`, k.key)
     if (derived && !k.reference_script) add("script_missing", `${w}: derived values need a reference_script (method B)`, k.key)
   }
-  const active = new Set(activeChecks(library, events).map(c => c.id))
-  for (const r of draft.retire) if (!active.has(r.check)) add("retire_invalid", `retire ${r.check}: no active check has that id`)
+  // A retire proposal must name a check that exists and is not retired yet; whether it is accepted is the code's call later.
+  const retired = new Set(events.filter(e => e.status === "retired").map(e => e.check))
+  for (const r of draft.retire) if (!library.some(c => c.id === r.check && c.admission === "admitted") || retired.has(r.check)) add("retire_invalid", `retire ${r.check}: no check in the library has that id, or it is already retired`)
   return issues
 }
 
@@ -535,7 +585,7 @@ export const CHECKS_SCHEMA = {
   properties: {
     upsert: { type: "array", items: checkSchema, description: "Checks to add, or to replace the draft's check with the same key." },
     remove: { ...stringArray, description: "Draft keys dropped." },
-    retire_add: { type: "array", items: { type: "object", additionalProperties: false, required: ["check", "reason"], properties: { check: { type: "string" }, reason: { type: "string" } } }, description: "Library checks whose expectation rests on text that no longer holds." },
+    retire_add: { type: "array", items: { type: "object", additionalProperties: false, required: ["check", "reason"], properties: { check: { type: "string" }, reason: { type: "string" } } }, description: "Proposals: library checks whose expectation rests on text that no longer holds. The code accepts one only when that check's source was in fact revised." },
     retire_remove: stringArray,
   },
 }
@@ -545,6 +595,6 @@ export const CHECKS_SYSTEM_PROMPT = [
   "Write checks only for the objects in `scope` (they changed this round). A check runs the program once: `input.files` are written into an empty directory, the program is called with `input.args`, and each assertion reads one fact of the result. Command names, options and JSON keys must be those the requirements' code fragments show.",
   "Every expected value needs a source: verbatim when the requirement states it (quote the block's text exactly), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept.",
   "Keep convention facts (a shared error format, an output-formatting rule) in their own assertions with role convention, and list those conventions in `uses`; business facts are the object's own behaviour.",
-  "Prefer checks whose expected output depends on the input data; a check of the exit code alone shows little. `checks` lists the library's checks for these objects; retire those whose expectation rests on text a later round replaced.",
+  "Every check states its expected exit code. Prefer checks whose expected output depends on the input data; a check of the exit code alone shows little. `checks` lists the library's checks for these objects and `stale` those whose source text changed this round: derive their replacements where the text still says something checkable. You may propose retiring a check whose expectation rests on replaced text; the code verifies the proposal.",
   "Answer as a patch on `previous_draft` (empty on the first call). When `issues` is not empty, fix exactly those problems and leave the rest as it is.",
 ].join("\n")

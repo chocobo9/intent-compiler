@@ -27,6 +27,25 @@ function ids(request: CheckRequest) {
 
 const check = (c: Omit<CheckDraft, "direction" | "note"> & Partial<Pick<CheckDraft, "direction" | "note">>): CheckDraft => ({ direction: "holds", note: null, ...c })
 
+/**
+ * The expected exit code of a successful call: derived (the text states no success code), so method B prints it too.
+ * The reference script is wrapped to add {"exit": 0} to what it prints.
+ */
+function succeeds(c: CheckDraft): CheckDraft {
+  const inner = c.reference_script?.code ?? "print('{}')"
+  const code = [
+    "import io, json, contextlib",
+    `_src = ${JSON.stringify(inner)}`,
+    "_buf = io.StringIO()",
+    "with contextlib.redirect_stdout(_buf):",
+    "    exec(compile(_src, 'reference', 'exec'), {'__name__': '__main__'})",
+    "_out = json.loads(_buf.getvalue() or '{}')",
+    "_out['exit'] = 0",
+    "print(json.dumps(_out))",
+  ].join("\n")
+  return { ...c, assertions: [...c.assertions, derived("exit", t("exit_code"), 0)], reference_script: { language: "python", code } }
+}
+
 // ------------------------------------------------------------------ R1
 
 const DATA = "id,value\n1,5\n2,15\n3,25\n"
@@ -37,7 +56,8 @@ function r1(request: CheckRequest, first: boolean): CheckDraft[] {
   const transformArgs = ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"]
   const filterRecipe = JSON.stringify([{ op: "filter", column: "value", condition: "gt", threshold: 10 }])
   return [
-    check({
+    succeeds({
+      direction: "holds", note: null,
       key: "filter-gt", object: id("filter"), blocks: ["R1.S3.P2.s4"], uses: [],
       // First answer: an option the requirements never show.
       input: { args: first ? [...transformArgs, "--precision", "2"] : transformArgs, files: [{ path: "data.csv", content: DATA }, { path: "recipe.json", content: filterRecipe }] },
@@ -87,7 +107,7 @@ function r1(request: CheckRequest, first: boolean): CheckDraft[] {
       // The model wrote the digest by hand and got it wrong: a badly built input, which the run will reveal.
       key: "verify-match-2", object: id("verify"), blocks: ["R1.S4"], uses: [],
       input: { args: ["verify", "--file", "other.csv", "--checksum", "other.csv.sha256"], files: [{ path: "other.csv", content: "a\n1\n" }, { path: "other.csv.sha256", content: "3f".repeat(32) + "\n" }] },
-      assertions: [verbatim("out", t("stdout_line", { line: 1 }), "VERIFIED", "R1.S4.P2.s2", "VERIFIED")],
+      assertions: [verbatim("out", t("stdout_line", { line: 1 }), "VERIFIED", "R1.S4.P2.s2", "VERIFIED"), verbatim("exit", t("exit_code"), 0, "R1.S4.P2.s2", "Exit code 0")],
       reference_script: null,
     }),
   ]
@@ -109,12 +129,9 @@ const normalizeScript = (stat: "pstdev" | "stdev" | "minmax") => py([
   "print(json.dumps({'n%d' % (k + 1): v for k, v in enumerate(out)}))",
 ].join("\n"))
 
-function r2(request: CheckRequest): CheckDraft[] {
+function r2(request: CheckRequest, first: boolean): CheckDraft[] {
   const id = ids(request)
-  return [
-    check({ key: "normalize-minmax", object: id("normalize"), blocks: ["R2.S11.P6"], uses: [], input: normalizeInput("minmax"), assertions: cells([0, 0.5, 1]), reference_script: normalizeScript("minmax") }),
-    check({ key: "normalize-zscore", object: id("normalize"), blocks: ["R2.S11.P5"], uses: [], input: normalizeInput("zscore"), assertions: cells([-1.224744871391589, 0, 1.224744871391589]), reference_script: normalizeScript("pstdev") }),
-    check({
+  const profile = check({
       key: "profile-numeric", object: id("profile"), blocks: ["R2.S3"], uses: [],
       input: { args: ["profile", "--input", "data.csv", "--output", "profile.json"], files: [{ path: "data.csv", content: VALUES }] },
       assertions: [
@@ -131,27 +148,60 @@ function r2(request: CheckRequest): CheckDraft[] {
         "idx = 0.25 * (len(xs) - 1); lo = int(idx); p25 = xs[lo] + (xs[min(lo + 1, len(xs) - 1)] - xs[lo]) * (idx - lo)",
         "print(json.dumps({'rows': len(rows) - 1, 'mean': statistics.mean(xs), 'sd': statistics.pstdev(xs), 'p25': p25}))",
       ].join("\n")),
-    }),
+    })
+  return [
+    succeeds(check({ key: "normalize-minmax", object: id("normalize"), blocks: ["R2.S11.P6"], uses: [], input: normalizeInput("minmax"), assertions: cells([0, 0.5, 1]), reference_script: normalizeScript("minmax") })),
+    succeeds(check({ key: "normalize-zscore", object: id("normalize"), blocks: ["R2.S11.P5"], uses: [], input: normalizeInput("zscore"), assertions: cells([-1.224744871391589, 0, 1.224744871391589]), reference_script: normalizeScript("pstdev") })),
+    // First answer: the expected exit code is left out.
+    first ? profile : succeeds(profile),
   ]
 }
 
 function r3(request: CheckRequest, first: boolean): { checks: CheckDraft[]; retire: string[] } {
   const id = ids(request)
   const normalize = id("normalize")
-  // The R2 z-score check rests on the population formula, which R3 replaced.
-  const old = request.checks.filter(c => c.object === normalize && c.blocks.includes("R2.S11.P5")).map(c => c.id)
+  // Proposals: the R2 z-score check (its population formula was replaced), and, wrongly, the profile check, whose
+  // text R3 only added to; the code accepts the first and turns down the second.
+  const old = request.stale.filter(c => c.object === normalize && c.blocks.includes("R2.S11.P5")).map(c => c.id)
+  const profile = request.checks.filter(c => c.object === id("profile")).map(c => c.id)
   return {
-    retire: old,
+    retire: [...old, ...profile],
     checks: [
-      check({ key: "zscore-sample", object: normalize, blocks: ["R3.S3"], uses: [], input: normalizeInput("zscore"), assertions: cells([-1, 0, 1]), reference_script: normalizeScript("stdev") }),
-      check({
+      succeeds(check({ key: "zscore-sample", object: normalize, blocks: ["R3.S3"], uses: [], input: normalizeInput("zscore"), assertions: cells([-1, 0, 1]), reference_script: normalizeScript("stdev") })),
+      // The R2 min-max check went stale with its paragraph; min-max itself is unchanged, so it is derived again on its item.
+      succeeds(check({ key: "minmax-again", object: normalize, blocks: ["R2.S11.P6.s5"], uses: [], input: normalizeInput("minmax"), assertions: cells([0, 0.5, 1]), reference_script: normalizeScript("minmax") })),
+      succeeds(check({
         key: "zscore-single", object: normalize, blocks: ["R3.S3.P3"], uses: [], input: normalizeInput("zscore", "id,value\n1,5\n"),
         // First answer: a paraphrase given as a quote.
         assertions: [verbatim("n1", t("csv_cell", { path: "out.csv", line: 1, column: "v_norm" }), 0, "R3.S3.P3", first ? "If n < 2, all outputs are 0" : "If `n < 2`, all output values are `\"0\"`.")],
         reference_script: null,
-      }),
+      })),
     ],
   }
+}
+
+// ------------------------------------------------------------------ R5: a withdrawn behaviour
+
+function r5(request: CheckRequest): CheckDraft[] {
+  const id = ids(request)
+  const recipe = JSON.stringify([{ op: "filter", column: "value", condition: "gt", threshold: 10 }])
+  return [check({
+    // The old behaviour, stated as it was: transform wrote <output>.sha256 with the output's digest. It must no longer happen.
+    key: "transform-no-sidecar", object: id("transform"), blocks: ["R5.S1.P3.s5"], uses: [], direction: "withdrawn",
+    input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [{ path: "data.csv", content: DATA }, { path: "recipe.json", content: recipe }] },
+    assertions: [
+      derived("exit", t("exit_code"), 0),
+      derived("sidecar", t("file_line", { path: "out.csv.sha256", line: 1 }), sha("id,value\n2,15\n3,25\n")),
+    ],
+    reference_script: py([
+      "import csv, json, hashlib",
+      "rows = list(csv.reader(open('data.csv')))",
+      "op = json.load(open('recipe.json'))[0]",
+      "i = rows[0].index(op['column'])",
+      "body = '\\n'.join([','.join(rows[0])] + [','.join(r) for r in rows[1:] if float(r[i]) > op['threshold']]) + '\\n'",
+      "print(json.dumps({'exit': 0, 'sidecar': hashlib.sha256(body.encode()).hexdigest()}))",
+    ].join("\n")),
+  })]
 }
 
 // ------------------------------------------------------------------ R10: JSON output and the command's own error rule
@@ -162,7 +212,8 @@ function r10(request: CheckRequest): CheckDraft[] {
   const args = ["reconcile", "--left", "left.json", "--right", "right.json", "--output", "report.json"]
   const json = (pointer: string) => t("json", { path: "report.json", pointer })
   return [
-    check({
+    succeeds({
+      direction: "holds", note: null,
       key: "reconcile-diff", object: id("reconcile"), blocks: ["R10.S4", "R10.S5"], uses: [],
       input: { args, files: [{ path: "left.json", content: manifest([["a.csv", "11"], ["b.csv", "22"]]) }, { path: "right.json", content: manifest([["b.csv", "33"], ["c.csv", "44"]]) }] },
       assertions: [
@@ -196,7 +247,8 @@ export const CHECK_SCRIPTS: Record<number, ((request: CheckRequest) => ChecksPat
     req => patch({ upsert: r1(req, true) }),
     req => patch({ upsert: r1(req, false).filter(c => ["filter-gt", "transform-missing-input", "verify-match"].includes(c.key)) }),
   ],
-  2: [req => patch({ upsert: r2(req) })],
+  2: [req => patch({ upsert: r2(req, true) }), req => patch({ upsert: r2(req, false).filter(c => c.key === "profile-numeric") })],
+  5: [req => patch({ upsert: r5(req) })],
   10: [req => patch({ upsert: r10(req) })],
   3: [
     req => { const a = r3(req, true); return patch({ upsert: a.checks, retire_add: a.retire.map(check => ({ check, reason: "rests on R2's population stddev, replaced by R3.S3" })) }) },
