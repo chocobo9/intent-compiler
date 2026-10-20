@@ -100,3 +100,16 @@ def test_acceptance_result_reports_what_the_returned_code_still_fails():
     assert [o['id'] for o in acceptance_result({'acceptance_repair': reverted})['open']] == ['unit:op:clip', 'unit:op:tag'], "reverted: SDD's own code is returned"
     assert acceptance_result({'acceptance_repair': {'outcome': 'nothing_to_repair', 'checks': 9, 'failing_before': []}})['open'] == []
     assert acceptance_result({}) is None
+
+
+def test_verified_counts_passing_p1_records_and_a_per_command_open_gate():
+    """2026-10-20 (v7 R13): P1 records carry state null; P2 opens per command (p2_structure:profile) under a closed class."""
+    from ic_bridge import acceptance_result
+    gate = {'unit': 'open', 'probe': 'open', 'p1_stub': 'open', 'p2_structure': 'closed', 'p2_structure:profile': 'open'}
+    post = [{'class': 'p1_stub', 'id': 'p1:filter', 'name': 'filter', 'failed': False, 'state': None, 'output_keys': None},
+            {'class': 'p2_structure', 'id': 'p2:profile', 'name': 'profile', 'failed': False, 'state': 'compared', 'output_keys': ['columns', 'p05']},
+            {'class': 'p2_structure', 'id': 'p2:drift', 'name': 'drift', 'failed': False, 'state': 'compared', 'output_keys': ['drifts']},
+            {'class': 'p2_structure', 'id': 'p2:lineage', 'name': 'lineage', 'failed': False, 'state': 'not run (an option could not be filled)', 'output_keys': []},
+            {'class': 'p1_stub', 'id': 'p1:sort', 'name': 'sort', 'failed': True, 'state': None, 'output_keys': None}]
+    a = {'acceptance_repair': {'outcome': 'nothing_to_repair', 'checks': 5, 'failing_before': [], 'gate': gate, 'recorded_before': post}}
+    assert acceptance_result(a)['verified'] == [{'class': 'p1_stub', 'name': 'filter', 'output_keys': []}, {'class': 'p2_structure', 'name': 'profile', 'output_keys': ['columns', 'p05']}]
