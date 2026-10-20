@@ -113,3 +113,20 @@ def test_verified_counts_passing_p1_records_and_a_per_command_open_gate():
             {'class': 'p1_stub', 'id': 'p1:sort', 'name': 'sort', 'failed': True, 'state': None, 'output_keys': None}]
     a = {'acceptance_repair': {'outcome': 'nothing_to_repair', 'checks': 5, 'failing_before': [], 'gate': gate, 'recorded_before': post}}
     assert acceptance_result(a)['verified'] == [{'class': 'p1_stub', 'name': 'filter', 'output_keys': []}, {'class': 'p2_structure', 'name': 'profile', 'output_keys': ['columns', 'p05']}]
+
+
+def test_run_observation_reads_back_what_the_repair_fixed_and_what_passed():
+    from ic_bridge import check_unit, run_observation
+    assert [check_unit(i) for i in ['unit:type:schema', 'unit:op:mask', 'p1:mask', 'probe:schema:missing-file', 'other']] == ['schema', 'mask', 'mask', 'schema', None]
+    completion = {'results': {'coding': {'status': 'not_reached'}}, 'acceptance_repair': {
+        'outcome': 'adopted', 'fixed': ['unit:command:schema', 'p1:mask'],
+        'passes': [{'recorded_after': [{'class': 'p1_stub', 'name': 'filter', 'failed': False, 'state': None},
+                                       {'class': 'p1_stub', 'name': 'derive', 'failed': True},
+                                       {'class': 'p2_structure', 'name': 'profile', 'failed': False, 'state': 'compared', 'output_keys': ['p05']},
+                                       {'class': 'p2_structure', 'name': 'quality', 'failed': False, 'state': 'skipped'}]}]}}
+    o = run_observation('run-9', completion)
+    assert o == {'run_id': 'run-9', 'entered_coding': False, 'fixed_units': ['mask', 'schema'], 'passed_units': ['filter', 'profile'],
+                 'passed_structures': [{'name': 'profile', 'output_keys': ['p05']}]}
+    # Nothing repaired (reverted or nothing to repair): no fixed units; SDD coded: entered_coding.
+    assert run_observation('r', {'results': {'coding': {'status': 'pass'}}, 'acceptance_repair': {'outcome': 'reverted', 'fixed': ['p1:x']}})['fixed_units'] == []
+    assert run_observation('r', {'results': {'coding': {'status': 'fail'}}})['entered_coding'] is True

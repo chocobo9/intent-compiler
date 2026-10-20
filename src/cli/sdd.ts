@@ -11,7 +11,7 @@ async function main() {
   if (!path) throw Error("Usage: node dist/cli/sdd.js <command.json> (inspect|compile|reopen|adopt|start|reconcile|launch-prepared)")
   const c = JSON.parse(readFileSync(path, "utf8")) as {
     command: string; store: string; run_id: string; event_id: string; execution_id: string;
-    event?: Parameters<SddCompiler["accept"]>[0]; max_requests: number; extra_requests: number; reason: string;
+    event?: Parameters<SddCompiler["accept"]>[0]; observations?: Parameters<SddCompiler["accept"]>[2]; max_requests: number; extra_requests: number; reason: string;
     management: SddManagementConfig; host: Parameters<typeof createSddProcessHost>[0];
     baseline: { path: string; digest: string }; config_digest: string; previous_voided?: string; retry_voided?: string; directory: string; result: Parameters<SddCompiler["receive"]>[0];
   }
@@ -26,7 +26,7 @@ async function main() {
   if (c.command === "adopt") { console.log(JSON.stringify(await compiler.adopt(c.execution_id, c.reason), null, 2)); return }
   if (c.command === "reopen") { console.log(JSON.stringify(await compiler.reopen(c.event_id, c.extra_requests, c.reason), null, 2)); return }
   if (c.command === "compile") {
-    if (c.event) await compiler.accept(c.event, c.max_requests)
+    if (c.event) await compiler.accept(c.event, c.max_requests, c.observations)
     console.log(JSON.stringify(await compiler.advance(c.event?.event_id ?? c.event_id), null, 2)); return
   }
   if (c.command === "claim-adopted") {

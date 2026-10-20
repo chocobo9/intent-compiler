@@ -1,6 +1,7 @@
 import type { Candidate, CompilerEvent, Ref, TaskIntent } from "./intent-contract.js"
 import type { CompilerModelV2Call } from "../model/compiler-model-v2.js"
 import type { ContextReport } from "./sdd-context.js"
+import type { RunObservation } from "./sdd-landing.js"
 
 /** Separate persisted profile: v2 Atom stores are never interpreted as CI deliveries. */
 export const SDD_PROFILE = "ci-sdd-v1" as const
@@ -282,6 +283,11 @@ export interface CIDelivery {
   baseline_prd?: { run_id: string; event_id: string; input: number; digest: string; chars: number }
   /** Every input as SDD alone would receive it, minus cuts: what names and examples are checked against. */
   reference_text?: string
+  /**
+   * v8 zoning, recorded: this update's change entries, earlier changes put back in the change zone with their
+   * evidence, earlier open revisions in the status zone, and how many earlier changes are of unknown landing.
+   */
+  zones?: { changes: number; not_landed: Array<{ input: number; subject: string; evidence: string }>; status: Array<{ input: number; subject: string }>; unknown: number }
   /** The draft gave no change list: every entry is code's. */
   changes_not_given?: boolean
   /** The failure ledger as code computed it for this delivery; open entries are in the text's own section. */
@@ -384,6 +390,8 @@ export interface SddBatch {
   checks?: SddCheckRecord[]
   /** Explicit resumptions of this batch after rejection: why, how many extra calls, and the state left behind. */
   reopened?: Array<{ reason: string; extra_requests: number; requests_used: number; previous_error: string }>
+  /** v8: what the host read back from the earlier runs (repairs, passing checks), recorded with the batch; zoning reads it. */
+  observations?: RunObservation[]
 }
 export interface SddCheckFinding {
   dimension: string

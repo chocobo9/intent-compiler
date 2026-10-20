@@ -23,13 +23,13 @@ const revision = (over: Partial<RevisionEntry> = {}): RevisionEntry => ({ id: "r
   items: ["r-manifest"], subjects: ["manifest"], before: [], now: [{ source_id: "r5", segment_id: "s3", input: 5, text: "The `manifest` command must also produce BLAKE2b-256 checksums (not SHA256)." }],
   old_values: [], new_values: ["BLAKE2b-256"], parameters: [], wording: "must also produce BLAKE2b-256 checksums (not SHA256)", revisions: { "r-manifest": 1 }, state: "open", missing: ["before", "old_values"], ...over })
 
-test("an identity ruling is settled with its passages quoted and each name where it says", () => {
+test("an identity ruling is settled with its passages named (v8: by update and opening words, not copied) and each name where it says", () => {
   const { rulings } = settleRulings([ruling()], [], { eventId: "r10", index, ir: ir(2), questions: [], current: [] })
   assert.equal(rulings.length, 1)
   assert.deepEqual([rulings[0]!.id, rulings[0]!.kind, rulings[0]!.quotes.map(q => q.input), rulings[0]!.values], ["r10#R1", "identity", [1, 10], [{ said: "blake2b", written: "sha256" }]])
   const text = rulingSection(rulings)
   assert.match(text, /^# Management rulings on the original requirements/u)
-  assert.ok(text.includes("`blake2b` in the later update is what earlier passages write as `sha256`") && text.includes("- Holds now: the R1 sha256 key") && text.includes("(user update 1)\n> Writes a manifest"))
+  assert.ok(text.includes("`blake2b` in the later update is what earlier passages write as `sha256`") && text.includes("- Holds now: the R1 sha256 key") && text.includes("Passages:\n- update 1, paragraph «Writes a manifest") && !text.includes("> Writes a manifest"))
 })
 
 test("a ruling on no current item, with too few passages or a wrong question is rejected; names its passages do not write are recorded", () => {

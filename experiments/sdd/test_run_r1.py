@@ -163,3 +163,28 @@ def test_development_build_enforces_requested_executable_command(tmp_path):
     (tmp_path / 'lib/value.go').write_text('package lib\nconst Value = 1\n')
     result = subprocess.run([BASH, '-c', BUILD_COMMAND], cwd=tmp_path, env=env, capture_output=True)
     assert result.returncode != 0  # Same package-layout failure as the delivery build.
+
+
+def test_change_stage_retry_only_after_a_change_verdict_that_did_not_pass(tmp_path):
+    from run_r1 import CHANGE_DOCUMENT, change_stage_retry
+    root = tmp_path / 'trial'
+    run = root / 'runs/r10'
+    (run / 'logs').mkdir(parents=True)
+    (run / 'output').mkdir()
+    for stage in ('prd', 'sd'):
+        (run / 'logs' / f'{stage}.state.json').write_text('{"status": "passed"}', encoding='utf-8')
+    (run / CHANGE_DOCUMENT).write_text('verdict: FAIL', encoding='utf-8')
+    failed = {'exit_code': 1, 'cleanup_confirmed': True}
+    assert change_stage_retry(root, run, {'exit_code': 0, 'cleanup_confirmed': True}) is None
+    assert change_stage_retry(root, run, {'exit_code': 1, 'cleanup_confirmed': False}) is None
+    record = change_stage_retry(root, run, failed)
+    assert record and not (run / CHANGE_DOCUMENT).exists() and (root / 'change-retry' / '05-变更说明书.md').read_text(encoding='utf-8') == 'verdict: FAIL'
+    # Once per trial.
+    (run / CHANGE_DOCUMENT).write_text('verdict: FAIL', encoding='utf-8')
+    assert change_stage_retry(root, run, failed) is None
+    # A stop before the change stage (SD not passed) is not this retry.
+    other = tmp_path / 'other'
+    (other / 'runs/r10/logs').mkdir(parents=True); (other / 'runs/r10/output').mkdir()
+    (other / 'runs/r10/logs/prd.state.json').write_text('{"status": "passed"}', encoding='utf-8')
+    (other / 'runs/r10' / CHANGE_DOCUMENT).write_text('x', encoding='utf-8')
+    assert change_stage_retry(other, other / 'runs/r10', failed) is None

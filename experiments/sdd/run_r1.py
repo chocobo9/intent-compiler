@@ -445,6 +445,28 @@ def rescore(root, reason):
     print(json.dumps(official, ensure_ascii=False), flush=True)
 
 
+CHANGE_DOCUMENT = 'output/05-变更说明书.md'
+
+
+def change_stage_retry(root, run, flow):
+    """v8 item 8: when the flow stopped at the change stage with its own verdict not passed (PRD and SD passed, the change
+    document written, no change state recorded), archive that document and say so; the caller runs the flow once more.
+    Only once per trial, only after a confirmed cleanup."""
+    from run_results import state
+    if (root / 'change-retry.json').exists() or flow.get('exit_code') == 0 or not flow.get('cleanup_confirmed'):
+        return None
+    if state(run, 'prd') != 'passed' or state(run, 'sd') != 'passed' or state(run, 'change') == 'passed' or not (run / CHANGE_DOCUMENT).is_file():
+        return None
+    archive = root / 'change-retry'
+    archive.mkdir()
+    shutil.move(run / CHANGE_DOCUMENT, archive / Path(CHANGE_DOCUMENT).name)
+    record = {'reason': 'change stage stopped with its verdict not passed; one retry with the same inputs (v8 item 8, harness)',
+              'first_flow_exit_code': flow.get('exit_code'), 'archived': (archive / Path(CHANGE_DOCUMENT).name).as_posix(),
+              'at': dt.datetime.now(dt.timezone.utc).isoformat()}
+    write_json(root / 'change-retry.json', record)
+    return record
+
+
 def develop_and_evaluate(root, env, label, extra=None):
     started = time.monotonic()
     run = run_directory(root)
@@ -454,9 +476,19 @@ def develop_and_evaluate(root, env, label, extra=None):
     container = root.name.lower()
     try:
         # The whole upstream workflow in one invocation, exactly as SDD runs it.
-        flow = run_phase(root, label, [BASH, (root / 'runtime/workflow/speclang-flow.sh').as_posix(),
-                         (root / 'baseline').as_posix(), (root / 'requirement.md').as_posix(),
-                         '--prdid', run.name, '--paths', 'main', '--jobs', '1'], env, records)
+        command = [BASH, (root / 'runtime/workflow/speclang-flow.sh').as_posix(),
+                   (root / 'baseline').as_posix(), (root / 'requirement.md').as_posix(),
+                   '--prdid', run.name, '--paths', 'main', '--jobs', '1']
+        flow = run_phase(root, label, command, env, records)
+        retry = change_stage_retry(root, run, flow)
+        if retry:
+            # v8 item 8 (harness, reported apart): the change stage stopped with pass false; the same flow runs once more in
+            # the same run directory, where the upstream skips the passed PRD and SD stages and writes the change again
+            # from the same inputs. The first change document is archived.
+            flow = run_phase(root, label + '-change-retry', command, env, records)
+            from run_results import state
+            write_json(root / 'change-retry.json', {**retry, 'retry_exit_code': flow.get('exit_code'),
+                                                     'change_state_after': state(run, 'change')})
         for stage in GATES:
             results[stage] = stage_result(run, stage)
         # No evaluation until every model process scope is confirmed empty.
@@ -474,7 +506,9 @@ def develop_and_evaluate(root, env, label, extra=None):
                 results['container_cleanup'] = {'status': 'unconfirmed'}
         except Exception as error:
             results['container_cleanup'] = {'status': 'unconfirmed', 'error': str(error)}
-        flow_ok = bool(records) and records[0].get('status') == 'exited' and records[0].get('exit_code') == 0
+        # The last run of the flow decides (a change-stage retry is the second).
+        flows = [r for r in records if str(r.get('phase', '')).startswith(label)]
+        flow_ok = bool(flows) and flows[-1].get('status') == 'exited' and flows[-1].get('exit_code') == 0
         passed = flow_ok and all(results.get(stage, {}).get('status') == 'pass' for stage in GATES)
         complete = {'phases': records, 'results': results,
                     'elapsed_seconds': time.monotonic() - started, 'round': round_number, 'automatic_relaunch': False,

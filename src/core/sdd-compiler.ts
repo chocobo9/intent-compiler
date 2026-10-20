@@ -13,12 +13,14 @@ import { SDD_PROFILE, type CIDelivery, type DeliveryContract, type SettledConfli
 import { checkRequest, deliveryRequest, irRequest, type CheckRequest, type ContextReport, type DeliveryRequest } from "./sdd-context.js"
 import { currentRevisions, inputOf, narrowedItems, planCarry, previousContract } from "./sdd-increment.js"
 import { computeLedger, fedBack, ledgerSection } from "./sdd-ledger.js"
-import { changeSection, changedItems, RulingNeeded, settleChanges } from "./sdd-changes.js"
+import { changeSection, changedItems, RulingNeeded, settleChanges, statusSection } from "./sdd-changes.js"
+import { blocks, cutMasks, groupedSection, groupOriginals, spansOf, type Block } from "./sdd-grouped.js"
 import { answerRevisions, carryRulings, rulingQuestions, rulingSection, rulingView, settleRulings } from "./sdd-rulings.js"
 import { carryExecutable, executableSection, itemOf, keepExamples, originalInputs, type Derivation, type ProposedExample } from "./sdd-executable.js"
 import { quoteBlock, refList, resolveQuotes, segmentIndex, writtenIn } from "./sdd-quotes.js"
 import { ledgerRevisions, markFactsValid, purge } from "./sdd-revisions.js"
 import type { AcceptanceSubject, ConflictEntry, DraftAcceptance, Quote, RulingEntry } from "./sdd-contract.js"
+import { earlierChanges, type RunObservation } from "./sdd-landing.js"
 
 const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b)
 function requireThat(value: unknown, message: string): asserts value { if (!value) throw Error(message) }
@@ -65,7 +67,7 @@ export class SddCompiler {
     try { writeFileSync(fd, String(process.pid)); return await action(this.inspect()) }
     finally { closeSync(fd); unlinkSync(lock) }
   }
-  async accept(event: CompilerEvent, maxRequests: number): Promise<void> {
+  async accept(event: CompilerEvent, maxRequests: number, observations?: RunObservation[]): Promise<void> {
     await this.transaction(s => {
       validateEvent(event)
       requireThat(event.run_id === this.runId && event.kind === "user_input" && event.source.channel === "user", "Only user updates create delivery batches")
@@ -74,7 +76,7 @@ export class SddCompiler {
       if (old) { requireThat(same(old, event), "Event identity conflict"); return }
       requireThat(!s.batches.some(b => !["accepted", "rejected"].includes(b.state)), "Finish or explicitly reject the pending management batch first")
       s.events.push(structuredClone(event))
-      s.batches.push({ event_id: event.event_id, state: "ir", requests_used: 0, max_requests: maxRequests, calls: [] })
+      s.batches.push({ event_id: event.event_id, state: "ir", requests_used: 0, max_requests: maxRequests, calls: [], ...(observations ? { observations: structuredClone(observations) } : {}) })
       this.save(s)
     })
   }
@@ -222,9 +224,11 @@ export class SddCompiler {
     const reference = d.reference_text ?? d.text
     d.contract.executable = purged.executable.map(e => ({ ...e, original_inputs: originalInputs(e.run, reference) }))
     d.contract.dropped.push(...dropped, ...purged.dropped)
-    // Before the requirement baseline (incremental delivery) or the first original update delivered.
-    const at = [d.text.indexOf(`\n${BASELINE_HEADING}`), d.text.indexOf("\n## Original user update ")].filter(i => i >= 0).sort((a, b) => a - b)[0]
-    if (at !== undefined) d.text = `${d.text.slice(0, at + 1)}${executableSection(d.contract.executable)}${d.text.slice(at + 1)}`
+    // v8: before the field dictionary, or at the end when there is none.
+    if (d.text) {
+      const at = d.text.indexOf("\n# Interface and data: field dictionary\n")
+      d.text = at >= 0 ? `${d.text.slice(0, at + 1)}${executableSection(d.contract.executable)}${d.text.slice(at + 1)}` : `${d.text}${executableSection(d.contract.executable)}`
+    }
     const { ref, ...content } = d
     d.ref = { ...ref, digest: digestOf(content) }
   }
@@ -349,7 +353,7 @@ export class SddCompiler {
     })
     // A field object whose items changed is edited on its accepted version (v7 R10 fix): rows the answer does not touch stay.
     const edits = mergeFieldEdits(admissible("field", o => o.object, draft.fields), final.revisedFields.map(o => ({ ...o, items: o.items.filter(id => now.has(id)) })).filter(o => o.items.length), sorted)
-    const writtenFields = edits.fields, writtenSubjects = admissible("acceptance", a => a.subject, draft.acceptance)
+    const writtenFields = edits.fields, writtenSubjects = admissible("acceptance", a => a.subject, draft.acceptance ?? [])
     const replaced = (carried: string[], written: string[], kind: "field" | "acceptance") => new Set(carried.filter(n => written.includes(n)).map(n => { sorted.push({ kind, name: n, reason: "replaced by the entry of the same name written this round" }); return n }))
     const replacedFields = replaced(final.fields.map(o => o.object), writtenFields.map(o => o.object), "field")
     const replacedSubjects = replaced(final.acceptance.map(a => a.subject), writtenSubjects.map(a => a.subject), "acceptance")
@@ -370,10 +374,12 @@ export class SddCompiler {
     }
     const removed = built.removed
     const reference = built.text
-    // From the second update the PRD SDD wrote for an earlier update stands for the inputs up to it.
-    const baseline = delivered.length === 0 ? undefined : prdBaseline(s, b.event_id)
-    const shown = baseline ? accumulatedText(s.events, earlier, ir, delivered, dispositions, effective, baseline.input + 1).text : reference
+    // v8: no PRD baseline. Every current passage of every input is delivered, grouped by the IR item that selects it.
+    const masks = delivered.length === 0 ? undefined : cutMasks(s.events, earlier, ir, delivered)
+    const grouped = delivered.length === 0 ? undefined : groupOriginals(s.events, masks!, ir, delivered,
+      effective.map(({ item, entry }) => ({ item, text: effectiveBlock(entry, s.events) })))
     let text = ""
+    let zones: CIDelivery["zones"]
     const emptyObjects: string[] = [], namesAdded: string[] = [], requiredNotStated: NonNullable<CIDelivery["required_not_stated"]> = []
     const revisionsOf = (items: string[]) => Object.fromEntries(items.map(id => [id, now.get(id)!]))
     const taskOf = (itemId: string) => Object.values(ir).find(t => t.content.some(c => c.item_id === itemId))!.task_id
@@ -424,17 +430,25 @@ export class SddCompiler {
         ...draft.tasks.flatMap(t => t.effective.map(entry => ({ task_id: taskOf(entry.item_id), revision: now.get(entry.item_id)!, entry, carried: false })))]
       contract.revisions = revisions
       contract.conflicts = rulings
-      // Code merges repeated rows, leaves out objects without fields, and adds every name the requirements write that no object lists.
-      const completed = completeFields(contract.fields, reference)
+      // v8 (item 4): only the objects written this round are delivered (carried ones stay in the contract as state).
+      // Code merges repeated rows, leaves out objects without fields, and adds every name this update's own text writes that no object lists.
+      const own = s.events.find(e => e.event_id === b.event_id)
+      const completed = completeFields(contract.fields.filter(o => !o.carried), userText(own!) ?? "")
       emptyObjects.push(...completed.leftOut)
       namesAdded.push(...completed.added)
-      const head = baseline ? `${INCREMENTAL_HEADER}\n` : `${ACCUMULATED_HEADER}\n`
-      const body = baseline ? `${baselineSection(baseline)}${shown.slice(ACCUMULATED_HEADER.length)}` : reference.slice(ACCUMULATED_HEADER.length)
-      text = `${head}${changeSection(settled.changes, revisions, fedBack(ledger), ir, b.event_id, baseline ? baseline.input + 1 : 1)}${rulingSection(deliveredRulings(contract.conflicts ?? [], changedItems(s.ir, ir, excluded), previous?.revisions ?? []))}${fieldSection(completed.fields)}${acceptanceSection(contract.acceptance, baseline ? baseline.input + 1 : 1)}${ledgerSection(fedBack(ledger), ir)}${body}`
+      // v8 zoning (item 3): earlier changes go to the change zone only with evidence they are not in the code; earlier open revisions without it are status.
+      const landing = earlierChanges(s, b)
+      const notLanded = landing.filter(x => x.state === "not_landed")
+      const evidenced = new Set(notLanded.map(x => `${x.event_id}|${x.change.subject}`))
+      const status = revisions.filter(r => r.state === "open" && r.event_id !== b.event_id && !evidenced.has(`${r.event_id}|${r.subject}`))
+      zones = { changes: settled.changes.length, not_landed: notLanded.map(x => ({ input: x.input, subject: x.change.subject, evidence: x.evidence! })),
+        status: status.map(r => ({ input: r.input, subject: r.subject })), unknown: landing.filter(x => x.state === "unknown").length }
+      const source = fieldSource(contract.fields, ir, blocks(s.events, masks!))
+      text = `${V8_HEADER}\n${changeSection(settled.changes, notLanded, fedBack(ledger), ir)}${rulingSection(deliveredRulings(contract.conflicts ?? [], changedItems(s.ir, ir, excluded), previous?.revisions ?? []))}${groupedSection(grouped!)}${statusSection(status)}${ledgerSection(fedBack(ledger), ir)}${fieldSection(completed.fields, source)}`
     }
     const content = { profile: SDD_PROFILE, event_id: b.event_id, ir_digest: b.parent!.digest, draft, text, removed, contract,
       ...(delivered.length ? { reference_text: reference } : {}),
-      ...(baseline ? { baseline_prd: { run_id: baseline.run_id, event_id: baseline.event_id, input: baseline.input, digest: baseline.digest, chars: baseline.text.length } } : {}),
+      ...(zones ? { zones } : {}),
       ...(settled.changes.length ? { changes: settled.changes } : {}), ...(conflicts.length ? { conflicts } : {}), ...(Object.keys(s.ir).length && draft.changes === undefined ? { changes_not_given: true } : {}), ...(ledger.length ? { ledger } : {}), ...(emptyObjects.length ? { field_objects_left_out: emptyObjects } : {}), ...(namesAdded.length ? { field_names_added: namesAdded } : {}), ...(requiredNotStated.length ? { required_not_stated: requiredNotStated } : {}) }
     return { ...content, ref: { id: `ci-${digestText(this.runId + ":" + b.event_id).slice(0, 24)}`, revision: 1, digest: digestOf(content) } }
   }
@@ -758,15 +772,36 @@ export function conflictSection(conflicts: readonly SettledConflict[]): string {
 
 export const CONFLICT_NOTE = "The original requirements say different things in the places below. Each passage is quoted verbatim with the user update it comes from; management's ruling and its basis follow. Carry the ruling into the PRD and implement it; the passages themselves stay authoritative as written."
 
-export function fieldSection(fields: DeliveryDraft["fields"]): string {
+/** v8 (item 4): each row with the passage that writes its name (the latest update writing it among the object's own passages). */
+export function fieldSection(fields: DeliveryDraft["fields"], source: (object: string, field: string) => string = () => ""): string {
+  if (!fields.length) return ""
   const cell = (v: string) => v.replace(/\|/gu, "\\|").replace(/\r?\n/gu, " ").trim()
   const required = (f: DeliveryDraft["fields"][number]["fields"][number]) => f.required === "not stated" ? "not stated in the original (a sample value is not a constraint)"
     : f.required_wording ? `${f.required} ("${f.required_wording}")` : f.required
-  const body = fields.map(o => `## ${o.object.trim()}\n| Field | Type | Required | Meaning |\n|---|---|---|---|\n${o.fields.map(f => `| \`${cell(f.field)}\` | ${cell(f.type)} | ${cell(required(f))} | ${cell(f.meaning)} |`).join("\n")}`).join("\n\n")
+  const body = fields.map(o => `## ${o.object.trim()}\n| Field | Type | Required | Meaning | Written in |\n|---|---|---|---|---|\n${o.fields.map(f => `| \`${cell(f.field)}\` | ${cell(f.type)} | ${cell(required(f))} | ${cell(f.meaning)} | ${cell(source(o.object, f.field)) || "-"} |`).join("\n")}`).join("\n\n")
   return `# Interface and data: field dictionary\n${FIELD_NOTE}\n\n${body}\n\n`
 }
 
-export const FIELD_NOTE = "Management derived this dictionary from the original requirements that follow, for the PRD's interface-and-data section. Each field name is part of the external interface (command-line options, file and configuration keys, output fields) and must be kept and implemented exactly as written."
+export const FIELD_NOTE = "Management derived this dictionary from the original requirements above, for the PRD's interface-and-data section, for the objects this update adds or changes. Each field name is part of the external interface (command-line options, file and configuration keys, output fields) and must be kept and implemented exactly as written; \"Written in\" names the passage that writes it."
+
+/**
+ * Where a field's name is written: among the current passages of its object's items, the latest that writes it;
+ * otherwise any current passage that does. Named by update and opening words.
+ */
+export function fieldSource(objects: readonly DeliveryDraft["fields"][number][], ir: Record<string, TaskIntent>, segments: readonly Block[]): (object: string, field: string) => string {
+  const items = new Map(Object.values(ir).flatMap(t => t.content.map(c => [c.item_id, c] as const)))
+  const name = (q: Block) => { const t = q.text.trim().replace(/\s+/gu, " "); return `update ${q.input} «${t.slice(0, 40)}${t.length > 40 ? "…" : ""}»` }
+  return (object, field) => {
+    const o = objects.find(x => x.object === object)
+    const spans = (o?.items ?? []).flatMap(id => (items.get(id)?.sources ?? []).flatMap(x => x.span ? [{ source_id: x.source_id, ...x.span }] : []))
+    const own = segments.filter(q => spans.some(x => x.source_id === q.source_id && x.start < q.end && q.start < x.end))
+    const latest = (qs: typeof segments) => qs.filter(q => writes(q.text, field)).sort((a, c) => c.input - a.input || a.start - c.start)[0]
+    const found = latest(own) ?? latest(segments)
+    return found ? name(found) : ""
+  }
+}
+
+export const V8_HEADER = "# Requirement for this update\nManagement compiled this requirement from every original user update so far. In order: the changes this update makes (each a requirement of this update), management's rulings on the original text, the full original requirements grouped by requirement (every current passage of every update verbatim and once; withdrawn or replaced text left out), the status of earlier changes (information, not tasks), and the field dictionary of the objects this update adds or changes. The original text is the authority.\n"
 
 export function acceptanceSection(acceptance: AcceptanceSubject[], deliveredFrom = 1): string {
   if (!acceptance.length) return ""
@@ -779,11 +814,13 @@ export function acceptanceSection(acceptance: AcceptanceSubject[], deliveredFrom
 export const ACCEPTANCE_NOTE = "Management lists, per command and operation, the passages of the original requirements that give an input and the result they state. Each passage is named by its user update and opening words and is found in the original text below (an update the PRD baseline stands for is covered by the PRD); every name, key, value, fixed text and exit code in it must be implemented exactly so."
 
 export interface EffectivePlacement { item: ContentItem; entry: DeliveryDraft["tasks"][number]["effective"][number] }
-type Spans = Map<string, Array<{ start: number; end: number; item: ContentItem }>>
-function spansOf(items: Iterable<ContentItem>): Spans {
-  const out: Spans = new Map()
-  for (const item of items) for (const x of item.sources) if (x.span) out.set(x.source_id, [...(out.get(x.source_id) ?? []), { start: x.span.start, end: x.span.end, item }])
-  return out
+type Spans = ReturnType<typeof spansOf>
+
+/** An effective statement as delivered: labelled with the inputs it rests on. */
+export function effectiveBlock(entry: EffectivePlacement["entry"], events: readonly CompilerEvent[]): string {
+  const order = new Map(events.map((e, i) => [e.event_id, i + 1]))
+  const inputs = [...new Set(entry.basis.map(x => order.get(x.source_id)!))].sort((a, c) => a - c)
+  return `[requirement as it now holds, per user input ${inputs.join(", ")}]\n${entry.text.trim()}`
 }
 
 /**
@@ -799,33 +836,8 @@ export function accumulatedText(events: readonly CompilerEvent[], earlier: Reado
   const inputOrder = new Map(events.map((e, i) => [e.event_id, i + 1]))
   const before = spansOf(earlier.flatMap(ir => Object.values(ir).flatMap(t => t.content)))
   const now = spansOf(Object.values(current).flatMap(t => t.content))
-  const kept = spansOf(delivered)
   const texts = new Map(events.map(e => [e.event_id, userText(e)!]))
-  const cuts = new Map(events.map((event, index) => {
-    const text = texts.get(event.event_id)!
-    const mark = (spans: Spans) => {
-      const mask = new Uint8Array(text.length)
-      for (const x of spans.get(event.event_id) ?? []) {
-        requireThat(0 <= x.start && x.start <= x.end && x.end <= text.length, `IR span ${x.start}-${x.end} lies outside user input ${index + 1}`)
-        mask.fill(1, x.start, x.end)
-      }
-      return mask
-    }
-    const earlierMask = mark(before), nowMask = mark(now), keep = mark(kept)
-    const cut = earlierMask.map((x, i) => (x === 1 || nowMask[i] === 1) && keep[i] === 0 ? 1 : 0)
-    // A line left holding only its list marker or blanks goes with its cut text;
-    // a paragraph cut whole also takes one of the blank lines around it.
-    const lines: Array<[number, number]> = []
-    for (let start = 0; start < text.length;) { const nl = text.indexOf("\n", start); const end = nl < 0 ? text.length : nl + 1; lines.push([start, end]); start = end }
-    const blank = (k: number) => k < 0 || k >= lines.length || /^[ \t]*\r?\n?$/u.test(text.slice(...lines[k]!))
-    lines.forEach(([start, end], k) => {
-      const rest = [...text.slice(start, end)].filter((_, i) => cut[start + i] === 0).join("")
-      if (!cut.subarray(start, end).includes(1) || !/^[ \t]*(?:[-*+]|\d+[.)])?[ \t]*\r?\n?$/u.test(rest)) return
-      cut.fill(1, start, end)
-      if (blank(k - 1) && k + 1 < lines.length && blank(k + 1)) cut.fill(1, ...lines[k + 1]!)
-    })
-    return [event.event_id, cut] as const
-  }))
+  const cuts = cutMasks(events, earlier, current, delivered)
   const inserts = new Map<string, Map<number, string[]>>()
   const byPosition = (a: { source_id: string; start: number }, c: { source_id: string; start: number }) => inputOrder.get(a.source_id)! - inputOrder.get(c.source_id)! || a.start - c.start
   for (const { item, entry } of effective) {

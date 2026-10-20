@@ -127,6 +127,44 @@ def acceptance_result(value):
             **({'recorded': recorded} if recorded else {})}
 
 
+def check_unit(check_id):
+    """The unit a check id names: unit:<kind>:<name>, p1:<name>, p2:<name>, probe:<command>:<case>."""
+    parts = check_id.split(':')
+    if parts[0] == 'unit' and len(parts) >= 3:
+        return ':'.join(parts[2:])
+    if parts[0] in ('p1', 'p2', 'probe') and len(parts) >= 2:
+        return parts[1]
+    return None
+
+
+def run_observation(run_id, completion):
+    """v8 zoning input, read back from one returned run (an observation, never a requirement): whether SDD's coding
+    stage ran, the units of the checks IC's repair fixed in its code, and those that passed on its final code."""
+    a = completion.get('acceptance_repair') or {}
+    coding = (completion.get('results', {}).get('coding') or {}).get('status')
+    fixed = [] if a.get('outcome') in (None, 'nothing_to_repair', 'reverted') else a.get('fixed', [])
+    last = a['passes'][-1].get('recorded_after') if a.get('passes') and a.get('outcome') in ('adopted', 'adopted_with_regressions') else None
+    records = last if last is not None else a.get('recorded_before', [])
+    passed = [r['name'] for r in records or [] if not r.get('failed') and r.get('class') in ('p1_stub', 'p2_structure') and (r.get('state') or 'compared') == 'compared']
+    structures = [{'name': r['name'], 'output_keys': r.get('output_keys') or []} for r in records or []
+                  if not r.get('failed') and r.get('class') == 'p2_structure' and (r.get('state') or 'compared') == 'compared']
+    units = lambda ids: sorted({u for u in (check_unit(i) for i in ids) if u})
+    return {'run_id': run_id, 'entered_coding': coding not in (None, 'not_reached'), 'fixed_units': units(fixed), 'passed_units': sorted(set(passed)),
+            'passed_structures': structures}
+
+
+def landing_observations(store):
+    """Observations of every returned run the store counts (not voided, not superseded) that has a directory."""
+    out = []
+    for run in read(store).get('runs', []):
+        if not run.get('result') or run.get('voided') or run.get('superseded') or not run.get('directory'):
+            continue
+        completion = Path(run['directory']) / 'completion.json'
+        if completion.exists():
+            out.append(run_observation(run['run_id'], read(completion)))
+    return out
+
+
 def example_results(delivery, code):
     """The delivery's checkable acceptance examples run against this run's code (docker, no network)."""
     examples = [{'id': f"{a['subject']}#{i + 1}", 'run': e['run'], 'check': e['check'], 'exit_code': e.get('exit_code'), 'asserts': e.get('asserts', [])}

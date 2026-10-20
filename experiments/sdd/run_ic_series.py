@@ -27,7 +27,7 @@ from ic_bridge import adapter_digest
 
 PROJECT = Path(__file__).resolve().parents[2]
 NODE = 'C:/Program Files/nodejs/node.exe'
-TRIAL_PREFIX = 'ic5-sdd-dpipe'
+TRIAL_PREFIX = 'ic8-sdd-dpipe'
 # The management host: OpenCode built with OpenAI strict structured output (D3, user 2026-10-16).
 STRICT_HOST = Path('D:/huawei/opencode-v1.18.31-strict/bin/opencode.cmd')
 # Extra management calls a round may receive once, recorded (D5: as agreed for v4, user 2026-10-16).
@@ -420,7 +420,7 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
                 time.sleep(1)
         else:
             raise RuntimeError('Management server did not become ready')
-        common = dict(store=str(root / 'store'), run_id=root.name,
+        common = dict(store=str(root / 'store'), run_id=config.get('ic_run_id', root.name),
                       management=dict(server_url=url, directory=str(root / 'management'), provider_id='openai',
                                       model_id='gpt-6-luna-fast', variant=run_r1.VARIANT, request_timeout_ms=config['request_timeout_ms']))
         host = dict(python=config['python'], bridge=str(root / 'adapter/ic_bridge.py'), adapter=str(root / 'adapter'),
@@ -434,7 +434,7 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
                 record['fix_retried'] = True
             reentered = None
             records.append(record)
-            event = dict(schema_version=2, run_id=root.name, event_id=f'r{number}-user-input', kind='user_input',
+            event = dict(schema_version=2, run_id=config.get('ic_run_id', root.name), event_id=f'r{number}-user-input', kind='user_input',
                          source=dict(channel='user', producer_id='authorized-dpipe-experiment'),
                          payload=dict(text=(run_r1.OFFICIAL / f'steps/round-{number}/instruction.md').read_text(encoding='utf-8')))
             store = root / 'store/ci-sdd.json'
@@ -447,7 +447,11 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
                                                            extra_requests=extra, reason=config['resumes'][-1]['reason']))
                 log(f'R{number} rejected batch reopened with {extra} extra management calls (explicit --reopen)')
             log(f'R{number} IC compile started')
-            command(f'r{number}-compile', dict(common, command='compile', event=event, max_requests=config['management_budget']))
+            # v8 zoning: what each earlier returned run's acceptance and repair showed, read back as observations and
+            # recorded with the new batch (a batch that already exists keeps the observations it was created with).
+            from ic_bridge import landing_observations
+            observations = landing_observations(store) if store.exists() else []
+            command(f'r{number}-compile', dict(common, command='compile', event=event, observations=observations, max_requests=config['management_budget']))
             batch = snapshot()['batches'][-1]
             if batch['state'] == 'rejected' and not batch.get('reopened') and config.get('reopen_calls'):
                 # D5: one extra allotment per round, recorded in the store and the log.
@@ -579,6 +583,16 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
             except Exception as error:
                 record['reconcile'] = {'error': repr(error)[:400]}
                 log(f'R{number} reconcile failed: {error!r}'[:400])
+            # v8 items 6 and 7, record only: landing of the changes by the examples, and what SDD's PRD and change document show.
+            try:
+                import return_observation
+                record['observation'] = return_observation.observe(root, number, record['root'])
+                states = [x['state'] for x in record['observation']['landing']]
+                log(f"R{number} observation: landing {', '.join(f'{s} {states.count(s)}' for s in ('landed', 'not_landed', 'unknown'))}; "
+                    f"returned {json.dumps(record['observation']['returned'], ensure_ascii=False)[:500]}")
+            except Exception as error:
+                record['observation'] = {'error': repr(error)[:400]}
+                log(f'R{number} observation failed: {error!r}'[:400])
             record['checkpoint'] = write_checkpoint(root, number, event, snapshot(), record, baseline)
             publish(root, records, 'running')
             log(f"R{number} checkpoint written: {record['checkpoint']['path']}")
@@ -606,6 +620,44 @@ def execute_ic_series(root, resume=None, retry_paused=False, retry_round=None):
             subprocess.run(['taskkill', '/PID', str(server.pid), '/T', '/F'], capture_output=True)
 
 
+def fork_ic_series(source, k, trial_prefix, reason):
+    """A new series root that continues another one from its checkpoint of round k-1 (v8 from v7's r09): the frozen
+    source is only read. The fork keeps the source store's run identity (ic_run_id), its adapter and SDD source as the
+    starting point (a resume replaces them with the current build), the rounds before k and their checkpoints; later
+    rounds, restarts and host requests stay with the source. Continue it with --resume <fork> --from-checkpoint k."""
+    source = Path(source).resolve()
+    checkpoint = source / 'checkpoints' / f'r{k - 1:02d}'
+    manifest = json.loads((checkpoint / 'manifest.json').read_text(encoding='utf-8'))
+    if run_r1.sha(checkpoint / 'store.json') != manifest['store_sha256']:
+        raise ValueError('Checkpoint store changed')
+    root = run_r1.BASE / 'harbor_runs' / (f'{trial_prefix}-15round-' + dt.datetime.now(dt.timezone.utc).strftime('%Y%m%d-%H%M%Sz-') + uuid.uuid4().hex[:8])
+    root.mkdir(parents=True)
+    for name in ['adapter', 'sdd-source', 'baseline-r0']:
+        shutil.copytree(source / name, root / name)
+    for n in range(1, k):
+        shutil.copytree(source / 'checkpoints' / f'r{n:02d}', root / 'checkpoints' / f'r{n:02d}')
+    (root / 'store').mkdir()
+    shutil.copy2(checkpoint / 'store.json', root / 'store' / 'ci-sdd.json')
+    (root / 'management').mkdir()
+    (root / 'requests' / 'host').mkdir(parents=True)
+    for request in sorted((source / 'requests' / 'host').glob('*.json')):
+        if json.loads(request.read_text(encoding='utf-8')).get('round', 0) < k:
+            for part in [request, *(source / 'requests' / 'host').glob(request.name + '.*')]:
+                shutil.copy2(part, root / 'requests' / 'host' / part.name)
+    state = json.loads((source / 'series-results.json').read_text(encoding='utf-8'))
+    publish(root, [r for r in state['rounds'] if r['round'] < k], 'forked')
+    config = json.loads((source / 'series.json').read_text(encoding='utf-8'))
+    store_run = json.loads((checkpoint / 'store.json').read_text(encoding='utf-8'))['run_id']
+    history = {key: config.pop(key) for key in ('restores', 'resumes', 'pilot_report') if key in config}
+    config.update(status='forked', trial_prefix=trial_prefix, port=free_port(), ic_run_id=store_run,
+                  forked_from={'series': str(source), 'checkpoint': str(checkpoint), 'round': k, 'reason': reason,
+                               'at': dt.datetime.now(dt.timezone.utc).isoformat(), 'source_history': history})
+    run_r1.write_json(root / 'management-config.json', management_config(root.name))
+    run_r1.write_json(root / 'series.json', config)
+    print(root, flush=True)
+    return root
+
+
 def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False, overnight_report=None, gate=None, pause_each_round=False):
     """Continue a blocked series with the current IC build and promotion rules; recorded in series.json."""
     root = Path(root).resolve()
@@ -627,7 +679,9 @@ def resume_ic_series(root, reason, reopen=None, keep_ic=False, no_pause=False, o
     harness = ['run_series.py', 'run_results.py', 'run_ic_series.py', 'run_r1.py', 'execution-context.md',
                'acceptance_repair.py', 'static_units.py', 'error_probes.py', 'drift_labels.py',
                # v6: post-PRD checks, V2 reconciliation and cost records go with the other harness files.
-               'post_prd.py', 'check_reconcile.py', 'ic_checks.py', 'round_reconcile.py', 'costs.py', 'watchdog.py', 'round_report.py']
+               'post_prd.py', 'check_reconcile.py', 'ic_checks.py', 'round_reconcile.py', 'costs.py', 'watchdog.py', 'round_report.py',
+               # v8: the record-only observations of items 6 and 7.
+               'return_observation.py']
     for name in harness + ([] if keep_ic else ['ic_bridge.py', 'example_runner.py']):
         before = run_r1.sha(root / 'adapter' / name) if (root / 'adapter' / name).exists() else None
         shutil.copy2(source / name, root / 'adapter' / name)
@@ -687,7 +741,13 @@ if __name__ == '__main__':
     parser.add_argument('--acceptance-repair', action='store_true', help='freeze: after SDD returns, IC accepts the code and has SDD prd-fix what failed (acceptance_repair.py)')
     parser.add_argument('--native', help='freeze: the management host launcher (v5: the strict OpenCode build)')
     parser.add_argument('--from-checkpoint', type=int, help='with --resume: restart at this round from the checkpoint of the round before')
+    parser.add_argument('--fork', help='a new series from this one at --from-checkpoint (its rounds before stay; the source is only read)')
     args = parser.parse_args()
+    if args.fork:
+        if not args.from_checkpoint:
+            raise SystemExit('--fork needs --from-checkpoint')
+        fork_ic_series(args.fork, args.from_checkpoint, args.trial_prefix, args.reason or 'unspecified')
+        raise SystemExit(0)
     if args.resume and args.from_checkpoint:
         restore_checkpoint(Path(args.resume), args.from_checkpoint, args.reason or 'unspecified')
     if args.resume and args.retry_round:

@@ -217,8 +217,7 @@ function carrier(segment: SourceSegment, eventId: string, digest: string, irs: R
 
 /** The check is shown how the delivered text was built instead of a second copy of every input. */
 const withoutReference = ({ reference_text: _r, ...rest }: CIDelivery) => rest
-const DELIVERY_TEXT_REST = " from the second update the PRD SDD clarified for an earlier update (delivery.baseline_prd) in place of the inputs up to it, then every later user input verbatim and in input order, minus each passage in delivery.removed, with each effective statement of delivery.contract placed after the paragraph its requirement was changed in; the store keeps the exact text)"
-export const DELIVERY_TEXT_VIEW = "(not repeated here: the delivered text is this update's change list (delivery.changes, then the open ledger entries fed back), management's rulings on the original requirements (delivery.contract.conflicts), the field dictionary and acceptance examples of delivery.contract (carried and newly written entries), the section code writes for the open ledger entries fed back (" + (LEDGER_FEEDBACK ? "all open entries of delivery.ledger" : "the open acceptance entries of delivery.ledger") + ": earlier requirements the starting code does not meet; code's, not to be judged), then" + DELIVERY_TEXT_REST
+export const DELIVERY_TEXT_VIEW = "(not repeated here: the delivered text is this update's change list (delivery.changes, then earlier changes code found evidence are not in the code, delivery.zones.not_landed, then the open ledger entries fed back), management's rulings on the original requirements written this round (delivery.contract.conflicts), every user input verbatim, each current passage once, grouped by the IR content item that selects it, minus each passage in delivery.removed, with each effective statement of delivery.contract after its requirement's passages, then the passages no item selects; then the status of earlier changes (delivery.zones.status: information, not tasks), the section code writes for the open ledger entries fed back (" + (LEDGER_FEEDBACK ? "all open entries of delivery.ledger" : "the open acceptance entries of delivery.ledger") + ": earlier requirements the starting code does not meet; code's, not to be judged), and the field dictionary of the objects written this round (delivery.draft.fields); the store keeps the exact text)"
 
 function changeView(previous: Record<string, TaskIntent>, prepared: Record<string, TaskIntent>): IrChangeView {
   const ids = [...new Set([...Object.keys(previous), ...Object.keys(prepared)])]
@@ -434,6 +433,7 @@ function deliveryRequestOf(s: SddSnapshot, b: SddBatch, report: Report, shown: R
 const currentIds = (ir: Record<string, TaskIntent>) => new Set(Object.values(ir).flatMap(t => t.content.map(c => c.item_id)))
 
 const NOT_SHOWN = "(text not shown: this requirement is unchanged since the accepted delivery and is delivered verbatim; it needs only a disposition)"
+const EARLIER_VERSION = "(text not shown: an earlier version of this requirement, referenced for its identity; its passages are in the listed inputs)"
 
 /**
  * Requests show the new input in full, the requirements this round writes for
@@ -475,8 +475,12 @@ function slim<T extends DeliveryRequest | CheckRequest>(request: T, currentId: s
       report.count("referenced_text_chars_not_shown", item.text.length + (item.interpretation?.length ?? 0))
       item.text = NOT_SHOWN; delete item.interpretation
     }
-    if (ref.kind === "content") hide(object)
-    if (ref.kind === "task") object.content?.forEach(hide)
+    // v8: a referenced content object is an earlier version no supplied IR holds (the current and previous versions are
+    // shown in ir and ir_change): named by identity and sources; its text is the listed inputs.
+    if (ref.kind === "content") { if (object.text !== undefined) { report.count("referenced_text_chars_not_shown", object.text.length + (object.interpretation?.length ?? 0)); object.text = EARLIER_VERSION; delete object.interpretation } return { ...ref, object } }
+    // v8: an earlier task version is referenced for its identity; its content items are named by id and revision only
+    // (their texts are the inputs this request lists; the current and previous versions of changed items are shown).
+    if (ref.kind === "task") return { ...ref, object: { ...object, content: (object.content ?? []).map(c => ({ item_id: c.item_id, revision: (c as { revision?: number }).revision })) } }
     return { ...ref, object }
   })
   return { ...request, ir, sources: { ...request.sources, inputs }, history, referenced_objects }
@@ -500,14 +504,17 @@ export function checkRequest(s: SddSnapshot, b: SddBatch): { request: CheckReque
   const candidate = b.parent.candidate
   // Carried entries were checked when written: shown by name only.
   // The contract by name: carried entries were checked when written; new ones are in full in delivery.draft.
+  // v8: carried executable examples and the ledger are code's, checked or computed earlier: by id only.
   const contract = { ...d.contract,
+    executable: (d.contract.executable ?? []).map(e => ({ id: e.id, subject: e.subject, items: e.items, carried: e.carried })),
     fields: d.contract.fields.map(o => ({ object: o.object, items: o.items, carried: o.carried, ...(o.carried ? { fields: o.fields.map(f => ({ field: f.field })) } : { written: "in delivery.draft.fields" }) })),
     acceptance: d.contract.acceptance.map(a => ({ subject: a.subject, items: a.items, carried: a.carried, ...(a.carried ? {} : { written: "in delivery.draft.acceptance" }) })),
     effective: d.contract.effective.map(e => ({ task_id: e.task_id, revision: e.revision, carried: e.carried, entry: e.carried ? { item_id: e.entry.item_id } : { item_id: e.entry.item_id, written: "in delivery.draft.tasks[].effective" } })) }
   const request: CheckRequest = {
     ...base,
     // The reference text is every input again; the check reads the inputs from sources.
-    delivery: { ...withoutReference(d), text: DELIVERY_TEXT_VIEW, contract: contract as unknown as CIDelivery["contract"] },
+    delivery: { ...withoutReference(d), text: DELIVERY_TEXT_VIEW, contract: contract as unknown as CIDelivery["contract"],
+      ...(d.ledger ? { ledger: d.ledger.map(e => ({ id: e.id, kind: e.kind, subject: e.subject, state: e.state })) as unknown as CIDelivery["ledger"] } : {}) },
     ir_update: {
       basis: candidate.basis,
       groups: candidate.groups.map(g => ({ local_ref: g.local_ref, task_refs: g.task_refs, ir_changes: g.ir_changes })),

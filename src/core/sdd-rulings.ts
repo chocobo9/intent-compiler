@@ -2,7 +2,7 @@ import type { TaskIntent } from "./intent-contract.js"
 import type { DeliveryContract, Quote, RevisionEntry, RulingEntry, SettledConflict } from "./sdd-contract.js"
 import { itemOf } from "./sdd-executable.js"
 import { currentRevisions } from "./sdd-increment.js"
-import { holdsValue, normValue, quoteBlock, resolveQuotes, type segmentIndex } from "./sdd-quotes.js"
+import { holdsValue, normValue, refList, resolveQuotes, type segmentIndex } from "./sdd-quotes.js"
 
 type Index = ReturnType<typeof segmentIndex>
 type Rulings = NonNullable<DeliveryContract["conflicts"]>
@@ -139,9 +139,10 @@ export function rulingSection(rulings: readonly SettledConflict[]): string {
   const body = rulings.map(c => {
     const code = (t: string) => `\`${t.replace(/`/gu, "")}\``
     const names = (c.values ?? []).filter(v => v.said).map(v => v.written ? `${code(v.said)} in the later update is what earlier passages write as ${code(v.written)}` : `${code(v.said)}: the earlier state is not written in the original requirements`)
-    return [`## ${c.subject} (${KIND_LABEL[c.kind ?? "conflict"]})`, quoteBlock(c.quotes), "", ...(names.length ? [`- Names: ${names.join("; ")}`] : []), `- Holds now: ${c.ruling}`, `- Basis: ${c.basis}`].join("\n")
+    // v8: zero copy; the passages are named by update and opening words, and delivered once, in the original text.
+    return [`## ${c.subject} (${KIND_LABEL[c.kind ?? "conflict"]})`, `Passages:\n${refList(c.quotes, 1)}`, ...(names.length ? [`- Names: ${names.join("; ")}`] : []), `- Holds now: ${c.ruling}`, `- Basis: ${c.basis}`].join("\n")
   }).join("\n\n")
   return `# Management rulings on the original requirements\n${RULING_NOTE}\n\n${body}\n\n`
 }
 
-export const RULING_NOTE = "Where the original requirements do not settle something by their text alone (passages that disagree, an update naming an earlier field or rule by another name, an update changing only part of a passage), management rules what holds. Each passage is quoted verbatim with the user update it comes from; the ruling and its basis follow. Carry each ruling into the PRD and implement it; a passage a ruling reads as renamed or partly changed stays in the original text below as written."
+export const RULING_NOTE = "Where the original requirements do not settle something by their text alone (passages that disagree, an update naming an earlier field or rule by another name, an update changing only part of a passage), management rules what holds. Each ruling names the passages it rests on by their user update and opening words (the passages are in the original text below); the ruling and its basis follow. Carry each ruling into the PRD and implement it; a passage a ruling reads as renamed or partly changed stays in the original text below as written."

@@ -4,6 +4,7 @@ import { itemOf } from "./sdd-executable.js"
 import { currentRevisions } from "./sdd-increment.js"
 import { holdsValue, normValue, refList, resolveQuotes, writtenIn, type segmentIndex } from "./sdd-quotes.js"
 import { rulingFor } from "./sdd-rulings.js"
+import type { EarlierChange } from "./sdd-landing.js"
 
 /** A CI answer the IR must rule on first (an earlier state the update names in words no earlier passage writes): the batch returns to the IR stage. */
 export class RulingNeeded extends Error {}
@@ -133,11 +134,14 @@ export function settleChanges(entries: ChangeEntry[], changed: Map<string, { exi
   return { changes, dropped }
 }
 
-/** The change-list section placed first in the delivered text: this update's changes, revisions still open, then earlier requirements the starting code does not meet. */
-export function changeSection(changes: SettledChange[], revisions: RevisionEntry[], ledger: LedgerEntry[], current: Record<string, TaskIntent>, eventId: string, deliveredFrom = 1): string {
+/**
+ * The change zone placed first in the delivered text (v8): this update's changes; earlier changes only with evidence
+ * that they are not in the code (each with that evidence); then earlier requirements the starting code does not meet.
+ * Earlier changes without such evidence go to the status zone, never here.
+ */
+export function changeSection(changes: SettledChange[], notLanded: readonly EarlierChange[], ledger: LedgerEntry[], current: Record<string, TaskIntent>): string {
   const open = ledger.filter(e => e.state === "open")
-  const carried = revisions.filter(r => r.state === "open" && r.event_id !== eventId)
-  if (!changes.length && !carried.length && !open.length) return ""
+  if (!changes.length && !notLanded.length && !open.length) return ""
   const items = new Map(Object.values(current).flatMap(t => t.content.map(c => [c.item_id, c.text] as const)))
   const excerpt = (t: string) => t.trim().split("\n").slice(0, 8).join("\n")
   const body = (c: SettledChange) => [
@@ -146,13 +150,15 @@ export function changeSection(changes: SettledChange[], revisions: RevisionEntry
     ...(c.ruled && !c.ruled.stated ? [`Earlier state: not written in the original requirements (management ruling ${c.ruled.ruling})`] : []),
     ...(c.wording ? [`As the update says: "${c.wording}"`] : []),
     ...(c.parameters.length ? [`Parameters: ${c.parameters.join(", ")}`] : []),
-    ...(c.before.length ? [`Before (original passages):\n${refList(c.before, deliveredFrom)}`] : []),
+    ...(c.before.length ? [`Before (original passages):\n${refList(c.before, 1)}`] : []),
     // A new command or operation is the update's own text, delivered below; a revision names where it now holds.
-    ...(c.now.length && c.kind === "revised" ? [`Now:\n${refList(c.now, deliveredFrom)}`] : []),
+    ...(c.now.length && c.kind === "revised" ? [`Now:\n${refList(c.now, 1)}`] : []),
   ]
   const sections = [
     ...changes.map(c => [`## ${c.kind === "revised" ? "Changed" : "New"}: ${c.subject}`, ...body(c)].join("\n")),
-    ...carried.map(r => [`## Changed in update ${r.input}, not yet confirmed in the code: ${r.subject}`, ...body(r)].join("\n")),
+    ...notLanded.map(e => [`## Not in the code yet (${e.change.kind === "revised" ? "changed" : "new"} in update ${e.input}): ${e.change.subject}`, `Evidence: ${e.evidence}.`,
+      ...body(e.change).filter(l => !l.startsWith("Listed by code")),
+      ...(e.change.kind === "added" && e.change.now.length ? [`Original passages:\n${refList(e.change.now, 1)}`] : [])].join("\n")),
     ...open.map(e => {
       const text = e.items.map(id => items.get(id)).find(Boolean)
       return [`## Not yet met: ${e.subject}`, ...(text ? [`Original text:\n${excerpt(text).split("\n").map(l => `> ${l}`).join("\n")}`] : []), `Observed in the current code: ${(e.last.observed || "(no detail)").slice(0, 300)}`].join("\n")
@@ -160,4 +166,15 @@ export function changeSection(changes: SettledChange[], revisions: RevisionEntry
   ]
   return `# Changes in this update\n${CHANGES_NOTE}\n\n${sections.join("\n\n")}\n\n`
 }
-export const CHANGES_NOTE = "Management lists here, one by one, what this update changes in the requirements below (corrections of existing commands or operations, and new ones), changes of earlier updates it has not yet confirmed in the code, and earlier requirements the current code does not yet meet. Each entry is a separate requirement of this update: carry each into the PRD as its own item and make the code follow it. Passages are named by their user update and opening words; the user's original text below is the authority."
+export const CHANGES_NOTE = "Management lists here, one by one, what this update changes in the requirements (corrections of existing commands or operations, and new ones), earlier changes that are observed not to be in the code yet (with the evidence), and earlier requirements the current code does not yet meet. Each entry is a requirement of this update: carry each into the PRD as its own item and make the code follow it. Passages are named by their user update and opening words; the user's original text, delivered in full below, is the authority."
+
+/**
+ * The status zone (v8): earlier revisions management keeps open but cannot observe in the code. Information, not
+ * tasks: each is named with the passages that state it, which the full original text delivers.
+ */
+export function statusSection(entries: readonly RevisionEntry[]): string {
+  if (!entries.length) return ""
+  const body = entries.map(r => [`- Update ${r.input}: ${r.subject}`, ...refList(r.now, 1).split("\n").map(l => `  ${l}`)].join("\n")).join("\n")
+  return `# Status of earlier changes\n${STATUS_NOTE}\n\n${body}\n\n`
+}
+export const STATUS_NOTE = "Information, not tasks of this update. Earlier updates made these changes; whether the current code follows them has not been observed. Each is stated by the original passages named, delivered in full in the original requirements above, which are the authority for what holds."

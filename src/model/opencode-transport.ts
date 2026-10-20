@@ -863,13 +863,23 @@ function finiteNumber(value: unknown): value is number {
  * later stage repeats the same opening text and the provider's prompt cache can reuse it. Every other field
  * keeps the sorted order; the model receives the same content either way.
  */
-export const VOLATILE_REQUEST_FIELDS = ["budget", "validation_errors", "issues", "previous_draft"] as const
+export const VOLATILE_REQUEST_FIELDS = ["delivery", "ir_update", "budget", "validation_errors", "issues", "previous_draft"] as const
+/**
+ * v8 (item 5): the original user inputs open the request (the IR's source segments, the CI's and check's sources),
+ * so that what changes from attempt to attempt comes after the longest stable opening. The check's delivery and IR
+ * update are the CI under check: a repaired CI changes them, so they come last with the other per-attempt fields.
+ * (The provider caches only an identical opening of the whole call, schema and system prompt included: a probe of
+ * 2026-10-20 read 13,568 of ~13.9k tokens with both unchanged, 2,816 with another system prompt, 0 with another
+ * schema; so the reuse is between attempts of one stage, never across stages.)
+ */
+export const LEADING_REQUEST_FIELDS = ["source_segments", "sources"] as const
 
 export function requestJson(value: unknown): string {
   if (!isRecord(value)) return stableJson(value)
   const sorted = sortValue(value) as Record<string, unknown>
-  const late = VOLATILE_REQUEST_FIELDS.filter(key => key in sorted)
-  const ordered = Object.fromEntries([...Object.entries(sorted).filter(([key]) => !late.includes(key as typeof late[number])), ...late.map(key => [key, sorted[key]])])
+  const early = LEADING_REQUEST_FIELDS.filter(key => key in sorted) as string[]
+  const late = VOLATILE_REQUEST_FIELDS.filter(key => key in sorted) as string[]
+  const ordered = Object.fromEntries([...early.map(key => [key, sorted[key]]), ...Object.entries(sorted).filter(([key]) => !early.includes(key) && !late.includes(key)), ...late.map(key => [key, sorted[key]])])
   const encoded = JSON.stringify(ordered)
   if (encoded === undefined) throw new Error("value is not JSON-serializable")
   return encoded

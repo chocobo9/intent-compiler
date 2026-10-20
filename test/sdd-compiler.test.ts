@@ -183,10 +183,14 @@ test("SDD input is the user's input verbatim; an effective statement on a requir
   const d = await compile(f)
   const errors = f.compiler.inspect().batches[0]!.calls.map(c => c.error ?? "").join(" ")
   assert.match(errors, /its passages all come from one input \(input-event-id\), so no later input changes it/)
-  assert.ok(d.text.startsWith("# Accumulated original user requirements\n"))
+  assert.ok(d.text.startsWith("# Requirement for this update\n"))
   assert.ok(!d.text.includes("[requirement as it now holds"))
-  assert.ok(d.text.includes(`## Original user update 1\n\n${CANDIDATE_EXAMPLE_INPUT}\n`))
+  // v8: every paragraph of the input, verbatim and exactly once, in the grouped original text.
+  const original = d.text.slice(d.text.indexOf("# Original requirements, grouped by requirement\n"))
+  for (const paragraph of CANDIDATE_EXAMPLE_INPUT.split(/\n[ \t]*\n/u).map(p => p.trim()).filter(Boolean)) assert.equal(original.split(paragraph).length - 1, 1, paragraph)
+  assert.ok(original.includes("[from user update 1]"))
   assert.deepEqual(d.removed, [])
+  assert.equal(d.reference_text?.includes(`## Original user update 1\n\n${CANDIDATE_EXAMPLE_INPUT}\n`), true, "the reference text keeps every input in order")
 })
 test("an effective statement citing a segment no input has is rejected, never delivered", async () => {
   const f = fixture()
@@ -268,7 +272,7 @@ test("a coverage that misses a requirement is rejected with the missing item ids
   const errors = f.compiler.inspect().batches[0]!.calls.map(c => c.error ?? "").join(" ")
   assert.match(errors, /missing coverage for item_id .+\. Give one coverage entry for each of: /)
 })
-test("acceptance examples quote the cited passages verbatim; a reference no input has is left out and recorded", async () => {
+test("v8: acceptance subjects an answer still gives are recorded, never delivered; a reference no input has is left out and recorded", async () => {
   const f = fixture(), deliver = f.model.deliver
   f.model.deliver = async input => {
     const answer = JSON.parse((await deliver(input)).text)
@@ -276,13 +280,9 @@ test("acceptance examples quote the cited passages verbatim; a reference no inpu
     return { text: JSON.stringify(answer) }
   }
   const d = await compile(f)
-  assert.ok(d.text.startsWith("# Accumulated original user requirements\nApply each update in order. Later explicit revisions replace only the affected earlier requirements.\n\n# Interface and data: field dictionary\n"))
   const s3 = CANDIDATE_EXAMPLE_INPUT.split("\n\n")[2]!
-  // C1: the example names its passages; the original text is delivered once, below.
-  assert.ok(d.text.includes(`## tool\nExample 1\nGiven:\n- update 1, paragraph «${s3.trim().replace(/\s+/gu, " ").slice(0, 60)}`))
-  assert.equal(d.text.split(s3.trim()).length - 1, 1, "the cited paragraph appears once, in the original")
-  assert.ok(d.text.indexOf("# Acceptance examples\n") < d.text.indexOf("## Original user update 1\n"))
-  assert.ok(d.text.includes(`## Original user update 1\n\n${CANDIDATE_EXAMPLE_INPUT}\n`))
+  assert.ok(!d.text.includes("# Acceptance examples\n"))
+  assert.equal(d.text.split(s3.trim()).length - 1, 1, "the paragraph appears once, in the original")
   assert.equal(d.contract.acceptance[0]!.examples.length, 1)
   assert.ok(d.contract.dropped.some(x => x.kind === "acceptance" && /s99: no such segment/u.test(x.reason)))
   assert.equal(d.reference_text?.startsWith("# Accumulated original user requirements"), true)
@@ -308,9 +308,10 @@ test("the field dictionary precedes the examples; a field the requirements never
   assert.throws(() => checkFields(dict("operator"), original, original), /field "operator" is not a name the requirements write/)
   assert.throws(() => checkFields(dict("condition"), "cut", original), /occurs only in text this delivery cuts/)
   const f = fixture(), d = await compile(f)
-  assert.ok(d.text.indexOf("# Interface and data: field dictionary\n") < d.text.indexOf("# Acceptance examples\n"))
+  // v8: the field dictionary of the objects written this round closes the text, each row naming the passage that writes it.
+  assert.ok(d.text.indexOf("# Interface and data: field dictionary\n") > d.text.indexOf("# Original requirements, grouped by requirement\n"))
   // The fake model gives required yes without the requirements' words: delivered as not stated, and recorded.
-  assert.ok(d.text.includes("| `items` | array | not stated in the original (a sample value is not a constraint) | bundled items |"))
+  assert.match(d.text, /\| `items` \| array \| not stated in the original \(a sample value is not a constraint\) \| bundled items \| update 1 «/u)
   assert.deepEqual(d.required_not_stated, [{ object: "tool", field: "items", was: "yes" }])
 })
 test("an earlier attempt can be adopted; later attempts are superseded and the next round continues from the adopted code", async () => {
@@ -577,11 +578,9 @@ test("the change list quotes the cited passages, keeps only values and subjects 
   assert.deepEqual(changes[0]!.now.map(q => q.segment_id), ["s1"])
   assert.match(dropped[0]!.reason, /not from this update[\s\S]*"manifest" is not written in now/u)
   const ledger = [{ id: "x#1", kind: "acceptance", subject: "verify mismatch", items: [], revisions: {}, first_failed: "r1", last: { event_id: "r1", run_id: "run", passed: false, observed: "printed nothing" }, state: "open" }] as never
-  const section = changeSection(changes, [], ledger, after, "r2")
+  const section = changeSection(changes, [], ledger, after)
   assert.match(section, /^# Changes in this update\n/u)
   assert.match(section, /## Changed: verify digest\nReplaced: `SHA256` → `BLAKE2b-256`\nAs the update says: "`verify`  now uses\nBLAKE2b-256 instead"\nBefore \(original passages\):\n- update 1, paragraph «### verify Computes SHA-256 of `--file`\.»\nNow:\n- update 2, paragraph «Behavior change/u)
-  // With a PRD baseline standing for update 1, its passage is named, not attached (D1).
-  assert.match(changeSection(changes, [], [], after, "r2", 2), /Before \(original passages\):\n- update 1 \(stands in the PRD baseline\)/u)
   assert.match(section, /## New: clip\nListed by code/u); assert.match(section, /## Not yet met: verify mismatch[\s\S]*printed nothing/u)
   // The kind rests on the update's words: a revision without them, or with words its now passages do not write, is rejected.
   const entry = { kind: "revised" as const, subject: "verify digest", items: ["r-verify"], subjects: ["verify"], before: [], now: [{ source_id: "r2", segment_id: "s1" }], old_values: ["SHA-256"], new_values: ["BLAKE2b-256"], parameters: [] }
@@ -593,7 +592,7 @@ test("the change list quotes the cited passages, keeps only values and subjects 
   // An added entry shows no replacement, whatever new values it names.
   const added = settleChanges([{ ...entry, kind: "added", wording: "" }], changed, context).changes
   assert.equal(added[0]!.wording, undefined)
-  assert.doesNotMatch(changeSection(added, [], [], after, "r2"), /Replaced:|As the update says/u)
+  assert.doesNotMatch(changeSection(added, [], [], after), /Replaced:|As the update says/u)
 })
 test("a runs example is kept only when it uses the requirement's own sample, and asserts that it runs", async () => {
   const { keepExamples, usesSample } = await import("../src/core/sdd-executable.js")

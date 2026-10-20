@@ -112,8 +112,8 @@ test("findings IC records are tracked in the ledger and never fed back", async (
   assert.equal(computeLedger({ batches: [], runs: [run("r1", ["p3:command:validate"]), run("r2", [])] } as never, {} as never)[0]!.state, "closed")
 })
 
-test("only a worded revision opens an entry and is delivered however many updates carry it; one recorded without words goes to review and is no longer delivered", async () => {
-  const { changeSection } = await import("../src/core/sdd-changes.js")
+test("only a worded revision opens an entry and stays open however many updates carry it (v8: as status, not as a change); one recorded without words goes to review", async () => {
+  const { changeSection, statusSection } = await import("../src/core/sdd-changes.js")
   const empty = { runs: [], batches: [] } as never
   const items = ir({ "r-verify": 1 })
   // An entry code filled from the IR change, or one without words, is not a revision on the ledger.
@@ -125,12 +125,14 @@ test("only a worded revision opens an entry and is delivered however many update
   let carried = r5
   for (let n = 6; n <= 15; n++) carried = ledgerRevisions(carried, [], empty, items, `r${n}-user-input`, n)
   assert.equal(carried[0]!.state, "open")
-  assert.match(changeSection([], carried, [], items, "r15-user-input"), /## Changed in update 3, not yet confirmed in the code: verify digest/u)
+  // v8: an open earlier revision without evidence is information in the status zone, never a change of this update.
+  assert.equal(changeSection([], [], [], items), "")
+  assert.match(statusSection(carried.filter(r => r.state === "open")), /^# Status of earlier changes\nInformation, not tasks[\s\S]*- Update 3: verify digest/u)
   // An entry recorded before revisions had to rest on words (the R3 profile percentiles) goes to review at once.
   const old = r3.map(r => ({ ...r, subject: "profile percentiles", wording: undefined }))
   const next = ledgerRevisions(old, [], empty, items, "r4-user-input", 4)[0]!
   assert.equal(next.state, "review"); assert.match(next.closed!.reason, /rests on no words of its update/u)
-  assert.equal(changeSection([], [next], [], items, "r4-user-input"), "", "a revision under review is not delivered")
+  assert.equal(changeSection([], [], [], items), "", "a revision under review is not delivered")
   assert.equal(ledgerRevisions([next], [], empty, items, "r5-user-input", 5)[0]!.closed!.event_id, "r4-user-input", "review stays closed")
 })
 
