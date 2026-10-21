@@ -173,8 +173,8 @@ function r10(request: ModelRequest, twice: boolean): AttributionAnswer {
     fresh("R10.S2", "reconcile"),
     to("R10.S7", "pipeline"),
     to("R10.S8", "lineage"),
-    // The first answer also gives the lineage outputs item to pipeline, inside the section it gave to lineage.
-    ...(twice ? [to("R10.S8.P1.s3", "pipeline")] : []),
+    // The first answer refers to the new reconcile object by a guessed id (as gpt-5.6-luna-fast does).
+    ...(twice ? [{ ...fresh("R10.S3", "reconcile"), new_object: null, object_id: `O${request.objects.length + 1}` }] : []),
   ], [
     refers("R10.S2.P2", "R1.S5.P2"),
     refers("R10.S4.P1.s6", "R10.S1.P2.s1"),
@@ -228,7 +228,7 @@ export const SCRIPTS: Record<number, Reply[]> = {
   3: [req => r3(req, true), req => patch({ upsert: [r3(req, false).assignments[1]] })],
   5: [req => r5(req, true), req => patch({ remove: ["R5.S1.P2.s7"], upsert: [helpers(req).fresh("R5.S1.P2.s6", "blake2b-256 digest")] })],
   7: [req => r7(req)],
-  10: [req => r10(req, true), () => patch({ remove: ["R10.S8.P1.s3"] })],
+  10: [req => r10(req, true), () => patch({ remove: ["R10.S3"] })],
   12: [req => r12(req)],
   13: [req => r13(req, true), req => patch({ upsert: [helpers(req).to("R13.S9.P3", "lineage")] })],
   15: [req => r15(req)],

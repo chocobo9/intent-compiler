@@ -141,10 +141,11 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     for (const name of ["manifest", "reconcile", "pipeline", "lineage"]) assert.ok(scope.includes(name))
     const edges = r.references.filter(e => e.round === 10).map(e => `${e.from}->${e.to}`)
     assert.ok(edges.includes("R10.S7.P1->R10.S2") && edges.includes("R10.S8.P1->R10.S2") && edges.includes("R10.S2.P2->R1.S5.P2"))
-    // The first answer gave R10.S8 and an item inside it; the overlap was sent back and the item dropped.
+    // The first answer referred to the new reconcile object by a guessed id; that one root was sent back as one issue.
     assert.deepEqual(byName(r, "lineage").blocks.filter(b => b.round === 10).map(b => b.block), ["R10.S8"])
     const repair = log.find(l => l.round === 10 && l.task === "repair")!.request
-    assert.ok(repair.issues.length === 1 && repair.issues[0].code === "overlap")
+    assert.ok(repair.issues.length === 1 && repair.issues[0].code === "unknown_object")
+    assert.match(repair.issues[0].message, /a new object has no id until this answer is accepted.*this answer creates "reconcile" \(R10\.S2\)/u)
   })
 
   it("R12 and R13: normalize's default is a partial revision over R2; R13's pipeline-support section is split between snapshot, pipeline and lineage", () => {

@@ -212,11 +212,19 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
     return [id]
   }
 
+  // A new object has no id until the answer is accepted. An id that does not exist is one root, however many
+  // assignments and edges use it (BLOCK9 §2.7): one message, naming the new objects this answer does create.
+  const created = [...new Map(answer.assignments.filter(a => a.new_object?.trim()).map(a => [nameKey(a.new_object!), `"${a.new_object!.trim()}" (${a.block})`])).values()]
+  const unknownUses = new Map<string, string[]>()
+  const noSuchObject = (id: string, where: string) => { unknownUses.set(id, [...(unknownUses.get(id) ?? []), where]) }
+  const createdNames = new Set(answer.assignments.filter(a => a.new_object?.trim()).map(a => nameKey(a.new_object!)))
+
   // Assignments: ids, duplicates, objects, change shape.
   const assignments: Assignment[] = []
   const seen = new Map<string, number>()
   const newNames = new Map<string, string>()
-  for (const [i, a] of answer.assignments.entries()) {
+  for (const [i, raw] of answer.assignments.entries()) {
+    const a = { ...raw }
     const where = `assignment ${i + 1} (${a.block})`
     const ids = resolve(a.block, where)
     if (!ids) continue
@@ -230,8 +238,12 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
       if (a.object_id || a.new_object || a.replaces.length || a.overrides.length) add("change_shape", `${where}: change "none" takes no object and no targets`, id)
     } else if (!!a.object_id === !!a.new_object) {
       add("object_choice", `${where}: give exactly one of object_id or new_object`, id)
+    } else if (a.object_id && !registry.objects.has(a.object_id) && createdNames.has(nameKey(a.object_id))) {
+      // The name of a new object of this answer, given where an id goes: it names that object.
+      a.new_object = a.object_id; a.object_id = null
+      if (!newNames.has(nameKey(a.new_object))) newNames.set(nameKey(a.new_object), a.new_object.trim())
     } else if (a.object_id && !registry.objects.has(a.object_id)) {
-      add("unknown_object", `${where}: object ${a.object_id} does not exist`, id)
+      noSuchObject(a.object_id, where)
     } else if (a.new_object) {
       const taken = registry.objectByName(a.new_object)
       if (!a.new_object.trim()) add("object_choice", `${where}: new_object needs a name`, id)
@@ -264,6 +276,23 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   }).map(a => a.block))
   for (let i = assignments.length - 1; i >= 0; i--) if (redundant.has(assignments[i].block)) assignments.splice(i, 1)
 
+  // The most specific assignment wins (BLOCK9 §2.7): a block given to another owner inside an assigned block takes
+  // that owner, and the outer assignment keeps the rest: it is replaced by its parts that hold no inner assignment.
+  // An outer assignment that replaces or overrides earlier text cannot be split that way; it stays an overlap.
+  const inner = new Set(assignments.map(a => a.block))
+  const partsLeft = (id: string): string[] => {
+    const b = registry.block(id)!
+    const holds = (x: SourceBlock): boolean => x.children.some(c => inner.has(c) || holds(registry.block(c)!))
+    if (!holds(b)) return [id]
+    return b.children.filter(c => !inner.has(c)).flatMap(partsLeft)
+  }
+  for (let i = assignments.length - 1; i >= 0; i--) {
+    const a = assignments[i]
+    const holdsInner = assignments.some(x => x !== a && registry.lineage(x.block).slice(1).some(b => b.id === a.block))
+    if (!holdsInner || a.replaces.length || a.overrides.length) continue
+    assignments.splice(i, 1, ...partsLeft(a.block).map(block => ({ ...a, block })))
+  }
+
   // Coverage: every block of the round exactly once.
   const assigned = new Set(assignments.map(a => a.block))
   const byId = new Map(source.blocks.map(b => [b.id, b]))
@@ -274,10 +303,10 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
     if (above) inside.set(above.id, [...(inside.get(above.id) ?? []), id])
   }
   for (const [outer, ids] of inside) {
-    const heading = byId.get(outer)?.heading
     const owner = (id: string) => { const a = byBlock.get(id)!; return a.change === "none" ? "none" : a.object_id ?? a.new_object! }
     const owners = [...new Set(ids.map(owner))]
-    add("overlap", `${outer} is assigned to ${owner(outer)} and ${ids.length === 1 ? "a block" : `${ids.length} blocks`} inside it to ${owners.length > 4 ? `${owners.slice(0, 4).join(", ")} and ${owners.length - 4} more` : owners.join(", ")}${owners.includes(owner(outer)) ? " (or with targets of their own)" : ""} (${ids.join(", ")}); a block is covered once: drop ${outer}${heading ? ` (to give its heading line alone an owner, assign ${outer}.H)` : ""}, or drop ${ids.length === 1 ? "that block" : "those"}`, outer)
+    const rest = partsLeft(outer)
+    add("overlap", `${outer} replaces or overrides earlier text, so it cannot be split around the ${ids.length === 1 ? "block" : `${ids.length} blocks`} inside it given to ${owners.length > 4 ? `${owners.slice(0, 4).join(", ")} and ${owners.length - 4} more` : owners.join(", ")} (${ids.join(", ")}). Either give its targets to the parts that hold them and assign its own parts ${rest.join(", ")} instead of ${outer}, or drop ${ids.length === 1 ? "that block" : "those"} so ${outer} covers ${ids.length === 1 ? "it" : "them"}`, outer)
     issues[issues.length - 1].blocks = [outer, ...ids]
   }
   // A heading unit needs no owner of its own when its section has other content.
@@ -300,6 +329,7 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   // Edges: both ends exist; the citing end is in this round; applies_to lands on another object.
   const references: Reference[] = []
   const ownerNow = (id: string): string | undefined => {
+    if (id.startsWith("new:")) return id
     if (/^O\d+$/u.test(id)) return registry.objects.has(id) ? id : undefined
     const here = registry.lineage(id).map(b => assignments.find(x => x.block === b.id)).find(Boolean)
     if (here) return here.change === "none" ? "none" : here.object_id ?? `new:${nameKey(here.new_object!)}`
@@ -310,21 +340,29 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
     if (r.kind !== "refers_to" && r.kind !== "applies_to") { add("reference_invalid", `${w}: kind must be refers_to or applies_to`); continue }
     // Either kind may point at an object by id (DESIGN §12d item 1): refers_to then means that object's current text.
     const objectTarget = /^O\d+$/u.test(r.to.trim())
-    if (objectTarget && !registry.objects.has(r.to.trim())) { add("reference_invalid", `${w}: there is no object ${r.to.trim()} yet (objects so far: O1–O${registry.allocatedCount}); an object made this round has no id until it is accepted, so point at one of its blocks instead`); continue }
-    const from = resolve(r.from, `${w} from`), to = objectTarget ? [r.to.trim()] : resolve(r.to, `${w} to`)
+    if (objectTarget && !registry.objects.has(r.to.trim())) { noSuchObject(r.to.trim(), w); continue }
+    // A new object of this answer is pointed at by its name.
+    const newTarget = !objectTarget && newNames.has(nameKey(r.to)) ? `new:${nameKey(r.to)}` : null
+    const from = resolve(r.from, `${w} from`), to = objectTarget ? [r.to.trim()] : newTarget ? [newTarget] : resolve(r.to, `${w} to`)
     if (!from || !to) continue
     if (from.length !== 1 || to.length !== 1) { add("reference_invalid", `${w}: each end names one block`); continue }
     if (roundOf(from[0]) !== round) { add("reference_invalid", `${w}: ${from[0]} is not in round ${round}; the citing block is this round's`); continue }
-    if (!objectTarget && roundOf(to[0]) > round) { add("reference_invalid", `${w}: ${to[0]} is in a later round`); continue }
+    if (!objectTarget && !newTarget && roundOf(to[0]) > round) { add("reference_invalid", `${w}: ${to[0]} is in a later round`); continue }
     if (r.kind === "applies_to") {
       const by = ownerNow(from[0]), target = ownerNow(to[0])
       if (!by || by === "none") { add("reference_invalid", `${w}: ${from[0]} belongs to no object, so its requirement cannot apply elsewhere`); continue }
       if (!target || target === "none") { add("reference_invalid", `${w}: ${to[0]} belongs to no object; point applies_to at a block of the object, or at its id`); continue }
-      if (target === by) { add("reference_invalid", `${w}: ${to[0]} belongs to the same object as ${from[0]}; applies_to names another object`); continue }
+      // The citing block is already that object's own text: the edge says nothing more, and is left out.
+      if (target === by) continue
     }
     if (!references.some(x => x.from === from[0] && x.to === to[0] && x.kind === r.kind)) references.push({ from: from[0], to: to[0], kind: r.kind })
   }
   const interpretations = answer.interpretations.map((n, i) => ({ blocks: n.blocks.flatMap(b => resolve(b, `interpretation ${i + 1}`) ?? []), text: n.text }))
+  // Ids that do not exist are one root however many places use them (BLOCK9 §2.7): one issue.
+  if (unknownUses.size) {
+    const ids = [...unknownUses.keys()]
+    add("unknown_object", `${ids.map(id => `${id} is used by ${unknownUses.get(id)!.join(", ")}`).join("; ")}. There ${ids.length === 1 ? `is no object ${ids[0]}` : `are no objects ${ids.join(", ")}`} yet (objects so far: O1–O${registry.allocatedCount}): a new object has no id until this answer is accepted. Wherever you mean a new object, give its name, as new_object in an assignment or as the \`to\` of an edge${created.length ? `; this answer creates ${created.join(", ")}` : ""}`)
+  }
 
   if (issues.length) return { issues: byCause(issues) }
   // Ids for new objects: next free numbers, in document order of their first block.
@@ -332,6 +370,8 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   const firsts = [...newNames.entries()].map(([key, name]) => ({ key, name, at: Math.min(...assignments.filter(a => a.new_object && nameKey(a.new_object) === key).map(a => order.indexOf(a.block))) }))
   firsts.sort((a, b) => a.at - b.at)
   const allocated = firsts.map((f, k) => ({ name: f.name, id: `O${registry.allocatedCount + k + 1}` }))
+  // Edges that named a new object now get its id.
+  for (const r of references) if (r.to.startsWith("new:")) r.to = allocated.find(x => nameKey(x.name) === r.to.slice(4))!.id
   assignments.sort((a, b) => order.indexOf(a.block) - order.indexOf(b.block))
   return { issues, acceptance: { round, answer: { assignments, references, interpretations }, allocated } }
 }
@@ -560,7 +600,7 @@ export const ATTRIBUTION_SYSTEM_PROMPT = [
   "You register requirement text into objects. The request holds every round of the original requirements so far (`sources`, the new round last); the original text is the only authority, and newer text overrides older text.",
   "Block ids: ⟦R3.S2⟧ marks a section (a heading and everything under it, subsections included), ⟦R3.S2.P1⟧ a paragraph, ‹s2› a unit inside the paragraph (a sentence, a list item, a code block or a table) and ‹s2.c1› a clause of a sentence or list item; the full id of a unit is R3.S2.P1.s2, of a clause R3.S2.P1.s2.c1. Ids may carry the shown hash (R3.S2.P1#ab12cd34). Units are marked only where a paragraph has more than one, clauses only where a unit has more than one.",
   "An object is a unit of requirement that the text names with a stable name and whose parts are revised together: a command, an operation, a pipeline step, a shared convention. Parameters, fields and options are never objects; a change to them is a change to their object.",
-  "A section's heading line alone, without anything under it, is the unit R3.S2.H (no marker of its own); give it an owner only when the heading itself needs one apart from its content (for example none for a heading over subsections that belong elsewhere). For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round is covered exactly once: a section covers everything inside it, so do not also assign its paragraphs. Clauses serve to say which part of earlier text a partial revision changes.",
+  "A section's heading line alone, without anything under it, is the unit R3.S2.H (no marker of its own); give it an owner only when the heading itself needs one apart from its content (for example none for a heading over subsections that belong elsewhere). For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round has one owner: a block assigned inside an assigned block takes its own owner, and the outer block keeps the rest of its text (the most specific assignment wins). A new object has no id until the answer is accepted: refer to it by the same new_object name wherever you mean it, and by that name as the `to` of an edge. Clauses serve to say which part of earlier text a partial revision changes.",
   "The change field's values are defined by their effect on earlier text, as its description says. Cite ids only; never copy text. Earlier units may belong to another object; cite them anyway. Ranges like R2.S9.P4.s2..s4 are allowed. Cite only text still in force: what a later round replaced is cited through its replacement.",
   "Edges: when a block's own wording names another object, add an edge. refers_to: this block depends on that text or object (so its checks are derived again when that changes). applies_to: this block changes that object's behaviour (so that object gets a change record and is worked on this round). Either may point at a block or at an object's id. `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself names it, not whether it ought to. Never infer edges from patterns across rounds.",
   "interpretations: only when two blocks of the same round disagree, or the extent of a partial revision is unclear, write a short reading citing the blocks; it is marked as interpretation, not source.",

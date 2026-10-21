@@ -38,10 +38,10 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
   it("all 15 attribution rounds stay accepted; the repair answers the new rules make unnecessary are reported", async () => {
     for (let round = 1; round <= 15; round++) assert.equal((await store.ingestRound(round, roundText(round), replay.attribution, { maxRepairs: 2 })).status, "accepted", `R${round}`)
     const calls = store.inspect().calls
-    // Only R1 still needs its repair (R1.S1 marked none over sections with other owners); R6, R9, R10, R11, R12, R15
-    // now pass on the first answer, so their recorded repairs go unused.
-    assert.deepEqual([...new Set(calls.filter(c => c.kind === "repair").map(c => c.round))], [1])
-    assert.deepEqual(replay.unused().filter(u => u.step === "attribution").map(u => `R${u.round}#${u.answer}`), ["R6#2", "R9#2", "R10#2", "R11#2", "R12#2", "R15#2"])
+    // Every round now passes on the first answer: R1.S1 marked none over sections with other owners keeps its own
+    // heading (the most specific assignment wins, BLOCK9 §2.7); refers_to objects and same-owner nesting are fine.
+    assert.deepEqual(calls.filter(c => c.kind === "repair").map(c => c.round), [])
+    assert.deepEqual(replay.unused().filter(u => u.step === "attribution").map(u => `R${u.round}#${u.answer}`), ["R1#2", "R6#2", "R9#2", "R10#2", "R11#2", "R12#2", "R15#2"])
     assert.ok(calls.every(c => c.usage_unknown === true && c.stub === false && /haiku/u.test(c.model ?? "")), "no usage recorded: unknown, not zero")
   })
 
@@ -52,7 +52,7 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
     assert.ok(checked.acceptance!.answer.references.some(e => e.kind === "refers_to" && e.from === "R6.S2.P3" && e.to === "O17"))
     // An id that does not exist is named as such, with the ids there are.
     const wrong = applyPatch(EMPTY_DRAFT, { ...answer("R6-ans1.json"), edges_add: [{ from: "R6.S2.P3", to: "O999", kind: "refers_to" }] })
-    assert.match(checkAnswer(r6, 6, wrong).issues[0].message, /there is no object O999 yet \(objects so far: O1–O\d+\)/u)
+    assert.match(checkAnswer(r6, 6, wrong).issues[0].message, /There is no object O999 yet \(objects so far: O1–O\d+\)/u)
     // R7 partly revises lineage (O40), which R6.S2.P3 refers to: a check resting on R6.S2.P3 goes stale through the edge.
     const all = store.registry()
     const check = { id: "K1", round: 6, key: "k", object: all.coverOf("R6.S2.P3")!.owner, blocks: ["R6.S2.P3"], uses: [], direction: "holds", input: { args: [], files: [] }, assertions: [], unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [] } as unknown as CheckRecord
@@ -240,5 +240,38 @@ describe("exp2 readings the text does not state (§12d item 10), on the real R4 
     later.references.push({ from: "R5.S1.P1", to: "R4.S3.P1", kind: "refers_to", round: 5 })
     assert.deepEqual(staleChecks(later, [k], [], 5).map(e => e.cause), [{ kind: "refers_to", source: "R5.S1.P1" }])
     assert.deepEqual(staleChecks(later, [record(draft.assertions)], [], 5), [], "a check without a reading is not staled by a mere mention")
+  })
+})
+
+describe("exp2 recordings: gpt-5.6-luna-fast medium attribution R1–R8 (BLOCK9 §2.7), replayed by answer order", () => {
+  const LUNA = join(HAIKU, "..", "luna56-medium-attr")
+  const recorded = readFileSync(join(LUNA, "rounds.jsonl"), "utf8").trim().split("\n").map(l => JSON.parse(l) as { round: number; status: string; calls: number })
+
+  it("every round passes, with no more calls than when recorded; R8 no longer goes back and forth", async () => {
+    const replay = replayByRound(loadCassette(join(LUNA, "cassette.json")))
+    const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-l56-")), "l56")
+    const calls: number[] = [], codes: string[][][] = []
+    for (let round = 1; round <= 8; round++) {
+      assert.equal((await store.ingestRound(round, roundText(round), replay.attribution, { maxRepairs: 2 })).status, "accepted", `R${round}`)
+      const mine = store.inspect().calls.filter(c => c.round === round)
+      calls.push(mine.length)
+      codes.push(mine.map(c => c.issues.map(i => i.code)))
+    }
+    assert.deepEqual(recorded.map(r => r.status), ["accepted", "accepted", "accepted", "accepted", "accepted", "accepted", "accepted", "failed"])
+    for (const [i, n] of calls.entries()) assert.ok(n <= recorded[i].calls, `R${i + 1}: ${n} calls, recorded ${recorded[i].calls}`)
+    assert.deepEqual(calls, [1, 2, 3, 2, 2, 1, 2, 1])
+    // One root, one issue: the guessed ids of new objects are a single issue in each round where they occur.
+    for (const round of codes) for (const answer of round) assert.ok(answer.filter(c => c === "unknown_object").length <= 1)
+    // No round sees an issue code come back after it was gone.
+    for (const round of codes) round.forEach((answer, k) => { for (const c of answer) assert.ok(!(k >= 2 && !round[k - 1].includes(c) && round.slice(0, k - 1).some(a => a.includes(c))), `${c} came back`) })
+  })
+
+  it("the R8 first answer: the section given to the new object keeps its own parts, the subsections their owners", async () => {
+    const replay = replayByRound(loadCassette(join(LUNA, "cassette.json")))
+    const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-l56-")), "l56")
+    for (let round = 1; round <= 8; round++) await store.ingestRound(round, roundText(round), replay.attribution, { maxRepairs: 2 })
+    const r = store.registry(), quality = r.objectByName("quality command")!
+    assert.deepEqual(quality.blocks.map(b => b.block), ["R8.S1.H", "R8.S1.P1", "R8.S1.P2"])
+    assert.equal(r.coverOf("R8.S2")!.owner, "O9")
   })
 })

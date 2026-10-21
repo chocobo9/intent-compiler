@@ -39,7 +39,15 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     const variant = (edit: (a: AttributionAnswer) => void) => { const a = structuredClone(good); edit(a); return codes(a, r3, 3) }
     assert.deepEqual(variant(a => { a.assignments.splice(5, 1) }), ["uncovered"], "a missing block")
     assert.deepEqual(variant(a => { a.assignments[2].block = "R3.S33" }), ["uncovered", "unknown_block"], "a wrong id")
-    assert.deepEqual(variant(a => { a.assignments.push({ ...a.assignments[4], block: "R3.S8.P1", object_id: a.assignments[4].object_id === "O1" ? "O2" : "O1", new_object: null }) }), ["overlap"], "a block inside one already given, to another object")
+    // The most specific assignment wins (BLOCK9 §2.7): an inner block to another object splits the outer one.
+    const other = (a: AttributionAnswer) => a.assignments[4].object_id === "O1" ? "O2" : "O1"
+    assert.deepEqual(variant(a => { a.assignments.push({ ...a.assignments[4], block: "R3.S8.P1", object_id: other(a), new_object: null }) }), [], "a block inside one already given, to another object")
+    const split = structuredClone(good); split.assignments.push({ ...split.assignments[4], block: "R3.S8.P1", object_id: other(split), new_object: null })
+    const blocks = checkAnswer(r3, 3, split).acceptance!.answer.assignments.map(x => x.block)
+    assert.ok(!blocks.includes(good.assignments[4].block) && blocks.includes("R3.S8.P1"), "the outer block is replaced by its parts outside the inner one")
+    // An outer block that overrides earlier text cannot be split around another owner's block: an overlap naming its own parts.
+    const inside = (a: AttributionAnswer) => `${a.assignments[1].block}.P1`
+    assert.deepEqual(variant(a => { a.assignments.push({ ...a.assignments[4], block: inside(a), object_id: other(a), new_object: null, change: "add", replaces: [], overrides: [] }) }), ["overlap"], "inside an overriding block, to another object")
     assert.deepEqual(variant(a => { a.assignments.push({ ...a.assignments[4], block: "R3.S8.P1" }) }), [], "the same owner nested is one assignment (§12d item 2)")
     assert.deepEqual(variant(a => { a.assignments.push(a.assignments[4]) }), ["duplicate"], "the same block twice")
     assert.deepEqual(variant(a => { a.assignments[1].overrides[0].old = ["R2.S13.P4.s4..s9"] }), ["range_invalid"], "a range past the end")
@@ -190,9 +198,11 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     const ingest = r5.objectByName("ingest")!.id
     const variant = (edge: { from: string; to: string }) => codes({ ...good, references: [...good.references, { ...edge, kind: "applies_to" }] }, r5, 5)
     assert.deepEqual(variant({ from: "R5.S0", to: r5.objectByName("transform")!.id }), ["reference_invalid"], "from text that belongs to no object")
-    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: ingest }), ["reference_invalid"], "to the block's own object")
-    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R1.S2.P1" }), ["reference_invalid"], "to a block of the same object")
-    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "O999" }), ["reference_invalid"])
+    // An edge from an object's own text to that object says nothing more: it is left out, not an error.
+    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: ingest }), [], "to the block's own object")
+    assert.ok(!checkAnswer(r5, 5, { ...good, references: [...good.references, { from: "R5.S1.P2.s5", to: ingest, kind: "applies_to" }] }).acceptance!.answer.references.some(e => e.to === ingest && e.from === "R5.S1.P2.s5"))
+    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R1.S2.P1" }), [], "to a block of the same object")
+    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "O999" }), ["unknown_object"])
     assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R1.S6.P2" }), [], "to a block of another object")
     assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R5.S2.P1" }), [], "to a block of an object new this round")
   })
