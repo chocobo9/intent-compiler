@@ -1,0 +1,224 @@
+{
+ "bare_219": [],
+ "bare_rep2_218": [
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s4",
+   "reason": "The recipe sets as names rank, dense, rownum, prev, next, sum, avg, tile, and the spec says as is the name of the new column. The output header is 'id,cat,value,,,,,,,,' with empty names for all new columns. The computed values (rank, dense_rank, row_number, lag, lead, running_sum, running_avg, ntile) match the spec, but the column names are missing."
+  }
+ ],
+ "bare_rep3_218": [],
+ "bare_rep4_218": [
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s4",
+   "reason": "The recipe sets as names rank, dense, rownum, prev, next, sum, avg, tile, and the spec says as is the name of the new column. The output header is 'id,cat,value,,,,,,,,' with empty names for all new columns. The computed values (rank, dense_rank, row_number, lag, lead, running_sum, running_avg, ntile) match the spec, but the column names are missing."
+  }
+ ],
+ "shell_191": [
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s1",
+   "reason": "All referenced columns exist and the window recipe is valid, so it should produce output. The run panics (index out of range [-1] at main.go:92) with exit code 2 and writes no out.csv, so the window function rules cannot be confirmed as followed."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s10",
+   "reason": "Max over only non-numeric and empty values must give NaN, since no numeric values exist. The output writes -Inf, so the NaN requirement is contradicted."
+  }
+ ],
+ "cf_218": [],
+ "cf_rep2_217": [],
+ "cf_rep3_203": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P5.s2",
+   "reason": "Every derive expression in the recipe has balanced parentheses and uses only the documented functions and operators, yet the run exits 1 with 'ERROR: invalid recipe: missing ) after function'. The spec requires these function-call and operator expressions to be evaluated, so the rejection contradicts the units."
+  }
+ ],
+ "cf_rep4_215": [
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s3",
+   "reason": "order_by specifies 'desc' for rank, dense_rank and row_number, so in partition a (values 5, 10, 10 in input order) the 10-rows must come first. Expected rank for id3 (value 5) is 3, dense 2, row_number 3, and ids 1 and 2 must tie at rank 1. The program gave id3 rank 1, dense 1, row_number 1, and ids 1 and 2 rank 2, so the desc ordering was ignored and ascending order was used. The lag, lead, running_sum, running_avg and ntile columns match the spec. Partition b's non-numeric 'x' ordering under desc is not specified, so it is not counted against the program."
+  }
+ ],
+ "IC_215": [
+  {
+   "probe": "aggregate-having",
+   "unit": "R1.S3.P9.s5",
+   "reason": "Group z has numeric values 60 and 50, so max must be 60 (the max definition in the full requirements: maximum numeric value). The output gives maximum 50. The sum 110, avg 55, count 2 and min 50 for z, and the having filter (total gte 50 keeps z, drops a and b), are correct."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P14.s9",
+   "reason": "ntile with n=4 over 6 rows, ordered by id, should give groups 1,1,2,2,3,4 (ids 1..6). The output gives id3=4, id4=4, id5=4 and id6=4, while ids 3, 4 and 5 should be 2, 2 and 3. Also, the output header has empty names for all 8 new columns (rank, dense, rownum, prev, next, sum, avg, tile), which contradicts R1.S3.P13.s4 ('as: name of the new column to create'). The values of rank, dense_rank, row_number, lag, lead, running_sum and running_avg do match the spec."
+  }
+ ],
+ "luna56m_201": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P2.s5",
+   "reason": "The constant expression 1 + 2 * 3 must give 7 on every row, but rows 2 and 3 give NaN for precedence, and every derived column is NaN there. For example eqval for value==value with value 3.5 should be 1, and absval should be 3.5. Only row 1 is correct."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P14.s9",
+   "reason": "Unit says ntile with n=4 over 6 rows gives two groups of 2 rows then two groups of 1 row, so ids 1,2 get 1; 3,4 get 2; 5 gets 3; 6 gets 4. The output gives id2=2, id4=3, id5=4, while id1=1, id3=2 and id6=4 match. Also R1.S3.P14.s3 (dense_rank, no gaps) is contradicted in partition b: value 4 (id6) has dense 2 but value 2 (id5) also has dense 2, though 2 ranks after 4 (rank column shows 2 and 3). Rank, row_number, lag, lead, running_sum and running_avg match the text."
+  }
+ ],
+ "luna56m_208": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P3.s8 (unary minus is a supported operator, precedence level 7)",
+   "reason": "The recipe derive expression -value is rejected with exit 1 and stderr ERROR: invalid recipe: invalid expression, but the spec lists unary minus as a supported operator, so a valid expression was refused."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P14.s8",
+   "reason": "running_avg must skip non-numeric values from numerator and denominator, and give NaN when no numeric value exists up to the row. Output: row 4 (value x) has running_avg 0 where NaN is required; row 5 has 1 where 2 is required (x was counted in the denominator); row 6 has 2 where 3 is required. Also R1.S3.P14.s9 (ntile n=4, k=6 gives group sizes 2,2,1,1) is violated at row 4: expected tile 2, output 3. rank, dense_rank, row_number, lag, lead and running_sum match the spec."
+  },
+  {
+   "probe": "invalid-recipes",
+   "unit": "R1.S3.P17.s1",
+   "reason": "The reference to the missing column in partition_by exits 1, but the stderr text is 'ERROR: invalid recipe: invalid reference: missing'. The spec requires 'ERROR: invalid recipe: column <name> not found'."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s10",
+   "reason": "Max over only the empty and non-numeric values of group all has no numeric value, so the result must be NaN. The output writes 0."
+  }
+ ],
+ "luna56m_219": [],
+ "luna6m_91": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P3.s9",
+   "reason": "The first derive expression '1 + 2 * 3' uses only numeric literals and + and *, which the precedence list (items 5, 6 and 8) requires the evaluator to support. The program instead exited 1 with 'derive expression not implemented', wrote no output, and stopped at the first derive. The spec has no such 'not implemented' error."
+  },
+  {
+   "probe": "aggregate-having",
+   "unit": "R1.S3.P9.s5",
+   "reason": "The recipe is a valid aggregate (sum, avg, count, min, max, plus having), but the run exits 1 with ERROR: invalid recipe: aggregate operation not implemented and writes no output. The spec defines aggregate and having, so a valid recipe should produce output."
+  },
+  {
+   "probe": "join",
+   "unit": "R1.S3.P12.s1",
+   "reason": "The join op is specified in full (inner and left joins, output columns, first-match rule), but the run exits 1 with 'ERROR: invalid recipe: join operation not implemented'. The op is rejected instead of being applied."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s1",
+   "reason": "The spec makes window a supported transform operation with functions rank, dense_rank, row_number, lag, lead, running_sum, running_avg and ntile. The run exits 1 with 'ERROR: invalid recipe: window operation not implemented', although the recipe references only existing columns (cat, value, id) and no other error applies. No out.csv is produced."
+  },
+  {
+   "probe": "pivot",
+   "unit": "R1.S3.P18.s1",
+   "reason": "The pivot op is specified in full, but the run exits 1 with 'ERROR: invalid recipe: pivot operation not implemented'. The op is rejected instead of being applied."
+  },
+  {
+   "probe": "unpivot",
+   "unit": "R1.S3.P20.s1",
+   "reason": "The unpivot op is specified in full, but the run exits 1 with 'ERROR: invalid recipe: unpivot operation not implemented'. The op is rejected instead of being applied."
+  },
+  {
+   "probe": "invalid-recipes",
+   "unit": "R1.S3.P17.s1",
+   "reason": "Window partition_by references a non-existent column 'missing', which must exit 1 with the message ERROR: invalid recipe: column missing not found. The run exits 1 but prints ERROR: invalid recipe: window operation not implemented, which does not match the required message."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s10",
+   "reason": "A valid aggregate with function max exits 1 with ERROR: invalid recipe: aggregate operation not implemented; the spec defines max as a supported aggregation (result NaN when no numeric values), so the group all should have produced output with maximum NaN."
+  }
+ ],
+ "luna6m_84": [
+  {
+   "probe": "aggregate-having",
+   "unit": "R1.S3.P11.s1; R1.S3.P11.s5; R1.S3.P11.s8",
+   "reason": "The aggregate recipe with a valid having clause (column total matches an as name) exits 1 with empty stdout, empty stderr and no out.csv; the spec requires the having clause to filter output rows, so a result file with the group z (total 110) was expected."
+  },
+  {
+   "probe": "join",
+   "unit": "R1.S3.P12.s6",
+   "reason": "A valid left join of left.csv with right.csv on id should write out.csv with rows for ids 2, 1, 3 (right columns empty for ids 2 and 3). The run exits 1 with empty stdout and stderr and writes no out.csv."
+  },
+  {
+   "probe": "pivot",
+   "unit": "R1.S3.P19.s4",
+   "reason": "Pivot on a valid recipe (index id, column label, value value) should write rows with header id,A,B (id 1: one-a, one-b; id 2: two-a, first-b). The run exits 1 silently with no stderr and no out.csv."
+  },
+  {
+   "probe": "unpivot",
+   "unit": "R1.S3.P21.s4",
+   "reason": "Unpivot of q1,q2,q3 over two input rows should produce six output rows with columns id,quarter,amount, keeping empty values. The run exits 1 with no stderr and no out.csv."
+  },
+  {
+   "probe": "missing-file",
+   "unit": "R1.S8.P1.s1",
+   "reason": "A missing input file gives exit code 1 as required, but stderr is empty. The spec requires stderr 'ERROR: file not found: <path>'."
+  },
+  {
+   "probe": "malformed-json",
+   "unit": "R1.S8.P1.s4",
+   "reason": "A malformed recipe JSON gives exit code 1 as required, but stderr is empty. The spec requires stderr 'ERROR: malformed JSON: <path>'."
+  },
+  {
+   "probe": "invalid-pattern",
+   "unit": "R1.S8.P1.s5",
+   "reason": "An invalid regex pattern '[' gives exit code 1 as required, but stderr is empty. The spec requires stderr 'ERROR: invalid pattern: <pattern>'."
+  },
+  {
+   "probe": "invalid-recipes",
+   "unit": "R1.S3.P17.s1; R1.S3.P19.s8; R1.S3.P21.s6; R1.S8.P1.s3",
+   "reason": "Window recipe with partition_by naming a missing column exits 1 but stderr is empty; the spec requires stderr ERROR: invalid recipe: column missing not found for a non-existent referenced column."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s10",
+   "reason": "The max aggregation over values 'nope' and empty has no numeric values, and the unit says the result is NaN in that case, so the run should succeed with a group 'all' whose maximum is NaN. The program exited 1 with empty stderr and stdout and produced no out.csv, so it failed silently on a case the spec defines."
+  }
+ ],
+ "luna6m_122": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P5.s2",
+   "reason": "Unit says abs(x) returns the absolute value. In this run abs(value) is NaN for every row, e.g. abs(-4) should be 4 and abs(3.5) should be 3.5. The other function derives (sqrt, ceil, floor, round, pow, log, min, max, clamp, coalesce, nested round(sqrt(abs(...)))) are NaN too, and if(value>0,value,0) gives 0 for 3.5 and 12. Also R1.S3.P7.s1 is contradicted: (value > 10 && value < 100) * value gives 0 for value 12, where it should give 12. Precedence (1+2*3=7), || (0||2=1), ==, !=, unary minus and NaN for division or modulo by zero are correct."
+  },
+  {
+   "probe": "aggregate-having",
+   "unit": "R1.S3.P11.s4",
+   "reason": "The having clause uses condition 'gte', which the text lists as a valid operator, and every aggregation function (sum, avg, count, min, max) is one the spec defines. The program exited 1 with 'unsupported aggregate configuration' and produced no output. Expected output is one row for group z (total 110, average 55, num 2, minimum 50, maximum 60), with groups a and b excluded by the having filter."
+  },
+  {
+   "probe": "join",
+   "unit": "R1.S3.P12.s6; R1.S3.P12.s4",
+   "reason": "A valid left join with on=id existing in both datasets (duplicate right keys are allowed, first one used) exits 1 with ERROR: invalid recipe: unsupported join configuration; the spec requires left join to output all left rows, filling right columns with empty strings for unmatched keys."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s1",
+   "reason": "The window op is a supported transformation per the text (R1.S3.P13.s1 and the window function list), but the run exits 1 with 'ERROR: invalid recipe: unsupported operation window' and writes no output. The text requires the window op to be accepted and applied."
+  },
+  {
+   "probe": "pivot",
+   "unit": "R1.S3.P18.s1; R1.S3.P19.s3; R1.S3.P19.s6; R1.S3.P19.s7",
+   "reason": "A valid pivot recipe exits 1 with ERROR: invalid recipe: unsupported operation pivot; the spec defines pivot as a supported operation with a defined output."
+  },
+  {
+   "probe": "unpivot",
+   "unit": "R1.S3.P20.s1; R1.S3.P21.s2; R1.S3.P21.s4",
+   "reason": "A valid unpivot recipe exits 1 with ERROR: invalid recipe: unsupported operation unpivot; the spec defines unpivot as a supported operation producing one row per melted column."
+  },
+  {
+   "probe": "invalid-recipes",
+   "unit": "R1.S3.P17.s1",
+   "reason": "The recipe is a window op whose partition_by references the column 'missing', which does not exist in data.csv (id,value). The spec requires exit with 'ERROR: invalid recipe: column missing not found'. The program instead printed 'ERROR: invalid recipe: unsupported operation window'. The window op is a supported operation in the spec, so that message also contradicts the spec."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s10",
+   "reason": "The group 'all' has only non-numeric or empty values in 'value', so max must be NaN and the output should be written. Instead the run exits 1 with 'ERROR: invalid recipe: unsupported aggregate configuration'. max is a supported function and the referenced columns exist, so the error contradicts the unit's rule that the result is NaN when no numeric values exist."
+  }
+ ]
+}

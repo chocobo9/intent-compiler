@@ -1,0 +1,644 @@
+{
+ "probes": [
+  {
+   "id": "ingest-validation",
+   "units": [
+    "R1.S2.P1.s1",
+    "R1.S2.P2.s1",
+    "R1.S2.P2.s2",
+    "R1.S2.P3.s2",
+    "R1.S2.P3.s3",
+    "R1.S2.P3.s4",
+    "R1.S2.P4.s1",
+    "R1.S2.P4.s2",
+    "R1.S2.P5.s1",
+    "R1.S2.P6.s1",
+    "R1.S2.P6.s3"
+   ],
+   "args": [
+    "ingest",
+    "--input",
+    "input.csv",
+    "--schema",
+    "schema.json",
+    "--output",
+    "clean.csv"
+   ],
+   "files": [
+    {
+     "path": "input.csv",
+     "content": "id,value,label,timestamp\n2,10,A,2024-01-02T00:00:00Z\n1,5,B,2024-01-01T00:00:00Z\n2,20,C,2024-01-03T00:00:00Z\n3,-1,D,2024-01-04T00:00:00Z\nx,7,E,2024-01-05T00:00:00Z\n4,7,abc,2024-01-06T00:00:00Z\n5,8,F,bad\n6,100,G,2024-01-07T00:00:00Z\n7,,H,2024-01-08T00:00:00Z\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true,\"unique\":true},{\"name\":\"value\",\"type\":\"float\",\"required\":true,\"min\":0,\"max\":100},{\"name\":\"label\",\"type\":\"string\",\"required\":false,\"pattern\":\"^[A-Z]\"},{\"name\":\"timestamp\",\"type\":\"datetime\",\"required\":true}],\"primary_key\":[\"label\",\"id\"]}"
+    }
+   ]
+  },
+  {
+   "id": "transform-expressions",
+   "units": [
+    "R1.S3.P1.s1",
+    "R1.S3.P2.s2",
+    "R1.S3.P2.s5",
+    "R1.S3.P8.s1",
+    "R1.S3.P8.s2",
+    "R1.S3.P3.s2",
+    "R1.S3.P3.s3",
+    "R1.S3.P3.s4",
+    "R1.S3.P3.s5",
+    "R1.S3.P3.s6",
+    "R1.S3.P3.s7",
+    "R1.S3.P3.s8",
+    "R1.S3.P3.s9",
+    "R1.S3.P4.s1",
+    "R1.S3.P4.s2",
+    "R1.S3.P4.s3",
+    "R1.S3.P5.s2",
+    "R1.S3.P5.s3",
+    "R1.S3.P5.s4",
+    "R1.S3.P5.s5",
+    "R1.S3.P5.s6",
+    "R1.S3.P5.s7",
+    "R1.S3.P5.s8",
+    "R1.S3.P5.s9",
+    "R1.S3.P5.s10",
+    "R1.S3.P5.s11",
+    "R1.S3.P5.s12",
+    "R1.S3.P5.s13",
+    "R1.S3.P6.s1",
+    "R1.S3.P7.s1",
+    "R1.S3.P24.s1"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "99"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,value,other\n1,-4,2\n2,3.5,0\n3,12,5\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"precedence\",\"expression\":\"1 + 2 * 3\"},{\"op\":\"derive\",\"name\":\"logic\",\"expression\":\"(value > 10 && value < 100) * value\"},{\"op\":\"derive\",\"name\":\"orval\",\"expression\":\"0 || 2\"},{\"op\":\"derive\",\"name\":\"eqval\",\"expression\":\"value == value\"},{\"op\":\"derive\",\"name\":\"neqval\",\"expression\":\"value != other\"},{\"op\":\"derive\",\"name\":\"neg\",\"expression\":\"-value\"},{\"op\":\"derive\",\"name\":\"divzero\",\"expression\":\"value / 0\"},{\"op\":\"derive\",\"name\":\"modzero\",\"expression\":\"value % 0\"},{\"op\":\"derive\",\"name\":\"nancompare\",\"expression\":\"(value / 0) == 1\"},{\"op\":\"derive\",\"name\":\"absval\",\"expression\":\"abs(value)\"},{\"op\":\"derive\",\"name\":\"sqrtval\",\"expression\":\"sqrt(abs(value))\"},{\"op\":\"derive\",\"name\":\"ceilval\",\"expression\":\"ceil(value)\"},{\"op\":\"derive\",\"name\":\"floorval\",\"expression\":\"floor(value)\"},{\"op\":\"derive\",\"name\":\"roundval\",\"expression\":\"round(value, 1)\"},{\"op\":\"derive\",\"name\":\"powval\",\"expression\":\"pow(value, 2)\"},{\"op\":\"derive\",\"name\":\"logval\",\"expression\":\"log(abs(value))\"},{\"op\":\"derive\",\"name\":\"minval\",\"expression\":\"min(value, other)\"},{\"op\":\"derive\",\"name\":\"maxval\",\"expression\":\"max(value, other)\"},{\"op\":\"derive\",\"name\":\"ifval\",\"expression\":\"if(value > 0, value, 0)\"},{\"op\":\"derive\",\"name\":\"clampval\",\"expression\":\"clamp(value, 0, 10)\"},{\"op\":\"derive\",\"name\":\"coalesceval\",\"expression\":\"coalesce(value / 0, 42)\"},{\"op\":\"derive\",\"name\":\"nested\",\"expression\":\"round(sqrt(abs(value)), 2)\"}]"
+    }
+   ]
+  },
+  {
+   "id": "transform-basic",
+   "units": [
+    "R1.S3.P2.s4",
+    "R1.S3.P9.s1",
+    "R1.S3.P9.s2",
+    "R1.S3.P9.s3",
+    "R1.S3.P9.s4"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "12345"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,value,label\n1,5,a\n2,20,b\n3,10,c\n4,20,d\n5,0,e\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"filter\",\"column\":\"value\",\"condition\":\"gte\",\"threshold\":5},{\"op\":\"sample\",\"fraction\":0.5},{\"op\":\"sort\",\"column\":\"value\",\"order\":\"desc\"},{\"op\":\"rename\",\"from\":\"label\",\"to\":\"category\"},{\"op\":\"drop\",\"columns\":[\"id\"]}]"
+    }
+   ]
+  },
+  {
+   "id": "aggregate-having",
+   "units": [
+    "R1.S3.P9.s5",
+    "R1.S3.P9.s6",
+    "R1.S3.P9.s7",
+    "R1.S3.P9.s8",
+    "R1.S3.P9.s9",
+    "R1.S3.P10.s1",
+    "R1.S3.P10.s3",
+    "R1.S3.P11.s1",
+    "R1.S3.P11.s3",
+    "R1.S3.P11.s4",
+    "R1.S3.P11.s5",
+    "R1.S3.P11.s8"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "label,value,id\nz,60,1\na,40,2\na,,3\na,nope,4\nz,50,5\nb,,6\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"aggregate\",\"group_by\":[\"label\"],\"aggregations\":[{\"column\":\"value\",\"function\":\"sum\",\"as\":\"total\"},{\"column\":\"value\",\"function\":\"avg\",\"as\":\"average\"},{\"column\":\"value\",\"function\":\"count\",\"as\":\"num\"},{\"column\":\"value\",\"function\":\"min\",\"as\":\"minimum\"},{\"column\":\"value\",\"function\":\"max\",\"as\":\"maximum\"}],\"having\":{\"column\":\"total\",\"condition\":\"gte\",\"threshold\":50}}]"
+    }
+   ]
+  },
+  {
+   "id": "join",
+   "units": [
+    "R1.S3.P12.s1",
+    "R1.S3.P12.s2",
+    "R1.S3.P12.s3",
+    "R1.S3.P12.s4",
+    "R1.S3.P12.s5",
+    "R1.S3.P12.s6",
+    "R1.S3.P12.s10"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "left.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "left.csv",
+     "content": "id,left\n2,L2\n1,L1\n3,L3\n"
+    },
+    {
+     "path": "right.csv",
+     "content": "id,right\n1,R1\n1,R1-first\n4,R4\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"join\",\"right\":\"right.csv\",\"on\":\"id\",\"type\":\"left\"}]"
+    }
+   ]
+  },
+  {
+   "id": "window",
+   "units": [
+    "R1.S3.P13.s1",
+    "R1.S3.P13.s2",
+    "R1.S3.P13.s3",
+    "R1.S3.P13.s4",
+    "R1.S3.P14.s1",
+    "R1.S3.P14.s2",
+    "R1.S3.P14.s3",
+    "R1.S3.P14.s4",
+    "R1.S3.P14.s5",
+    "R1.S3.P14.s6",
+    "R1.S3.P14.s7",
+    "R1.S3.P14.s8",
+    "R1.S3.P14.s9",
+    "R1.S3.P16.s1",
+    "R1.S3.P16.s2",
+    "R1.S3.P17.s1"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,cat,value\n3,a,5\n1,a,10\n2,a,10\n4,b,x\n5,b,2\n6,b,4\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"rank\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"value\",\"order\":\"desc\"}],\"as\":\"rank\"},{\"op\":\"window\",\"function\":\"dense_rank\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"value\",\"order\":\"desc\"}],\"as\":\"dense\"},{\"op\":\"window\",\"function\":\"row_number\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"value\",\"order\":\"desc\"}],\"as\":\"rownum\"},{\"op\":\"window\",\"function\":\"lag\",\"source_column\":\"value\",\"offset\":1,\"default\":\"0\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"prev\"},{\"op\":\"window\",\"function\":\"lead\",\"source_column\":\"value\",\"offset\":1,\"default\":\"END\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"next\"},{\"op\":\"window\",\"function\":\"running_sum\",\"source_column\":\"value\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"sum\"},{\"op\":\"window\",\"function\":\"running_avg\",\"source_column\":\"value\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"avg\"},{\"op\":\"window\",\"function\":\"ntile\",\"n\":4,\"partition_by\":[],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"tile\"}]"
+    }
+   ]
+  },
+  {
+   "id": "pivot",
+   "units": [
+    "R1.S3.P18.s1",
+    "R1.S3.P18.s2",
+    "R1.S3.P18.s3",
+    "R1.S3.P18.s4",
+    "R1.S3.P19.s2",
+    "R1.S3.P19.s3",
+    "R1.S3.P19.s4",
+    "R1.S3.P19.s6",
+    "R1.S3.P19.s7",
+    "R1.S3.P19.s8"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,label,value\n2,B,first-b\n1,A,one-a\n1,B,one-b\n1,A,duplicate-a\n2,A,two-a\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"pivot\",\"index\":[\"id\"],\"column\":\"label\",\"value\":\"value\"}]"
+    }
+   ]
+  },
+  {
+   "id": "unpivot",
+   "units": [
+    "R1.S3.P20.s1",
+    "R1.S3.P20.s2",
+    "R1.S3.P20.s3",
+    "R1.S3.P20.s4",
+    "R1.S3.P20.s5",
+    "R1.S3.P21.s2",
+    "R1.S3.P21.s3",
+    "R1.S3.P21.s4",
+    "R1.S3.P21.s6"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,q1,q2,q3\n1,10,,30\n2,,20,\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"unpivot\",\"index\":[\"id\"],\"columns\":[\"q1\",\"q2\",\"q3\"],\"name_to\":\"quarter\",\"value_to\":\"amount\"}]"
+    }
+   ]
+  },
+  {
+   "id": "fill",
+   "units": [
+    "R1.S3.P22.s1",
+    "R1.S3.P22.s2",
+    "R1.S3.P22.s3",
+    "R1.S3.P22.s4",
+    "R1.S3.P23.s2",
+    "R1.S3.P23.s3",
+    "R1.S3.P23.s4",
+    "R1.S3.P23.s7"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,a,b\n1,,x\n2,A,\n3,,z\n4,B,\n5,,\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"fill\",\"columns\":[\"a\",\"b\"],\"strategy\":\"forward\"},{\"op\":\"fill\",\"columns\":[\"a\",\"b\"],\"strategy\":\"backward\"},{\"op\":\"fill\",\"columns\":[\"a\",\"b\"],\"strategy\":\"constant\",\"value\":\"DEFAULT\"}]"
+    }
+   ]
+  },
+  {
+   "id": "verify-match",
+   "units": [
+    "R1.S4.P1.s1",
+    "R1.S4.P2.s1",
+    "R1.S4.P2.s2"
+   ],
+   "args": [
+    "verify",
+    "--file",
+    "data.csv",
+    "--checksum",
+    "data.sha256"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "a,b\n1,2\n"
+    },
+    {
+     "path": "data.sha256",
+     "content": "f2f4c5f5f1a6c7b4d4e4f4e9c3f6a9f1a8c1e4d8a4d2a0c4d1f9a4e3b2c1d0e9\n"
+    }
+   ]
+  },
+  {
+   "id": "verify-mismatch",
+   "units": [
+    "R1.S4.P2.s2"
+   ],
+   "args": [
+    "verify",
+    "--file",
+    "data.csv",
+    "--checksum",
+    "data.sha256"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "a,b\n1,2\n"
+    },
+    {
+     "path": "data.sha256",
+     "content": "0000000000000000000000000000000000000000000000000000000000000000\n"
+    }
+   ]
+  },
+  {
+   "id": "manifest",
+   "units": [
+    "R1.S5.P1.s1",
+    "R1.S5.P2.s1",
+    "R1.S5.P2.s2",
+    "R1.S5.P2.s3",
+    "R1.S5.P2.s4",
+    "R1.S5.P2.s5"
+   ],
+   "args": [
+    "manifest",
+    "--dir",
+    "data",
+    "--output",
+    "manifest.json"
+   ],
+   "files": [
+    {
+     "path": "data/a.csv",
+     "content": "x\n1\n2\n"
+    },
+    {
+     "path": "data/nested/b.csv",
+     "content": "y,z\n3,4\n"
+    },
+    {
+     "path": "data/nested/no.csv.txt",
+     "content": "not csv\n"
+    }
+   ]
+  },
+  {
+   "id": "pipeline-success",
+   "units": [
+    "R1.S6.P1.s1",
+    "R1.S6.P2.s1",
+    "R1.S6.P2.s3"
+   ],
+   "args": [
+    "pipeline",
+    "--config",
+    "config.json"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id,value\n2,20\n1,10\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true},{\"name\":\"value\",\"type\":\"float\",\"required\":true}],\"primary_key\":[\"id\"]}"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"double\",\"expression\":\"value * 2\"}]"
+    },
+    {
+     "path": "config.json",
+     "content": "{\"seed\":12345,\"steps\":[{\"type\":\"ingest\",\"input\":\"raw.csv\",\"schema\":\"schema.json\",\"output\":\"clean.csv\"},{\"type\":\"transform\",\"input\":\"clean.csv\",\"recipe\":\"recipe.json\",\"output\":\"final.csv\"},{\"type\":\"verify\",\"file\":\"final.csv\",\"checksum\":\"final.csv.sha256\"},{\"type\":\"manifest\",\"dir\":\".\",\"output\":\"manifest.json\"}]}"
+    }
+   ]
+  },
+  {
+   "id": "pipeline-failure",
+   "units": [
+    "R1.S6.P2.s2"
+   ],
+   "args": [
+    "pipeline",
+    "--config",
+    "config.json"
+   ],
+   "files": [
+    {
+     "path": "config.json",
+     "content": "{\"seed\":1,\"steps\":[{\"type\":\"verify\",\"file\":\"missing.csv\",\"checksum\":\"missing.sha256\"},{\"type\":\"manifest\",\"dir\":\".\",\"output\":\"manifest.json\"}]}"
+    }
+   ]
+  },
+  {
+   "id": "missing-file",
+   "units": [
+    "R1.S8.P1.s1"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "missing.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "recipe.json",
+     "content": "[]"
+    }
+   ]
+  },
+  {
+   "id": "malformed-json",
+   "units": [
+    "R1.S8.P1.s4"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "bad.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "a\n1\n"
+    },
+    {
+     "path": "bad.json",
+     "content": "[{\"op\":\"filter\""
+    }
+   ]
+  },
+  {
+   "id": "invalid-pattern",
+   "units": [
+    "R1.S8.P1.s5"
+   ],
+   "args": [
+    "ingest",
+    "--input",
+    "data.csv",
+    "--schema",
+    "schema.json",
+    "--output",
+    "out.csv"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "name\nabc\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"name\",\"type\":\"string\",\"pattern\":\"[\"}],\"primary_key\":[\"name\"]}"
+    }
+   ]
+  },
+  {
+   "id": "invalid-recipes",
+   "units": [
+    "R1.S8.P1.s3",
+    "R1.S3.P17.s1",
+    "R1.S3.P19.s8",
+    "R1.S3.P21.s6"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,value\n1,2\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"row_number\",\"partition_by\":[\"missing\"],\"order_by\":[],\"as\":\"n\"}]"
+    }
+   ]
+  },
+  {
+   "id": "aggregate-max-empty",
+   "units": [
+    "R1.S3.P9.s10"
+   ],
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "group,value\nall,nope\nall,\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"aggregate\",\"group_by\":[\"group\"],\"aggregations\":[{\"column\":\"value\",\"function\":\"max\",\"as\":\"maximum\"}]}]"
+    }
+   ]
+  },
+  {
+   "id": "ingest-rejected-no-error",
+   "units": [
+    "R1.S8.P1.s2"
+   ],
+   "args": [
+    "ingest",
+    "--input",
+    "data.csv",
+    "--schema",
+    "schema.json",
+    "--output",
+    "out.csv"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,value\n1,ok\n2,bad\n3,\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true},{\"name\":\"value\",\"type\":\"string\",\"required\":true,\"pattern\":\"^ok$\"}],\"primary_key\":[\"id\"]}"
+    }
+   ]
+  }
+ ],
+ "uncheckable": [
+  {
+   "unit": "R1.S7.P1.s3",
+   "reason": "A single probe invocation cannot establish that repeated independent runs always produce byte-identical outputs; this is a cross-run property."
+  },
+  {
+   "unit": "R1.S8.P2.s1",
+   "reason": "Buildability with `go build -o dpipe ./...` from `/app/` is a build/source property, not observable by invoking the already-built CLI probe."
+  }
+ ]
+}

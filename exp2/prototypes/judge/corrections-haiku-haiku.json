@@ -1,0 +1,644 @@
+{
+ "bare_219": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s1; R1.S5.P2.s3",
+   "reason": "The unit requires a recursive scan for all .csv files and writing a manifest to the output. data/z/c.csv is an empty .csv file, but the program exited 1 with 'empty CSV: data/z/c.csv' on stderr and wrote no manifest.json. The requirement text has no empty-file error case."
+  }
+ ],
+ "bare_rep2_218": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t12_window_rank_family",
+   "unit": "R1.S3.P13.s4",
+   "reason": "Window output header is 'id,cat,value,,,,' so the new columns have empty names instead of the 'as' names r, dr, rn, rn_all. Computed values (rank, dense_rank, row_number) are correct."
+  }
+ ],
+ "bare_rep3_218": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s8",
+   "reason": "log(0) produced -Inf; the text requires NaN for non-positive input. Other function outputs match the text."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s8",
+   "reason": "For x=0, coalesce(log(x), 9) gave -Inf instead of 9; log(0) must return NaN per the text, so coalesce should yield 9. Other min/max/if/clamp/coalesce/nested results match."
+  },
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "Manifest on a directory with CSV files exits 1 with 'ERROR: EOF' and writes no manifest.json; the spec requires recursive scan and a JSON manifest with files sorted by path."
+  },
+  {
+   "probe": "pl02_pipeline_fail_step2",
+   "unit": "R1.S8.P1.s3",
+   "reason": "Pipeline step failed on an invalid filter column and the step printed 'PIPELINE FAILED at step 2' with exit 1 correctly, but the invalid-recipe error went to stdout and stderr is empty; the text requires stderr 'ERROR: invalid recipe: <detail>'."
+  }
+ ],
+ "bare_rep4_218": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t12_window_rank_family",
+   "unit": "R1.S3.P13.s4",
+   "reason": "Window output header is 'id,cat,value,,,,' so the new columns have empty names instead of the 'as' names r, dr, rn, rn_all. Computed values (rank, dense_rank, row_number) are correct."
+  }
+ ],
+ "shell_191": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s8",
+   "reason": "log(0) produced -Inf; the text requires NaN for non-positive input. Other function outputs match the text."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s8",
+   "reason": "For x=0, coalesce(log(x), 9) gave -Inf instead of 9; log(0) must return NaN per the text, so coalesce should yield 9. Other min/max/if/clamp/coalesce/nested results match."
+  },
+  {
+   "probe": "t09_aggregate",
+   "unit": "R1.S3.P9.s9, R1.S3.P9.s10",
+   "reason": "For group C with no numeric values, min and max printed +Inf and -Inf; the text requires NaN. sum, avg, count and the other groups are correct."
+  },
+  {
+   "probe": "t12_window_rank_family",
+   "unit": "R1.S3.P14.s2",
+   "reason": "Valid window rank/dense_rank/row_number recipe crashes with a Go panic 'index out of range [-1]' and exit code 2; no output is written."
+  },
+  {
+   "probe": "t13_window_lag_lead_running",
+   "unit": "R1.S3.P14.s5",
+   "reason": "Valid lag, lead, running_sum and running_avg recipe crashes with a Go panic 'index out of range [-1]' and exit code 2; no output is written."
+  },
+  {
+   "probe": "t13b_window_ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "Valid ntile recipe with n=4 over 10 rows crashes with a Go panic 'index out of range [-1]' and exit code 2; no output is written."
+  }
+ ],
+ "cf_218": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s8",
+   "reason": "log(0) produced -Inf; the text requires NaN for non-positive input. Other function outputs match the text."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s8",
+   "reason": "For x=0, coalesce(log(x), 9) gave -Inf instead of 9; log(0) must return NaN per the text, so coalesce should yield 9. Other min/max/if/clamp/coalesce/nested results match."
+  },
+  {
+   "probe": "p02_ingest_validation_order",
+   "unit": "R1.S2.P4.s1",
+   "reason": "Validation order is (1) required/type checks, (2) range, (3) pattern. Row '16,2000,abc,notadate' has an invalid datetime (step 1) but was rejected as 'value out of range for column value: 2000' (step 2). It should be 'invalid datetime for column timestamp: notadate'. The other rows follow the units."
+  },
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "The manifest must scan all .csv files and write a JSON manifest. The run aborted with 'ERROR: empty CSV' on data/z/c.csv, a .csv file, and no manifest.json was written. The units do not allow skipping an empty .csv file."
+  }
+ ],
+ "cf_rep2_217": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s8",
+   "reason": "log(0) produced -Inf; the text requires NaN for non-positive input. Other function outputs match the text."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s8",
+   "reason": "For x=0, coalesce(log(x), 9) gave -Inf instead of 9; log(0) must return NaN per the text, so coalesce should yield 9. Other min/max/if/clamp/coalesce/nested results match."
+  },
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "manifest must scan all .csv files under the directory and write the JSON manifest to --output. The run exited 1 with stderr 'EOF' and wrote no manifest.json, even though data/ contains valid .csv files (the empty data/z/c.csv is the likely trigger). 'EOF' is not an error the spec defines, and the spec does not exclude empty CSV files."
+  }
+ ],
+ "cf_rep3_203": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s2",
+   "reason": "All seven function calls (abs, sqrt, ceil, floor, round(x, 0), pow, log) are well-formed, yet the run fails with 'ERROR: invalid recipe: missing ) after function' and writes no output."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s9",
+   "reason": "All calls (min, max, if, clamp, coalesce, nested round(sqrt(abs(x)),2)) are well-formed, yet the run fails with 'missing ) after function' and writes no output."
+  }
+ ],
+ "cf_rep4_215": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s8",
+   "reason": "log(0) produced -Inf; the text requires NaN for non-positive input. Other function outputs match the text."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s8",
+   "reason": "For x=0, coalesce(log(x), 9) gave -Inf instead of 9; log(0) must return NaN per the text, so coalesce should yield 9. Other min/max/if/clamp/coalesce/nested results match."
+  },
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "manifest must scan all .csv files under the directory and write the JSON manifest to --output. The run exited 1 with stderr 'EOF' and wrote no manifest.json, even though data/ contains valid .csv files (the empty data/z/c.csv is the likely trigger). 'EOF' is not an error the spec defines, and the spec does not exclude empty CSV files."
+  },
+  {
+   "probe": "t12_window_rank_family",
+   "unit": "R1.S3.P14.s2",
+   "reason": "Rank for partition a (values 10,10,7, desc) must give 1,1,3 for ids 1,2,3; output gives 2,2,1. Dense_rank and row_number for the same partition are also wrong (expected 1,1,2 and 1,2,3, output 2,2,1 and 2,3,1). Partition b and the unpartitioned row_number are correct."
+  },
+  {
+   "probe": "t13b_window_ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "ntile with k=10, n=4 must give groups 1-3 -> 1, 4-6 -> 2, 7-8 -> 3, 9-10 -> 4; output gives 1,1,2,2,2,3,3,4,4,1 (id 3 and id 10 wrong)."
+  }
+ ],
+ "IC_215": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "t12_window_rank_family",
+   "unit": "R1.S3.P13.s4",
+   "reason": "Window output header is 'id,cat,value,,,,' so the new columns have empty names instead of the 'as' names r, dr, rn, rn_all. Computed values (rank, dense_rank, row_number) are correct."
+  },
+  {
+   "probe": "p02_ingest_validation_order",
+   "unit": "R1.S2.P4.s1",
+   "reason": "Validation order is (1) required/type checks, (2) range, (3) pattern. Row '16,2000,abc,notadate' has an invalid datetime (step 1) but was rejected as 'value out of range for column value: 2000' (step 2). It should be 'invalid datetime for column timestamp: notadate'. The other rows follow the units."
+  },
+  {
+   "probe": "t09_aggregate",
+   "unit": "R1.S3.P9.s10",
+   "reason": "Group B has numeric values 10 and 4 (the empty value is skipped), so max should be 10; the output gives max_v=4. Sum 14, avg 7, min 4, count 3 and group C NaN/0 results are correct."
+  },
+  {
+   "probe": "t13b_window_ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "For 10 rows and n=4 with no partition, the first 2 groups must have 3 rows and the last 2 groups 2 rows, giving 1,1,1,2,2,3,3,3,4,4. The output is 1,1,1,4,4,4,4,4,4,4. The output header is also wrong: it is 'id,v,' with an empty column name instead of 'id,v,quartile'."
+  }
+ ],
+ "luna56m_201": [
+  {
+   "probe": "p02_ingest_validation_order",
+   "unit": "R1.S2.P4.s1",
+   "reason": "Unit requires validation order (1) required/type, (2) range, (3) pattern. Row 16 (16,2000,abc,notadate) fails the type check on timestamp (notadate is not RFC 3339), which is step 1, but the rejection reason given is 'value out of range for column value: 2000' (step 2). The first failing step should determine the reason. All other rejections and the kept rows (7,5 / 8 / 9 / 13,3) are consistent with the units."
+  },
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P2.s5",
+   "reason": "Row a=-4,b=2 gives NaN in every derived column, including d1 = 1 + 2 * 3 (should be 7) and d8 = a * 1 (should be -4). No unit makes negative inputs NaN."
+  },
+  {
+   "probe": "t03_derive_nan",
+   "unit": "R1.S3.P4.s3",
+   "reason": "For row a=-4,b=2 the comparisons (a/0)>1, (a/0)==(a/0), (a/0)!=1 give NaN, but a comparison involving NaN must produce 0. Also a/b = -4/2 should be -2, not NaN."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s2",
+   "reason": "abs(2.5) must be 2.5 and abs(16) must be 16, but the rows with x=2.5, 16, 0, -2.5 are all NaN in every function column (e.g. f6 pow(3,3) should be 27 but is NaN); only the x=-4 row is computed."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s9",
+   "reason": "min(2.5,0) must be 0 and max(2.5,0) must be 2.5, coalesce(2.5,9) must be 2.5; the output gives NaN for these rows, and g7 round(sqrt(abs(16)),2) should be 4 but is NaN. Only the x=-4 row is correct."
+  },
+  {
+   "probe": "t13b_window_ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "For k=10 rows and n=4, k mod n = 2 groups should have ceil(10/4)=3 rows and the other 2 groups floor(10/4)=2 rows, i.e. sizes 3,3,2,2. Output gives group sizes 2,3,2,3 (ids 1-2 -> 1, 3-5 -> 2, 6-7 -> 3, 8-10 -> 4)."
+  }
+ ],
+ "luna56m_208": [
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s8",
+   "reason": "log(0) produced -Inf; the text requires NaN for non-positive input. Other function outputs match the text."
+  },
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "manifest must scan all .csv files under the directory and write the JSON manifest to --output. The run exited 1 with stderr 'EOF' and wrote no manifest.json, even though data/ contains valid .csv files (the empty data/z/c.csv is the likely trigger). 'EOF' is not an error the spec defines, and the spec does not exclude empty CSV files."
+  },
+  {
+   "probe": "p02_ingest_validation_order",
+   "unit": "R1.S2.P4.s1",
+   "reason": "Validation order is (1) required/type checks, (2) range, (3) pattern. Row 16 (16,2000,abc,notadate) fails the datetime type check on timestamp, but the rejection reason is 'value out of range for column value: 2000', so the range check was applied before the type check. The expected reason was the invalid datetime for timestamp. The other rejected rows and the uniqueness handling (13,4 rejected as duplicate; first 7,5 kept) follow the units, and the output is sorted by id."
+  },
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P3.s8",
+   "reason": "Unary minus is a listed operator (level 7), but derive expression '-a + 1' was rejected with 'ERROR: invalid recipe: invalid expression \"-a + 1\"', exit 1, so a valid expression fails."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s11",
+   "reason": "if(cond, x, y) must return y when cond is not greater than 0. For x=-4 and x=-2.5 the output g3 is 10, but the required value is 20. (Also g5 for x=0 gives -Inf, though log must return NaN for non-positive input, so coalesce should give 9.) Other functions min, max, clamp, coalesce, nested round/sqrt/abs match."
+  },
+  {
+   "probe": "t09_aggregate",
+   "unit": "R1.S3.P9.s7",
+   "reason": "avg must skip empty and non-numeric values: group B avg should be 7 (10 and 4) but output is 4.666666666666667; min for B should be 4 but output is 0; group A avg should be 2.5 but output is 1.25 and min should be 2.5 but output is 0; group C sum/avg/min/max should be 0/NaN/NaN/NaN but output is 0 for all."
+  },
+  {
+   "probe": "t10b_having_neq",
+   "unit": "R1.S3.P11.s8",
+   "reason": "Having filter kept both groups but output order is B then A; group_by output is sorted ascending (A before B) and having must not change the relative order."
+  },
+  {
+   "probe": "t13_window_lag_lead_running",
+   "unit": "R1.S3.P14.s8",
+   "reason": "running_avg skips non-numeric values; for partition a (x,10,5) it must be NaN, 10, 7.5 but output is 0, 5, 5. lag, lead and running_sum are correct."
+  },
+  {
+   "probe": "t13b_window_ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "For 10 rows and n=4, the first k mod n = 2 groups must have ceil(10/4)=3 rows each and the rest floor(10/4)=2 rows, giving sizes 3,3,2,2 (rows 1-3, 4-6, 7-8, 9-10). The output gives group 1 = rows 1-3, group 2 = rows 4-5, group 3 = rows 6-8, group 4 = rows 9-10, i.e. sizes 3,2,3,2, which violates the ntile rule."
+  },
+  {
+   "probe": "t14_window_missing_column",
+   "unit": "R1.S3.P17.s1",
+   "reason": "Missing partition_by column exits 1 with 'ERROR: invalid recipe: invalid reference: nope' but the text requires 'ERROR: invalid recipe: column nope not found'."
+  },
+  {
+   "probe": "t15b_sort_missing_column",
+   "unit": "R1.S8.P1.s3",
+   "reason": "Sort on non-existent column nope exits 0 and writes output; the text requires exit 1 with 'ERROR: invalid recipe: <detail>'."
+  }
+ ],
+ "luna56m_219": [
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The spec example says (value > 10 && value < 100) * value yields 0 when out of range. For row 2 (a=-4), d11 = (a > 1 && a < 7) * a produced the text '-0', not '0'. The row is 0 * -4 in IEEE arithmetic, which is negative zero and is printed as '-0'. The other derive results match the precedence and function rules. The same -0 also appears in d5 (-8 % 4), where the spec is silent."
+  },
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "The manifest must scan all .csv files and write a JSON manifest. The run aborted with 'ERROR: empty CSV' on data/z/c.csv, a .csv file, and no manifest.json was written. The units do not allow skipping an empty .csv file."
+  },
+  {
+   "probe": "p02_ingest_validation_order",
+   "unit": "R1.S2.P4.s1",
+   "reason": "Validation order is (1) required/type, (2) range, (3) pattern. Input row 16,2000,abc,notadate has an invalid datetime (type check fails at step 1), but the rejection reason given is 'value out of range for column value: 2000' (a step 2 check). The type failure should be the reason. Other rows follow the order correctly (e.g. row 7,2000,abc reports range, not pattern). Ingest exit code 0 and valid-row output (sorted by id, first unique occurrence kept, duplicate 13,4 rejected) match the other units."
+  }
+ ],
+ "luna6m_91": [
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "Manifest on a directory with CSV files exits 1 with 'ERROR: EOF' and writes no manifest.json; the spec requires recursive scan and a JSON manifest with files sorted by path."
+  },
+  {
+   "probe": "p02_ingest_validation_order",
+   "unit": "R1.S2.P4.s1",
+   "reason": "The unit requires validation order (1) required/type checks before (2) range checks. Input row 16 (16,2000,abc,notadate) has an invalid datetime in the timestamp column, which is a type failure, but the rejection reason is 'value out of range for column value: 2000', so the range check ran before the type check. The expected reason was the type failure (invalid datetime for column timestamp). The other rows (range, pattern, duplicate, and valid rows) follow the listed units."
+  },
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P2.s5",
+   "reason": "derive must add a column computed from an expression, but every derive in the run (even the plain expression 1 + 2 * 3) fails with 'derive expression not implemented', exit 1, no output written."
+  },
+  {
+   "probe": "t03_derive_nan",
+   "unit": "R1.S3.P4.s1",
+   "reason": "Spec says division by zero produces NaN, but 'a / 0' exits 1 with 'derive expression not implemented: a / 0 (column n1)'; no NaN output is written."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s2",
+   "reason": "The unit requires abs(x) to compute absolute value, but the program exits 1 with 'ERROR: invalid recipe: derive expression not implemented: abs(x) (column f1)' and produces no output. The same run also rejects sqrt, ceil, floor, round, pow and log as unimplemented in the first derive, so the listed functions are not provided."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s9",
+   "reason": "min(x, y) is a required function ('minimum of two values'). The program reported 'ERROR: invalid recipe: derive expression not implemented: min(x, y) (column g1)' and exited 1, so the unit's behavior is not implemented."
+  },
+  {
+   "probe": "t09_aggregate",
+   "unit": "R1.S3.P9.s5",
+   "reason": "The aggregate operation must group rows and compute sum, avg, min, max and count. The program exits 1 with 'ERROR: invalid recipe: aggregate operation not implemented' for a valid aggregate recipe and writes no output."
+  },
+  {
+   "probe": "t10b_having_neq",
+   "unit": "R1.S3.P11.s4",
+   "reason": "Having with condition neq is a supported operator, but the run fails with 'ERROR: invalid recipe: aggregate operation not implemented'; groups A (2.5) and B (14) should be output."
+  },
+  {
+   "probe": "j01_join_left",
+   "unit": "R1.S3.P12.s1",
+   "reason": "The join op is supported by the text but the run exits 1 with 'join operation not implemented' and produces no joined output."
+  },
+  {
+   "probe": "j03_join_key_missing_in_right",
+   "unit": "R1.S3.P12.s10",
+   "reason": "Join key id is missing from the right dataset; the text requires 'ERROR: invalid recipe: join key id not found in right dataset' but the run printed 'join operation not implemented'."
+  },
+  {
+   "probe": "t12_window_rank_family",
+   "unit": "R1.S3.P14.s2",
+   "reason": "The rank, dense_rank, row_number window functions must add a new column over partitions. The program exits 1 with 'ERROR: invalid recipe: window operation not implemented' for a valid window recipe and writes no output."
+  },
+  {
+   "probe": "t13_window_lag_lead_running",
+   "unit": "R1.S3.P14.s5",
+   "reason": "lag, lead, running_sum and running_avg must add columns over partitions. The program exits 1 with 'ERROR: invalid recipe: window operation not implemented' for a valid recipe and writes no output."
+  },
+  {
+   "probe": "t13b_window_ntile",
+   "unit": "R1.S3.P14.s9 (ntile: divide the partition into n roughly equal groups numbered 1 through n)",
+   "reason": "The spec lists ntile as a supported window function and defines its output. The run exits 1 with 'ERROR: invalid recipe: window operation not implemented' and writes no out.csv. The recipe is valid, so this contradicts the requirement that ntile be supported."
+  },
+  {
+   "probe": "t14_window_missing_column",
+   "unit": "R1.S3.P17.s1",
+   "reason": "Missing partition column nope must yield 'ERROR: invalid recipe: column nope not found'; the run instead says 'window operation not implemented'. Exit code 1 matches, the message does not."
+  },
+  {
+   "probe": "t16_pivot",
+   "unit": "R1.S3.P18.s1",
+   "reason": "The pivot op is listed as supported, but the run exits 1 with 'pivot operation not implemented' and produces no output."
+  },
+  {
+   "probe": "t17_pivot_missing_column",
+   "unit": "R1.S3.P19.s8",
+   "reason": "Pivot with non-existent value column nope gives 'pivot operation not implemented' instead of the required 'ERROR: invalid recipe: column nope not found'."
+  },
+  {
+   "probe": "t18_unpivot",
+   "unit": "R1.S3.P20.s1",
+   "reason": "The unpivot op is listed as supported, but the run exits 1 with 'unpivot operation not implemented' and produces no output."
+  },
+  {
+   "probe": "t19_unpivot_missing_column",
+   "unit": "R1.S3.P21.s6",
+   "reason": "Unpivot with non-existent column nope gives 'unpivot operation not implemented' instead of the required 'ERROR: invalid recipe: column nope not found'."
+  }
+ ],
+ "luna6m_84": [
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "manifest must scan all .csv files under the directory and write the JSON manifest to --output. The run exited 1 with stderr 'EOF' and wrote no manifest.json, even though data/ contains valid .csv files (the empty data/z/c.csv is the likely trigger). 'EOF' is not an error the spec defines, and the spec does not exclude empty CSV files."
+  },
+  {
+   "probe": "p04_ingest_malformed_schema",
+   "unit": "R1.S8.P1.s4",
+   "reason": "Malformed JSON schema exits 1 as required but stderr is empty; the text requires stderr 'ERROR: malformed JSON: <path>'."
+  },
+  {
+   "probe": "p05_ingest_invalid_regex",
+   "unit": "R1.S8.P1.s5",
+   "reason": "Invalid regex pattern exits 1 but stderr is empty; the text requires stderr 'ERROR: invalid pattern: <pattern>'."
+  },
+  {
+   "probe": "p06_ingest_missing_input",
+   "unit": "R1.S8.P1.s1",
+   "reason": "Missing input file exits 1 but stderr is empty; the text requires stderr 'ERROR: file not found: <path>'."
+  },
+  {
+   "probe": "t03_derive_nan",
+   "unit": "R1.S3.P4.s1",
+   "reason": "Division and modulo by zero must produce NaN (and comparisons with NaN produce 0), but the run exits 1 with empty stderr and writes no out.csv, so no NaN result is produced."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s2",
+   "reason": "The recipe is valid (abs, sqrt, ceil, floor, round, pow, log on existing columns). The run exited 1 with empty stderr and wrote no out.csv, so the required function results (e.g. abs(x) for x=-4 giving 4) were never produced."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s9",
+   "reason": "The recipe uses only specified functions (min, max, if, clamp, coalesce, nested round/sqrt/abs) with valid arguments, yet transform exited 1 with empty stderr and wrote no out.csv. The spec gives no error for this case, so the run contradicts the requirement that these functions produce values."
+  },
+  {
+   "probe": "t09_aggregate",
+   "unit": "R1.S3.P9.s5",
+   "reason": "The recipe is valid (group_by label; sum, avg, min, max, count on existing columns). The run exited 1 with empty stderr and wrote no out.csv, so the aggregate per group was not computed."
+  },
+  {
+   "probe": "t10a_having_gt",
+   "unit": "R1.S3.P11.s1",
+   "reason": "A valid having clause (total gt 5) should keep only group B (total 14); the run exits 1 with empty stderr and writes no out.csv."
+  },
+  {
+   "probe": "t10b_having_neq",
+   "unit": "R1.S3.P11.s4",
+   "reason": "A valid having with condition neq on total should succeed and drop the group with total 0 (group C); the run exits 1 with empty stderr and writes no out.csv."
+  },
+  {
+   "probe": "j01_join_left",
+   "unit": "R1.S3.P12.s6",
+   "reason": "A valid left join on id should output all three left rows, with right columns empty for id 1 and 3; the run exits 1 with empty stderr and writes no out.csv."
+  },
+  {
+   "probe": "j02_join_inner",
+   "unit": "R1.S3.P12.s5",
+   "reason": "A valid inner join should output only the row for id 2 (with score 20, tag x); the run exits 1 with empty stderr and writes no out.csv."
+  },
+  {
+   "probe": "j03_join_key_missing_in_right",
+   "unit": "R1.S3.P12.s10",
+   "reason": "Join key id is absent from right2.csv. Unit requires an error message naming the missing key, and R1.S8.P1.s3 requires stderr 'ERROR: invalid recipe: <detail>' for a join referencing a non-existent column; the run exits 1 with empty stderr."
+  },
+  {
+   "probe": "t12_window_rank_family",
+   "unit": "R1.S3.P13.s1",
+   "reason": "The recipe is valid (rank, dense_rank, row_number over existing columns). The run exited 1 with empty stderr and wrote no out.csv, so no window column was added."
+  },
+  {
+   "probe": "t13_window_lag_lead_running",
+   "unit": "R1.S3.P14.s5",
+   "reason": "The recipe is valid (lag, lead, running_sum, running_avg on existing columns). The run exited 1 with empty stderr and wrote no out.csv, so no lag column was produced."
+  },
+  {
+   "probe": "t13b_window_ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "Recipe is a valid ntile op (n=4, partition_by empty, order_by id exists), and the unit says ntile divides the partition into n groups numbered 1..n, so the transform should succeed and write out.csv with a quartile column (10 rows -> group sizes 3,3,2,2). Instead the run exited with code 1, empty stderr and no output file was produced."
+  },
+  {
+   "probe": "t14_window_missing_column",
+   "unit": "R1.S3.P17.s1",
+   "reason": "Window partition_by references missing column nope; the spec requires stderr ERROR: invalid recipe: column nope not found and exit 1, but stderr is empty."
+  },
+  {
+   "probe": "t15a_unknown_op",
+   "unit": "R1.S8.P1.s3",
+   "reason": "Unknown op explode gives exit 1 as required, but stderr is empty; the spec requires stderr ERROR: invalid recipe: detail."
+  },
+  {
+   "probe": "t15b_sort_missing_column",
+   "unit": "R1.S8.P1.s3",
+   "reason": "Sort on non-existent column nope exits 1 but stderr is empty; the unit requires stderr 'ERROR: invalid recipe: <detail>'."
+  },
+  {
+   "probe": "t16_pivot",
+   "unit": "R1.S3.P19.s3",
+   "reason": "Valid pivot on id/label/value exits 1 with no output and no error; expected columns id, a, b, c with rows for ids 1, 2, 3 (first value for id 1 and label b is 10)."
+  },
+  {
+   "probe": "t17_pivot_missing_column",
+   "unit": "R1.S3.P19.s8",
+   "reason": "Pivot with non-existent value column nope exits 1 but stderr is empty; the unit requires 'ERROR: invalid recipe: column nope not found'."
+  },
+  {
+   "probe": "t18_unpivot",
+   "unit": "R1.S3.P21.s2",
+   "reason": "Valid unpivot of q3, q1, q2 exits 1 with no output; expected one output row per melted column per input row (6 rows)."
+  },
+  {
+   "probe": "t19_unpivot_missing_column",
+   "unit": "R1.S3.P21.s6",
+   "reason": "Unpivot with non-existent column nope exits 1 but stderr is empty; the unit requires 'ERROR: invalid recipe: column nope not found'."
+  },
+  {
+   "probe": "t20d_fill_missing_column",
+   "unit": "R1.S3.P23.s7",
+   "reason": "Fill on non-existent column nope exits 1 but stderr is empty; the text requires 'ERROR: invalid recipe: column nope not found'."
+  },
+  {
+   "probe": "e01_transform_malformed_recipe",
+   "unit": "R1.S8.P1.s4",
+   "reason": "Malformed recipe JSON exits 1 but stderr is empty; the text requires stderr 'ERROR: malformed JSON: <path>'."
+  }
+ ],
+ "luna6m_122": [
+  {
+   "probe": "m01_manifest",
+   "unit": "R1.S5.P2.s3",
+   "reason": "manifest must scan all .csv files under the directory and write the JSON manifest to --output. The run exited 1 with stderr 'EOF' and wrote no manifest.json, even though data/ contains valid .csv files (the empty data/z/c.csv is the likely trigger). 'EOF' is not an error the spec defines, and the spec does not exclude empty CSV files."
+  },
+  {
+   "probe": "t02_derive_precedence",
+   "unit": "R1.S3.P3.s9",
+   "reason": "Parentheses and precedence are not honored. d7 '(a + b) * 2' gives NaN for every row instead of 18 and -2 (row 1 expected 18). d5 'a * b % 4' gives 18 for row 1 instead of 2, and -8 for row 2 instead of 0. d6 '-a + 1' gives -7 instead of -5 for row 1. d11 '(a > 1 && a < 7) * a' gives 0 for row 1 instead of 6."
+  },
+  {
+   "probe": "t04_derive_functions_a",
+   "unit": "R1.S3.P5.s2",
+   "reason": "abs(x) is specified as absolute value, but f1 is NaN for every row (e.g. abs(-4) should be 4, abs(2.5) should be 2.5). sqrt(16) (f2) should be 4 but is NaN, contradicting sqrt's specified behaviour for non-negative input. All seven derive functions produced NaN, so the functions were not evaluated."
+  },
+  {
+   "probe": "t05_derive_functions_b_nested",
+   "unit": "R1.S3.P5.s9 (min(x, y) — minimum of two values); also R1.S3.P5.s10 to s13 and R1.S3.P5.s13 coalesce",
+   "reason": "Every derived column is NaN. Required: g1 = min(x,y) = -4 for the first row, g2 = max(x,y) = 2, g3 = if(x,10,20) = 20, g4 = clamp(x,0,5) = 0, g5 = coalesce(log(x),9) = 9 for negative x, g6 = coalesce(x,9) = -4, g7 = round(sqrt(abs(x)),2) = 2. The program produced NaN for all of these, contradicting the function definitions. The run exits 0 with no error."
+  },
+  {
+   "probe": "t09_aggregate",
+   "unit": "R1.S3.P9.s5",
+   "reason": "The aggregate recipe uses sum, avg, min, max and count on existing columns (id, label, value), all listed as supported. The run exited 1 with 'ERROR: invalid recipe: unsupported aggregate configuration', which is not a condition the spec defines, and no aggregated output was produced."
+  },
+  {
+   "probe": "t10a_having_gt",
+   "unit": "R1.S3.P11.s4",
+   "reason": "A valid aggregate with having condition gt on the as-name total must filter groups; the run exits 1 with 'unsupported aggregate configuration' and writes no output."
+  },
+  {
+   "probe": "t10b_having_neq",
+   "unit": "R1.S3.P11.s4",
+   "reason": "The having clause must accept the condition operators gt, gte, lt, lte, eq and neq; the recipe uses neq on an 'as' column of a valid aggregate. The program exits 1 with 'ERROR: invalid recipe: unsupported aggregate configuration' instead of applying the filter."
+  },
+  {
+   "probe": "j01_join_left",
+   "unit": "R1.S3.P12.s6",
+   "reason": "join type left is a supported configuration with both keys present, but the run exits 1 with 'unsupported join configuration' and writes no output."
+  },
+  {
+   "probe": "j02_join_inner",
+   "unit": "R1.S3.P12.s5",
+   "reason": "join type inner with key id present in both datasets is supported, but the run exits 1 with 'unsupported join configuration' and writes no output."
+  },
+  {
+   "probe": "j03_join_key_missing_in_right",
+   "unit": "R1.S3.P12.s10",
+   "reason": "Key id is missing in the right dataset, so the spec requires ERROR: invalid recipe: join key id not found in right dataset; the run prints 'unsupported join configuration' instead."
+  },
+  {
+   "probe": "t12_window_rank_family",
+   "unit": "R1.S3.P13.s1",
+   "reason": "window is a supported operation, and the recipe uses valid rank, dense_rank and row_number window functions on existing columns. The run exited 1 with 'ERROR: invalid recipe: unsupported operation window', contradicting the spec and producing no output."
+  },
+  {
+   "probe": "t13_window_lag_lead_running",
+   "unit": "R1.S3.P14.s5",
+   "reason": "lag, lead, running_sum and running_avg are specified window functions and the recipe is valid. The run exited 1 with 'ERROR: invalid recipe: unsupported operation window', so no lag output was produced."
+  },
+  {
+   "probe": "t13b_window_ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "The ntile unit says ntile is a supported window function that divides the partition into n groups and adds a column (here 'quartile'). The run instead exited 1 with 'ERROR: invalid recipe: unsupported operation window'. No output was produced, contrary to the specified behaviour of the window operation."
+  },
+  {
+   "probe": "t14_window_missing_column",
+   "unit": "R1.S3.P17.s1",
+   "reason": "A window partition_by referencing a non-existent column must exit with 'ERROR: invalid recipe: column nope not found'. The program prints 'ERROR: invalid recipe: unsupported operation window' instead, so the required message text is not produced."
+  },
+  {
+   "probe": "t16_pivot",
+   "unit": "R1.S3.P18.s1",
+   "reason": "pivot is a specified operation with valid index, column and value, but the run exits 1 with 'unsupported operation pivot' and writes no output."
+  },
+  {
+   "probe": "t17_pivot_missing_column",
+   "unit": "R1.S3.P19.s8",
+   "reason": "pivot value column nope does not exist, so the spec requires ERROR: invalid recipe: column nope not found; the run prints 'unsupported operation pivot'."
+  },
+  {
+   "probe": "t18_unpivot",
+   "unit": "R1.S3.P20.s1",
+   "reason": "unpivot is a specified operation with valid index and columns, but the run exits 1 with 'unsupported operation unpivot' and writes no output."
+  },
+  {
+   "probe": "t19_unpivot_missing_column",
+   "unit": "R1.S3.P21.s6",
+   "reason": "unpivot columns list contains missing column nope, so the spec requires ERROR: invalid recipe: column nope not found; the run prints 'unsupported operation unpivot'."
+  }
+ ]
+}

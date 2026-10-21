@@ -1,0 +1,652 @@
+[
+ {
+  "id": "R1.S2.P1.s1",
+  "owner": "O1",
+  "text": "`dpipe ingest --input <path> --schema <path> --output <path>`\n\n"
+ },
+ {
+  "id": "R1.S2.P2.s1",
+  "owner": "O1",
+  "text": "- Reads a CSV file at `<path>`. The first row is a header.\n"
+ },
+ {
+  "id": "R1.S2.P2.s2",
+  "owner": "O1",
+  "text": "- Validates every row against a JSON schema file. The schema has this structure:\n  ```json\n  {\n    \"columns\": [\n      {\"name\": \"id\", \"type\": \"int\", \"required\": true, \"unique\": true},\n      {\"name\": \"value\", \"type\": \"float\", \"required\": true, \"min\": 0, \"max\": 1000},\n      {\"name\": \"label\", \"type\": \"string\", \"required\": false, \"pattern\": \"^[A-Z]\"},\n      {\"name\": \"timestamp\", \"type\": \"datetime\", \"required\": true}\n    ],\n    \"primary_key\": [\"id\"]\n  }\n  ```\n  Supported types: `int`, `float`, `string`, `datetime` (RFC 3339 format).\n\n"
+ },
+ {
+  "id": "R1.S2.P3.s2",
+  "owner": "O1",
+  "text": "  - `unique` (boolean): No two valid rows may have the same value in this column. When a duplicate is encountered (checked in input file order after all other validations pass), the later row is rejected with reason `duplicate value for unique column: <name>`.\n"
+ },
+ {
+  "id": "R1.S2.P3.s3",
+  "owner": "O1",
+  "text": "  - `min`, `max` (number): For `int` and `float` columns only. Value must be within `[min, max]` inclusive. Rejected rows get reason `value out of range for column <name>: <value>`.\n"
+ },
+ {
+  "id": "R1.S2.P3.s4",
+  "owner": "O1",
+  "text": "  - `pattern` (string): For `string` columns only. Value must match the Go regular expression. Rejected rows get reason `value does not match pattern for column <name>: <value>`.\n\n"
+ },
+ {
+  "id": "R1.S2.P4.s1",
+  "owner": "O1",
+  "text": "  Validation order for each row: (1) required/type checks, (2) range checks, (3) pattern checks. "
+ },
+ {
+  "id": "R1.S2.P4.s2",
+  "owner": "O1",
+  "text": "After all rows pass steps 1-3, uniqueness is checked across valid rows in input file order — the first occurrence is kept, subsequent duplicates are rejected.\n\n"
+ },
+ {
+  "id": "R1.S2.P5.s1",
+  "owner": "O1",
+  "text": "  `primary_key` is always an array of one or more column names (composite key support).\n\n"
+ },
+ {
+  "id": "R1.S2.P6.s1",
+  "owner": "O1",
+  "text": "- Rows that fail validation are written to `<output>.rejected` (same CSV format, with an appended `rejection_reason` column). Valid rows are written to `<output>` in CSV format.\n"
+ },
+ {
+  "id": "R1.S2.P6.s3",
+  "owner": "O1",
+  "text": "- A SHA-256 checksum of the output file (computed on the raw bytes) is written to `<output>.sha256` as a single hex string followed by a newline.\n\n"
+ },
+ {
+  "id": "R1.S3.P1.s1",
+  "owner": "O2",
+  "text": "`dpipe transform --input <path> --recipe <path> --output <path> --seed <uint64>`\n\n"
+ },
+ {
+  "id": "R1.S3.P2.s2",
+  "owner": "O2",
+  "text": "- Applies transformations defined in a JSON recipe file, in order. Each transformation is an object in an array:\n  ```json\n  [\n    {\"op\": \"filter\", \"column\": \"value\", \"condition\": \"gt\", \"threshold\": 10.0},\n    {\"op\": \"derive\", \"name\": \"score\", \"expression\": \"value * 2 + 1\"},\n    {\"op\": \"sample\", \"fraction\": 0.5},\n    {\"op\": \"sort\", \"column\": \"score\", \"order\": \"desc\"},\n    {\"op\": \"rename\", \"from\": \"label\", \"to\": \"category\"},\n    {\"op\": \"drop\", \"columns\": [\"timestamp\"]},\n    {\"op\": \"aggregate\", \"group_by\": [\"label\"], \"aggregations\": [\n      {\"column\": \"value\", \"function\": \"sum\", \"as\": \"total_value\"},\n      {\"column\": \"value\", \"function\": \"avg\", \"as\": \"avg_value\"},\n      {\"column\": \"id\", \"function\": \"count\", \"as\": \"num_items\"}\n    ]},\n    {\"op\": \"join\", \"right\": \"other.csv\", \"on\": \"id\", \"type\": \"left\"},\n    {\"op\": \"window\", \"function\": \"rank\", \"partition_by\": [\"label\"], \"order_by\": [{\"column\": \"value\", \"order\": \"desc\"}], \"as\": \"value_rank\"},\n    {\"op\": \"pivot\", \"index\": [\"id\"], \"column\": \"label\", \"value\": \"value\"},\n    {\"op\": \"unpivot\", \"index\": [\"id\"], \"columns\": [\"q1\", \"q2\", \"q3\"], \"name_to\": \"quarter\", \"value_to\": \"amount\"},\n    {\"op\": \"fill\", \"columns\": [\"value\"], \"strategy\": \"forward\"}\n  ]\n  ```\n"
+ },
+ {
+  "id": "R1.S3.P24.s1",
+  "owner": "O2",
+  "text": "- After all transformations, write the result CSV to `<output>`, its SHA-256 to `<output>.sha256`.\n\n"
+ },
+ {
+  "id": "R1.S3.P2.s4",
+  "owner": "O3",
+  "text": "  - `filter`: Keep rows where `column` satisfies `condition` against `threshold`. Conditions: `gt`, `gte`, `lt`, `lte`, `eq`, `neq`.\n"
+ },
+ {
+  "id": "R1.S3.P2.s5",
+  "owner": "O4",
+  "text": "  - `derive`: Add a new column computed from an expression over existing numeric columns.\n\n"
+ },
+ {
+  "id": "R1.S3.P8.s1",
+  "owner": "O4",
+  "text": "    Formatting: derive results are written using the shortest decimal representation that preserves the computed value, without unnecessary trailing zeros or a trailing decimal point (e.g., `11` not `11.0`, `2.5` not `2.50`). "
+ },
+ {
+  "id": "R1.S3.P8.s2",
+  "owner": "O4",
+  "text": "`NaN` is written as the literal string `NaN`.\n\n"
+ },
+ {
+  "id": "R1.S3.P3.s2",
+  "owner": "O5",
+  "text": "    1. `||` (logical OR): returns `1` if either operand is > 0, otherwise `0`\n"
+ },
+ {
+  "id": "R1.S3.P3.s3",
+  "owner": "O5",
+  "text": "    2. `&&` (logical AND): returns `1` if both operands are > 0, otherwise `0`\n"
+ },
+ {
+  "id": "R1.S3.P3.s4",
+  "owner": "O5",
+  "text": "    3. `==`, `!=` (equality): numeric comparison, returns `1` (true) or `0` (false)\n"
+ },
+ {
+  "id": "R1.S3.P3.s5",
+  "owner": "O5",
+  "text": "    4. `>`, `>=`, `<`, `<=` (relational): numeric comparison, returns `1` or `0`\n"
+ },
+ {
+  "id": "R1.S3.P3.s6",
+  "owner": "O5",
+  "text": "    5. `+`, `-` (addition, subtraction)\n"
+ },
+ {
+  "id": "R1.S3.P3.s7",
+  "owner": "O5",
+  "text": "    6. `*`, `/`, `%` (multiplication, division, modulo)\n"
+ },
+ {
+  "id": "R1.S3.P3.s8",
+  "owner": "O5",
+  "text": "    7. Unary `-` (negation)\n"
+ },
+ {
+  "id": "R1.S3.P3.s9",
+  "owner": "O5",
+  "text": "    8. Function calls, parentheses, column references, numeric literals\n\n"
+ },
+ {
+  "id": "R1.S3.P4.s1",
+  "owner": "O5",
+  "text": "    Division by zero produces `NaN`. "
+ },
+ {
+  "id": "R1.S3.P4.s2",
+  "owner": "O5",
+  "text": "Modulo by zero produces `NaN`. "
+ },
+ {
+  "id": "R1.S3.P4.s3",
+  "owner": "O5",
+  "text": "Any comparison involving `NaN` (on either side) produces `0`.\n\n"
+ },
+ {
+  "id": "R1.S3.P5.s2",
+  "owner": "O5",
+  "text": "    - `abs(x)` — absolute value\n"
+ },
+ {
+  "id": "R1.S3.P5.s3",
+  "owner": "O5",
+  "text": "    - `sqrt(x)` — square root; returns `NaN` for negative input\n"
+ },
+ {
+  "id": "R1.S3.P5.s4",
+  "owner": "O5",
+  "text": "    - `ceil(x)` — smallest integer >= x\n"
+ },
+ {
+  "id": "R1.S3.P5.s5",
+  "owner": "O5",
+  "text": "    - `floor(x)` — largest integer <= x\n"
+ },
+ {
+  "id": "R1.S3.P5.s6",
+  "owner": "O5",
+  "text": "    - `round(x, n)` — round x to n decimal places (n is a non-negative integer; half-values round away from zero)\n"
+ },
+ {
+  "id": "R1.S3.P5.s7",
+  "owner": "O5",
+  "text": "    - `pow(x, y)` — x raised to the power y\n"
+ },
+ {
+  "id": "R1.S3.P5.s8",
+  "owner": "O5",
+  "text": "    - `log(x)` — natural logarithm; returns `NaN` for non-positive input\n"
+ },
+ {
+  "id": "R1.S3.P5.s9",
+  "owner": "O5",
+  "text": "    - `min(x, y)` — minimum of two values\n"
+ },
+ {
+  "id": "R1.S3.P5.s10",
+  "owner": "O5",
+  "text": "    - `max(x, y)` — maximum of two values\n"
+ },
+ {
+  "id": "R1.S3.P5.s11",
+  "owner": "O5",
+  "text": "    - `if(cond, x, y)` — returns x if cond > 0, otherwise returns y\n"
+ },
+ {
+  "id": "R1.S3.P5.s12",
+  "owner": "O5",
+  "text": "    - `clamp(x, lo, hi)` — returns lo if x < lo, hi if x > hi, otherwise x\n"
+ },
+ {
+  "id": "R1.S3.P5.s13",
+  "owner": "O5",
+  "text": "    - `coalesce(x, y)` — returns x if x is not NaN, otherwise returns y\n\n"
+ },
+ {
+  "id": "R1.S3.P6.s1",
+  "owner": "O5",
+  "text": "    Functions can be nested: `round(sqrt(abs(value)), 2)`.\n\n"
+ },
+ {
+  "id": "R1.S3.P7.s1",
+  "owner": "O5",
+  "text": "    Comparison and logical operators enable inline conditions without `if`: e.g., `(value > 10 && value < 100) * value` yields `value` when in range, `0` otherwise.\n\n"
+ },
+ {
+  "id": "R1.S3.P9.s1",
+  "owner": "O6",
+  "text": "  - `sample`: Retain the given fraction of rows. The selection must be deterministic given `--seed`. Use the seed to initialize a deterministic PRNG (use Go's `math/rand` with the given seed). Rows are selected by generating a random float for each row in input order; keep the row if the float is < fraction.\n"
+ },
+ {
+  "id": "R1.S3.P9.s2",
+  "owner": "O7",
+  "text": "  - `sort`: Sort rows by the given column. `asc` or `desc`. Ties are broken by the original row order (stable sort).\n"
+ },
+ {
+  "id": "R1.S3.P9.s3",
+  "owner": "O8",
+  "text": "  - `rename`: Rename a column.\n"
+ },
+ {
+  "id": "R1.S3.P9.s4",
+  "owner": "O9",
+  "text": "  - `drop`: Remove the listed columns.\n"
+ },
+ {
+  "id": "R1.S3.P9.s5",
+  "owner": "O10",
+  "text": "  - `aggregate`: Group rows by the `group_by` columns and compute aggregations on each group.\n    Supported aggregation functions:\n"
+ },
+ {
+  "id": "R1.S3.P9.s6",
+  "owner": "O10",
+  "text": "    - `sum`: sum of numeric values in the column for this group. Empty/non-numeric values are skipped. Result is `0` if no numeric values exist.\n"
+ },
+ {
+  "id": "R1.S3.P9.s7",
+  "owner": "O10",
+  "text": "    - `avg`: arithmetic mean of numeric values. Empty/non-numeric values are skipped. Result is `NaN` if no numeric values exist.\n"
+ },
+ {
+  "id": "R1.S3.P9.s8",
+  "owner": "O10",
+  "text": "    - `count`: number of non-empty values in the specified column for this group.\n"
+ },
+ {
+  "id": "R1.S3.P9.s9",
+  "owner": "O10",
+  "text": "    - `min`: minimum numeric value. Empty/non-numeric values are skipped. Result is `NaN` if no numeric values exist.\n"
+ },
+ {
+  "id": "R1.S3.P9.s10",
+  "owner": "O10",
+  "text": "    - `max`: maximum numeric value. Empty/non-numeric values are skipped. Result is `NaN` if no numeric values exist.\n\n"
+ },
+ {
+  "id": "R1.S3.P10.s1",
+  "owner": "O10",
+  "text": "    Output columns: the group_by columns (in declaration order), followed by the aggregation result columns (in declaration order, using the `as` name). "
+ },
+ {
+  "id": "R1.S3.P10.s3",
+  "owner": "O10",
+  "text": "Numeric aggregation results are formatted without unnecessary trailing zeros (e.g., `10` not `10.0`, `2.5` not `2.50`).\n\n"
+ },
+ {
+  "id": "R1.S3.P11.s1",
+  "owner": "O10",
+  "text": "    Optional `having` clause: after aggregation results are computed and formatted, filter output rows based on an aggregated column. "
+ },
+ {
+  "id": "R1.S3.P11.s3",
+  "owner": "O10",
+  "text": "    ```json\n    {\"op\": \"aggregate\", \"group_by\": [\"label\"], \"aggregations\": [\n      {\"column\": \"value\", \"function\": \"sum\", \"as\": \"total\"}\n    ], \"having\": {\"column\": \"total\", \"condition\": \"gt\", \"threshold\": 100}}\n    ```\n"
+ },
+ {
+  "id": "R1.S3.P11.s4",
+  "owner": "O10",
+  "text": "    The `having` object uses the same condition operators as `filter` (`gt`, `gte`, `lt`, `lte`, `eq`, `neq`). "
+ },
+ {
+  "id": "R1.S3.P11.s5",
+  "owner": "O10",
+  "text": "The `column` must reference one of the `as` names from the aggregations. "
+ },
+ {
+  "id": "R1.S3.P11.s8",
+  "owner": "O10",
+  "text": "The `having` clause is applied after sorting — it only removes rows, it does not change the relative order of remaining rows.\n\n"
+ },
+ {
+  "id": "R1.S3.P12.s1",
+  "owner": "O11",
+  "text": "  - `join`: Join current dataset with another CSV file.\n"
+ },
+ {
+  "id": "R1.S3.P12.s2",
+  "owner": "O11",
+  "text": "    - `right`: path to the other CSV file\n"
+ },
+ {
+  "id": "R1.S3.P12.s3",
+  "owner": "O11",
+  "text": "    - `on`: column name that must exist in both datasets (the join key)\n"
+ },
+ {
+  "id": "R1.S3.P12.s4",
+  "owner": "O11",
+  "text": "    - `type`: `\"inner\"` or `\"left\"`\n"
+ },
+ {
+  "id": "R1.S3.P12.s5",
+  "owner": "O11",
+  "text": "      - `inner`: output only rows where the join key value exists in both datasets\n"
+ },
+ {
+  "id": "R1.S3.P12.s6",
+  "owner": "O11",
+  "text": "      - `left`: output all rows from the current (left) dataset; for rows where the join key has no match in the right dataset, all right-side columns are filled with empty strings\n"
+ },
+ {
+  "id": "R1.S3.P12.s10",
+  "owner": "O11",
+  "text": "    - If the join key column does not exist in either dataset, exit with error: `ERROR: invalid recipe: join key <name> not found in <left|right> dataset`.\n\n"
+ },
+ {
+  "id": "R1.S3.P13.s1",
+  "owner": "O12",
+  "text": "  - `window`: Add a new column computed by a window function over partitions of the data.\n"
+ },
+ {
+  "id": "R1.S3.P13.s2",
+  "owner": "O12",
+  "text": "    - `partition_by` (optional): array of column names to partition by. If omitted or empty, all rows are in one partition.\n"
+ },
+ {
+  "id": "R1.S3.P13.s3",
+  "owner": "O12",
+  "text": "    - `order_by`: array of ordering specifications, each an object with `\"column\"` (string) and `\"order\"` (`\"asc\"` or `\"desc\"`). Rows within each partition are ordered by these columns (first column is primary, etc.). Ties in all order_by columns are broken by input row order.\n"
+ },
+ {
+  "id": "R1.S3.P13.s4",
+  "owner": "O12",
+  "text": "    - `as`: name of the new column to create.\n\n"
+ },
+ {
+  "id": "R1.S3.P14.s1",
+  "owner": "O12",
+  "text": "    Supported window functions (specified in the `\"function\"` field):\n"
+ },
+ {
+  "id": "R1.S3.P14.s2",
+  "owner": "O12",
+  "text": "    - `rank`: 1-based rank within the partition. Rows with equal values in all `order_by` columns receive the same rank. The next rank after a group of ties skips ahead by the group size (e.g., two rows tied at rank 1 → next rank is 3).\n"
+ },
+ {
+  "id": "R1.S3.P14.s3",
+  "owner": "O12",
+  "text": "    - `dense_rank`: Like `rank` but without gaps (e.g., two rows tied at rank 1 → next rank is 2).\n"
+ },
+ {
+  "id": "R1.S3.P14.s4",
+  "owner": "O12",
+  "text": "    - `row_number`: Unique sequential number starting from 1 within the partition. Ties are broken by input row order.\n"
+ },
+ {
+  "id": "R1.S3.P14.s5",
+  "owner": "O12",
+  "text": "    - `lag`: Value of a source column from a preceding row in partition order. Additional operation fields: `\"source_column\"` (string), `\"offset\"` (positive integer, number of rows back), `\"default\"` (string, value to use when no preceding row exists at that offset). Example:\n      ```json\n      {\"op\": \"window\", \"function\": \"lag\", \"source_column\": \"value\", \"offset\": 1, \"default\": \"0\", \"partition_by\": [\"cat\"], \"order_by\": [{\"column\": \"id\", \"order\": \"asc\"}], \"as\": \"prev_value\"}\n      ```\n"
+ },
+ {
+  "id": "R1.S3.P14.s6",
+  "owner": "O12",
+  "text": "    - `lead`: Like `lag` but looks forward (rows ahead in partition order). Same additional fields as `lag`.\n"
+ },
+ {
+  "id": "R1.S3.P14.s7",
+  "owner": "O12",
+  "text": "    - `running_sum`: Cumulative sum of a source column's values up to and including the current row within the partition (in partition order). Additional field: `\"source_column\"`. Non-numeric values are treated as 0. Example:\n      ```json\n      {\"op\": \"window\", \"function\": \"running_sum\", \"source_column\": \"value\", \"partition_by\": [\"cat\"], \"order_by\": [{\"column\": \"id\", \"order\": \"asc\"}], \"as\": \"cum_value\"}\n      ```\n"
+ },
+ {
+  "id": "R1.S3.P14.s8",
+  "owner": "O12",
+  "text": "    - `running_avg`: Cumulative average of a source column's numeric values up to and including the current row. Additional field: `\"source_column\"`. Non-numeric values are skipped from both numerator and denominator. If no numeric values exist up to the current row, the result is `NaN`.\n"
+ },
+ {
+  "id": "R1.S3.P14.s9",
+  "owner": "O12",
+  "text": "    - `ntile`: Divide the partition into `n` roughly equal groups numbered 1 through `n`. Additional field: `\"n\"` (positive integer). If the partition has `k` rows, the first `k mod n` groups have `ceil(k/n)` rows each, and the remaining groups have `floor(k/n)` rows each. Example:\n      ```json\n      {\"op\": \"window\", \"function\": \"ntile\", \"n\": 4, \"partition_by\": [], \"order_by\": [{\"column\": \"id\", \"order\": \"asc\"}], \"as\": \"quartile\"}\n      ```\n\n"
+ },
+ {
+  "id": "R1.S3.P16.s1",
+  "owner": "O12",
+  "text": "    Formatting: `rank`, `dense_rank`, `row_number`, and `ntile` results are formatted as integers (no decimal point). "
+ },
+ {
+  "id": "R1.S3.P16.s2",
+  "owner": "O12",
+  "text": "`running_sum`, `running_avg`, `lag`, and `lead` results are formatted without unnecessary trailing zeros.\n\n"
+ },
+ {
+  "id": "R1.S3.P17.s1",
+  "owner": "O12",
+  "text": "    If any referenced column (in `partition_by`, `order_by`, or `source_column`) does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\n\n"
+ },
+ {
+  "id": "R1.S3.P18.s1",
+  "owner": "O13",
+  "text": "  - `pivot`: Reshape data from long format to wide format.\n"
+ },
+ {
+  "id": "R1.S3.P18.s2",
+  "owner": "O13",
+  "text": "    - `index`: array of column names that identify each output row (the row keys).\n"
+ },
+ {
+  "id": "R1.S3.P18.s3",
+  "owner": "O13",
+  "text": "    - `column`: the column whose unique values become new column headers.\n"
+ },
+ {
+  "id": "R1.S3.P18.s4",
+  "owner": "O13",
+  "text": "    - `value`: the column whose values fill the cells.\n\n"
+ },
+ {
+  "id": "R1.S3.P19.s2",
+  "owner": "O13",
+  "text": "    - Output rows are identified by the unique combinations of `index` column values.\n"
+ },
+ {
+  "id": "R1.S3.P19.s3",
+  "owner": "O13",
+  "text": "    - For each unique value found in `column`, a new output column is created with that value as its header.\n"
+ },
+ {
+  "id": "R1.S3.P19.s4",
+  "owner": "O13",
+  "text": "    - The cell at a given (index combination, column value) is filled with the `value` from the first matching input row (by input order) that has that index combination and that column value.\n"
+ },
+ {
+  "id": "R1.S3.P19.s6",
+  "owner": "O13",
+  "text": "    - Output columns: `index` columns (in declaration order), followed by the new pivot columns sorted in ascending lexicographic order.\n"
+ },
+ {
+  "id": "R1.S3.P19.s7",
+  "owner": "O13",
+  "text": "    - Output rows are sorted by the `index` columns in ascending lexicographic order, comparing left to right.\n"
+ },
+ {
+  "id": "R1.S3.P19.s8",
+  "owner": "O13",
+  "text": "    - If any referenced column (`index`, `column`, or `value`) does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\n\n"
+ },
+ {
+  "id": "R1.S3.P20.s1",
+  "owner": "O14",
+  "text": "  - `unpivot`: Reshape data from wide format to long format (reverse of pivot).\n"
+ },
+ {
+  "id": "R1.S3.P20.s2",
+  "owner": "O14",
+  "text": "    - `index`: array of column names to keep as-is (the row identifiers).\n"
+ },
+ {
+  "id": "R1.S3.P20.s3",
+  "owner": "O14",
+  "text": "    - `columns`: array of column names to \"melt\" into rows.\n"
+ },
+ {
+  "id": "R1.S3.P20.s4",
+  "owner": "O14",
+  "text": "    - `name_to`: name of the new column that will contain the original column names.\n"
+ },
+ {
+  "id": "R1.S3.P20.s5",
+  "owner": "O14",
+  "text": "    - `value_to`: name of the new column that will contain the values.\n\n"
+ },
+ {
+  "id": "R1.S3.P21.s2",
+  "owner": "O14",
+  "text": "    - For each input row, produces one output row per column listed in `columns`.\n"
+ },
+ {
+  "id": "R1.S3.P21.s3",
+  "owner": "O14",
+  "text": "    - Output columns: `index` columns (in declaration order), then `name_to`, then `value_to`.\n"
+ },
+ {
+  "id": "R1.S3.P21.s4",
+  "owner": "O14",
+  "text": "    - Output rows: for each input row (in original input order), one output row per melted column (in `columns` declaration order).\n"
+ },
+ {
+  "id": "R1.S3.P21.s6",
+  "owner": "O14",
+  "text": "    - If any referenced column (in `index` or `columns`) does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\n\n"
+ },
+ {
+  "id": "R1.S3.P22.s1",
+  "owner": "O15",
+  "text": "  - `fill`: Fill empty values in specified columns.\n"
+ },
+ {
+  "id": "R1.S3.P22.s2",
+  "owner": "O15",
+  "text": "    - `columns`: array of column names whose empty values should be filled.\n"
+ },
+ {
+  "id": "R1.S3.P22.s3",
+  "owner": "O15",
+  "text": "    - `strategy`: one of `\"forward\"`, `\"backward\"`, `\"constant\"`.\n"
+ },
+ {
+  "id": "R1.S3.P22.s4",
+  "owner": "O15",
+  "text": "    - `value` (required only for `\"constant\"` strategy): the replacement value string.\n\n"
+ },
+ {
+  "id": "R1.S3.P23.s2",
+  "owner": "O15",
+  "text": "    - `\"forward\"`: scan rows top to bottom. For each specified column, replace each empty value with the most recent non-empty value seen above it in the same column. Leading empty values (no non-empty value above) remain empty.\n"
+ },
+ {
+  "id": "R1.S3.P23.s3",
+  "owner": "O15",
+  "text": "    - `\"backward\"`: scan rows bottom to top. For each specified column, replace each empty value with the nearest non-empty value below it in the same column. Trailing empty values (no non-empty value below) remain empty.\n"
+ },
+ {
+  "id": "R1.S3.P23.s4",
+  "owner": "O15",
+  "text": "    - `\"constant\"`: replace all empty values in the specified columns with the given `value` string.\n"
+ },
+ {
+  "id": "R1.S3.P23.s7",
+  "owner": "O15",
+  "text": "    - If any referenced column does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\n\n"
+ },
+ {
+  "id": "R1.S4.P1.s1",
+  "owner": "O16",
+  "text": "`dpipe verify --file <path> --checksum <path>`\n\n"
+ },
+ {
+  "id": "R1.S4.P2.s1",
+  "owner": "O16",
+  "text": "- Reads `<path>`, computes SHA-256, compares against the hex string in `<checksum>`.\n"
+ },
+ {
+  "id": "R1.S4.P2.s2",
+  "owner": "O16",
+  "text": "- Exit code 0 and prints `VERIFIED` to stdout if they match; exit code 1 and prints `MISMATCH expected=<expected> actual=<actual>` if they differ.\n\n"
+ },
+ {
+  "id": "R1.S5.P1.s1",
+  "owner": "O17",
+  "text": "`dpipe manifest --dir <path> --output <path>`\n\n"
+ },
+ {
+  "id": "R1.S5.P2.s1",
+  "owner": "O17",
+  "text": "- Recursively scans `<dir>` for all `.csv` files.\n"
+ },
+ {
+  "id": "R1.S5.P2.s2",
+  "owner": "O17",
+  "text": "- For each file, computes its SHA-256.\n"
+ },
+ {
+  "id": "R1.S5.P2.s3",
+  "owner": "O17",
+  "text": "- Writes a JSON manifest to `<output>`:\n  ```json\n  {\n    \"generated_at\": \"<RFC 3339 UTC timestamp>\",\n    \"files\": [\n      {\"path\": \"relative/to/dir/file.csv\", \"sha256\": \"abcdef...\", \"rows\": 42, \"size_bytes\": 1234}\n    ]\n  }\n  ```\n"
+ },
+ {
+  "id": "R1.S5.P2.s4",
+  "owner": "O17",
+  "text": "- The `files` array is sorted by `path` lexicographically.\n"
+ },
+ {
+  "id": "R1.S5.P2.s5",
+  "owner": "O17",
+  "text": "- The `generated_at` timestamp must reflect the actual time of generation.\n\n"
+ },
+ {
+  "id": "R1.S6.P1.s1",
+  "owner": "O18",
+  "text": "`dpipe pipeline --config <path>`\n\n"
+ },
+ {
+  "id": "R1.S6.P2.s1",
+  "owner": "O18",
+  "text": "- Reads a pipeline config (JSON):\n  ```json\n  {\n    \"seed\": 12345,\n    \"steps\": [\n      {\"type\": \"ingest\", \"input\": \"raw.csv\", \"schema\": \"schema.json\", \"output\": \"clean.csv\"},\n      {\"type\": \"transform\", \"input\": \"clean.csv\", \"recipe\": \"recipe.json\", \"output\": \"final.csv\"},\n      {\"type\": \"verify\", \"file\": \"final.csv\", \"checksum\": \"final.csv.sha256\"},\n      {\"type\": \"manifest\", \"dir\": \".\", \"output\": \"manifest.json\"}\n    ]\n  }\n  ```\n"
+ },
+ {
+  "id": "R1.S6.P2.s2",
+  "owner": "O18",
+  "text": "- Executes each step sequentially. If any step fails, the pipeline stops and exits with code 1, printing `PIPELINE FAILED at step N: <error>` (N is 1-indexed).\n"
+ },
+ {
+  "id": "R1.S6.P2.s3",
+  "owner": "O18",
+  "text": "- On success, exits with code 0 and prints `PIPELINE OK: N steps completed`.\n\n"
+ },
+ {
+  "id": "R1.S7.P1.s3",
+  "owner": "O19",
+  "text": "The only exception is `generated_at` in manifest output, which reflects wall-clock time.\n\n"
+ },
+ {
+  "id": "R1.S8.P1.s1",
+  "owner": "O20",
+  "text": "- Missing input files: exit code 1, stderr message `ERROR: file not found: <path>`.\n"
+ },
+ {
+  "id": "R1.S8.P1.s2",
+  "owner": "O20",
+  "text": "- Schema validation failures during ingest: do not exit with error; write rejected rows to `.rejected` file.\n"
+ },
+ {
+  "id": "R1.S8.P1.s3",
+  "owner": "O20",
+  "text": "- Invalid recipe operations (unknown op, referencing non-existent column in filter/sort/aggregate/join): exit code 1, stderr `ERROR: invalid recipe: <detail>`.\n"
+ },
+ {
+  "id": "R1.S8.P1.s4",
+  "owner": "O20",
+  "text": "- Malformed JSON config/schema/recipe: exit code 1, stderr `ERROR: malformed JSON: <path>`.\n"
+ },
+ {
+  "id": "R1.S8.P1.s5",
+  "owner": "O20",
+  "text": "- Invalid regex pattern in schema: exit code 1, stderr `ERROR: invalid pattern: <pattern>`.\n\n"
+ },
+ {
+  "id": "R1.S8.P2.s1",
+  "owner": "O21",
+  "text": "The tool must be buildable with `go build -o dpipe ./...` from `/app/`.\n"
+ }
+]
