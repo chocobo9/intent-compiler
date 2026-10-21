@@ -77,6 +77,13 @@ export interface ModelReply {
 
 export type AttributionTransport = (request: ModelRequest) => Promise<ModelReply>
 
+/**
+ * The provider's quota is spent (DESIGN §14): not a failed answer. The step stops, records what it spent, and the
+ * serial resumes from the round's checkpoint later. Any other transport failure (a watchdog stop included) counts
+ * as one attempt within the step's repair limit.
+ */
+export class QuotaExhausted extends Error {}
+
 export type IssueCode =
   | "unparseable" | "shape" | "unknown_block" | "not_this_round" | "hash_mismatch" | "duplicate" | "overlap" | "uncovered"
   | "object_choice" | "unknown_object" | "name_taken" | "change_shape" | "range_invalid" | "target_unknown"
@@ -109,7 +116,7 @@ export interface ModelCallRecord {
 }
 
 export interface AttributionOutcome {
-  status: "accepted" | "failed"
+  status: "accepted" | "failed" | "interrupted"
   acceptance?: RoundAcceptance
   calls: ModelCallRecord[]
   issues: Issue[]
@@ -376,11 +383,15 @@ export async function attributeRound(registry: Registry, round: number, transpor
     const sha = createHash("sha256").update(text).digest("hex")
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
-      // Keep the record of a failed call; the round is failed and can be ingested again.
-      issues = [{ code: "transport", message: `The model call failed: ${(e as Error).message}` }]
+      // Keep the record of a failed call. A spent quota stops here; anything else uses up this attempt.
+      const quota = e instanceof QuotaExhausted
+      const failed: Issue[] = [{ code: "transport", message: `The model call failed: ${(e as Error).message}` }]
       calls.push({ id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind, attempt,
-        request, request_chars: text.length, request_sha256: sha, response_text: "", issues, usage: usageOf({ text: "" }), stub: false, error: (e as Error).message })
-      return { status: "failed", calls, issues }
+        request, request_chars: text.length, request_sha256: sha, response_text: "", issues: failed, usage: usageOf({ text: "" }), stub: false, error: (e as Error).message })
+      if (quota) return { status: "interrupted", calls, issues: failed }
+      // The draft stays as it was; with no problems of its own yet, the next request says why it is asked again.
+      if (!issues.length) issues = failed
+      continue
     }
     const record: ModelCallRecord = {
       id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind, attempt,

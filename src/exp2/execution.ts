@@ -74,6 +74,8 @@ export interface ExecutionDeps {
   facts: CodeFacts
   /** Checks that passed on the program at the start of the round (its verdict run). */
   passing?: readonly string[]
+  /** Called after the plan and after every step with the record so far (for the record of an interrupted round). */
+  onProgress?: (record: ExecutionRecord) => void
   checkTimeoutMs?: number
 }
 
@@ -99,6 +101,8 @@ export interface ExecutionRecord {
   base: string
   head: string
   status: "done" | "plan_rejected" | "budget_spent" | "sessions_spent"
+  /** The work order's task zone, so the next round can carry what was left undone. */
+  task: string[]
   proposals: { session: string; steps: StepProposal[]; problems: string[] }[]
   sessions: { id: string; opened_for: string; closed: "normally" | "broken" }[]
   steps: StepRecord[]
@@ -149,7 +153,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 export async function executeRound(workdir: string, workorder: WorkOrder, text: string, executor: Executor, deps: ExecutionDeps, limits: ExecutionLimits = DEFAULT_LIMITS): Promise<ExecutionRecord> {
   const round = workorder.round
   const task = workorder.task.map(t => t.object)
-  const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", proposals: [], sessions: [], steps: [], carried: [], links: [], usage: zero() }
+  const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", task, proposals: [], sessions: [], steps: [], carried: [], links: [], usage: zero() }
   const links = [...deps.links]
   // What protection guards: checks passing at the last good checkpoint (start of round, then after each kept step).
   const passing = new Set(deps.passing ?? [])
@@ -167,6 +171,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     if (!problems.length) approved = p.steps.map((s, i) => ({ ...s, id: `P${round}.${i + 1}`, round }))
     feedback = problems
   }
+  deps.onProgress?.(record)
   if (!approved) {
     await session.close()
     record.status = "plan_rejected"
@@ -231,6 +236,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
       resetTo(workdir, checkpoint)
       if (rec.attempts > 0 && record.status === "done") rec.status = "failed"
     }
+    deps.onProgress?.(record)
   }
   await session.close()
   const fullyDone = new Set(record.steps.filter(s => s.status === "committed").flatMap(s => s.objects.filter(o => o.coverage === "full").map(o => o.object)))

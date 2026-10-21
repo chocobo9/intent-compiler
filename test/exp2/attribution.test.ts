@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, attributeRound, buildRequest, checkAnswer, type AttributionTransport, type ModelRequest } from "../../src/exp2/attribution.js"
+import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, QuotaExhausted, attributeRound, buildRequest, checkAnswer, type AttributionTransport, type ModelRequest } from "../../src/exp2/attribution.js"
 import { createOpenCodeAttributionTransport } from "../../src/exp2/transport.js"
 import { materialize, type AttributionAnswer, type Registry } from "../../src/exp2/registry.js"
 import { contentHash } from "../../src/exp2/source.js"
@@ -120,9 +120,15 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     const broken = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-attr-")), "t")
     const down = await broken.ingestRound(1, roundText(1), async () => { throw new Error("connection reset") })
     assert.equal(down.status, "failed")
-    const call = broken.inspect().calls[0]
-    assert.equal(call.error, "connection reset")
-    assert.equal(call.stub, false)
+    // A failed call uses up one attempt; every one is recorded.
+    const calls = broken.inspect().calls
+    assert.equal(calls.length, 3)
+    assert.ok(calls.every(c => c.error === "connection reset" && c.stub === false))
+    // A spent quota stops at once: the round is interrupted (to be resumed), not failed.
+    const quota = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-attr-")), "t")
+    const stopped = await quota.ingestRound(1, roundText(1), async () => { throw new QuotaExhausted("quota") })
+    assert.equal(stopped.status, "interrupted")
+    assert.equal(quota.inspect().calls.length, 1)
   })
 
   it("the request is lean: objects carry ids, names and block ids only; the repair keeps the same opening", async () => {
@@ -202,7 +208,7 @@ describe("exp2 store: append-only, ordered, one writer", () => {
   })
 
   it("refuses any edit of an existing entry", () => {
-    const base: Exp2State = { profile: "exp2-ic/block1", run_id: "t", sources: [{ round: 1, text: "a", hash: "x" }], calls: [], rounds: [], signals: [], checks: [], check_events: [], check_runs: [], check_calls: [], check_rounds: [] }
+    const base: Exp2State = { profile: "exp2-ic/block1", run_id: "t", sources: [{ round: 1, text: "a", hash: "x" }], calls: [], rounds: [], signals: [], checks: [], check_events: [], check_runs: [], check_calls: [], check_rounds: [], executions: [], reports: [] }
     assert.doesNotThrow(() => appendOnly(base, { ...base, sources: [...base.sources, { round: 2, text: "b", hash: "y" }] }))
     assert.throws(() => appendOnly(base, { ...base, sources: [{ round: 1, text: "changed", hash: "x" }] }), /append-only/u)
     assert.throws(() => appendOnly(base, { ...base, sources: [] }), /append-only/u)

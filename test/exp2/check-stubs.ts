@@ -257,11 +257,10 @@ export const CHECK_SCRIPTS: Record<number, ((request: CheckRequest) => ChecksPat
 }
 
 export function checkStubTransport(scripts = CHECK_SCRIPTS, log: CheckRequest[] = []): ChecksTransport {
-  const counts = new Map<number, number>()
+  // Answers from the request alone (an empty draft gets the first answer, otherwise the repair), as stubTransport.
   return async request => {
     log.push(request)
-    const n = counts.get(request.round) ?? 0
-    counts.set(request.round, n + 1)
+    const n = request.previous_draft.checks.length === 0 && request.previous_draft.retire.length === 0 ? 0 : 1
     const script = scripts[request.round]
     const reply = script ? script[Math.min(n, script.length - 1)](request) : patch({})
     return { text: JSON.stringify(reply), usage: { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 }, stub: true, model: script ? "stub:scripted" : "stub:none" }

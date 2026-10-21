@@ -82,8 +82,8 @@ func runVerify(args map[string]string) int {
 }
 `
 
-/** transform with the ops named in \`ops\` registered in its dispatch map. */
-export const TRANSFORM = (ops: string[]) => `package main
+/** transform with the ops named in \`ops\` registered in its dispatch map; \`sidecar\` writes <output>.sha256. */
+export const TRANSFORM = (ops: string[], sidecar = true) => `package main
 
 import (
 	"crypto/sha256"
@@ -139,8 +139,10 @@ func runTransform(args map[string]string) int {
 	w.WriteAll(t.rows)
 	w.Flush()
 	os.WriteFile(args["--output"], []byte(b.String()), 0o644)
-	sum := sha256.Sum256([]byte(b.String()))
-	os.WriteFile(args["--output"]+".sha256", []byte(hex.EncodeToString(sum[:])+"\\n"), 0o644)
+${sidecar ? `	sum := sha256.Sum256([]byte(b.String()))
+	os.WriteFile(args["--output"]+".sha256", []byte(hex.EncodeToString(sum[:])+"\\n"), 0o644)` : `	os.Remove(args["--output"] + ".sha256")
+	_ = sha256.Sum256
+	_ = hex.EncodeToString`}
 	return 0
 }
 
@@ -262,3 +264,66 @@ func opRename(t table, op map[string]any) (table, error) {
 `
 
 export const GO_MOD = "module dpipe\n\ngo 1.22\n"
+
+/** normalize (zscore with the population or the sample stddev, minmax). */
+export const NORMALIZE = (stddev: "population" | "sample") => `package main
+
+import (
+	"math"
+	"strconv"
+)
+
+func opNormalize(t table, op map[string]any) (table, error) {
+	c, _ := op["column"].(string)
+	i, err := col(t, c)
+	if err != nil {
+		return t, err
+	}
+	method, _ := op["method"].(string)
+	as, _ := op["as"].(string)
+	var xs []float64
+	for _, r := range t.rows {
+		if v, err := strconv.ParseFloat(r[i], 64); err == nil && r[i] != "" {
+			xs = append(xs, v)
+		}
+	}
+	n := float64(len(xs))
+	mean, ss, mn, mx := 0.0, 0.0, math.Inf(1), math.Inf(-1)
+	for _, x := range xs {
+		mean += x
+	}
+	mean /= n
+	for _, x := range xs {
+		ss += (x - mean) * (x - mean)
+		mn, mx = math.Min(mn, x), math.Max(mx, x)
+	}
+	sd := math.Sqrt(ss / (n - ${stddev === "sample" ? 1 : 0}))
+	out := table{header: append(append([]string{}, t.header...), as)}
+	for _, r := range t.rows {
+		cell := ""
+		if v, err := strconv.ParseFloat(r[i], 64); err == nil && r[i] != "" {
+			if method == "zscore" {
+				if len(xs) < 2 || sd == 0 {
+					cell = "0"
+				} else {
+					cell = strconv.FormatFloat((v-mean)/sd, 'f', -1, 64)
+				}
+			} else if mx == mn {
+				cell = "0"
+			} else {
+				cell = strconv.FormatFloat((v-mn)/(mx-mn), 'f', -1, 64)
+			}
+		}
+		out.rows = append(out.rows, append(append([]string{}, r...), cell))
+	}
+	return out, nil
+}
+`
+
+/** Puts a comment line at the top of a function's body, so a step that touches it changes its anchor. */
+export function stamp(source: string, func: string, text: string): string {
+  const at = source.indexOf(`func ${func}(`)
+  if (at < 0) return source
+  const brace = source.indexOf("{\n", at)
+  return source.slice(0, brace + 2) + `\t// ${text}\n` + source.slice(brace + 2)
+}

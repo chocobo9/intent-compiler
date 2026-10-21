@@ -1,5 +1,6 @@
 import { createOpenCodeStructuredTransport, type OpenCodeModelTransportV2Options } from "../model/opencode-transport.js"
 import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, type AttributionTransport, type ModelRequest } from "./attribution.js"
+import { CHECKS_SCHEMA, CHECKS_SYSTEM_PROMPT, type CheckRequest, type ChecksTransport } from "./checks.js"
 
 /**
  * The attribution step over OpenCode structured output. The first answer and every repair use the same system
@@ -8,6 +9,24 @@ import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, type AttributionTranspor
  */
 export function createOpenCodeAttributionTransport(options: OpenCodeModelTransportV2Options): AttributionTransport {
   const transport = createOpenCodeStructuredTransport<ModelRequest>(options, ATTRIBUTION_SYSTEM_PROMPT, ATTRIBUTION_SCHEMA)
+  return async request => {
+    const call = await transport(request)
+    return {
+      text: call.text,
+      usage: call.usage,
+      stub: false,
+      ...(call.model ? { model: call.model } : {}),
+      ...(call.provider ? { provider: call.provider } : {}),
+      ...(call.started_at ? { started_at: call.started_at } : {}),
+      ...(call.completed_at ? { completed_at: call.completed_at } : {}),
+      ...(call.structured_schema_errors?.length ? { schema_errors: call.structured_schema_errors } : {}),
+    }
+  }
+}
+
+/** The check-derivation step over OpenCode structured output: one schema and prompt for the first answer and repairs. */
+export function createOpenCodeChecksTransport(options: OpenCodeModelTransportV2Options): ChecksTransport {
+  const transport = createOpenCodeStructuredTransport<CheckRequest>(options, CHECKS_SYSTEM_PROMPT, CHECKS_SCHEMA)
   return async request => {
     const call = await transport(request)
     return {

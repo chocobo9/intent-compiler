@@ -265,14 +265,16 @@ export function ruleStub(request: ModelRequest): AttributionAnswer {
 
 export interface StubLog { round: number; task: "attribute" | "repair"; request: ModelRequest }
 
-/** A transport that replays the scripts per round (the last reply repeats) and falls back to the rule stub. */
+/**
+ * A transport that answers from the request alone, so a round run again from its checkpoint gets the same answers:
+ * an empty draft gets the round's first answer, a draft with something in it the repair (the last reply repeats).
+ * Rounds without a script get the rule stub.
+ */
 export function stubTransport(scripts: Record<number, Reply[]> = SCRIPTS, log: StubLog[] = []): AttributionTransport {
-  const counts = new Map<number, number>()
   return async request => {
     const script = scripts[request.round]
-    const n = counts.get(request.round) ?? 0
+    const n = request.previous_draft.assignments.length === 0 ? 0 : 1
     log.push({ round: request.round, task: n === 0 ? "attribute" : "repair", request })
-    counts.set(request.round, n + 1)
     const reply = script ? script[Math.min(n, script.length - 1)](request) : ruleStub(request)
     const shaped = typeof reply === "string" || !("assignments" in reply) ? reply : asPatch(reply)
     return {

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
-import type { ModelReply, TokenUsage } from "./attribution.js"
+import { QuotaExhausted, type ModelReply, type TokenUsage } from "./attribution.js"
 import type { Registry } from "./registry.js"
 import { safePath, type CheckInput, type ScriptSandbox } from "./runner.js"
 import { annotate, LEVEL_RANK, parseRef, roundOf, type SourceBlock } from "./source.js"
@@ -529,7 +529,7 @@ export interface CheckCallRecord {
   error?: string
 }
 
-export interface DeriveOutcome { status: "accepted" | "failed"; draft?: ChecksDraft; calls: CheckCallRecord[]; issues: CheckIssue[] }
+export interface DeriveOutcome { status: "accepted" | "failed" | "interrupted"; draft?: ChecksDraft; calls: CheckCallRecord[]; issues: CheckIssue[] }
 
 export async function deriveChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], transport: ChecksTransport, options: { maxRepairs: number; callId: (n: number) => string }): Promise<DeriveOutcome> {
   const calls: CheckCallRecord[] = []
@@ -542,9 +542,12 @@ export async function deriveChecks(registry: Registry, round: number, library: r
     const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "checks" as const, kind: attempt === 1 ? "attribute" as const : "repair" as const, attempt, request, request_chars: text.length, request_sha256: createHash("sha256").update(text).digest("hex") }
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
-      issues = [{ code: "transport", message: `The model call failed: ${(e as Error).message}` }]
-      calls.push({ ...base, response_text: "", issues, usage: zero(), stub: false, error: (e as Error).message })
-      return { status: "failed", calls, issues }
+      // As in attribution: a spent quota stops the step; any other failure uses up this attempt.
+      const failed: CheckIssue[] = [{ code: "transport", message: `The model call failed: ${(e as Error).message}` }]
+      calls.push({ ...base, response_text: "", issues: failed, usage: zero(), stub: false, error: (e as Error).message })
+      if (e instanceof QuotaExhausted) return { status: "interrupted", calls, issues: failed }
+      if (!issues.length) issues = failed
+      continue
     }
     const record: CheckCallRecord = { ...base, response_text: reply.text, issues: [], usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.model ? { model: reply.model } : {}) }
     calls.push(record)

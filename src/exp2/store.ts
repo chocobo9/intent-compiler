@@ -5,6 +5,8 @@ import { materialize, type Registry, type RoundAcceptance, type Signal } from ".
 import { contentHash } from "./source.js"
 import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport } from "./checks.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
+import type { ExecutionRecord } from "./execution.js"
+import type { RoundReport } from "./report.js"
 import { objectStatuses, runCheck, strength, type CheckRun, type ObjectStatus } from "./verdict.js"
 
 /**
@@ -17,7 +19,7 @@ export const EXP2_PROFILE = "exp2-ic/block1"
 
 export interface RoundRecord {
   round: number
-  status: "accepted" | "failed"
+  status: "accepted" | "failed" | "interrupted"
   calls: string[]
   acceptance?: RoundAcceptance
   issues?: Issue[]
@@ -37,11 +39,14 @@ export interface Exp2State {
   check_runs: CheckRun[]
   check_calls: CheckCallRecord[]
   check_rounds: CheckRoundRecord[]
+  /** Each round's execution record and report (DESIGN §7, §14). */
+  executions: ExecutionRecord[]
+  reports: RoundReport[]
 }
 
 export interface CheckRoundRecord {
   round: number
-  status: "accepted" | "failed"
+  status: "accepted" | "failed" | "interrupted"
   calls: string[]
   /** Checks entered this round (admitted or recorded as unknown), and checks retired. */
   entered: string[]
@@ -97,7 +102,7 @@ export class Exp2Store {
       s.calls.push(...outcome.calls)
       const record: RoundRecord = outcome.status === "accepted"
         ? { round, status: "accepted", calls: outcome.calls.map(c => c.id), acceptance: outcome.acceptance }
-        : { round, status: "failed", calls: outcome.calls.map(c => c.id), issues: outcome.issues }
+        : { round, status: outcome.status, calls: outcome.calls.map(c => c.id), issues: outcome.issues }
       if (record.acceptance) {
         // Replaying the accepted answer must reproduce a full, single cover of the round.
         registry.apply(record.acceptance)
@@ -120,8 +125,8 @@ export class Exp2Store {
       const outcome = await deriveChecks(registry, round, s.checks, s.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `M${nextCall() + n}` })
       s.check_calls.push(...outcome.calls)
       const calls = outcome.calls.map(c => c.id)
-      if (outcome.status === "failed") {
-        const record: CheckRoundRecord = { round, status: "failed", calls, entered: [], retired: [], rejected_retire: [], issues: outcome.issues }
+      if (outcome.status !== "accepted") {
+        const record: CheckRoundRecord = { round, status: outcome.status, calls, entered: [], retired: [], rejected_retire: [], issues: outcome.issues }
         s.check_rounds.push(record)
         return record
       }
@@ -181,6 +186,36 @@ export class Exp2Store {
     return objectStatuses(this.registry(state), state.checks, state.check_events, state.check_runs.filter(r => r.round === round && r.program === program), round)
   }
 
+  /** Appends a round's execution record and report. */
+  async recordRound(execution: ExecutionRecord, report: RoundReport): Promise<void> {
+    await this.transaction(s => {
+      if (s.reports.some(r => r.round === report.round)) throw new Error(`Round ${report.round} already has a report`)
+      s.executions.push(execution)
+      s.reports.push(report)
+    })
+  }
+
+  /** The state file's exact text, for a checkpoint. */
+  exportState(): string {
+    return existsSync(this.file) ? readFileSync(this.file, "utf8") : JSON.stringify(this.inspect(), null, 2) + "\n"
+  }
+
+  /**
+   * Puts the state back to a checkpoint's text (DESIGN §14: round N starts only from round N−1's checkpoint). This is
+   * the one way the state may go back; whatever the interrupted attempt wrote must be saved elsewhere first.
+   */
+  async restoreState(text: string): Promise<void> {
+    const s = JSON.parse(text) as Exp2State
+    if (s.profile !== EXP2_PROFILE || s.run_id !== this.runId) throw new Error("Checkpoint profile/run mismatch")
+    const lock = `${this.file}.lock`
+    const fd = openSync(lock, "wx")
+    try {
+      const temp = `${this.file}.${process.pid}.tmp`
+      writeFileSync(temp, text, "utf8")
+      renameSync(temp, this.file)
+    } finally { closeSync(fd); unlinkSync(lock) }
+  }
+
   private save(before: Exp2State, after: Exp2State): void {
     appendOnly(before, after)
     const temp = `${this.file}.${process.pid}.tmp`
@@ -212,12 +247,12 @@ export class Exp2Store {
 }
 
 function emptyChecks() {
-  return { checks: [] as CheckRecord[], check_events: [] as CheckEvent[], check_runs: [] as CheckRun[], check_calls: [] as CheckCallRecord[], check_rounds: [] as CheckRoundRecord[] }
+  return { checks: [] as CheckRecord[], check_events: [] as CheckEvent[], check_runs: [] as CheckRun[], check_calls: [] as CheckCallRecord[], check_rounds: [] as CheckRoundRecord[], executions: [] as ExecutionRecord[], reports: [] as RoundReport[] }
 }
 
 /** Every list in the state may only grow; existing entries must stay byte-identical. */
 export function appendOnly(before: Exp2State, after: Exp2State): void {
-  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds"] as const) {
+  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports"] as const) {
     const a = before[key] as unknown[], b = after[key] as unknown[]
     if (b.length < a.length || a.some((x, i) => JSON.stringify(x) !== JSON.stringify(b[i]))) throw new Error(`Exp2 state ${key} is append-only`)
   }
