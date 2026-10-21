@@ -174,7 +174,36 @@
 
   所有服务的启动脚本都已加上这两个设置。这个问题对裸模型和 IC 同样存在。IC 的看门狗能处理这种挂死，裸模型和外壳没有看门狗。
 
-## 8. 还没有观察的
+## 8. 归属录音：gpt-5.6-luna-fast medium（R1–R8）
+
+- **运行目录**：`D:/huawei/EvoCodeBench/harbor_runs/exp2-rec-luna56-medium-attr-20261021`。用的是 3e21ed0 的代码，走隔离的管理服务。全部调用都录进了 `cassette.json`，每轮的结果在 `rounds.jsonl`。
+- **结果**：
+  - R1–R7 全部通过，但几乎每一轮首答都有问题，要修补 1–2 次；
+  - R8 修补 2 次后仍不通过，串行在这里停止。
+
+| 轮 | 调用次数 | 首答的问题（种类 × 条数） |
+|---|---|---|
+| R1 | 2 | overlap |
+| R2 | 2 | unknown_object × 2、overlap × 5、reference_invalid × 2 |
+| R3 | 3 | unknown_object、overlap、uncovered、reference_invalid；第二次修补还剩 uncovered |
+| R4 | 2 | unknown_object、overlap、reference_invalid |
+| R5 | 2 | change_shape、object_choice、unknown_object、reference_invalid |
+| R6 | 2 | reference_invalid |
+| R7 | 2 | unknown_object、overlap × 2 |
+| R8 | 3（失败） | overlap、reference_invalid × 2 → uncovered → overlap，在两种问题之间来回 |
+
+- **共同的根源：本轮新建的对象，模型会自己猜一个编号来用。**
+  - 例如 R2：上级小节归给新对象 "profile command"，下面的子小节却归给一个并不存在的 "O9"，那是模型猜的、这个新对象将来的编号。结果是同一个根源同时报出 unknown_object、overlap 和 reference_invalid 三种问题。
+  - 按现有规则，新对象在被接受之前没有编号，同一份回答里只能用名字或它的某一块来指代它。模型显然不这么理解。
+- **R8 为什么在两种问题之间来回**：
+  - 第一次报 overlap，提示"要么去掉上级小节 R8.S1，要么去掉里面的块"；
+  - 模型去掉了 R8.S1，但 R8.S1 自己的两段引言 P1、P2 就没人认领了，于是报 uncovered；
+  - 模型再把 R8.S1 加回去，又回到 overlap。
+
+  报错只说了"去掉什么"，没说去掉以后剩下哪些部分要另外认领，修补因此不收敛。
+- **缓存几乎没有命中**：首答和修补的请求前缀相同，但修补的 cache read 大多是 0。原因是我们的 OpenCode 配置只给 `gpt-6-luna-fast` 设置了 promptCacheKey，没有给 `gpt-5.6-luna-fast` 设置。这是本地配置的遗漏，正式运行前要补上。
+
+## 9. 还没有观察的
 
 - 最小外壳 R7–R15（运行中）。
 - 任务中的修订、撤回和冲突，对强模型是否构成长程风险：在 dpipe 上看不出来。诊断分只在每轮最后差 2–7 个用例。
