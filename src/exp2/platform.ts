@@ -4,6 +4,22 @@
  * Nothing here relies on a shebang or on the shell: an interpreter is always named and called directly.
  */
 
+/**
+ * The host refused to start a program (DESIGN §12b item 6): Windows Application Control / Smart App Control blocks a
+ * freshly built unsigned executable, and spawn fails with UNKNOWN. An environment error: no step failed and no
+ * attempt is used; the serial stops and reports.
+ */
+export class EnvironmentBlocked extends Error {}
+
+/** Whether a spawn failure (or its output) is the host blocking the program. */
+export function isEnvironmentBlock(e: unknown, output = ""): boolean {
+  const code = (e as NodeJS.ErrnoException | undefined)?.code
+  return code === "UNKNOWN" || /Application Control policy|spawn UNKNOWN/iu.test(`${output} ${e ? String(e) : ""}`)
+}
+
+/** Spawning again when the host blocked it: Smart App Control blocks at random, so a few tries may get through. */
+export const ENVIRONMENT_TRIES = 3
+
 export interface PlatformOptions {
   platform?: NodeJS.Platform
   /** The Python interpreter: a command on PATH or a full path. */

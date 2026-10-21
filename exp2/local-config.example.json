@@ -48,5 +48,6 @@
   },
   "tools": { "python": "python", "go": "go" },
   "resume": { "wait_ms": 1800000, "max_resumes": 48 },
+  "rate_limit": { "delays_ms": [15000, 45000, 120000] },
   "scoring": null
 }

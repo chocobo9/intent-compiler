@@ -7,6 +7,7 @@ import { codeFacts, type ChecksTransport } from "./checks.js"
 import { executeRound, type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
 import { head, initRepo, resetTo } from "./git.js"
 import { buildReport, codingCost, renderReport, type RoundReport, type StageCost } from "./report.js"
+import { EnvironmentBlocked } from "./platform.js"
 import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import type { Exp2State, Exp2Store } from "./store.js"
 import { buildWorkOrder, nameLinks, renderWorkOrder, type PreviousStep, type WorkOrder } from "./workorder.js"
@@ -166,11 +167,13 @@ export class Serial {
       try {
         outcome = await this.runRound(round)
       } catch (e) {
-        if (e instanceof AuthInvalid) {
-          // A dead login is not waited out: keep what the attempt spent, go back to the checkpoint, stop and report.
-          this.salvage(round, `login invalid: ${e.message}`)
+        if (e instanceof AuthInvalid || e instanceof EnvironmentBlocked) {
+          // A dead login, or a host that will not start programs, is not waited out: keep what the attempt spent,
+          // go back to the checkpoint, stop and report. Neither counts as a failed step.
+          const why = e instanceof AuthInvalid ? `login invalid: ${e.message}` : `environment: ${e.message}`
+          this.salvage(round, why)
           await this.restore(last)
-          const stop = { status: "stopped", reason: `login invalid: ${e.message}`, issues: [] }
+          const stop = { status: "stopped", reason: why, issues: [] }
           writeFileSync(join(this.c.checkpoints, `stopped-round-${pad(round)}.json`), JSON.stringify(stop, null, 2) + "\n", "utf8")
           return { status: "stopped", last_checkpoint: last, resumes, stopped: { round, reason: stop.reason } }
         }

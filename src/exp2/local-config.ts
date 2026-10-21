@@ -50,6 +50,8 @@ export interface LocalConfig {
   runner: { kind: "local" } | ({ kind: "docker"; docker?: string[] } & Omit<DockerOptions, "docker">)
   tools?: { python?: string; go?: string }
   resume?: { wait_ms?: number; max_resumes?: number }
+  /** Waits before retrying a rate-limited call; when they run out the call counts as a spent quota. */
+  rate_limit?: { delays_ms: number[] }
   /**
    * Post-round scoring: a command (with {round}, {commit}, {repo} filled in) that prints {"passed": n, "total": m}.
    * Its result goes into the checkpoint report only; the system never reads it.
@@ -82,6 +84,7 @@ export function localConfigProblems(c: LocalConfig): string[] {
   }
   if (c.runner?.kind !== "local" && c.runner?.kind !== "docker") p.push("runner.kind must be local or docker")
   if (c.runner?.kind === "docker" && !c.runner.image) p.push("runner.image is required for docker")
+  if (c.rate_limit && (!Array.isArray(c.rate_limit.delays_ms) || !c.rate_limit.delays_ms.every(d => Number.isFinite(d) && d >= 0))) p.push("rate_limit.delays_ms must be an array of non-negative numbers")
   if (c.scoring && (!Array.isArray(c.scoring.command) || !c.scoring.command.length)) p.push("scoring.command must be a non-empty array")
   // Checkpoints and builds outside the work tree: restoring a checkpoint cleans the work tree.
   const inside = (parent: string, child: string) => { const r = relative(resolve(parent), resolve(child)); return r === "" || (!r.startsWith("..") && !isAbsolute(r)) }
@@ -139,6 +142,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   const docker = c.runner.kind === "docker" ? { ...c.runner } as DockerOptions : null
   const management = { client: openCodeHttpClient(c.management), directory: c.management.directory, providerId: c.management.provider, modelId: c.management.model, variant: c.management.variant, timeoutMs: c.management.request_timeout_ms }
   const coding = openCodeHttpClient(c.coding)
+  const rateLimit = c.rate_limit ? { delaysMs: c.rate_limit.delays_ms } : undefined
   // The program's name comes from the build command the requirements state.
   const texts = Array.from({ length: c.rounds }, (_, i) => join(at(c.inputs_dir), `round-${pad(i + 1)}.md`)).filter(existsSync).map(f => readFileSync(f, "utf8"))
   const binary = binaryFromSource(texts) ?? "app"
@@ -151,9 +155,9 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       if (!existsSync(file)) throw new Error(`No requirement text for round ${round}: ${file}`)
       return readFileSync(file, "utf8")
     },
-    attribution: createOpenCodeAttributionTransport(management),
-    checks: createOpenCodeChecksTransport(management),
-    executor: () => new OpenCodeExecutor({ client: coding, providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant, agent: c.coding.agent }),
+    attribution: createOpenCodeAttributionTransport(management, rateLimit),
+    checks: createOpenCodeChecksTransport(management, rateLimit),
+    executor: () => new OpenCodeExecutor({ client: coding, providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant, agent: c.coding.agent, rateLimit }),
     executorIsStub: false,
     anchors: new GoAnchorExtractor(undefined, platform),
     runner: docker ? new DockerRunner(docker) : new LocalProcessRunner(platform),

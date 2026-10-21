@@ -1,11 +1,14 @@
 import type { TokenUsage } from "./attribution.js"
 import type { ApprovedStep, Executor, ExecutorContext, ExecutorSession, StepProposal } from "./execution.js"
 import { SessionBroken } from "./execution.js"
-import { classifyProviderError, asProviderError } from "./provider-errors.js"
+import { classifyProviderError, asProviderError, withRateLimitRetry, type RateLimitPolicy } from "./provider-errors.js"
+import { QuotaExhausted } from "./attribution.js"
 
 /** A quota or login failure is no broken session: it goes up as itself, so the serial waits or stops. */
 function broken(what: string, e: unknown): Error {
-  return classifyProviderError(e) ? asProviderError(e) as Error : new SessionBroken(`${what} failed: ${(e as Error).message}`)
+  if (e instanceof QuotaExhausted) return e
+  const kind = classifyProviderError(e)
+  return kind === "auth" || kind === "quota" ? asProviderError(e) as Error : new SessionBroken(`${what} failed: ${(e as Error).message}`)
 }
 
 /**
@@ -40,6 +43,8 @@ export interface OpenCodeExecutorOptions {
   modelId: string
   variant?: string
   agent?: string
+  /** Waits before re-sending a rate-limited prompt (default DEFAULT_RATE_LIMIT). */
+  rateLimit?: RateLimitPolicy
 }
 
 export const PLAN_SCHEMA = {
@@ -87,16 +92,17 @@ export class OpenCodeExecutor implements Executor {
     if (!id) throw new SessionBroken("session.create returned no id")
     const options = this.options
     const prompt = async (text: string, format?: { type: "json_schema"; schema: unknown; retryCount?: number }) => {
-      let r: Record<string, any>
+      // A rate limit is waited out and the same prompt sent again; a provider failure can come back inside a normal reply.
       try {
-        r = unwrap(await client.session.prompt({
-          path: { id }, query: { directory: context.workdir },
-          body: { model: { providerID: options.providerId, modelID: options.modelId }, ...(options.variant ? { variant: options.variant } : {}), agent: options.agent ?? "build", system: EXECUTOR_SYSTEM_PROMPT, ...(format ? { format } : {}), parts: [{ type: "text", text }] },
-        }))
+        return await withRateLimitRetry(async () => {
+          const r = unwrap(await client.session.prompt({
+            path: { id }, query: { directory: context.workdir },
+            body: { model: { providerID: options.providerId, modelID: options.modelId }, ...(options.variant ? { variant: options.variant } : {}), agent: options.agent ?? "build", system: EXECUTOR_SYSTEM_PROMPT, ...(format ? { format } : {}), parts: [{ type: "text", text }] },
+          }))
+          if (r.info?.error) throw new Error(JSON.stringify(r.info.error))
+          return r
+        }, options.rateLimit)
       } catch (e) { throw broken("session.prompt", e) }
-      // A provider failure can come back inside a normal reply.
-      if (r.info?.error) throw broken("session.prompt", new Error(JSON.stringify(r.info.error)))
-      return r
     }
     const opening = context.resume
       ? `${context.text}\nA previous session stopped. Steps already committed: ${context.resume.done.join(", ") || "none"}. Do only the steps left: ${context.resume.remaining.map(s => `${s.id} ${s.label}`).join("; ")}.`

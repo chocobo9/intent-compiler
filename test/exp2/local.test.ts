@@ -10,7 +10,8 @@ import { dockerGoBuilder, dockerRunArgs, DockerRunner, DockerScriptSandbox } fro
 import { DEFAULT_LIMITS, SessionBroken } from "../../src/exp2/execution.js"
 import { assembleSerial, localConfigProblems, loadLocalConfig, preflight, scoringHook, type LocalConfig } from "../../src/exp2/local-config.js"
 import { OpenCodeExecutor } from "../../src/exp2/opencode-executor.js"
-import { classifyProviderError } from "../../src/exp2/provider-errors.js"
+import { classifyProviderError, withRateLimitRetry } from "../../src/exp2/provider-errors.js"
+import { EnvironmentBlocked, isEnvironmentBlock } from "../../src/exp2/platform.js"
 import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
 import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store } from "../../src/exp2/store.js"
@@ -29,14 +30,15 @@ const AUTH_TEXTS = [
 const QUOTA_TEXTS = [
   "OpenCode HTTP 429: {\"error\":{\"code\":\"insufficient_quota\",\"message\":\"You exceeded your current quota\"}}",
   "usage_limit_reached: The usage limit has been reached for this period",
-  "Rate limit reached for requests",
 ]
+const RATE_TEXTS = ["Rate limit reached for requests", "OpenCode HTTP 429: Too Many Requests", "status code 429"]
 const ORDINARY = ["socket hang up", "OpenCode HTTP 500: internal error", "fetch failed: ECONNREFUSED", "model returned no structured output"]
 
 describe("exp2 local: provider errors", () => {
   it("tells an invalid login and a spent quota from an ordinary failure", () => {
     for (const t of AUTH_TEXTS) assert.equal(classifyProviderError(new Error(t)), "auth", t)
     for (const t of QUOTA_TEXTS) assert.equal(classifyProviderError(new Error(t)), "quota", t)
+    for (const t of RATE_TEXTS) assert.equal(classifyProviderError(new Error(t)), "rate_limit", t)
     for (const t of ORDINARY) assert.equal(classifyProviderError(new Error(t)), null, t)
     // The text may sit in a diagnostic the transport attached, not in the message.
     const e = Object.assign(new Error("OpenCode session.prompt failed"), { diagnostic: { error: "invalidated oauth token" } })
@@ -59,6 +61,43 @@ describe("exp2 local: provider errors", () => {
     await assert.rejects(s2.work(step, []), SessionBroken)
     const s3 = await coding(async () => { throw new Error(AUTH_TEXTS[0]) }).open(context)
     await assert.rejects(s3.work(step, []), AuthInvalid)
+  })
+
+  it("a rate limit is waited out with short retries of the same call; when they run out it counts as a spent quota", async () => {
+    const waits: number[] = []
+    const policy = { delaysMs: [1, 2, 3], sleep: async (ms: number) => { waits.push(ms) } }
+    let n = 0
+    assert.equal(await withRateLimitRetry(async () => { if (++n < 3) throw new Error(RATE_TEXTS[1]); return "ok" }, policy), "ok")
+    assert.deepEqual([n, waits], [3, [1, 2]])
+    await assert.rejects(withRateLimitRetry(async () => { throw new Error(RATE_TEXTS[0]) }, policy), (e: Error) => e instanceof QuotaExhausted && /after 3 retries/u.test(e.message))
+    n = 0
+    await assert.rejects(withRateLimitRetry(async () => { n++; throw new Error(QUOTA_TEXTS[0]) }, policy), (e: Error) => !(e instanceof QuotaExhausted) && n === 1, "an explicit usage limit is not retried here")
+    // The coding executor re-sends a rate-limited prompt in the same session.
+    let prompts = 0
+    const client = { session: { create: async () => ({ id: "c" }), prompt: async () => { if (++prompts === 1) throw new Error(RATE_TEXTS[1]); return { info: {}, parts: [{ type: "text", text: "done" }] } } } }
+    const session = await new OpenCodeExecutor({ client, providerId: "p", modelId: "m", rateLimit: policy }).open({ round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], edges: [] }, text: "", resume: null } as never)
+    assert.equal((await session.work({ id: "P1.1", round: 1, label: "s", summary: "", objects: [] }, [])).note, "done")
+    assert.equal(prompts, 2)
+  })
+
+  it("a host that blocks the built program is an environment error: the serial stops, no step is failed", async () => {
+    assert.equal(isEnvironmentBlock(Object.assign(new Error("spawn UNKNOWN"), { code: "UNKNOWN" })), true)
+    assert.equal(isEnvironmentBlock(null, "An Application Control policy has blocked this file."), true)
+    assert.equal(isEnvironmentBlock(Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" })), false)
+    process.env.GIT_AUTHOR_DATE = process.env.GIT_COMMITTER_DATE = "2026-10-20T00:00:00Z"
+    const dir = mkdtempSync(join(tmpdir(), "exp2-env-"))
+    const real = goBuilder(join(dir, "builds"))
+    const store = new Exp2Store(join(dir, "store"), "env")
+    const serial = new Serial({
+      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
+      executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(),
+      build: (workdir, label) => { if (label.startsWith("P2.")) throw new EnvironmentBlocked("the host blocked P2.1/dpipe.exe 3 times: Error: spawn UNKNOWN"); return real(workdir, label) },
+      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, maxAttemptsPerStep: 2 } },
+    })
+    const outcome = await serial.run({ to: 3, wait: async () => assert.fail("an environment block is not waited out") })
+    assert.deepEqual([outcome.status, outcome.last_checkpoint, outcome.stopped!.round], ["stopped", 1, 2])
+    assert.match(outcome.stopped!.reason, /^environment: .*spawn UNKNOWN/u)
+    assert.equal(store.inspect().executions.filter(e => e.round === 2).length, 0, "no step of round 2 was recorded as failed")
   })
 
   it("an invalid login stops the serial at once: the attempt is kept, the checkpoint restored, the stop reported", async () => {

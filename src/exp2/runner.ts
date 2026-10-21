@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, extname, join, relative, resolve, sep } from "node:path"
-import { minimalEnv, scriptCommand, scriptFile, type PlatformOptions } from "./platform.js"
+import { ENVIRONMENT_TRIES, EnvironmentBlocked, isEnvironmentBlock, minimalEnv, scriptCommand, scriptFile, type PlatformOptions } from "./platform.js"
 
 /**
  * Exp2 check runner (DESIGN §8): runs the program under test, or a reference script, in a fresh directory that
@@ -74,15 +74,27 @@ export function collect(dir: string): Record<string, string> {
   return out
 }
 
-export function execute(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<ScriptResult> {
+/** Runs a command; a start the host blocks is tried again, then raised as EnvironmentBlocked (never a result). */
+export async function execute(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<ScriptResult> {
+  for (let n = 1; ; n++) {
+    const r = await executeOnce(command, cwd, timeoutMs, env)
+    if (!r.blocked) return r.result
+    if (n >= ENVIRONMENT_TRIES) throw new EnvironmentBlocked(`the host blocked ${command[0]} ${n} times: ${r.blocked}`)
+  }
+}
+
+function executeOnce(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<{ result: ScriptResult; blocked?: string }> {
   return new Promise(done => {
     const child = spawn(command[0], command.slice(1), { cwd, env, stdio: ["ignore", "pipe", "pipe"] })
     let stdout = "", stderr = "", timedOut = false
     child.stdout.on("data", d => { stdout += d })
     child.stderr.on("data", d => { stderr += d })
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL") }, timeoutMs)
-    child.on("error", e => { clearTimeout(timer); done({ exit_code: null, stdout, stderr: stderr + String(e), timed_out: false }) })
-    child.on("close", code => { clearTimeout(timer); done({ exit_code: timedOut ? null : code, stdout, stderr, timed_out: timedOut }) })
+    child.on("error", e => {
+      clearTimeout(timer)
+      done({ result: { exit_code: null, stdout, stderr: stderr + String(e), timed_out: false }, ...(isEnvironmentBlock(e) ? { blocked: String(e) } : {}) })
+    })
+    child.on("close", code => { clearTimeout(timer); done({ result: { exit_code: timedOut ? null : code, stdout, stderr, timed_out: timedOut } }) })
   })
 }
 
