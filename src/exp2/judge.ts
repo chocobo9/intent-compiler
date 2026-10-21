@@ -223,8 +223,10 @@ export function probeStatuses(registry: Registry, findings: readonly Finding[]):
   }
   return [...registry.objects.keys()].map(object => {
     const mine = by.get(object) ?? []
+    // Landed: nothing wrong, and each judged unit has an ok (a cannot_tell from another case's probe contradicts nothing).
     const wrong = mine.filter(f => f.verdict === "wrong"), ok = mine.filter(f => f.verdict === "ok")
-    const status = wrong.length ? "not_landed" : mine.length && ok.length === mine.length ? "landed" : "unknown"
+    const units = new Set(mine.map(f => f.unit))
+    const status = wrong.length ? "not_landed" : units.size && [...units].every(u => ok.some(f => f.unit === u)) ? "landed" : "unknown"
     return { object, status, reasons: status === "unknown" ? [mine.length ? "only_weak" : "no_checks"] : [], passing_strong: ok.map(f => pairKey(f.probe, f.unit)), not_landed: wrong.map(f => pairKey(f.probe, f.unit)), unknown: mine.filter(f => f.verdict !== "ok" && f.verdict !== "wrong").map(f => pairKey(f.probe, f.unit)) } as ObjectStatus
   })
 }

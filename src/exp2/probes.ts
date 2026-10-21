@@ -18,7 +18,8 @@ import { annotate } from "./source.js"
 export const MAX_UNITS = 4
 export const GROUP_SIZE = 22
 
-export interface ProbeCover { unit: string; trigger_values: string[]; wrong_would: string }
+/** case: the case id the cover reaches (null for a unit without cases). */
+export interface ProbeCover { unit: string; case?: string | null; trigger_values: string[]; wrong_would: string }
 
 export interface ProbeDraft {
   id: string
@@ -48,8 +49,10 @@ export interface ProbeEvent { probe: string; round: number; status: "stale"; rea
 export interface ProbeRequest {
   round: number
   sources: string
-  units: { id: string; text: string }[]
+  units: { id: string; text: string; cases?: { id: string; text: string }[] }[]
   previous_answer?: ProbesAnswer
+  /** Probes already admitted for these units (a strengthening request adds to them). */
+  existing?: ProbeDraft[]
   problems?: string[]
   task?: string
 }
@@ -88,6 +91,8 @@ export interface ProbeRoundRecord {
   uncovered: string[]
   /** Probes left out when the repairs ran out, with their problems. */
   dropped: { key: string; problems: string[] }[]
+  /** Case-level coverage (BLOCK10 §7.3): cases code found in the units, reached, declared uncheckable, still open. */
+  cases?: { total: number; covered: number; excused: number; open: string[] }
   issues?: { code: string; message: string }[]
 }
 
@@ -106,9 +111,10 @@ export const PROBES_SCHEMA = {
           covers: {
             type: "array",
             items: {
-              type: "object", additionalProperties: false, required: ["unit", "trigger_values", "wrong_would"],
+              type: "object", additionalProperties: false, required: ["unit", "case", "trigger_values", "wrong_would"],
               properties: {
                 unit: { type: "string", description: "the unit id from the request, for example R1.S3.P5.s8 (not its text)" },
+                case: { type: ["string", "null"], description: "the case id from the unit's `cases` this cover reaches; null when the unit lists no cases" },
                 trigger_values: { type: "array", items: { type: "string" }, description: "exact strings of this probe's args or file contents that make the unit apply" },
                 wrong_would: { type: "string", description: "what a plausible wrong program would output for this input instead" },
               },
@@ -117,7 +123,7 @@ export const PROBES_SCHEMA = {
         },
       },
     },
-    uncheckable: { type: "array", items: { type: "object", additionalProperties: false, required: ["unit", "reason"], properties: { unit: { type: "string", description: "a unit id from the request" }, reason: { type: "string" } } } },
+    uncheckable: { type: "array", items: { type: "object", additionalProperties: false, required: ["unit", "reason"], properties: { unit: { type: "string", description: "a unit id or a case id from the request" }, reason: { type: "string" } } } },
   },
 }
 
@@ -144,18 +150,66 @@ export interface ProbeProblem { probe?: string; message: string }
 const SHAPE = "the answer must have probes and uncheckable lists"
 const OUTPUT_OPTION = /^--?(out|output|dest|report|target)\b/u
 
-export function probeProblems(answer: unknown, group: readonly { id: string }[]): { problems: ProbeProblem[]; covered: Set<string>; excused: Set<string> } {
+/** A unit as the writer gets it: its text, and the cases code found in it. */
+export interface GroupUnit { id: string; text: string; cases: RuleCase[]; needs: string[] }
+
+/**
+ * A case a rule sentence distinguishes (BLOCK10 §7.3), found by code in the sentence's own text: each of a list of
+ * alternatives (code spans next to each other, joined by commas, "or", "and" or "/"), and each clause that states a
+ * rule (holds a code span or a number) when the sentence has more than one clause. `needs`: values a cover of the
+ * case must name among its trigger values: the alternative itself, and every number the case compares with.
+ */
+export interface RuleCase { id: string; text: string; kind: "alternative" | "clause"; needs: string[] }
+
+const SPAN = /`([^`\n]+)`/gu
+const RUN = /`[^`\n]+`(?:\s*(?:,\s*(?:or\s+|and\s+)?|or\s+|and\s+|\/\s*)`[^`\n]+`)+/gu
+const COMPARED = /(?:>=|<=|≥|≤|>|<)\s*(-?\d+(?:\.\d+)?)/gu
+/** An alternative a probe can name: a short token, no placeholder, no spaces. */
+const NAMEABLE = /^[^\s<>]{1,40}$/u
+
+export function ruleCases(registry: Registry, unit: string): { cases: RuleCase[]; needs: string[] } {
+  const b = registry.block(unit)
+  if (!b) return { cases: [], needs: [] }
+  const numbers = (t: string) => [...new Set([...t.replace(SPAN, (_m, x: string) => ` ${x} `).matchAll(COMPARED)].map(m => m[1]))]
+  const cases: RuleCase[] = []
+  let k = 0
+  for (const run of b.text.matchAll(RUN)) {
+    const alts = [...run[0].matchAll(SPAN)].map(m => m[1].trim()).filter(x => NAMEABLE.test(x))
+    if (alts.length >= 2) for (const v of alts) cases.push({ id: `${unit}#${++k}`, text: v, kind: "alternative", needs: [v] })
+  }
+  const clauses = b.children.map(id => registry.block(id)!).filter(c => c.kind === "clause")
+  // A clause whose only rule content is one of the listed alternatives is that alternative's case already.
+  const listed = new Set(cases.map(c => c.text))
+  const onlyListed = (t: string) => { const spans = [...t.matchAll(SPAN)].map(m => m[1].trim()); return spans.length > 0 && spans.every(x => listed.has(x)) && !/\d/u.test(t.replace(SPAN, "")) && t.replace(SPAN, "").replace(/[^A-Za-z]/gu, "").length < 3 }
+  if (clauses.length >= 2) for (const c of clauses.filter(x => /`[^`]+`|\d/u.test(x.text) && !onlyListed(x.text))) cases.push({ id: c.id, text: c.text.trim(), kind: "clause", needs: numbers(c.text) })
+  // One case is no distinction: the unit is covered as a whole.
+  return cases.length >= 2 ? { cases, needs: [] } : { cases: [], needs: numbers(b.text) }
+}
+
+export function groupUnit(registry: Registry, id: string): GroupUnit {
+  return { id, text: registry.block(id)!.text, ...ruleCases(registry, id) }
+}
+
+/**
+ * Code checks of an answer. A unit is covered when each of its cases is (or, without cases, the unit itself): by a
+ * cover of a probe that has no problem of its own, whose trigger values occur in the probe and include what the
+ * case needs. `strengthen`: an answer that only adds probes, so units already covered need no new cover.
+ */
+export function probeProblems(answer: unknown, group: readonly GroupUnit[], options: { strengthen?: boolean } = {}): { problems: ProbeProblem[]; covered: Set<string>; excused: Set<string>; cases: { total: number; covered: string[]; excused: string[] } } {
   const problems: ProbeProblem[] = []
   const covered = new Set<string>(), excused = new Set<string>()
+  const empty = { total: group.reduce((n, u) => n + u.cases.length, 0), covered: [], excused: [] }
   const a = answer as Partial<ProbesAnswer> | null
-  if (!a || typeof a !== "object" || !Array.isArray(a.probes) || !Array.isArray(a.uncheckable)) return { problems: [{ message: SHAPE }], covered, excused }
-  const ids = new Set(group.map(u => u.id))
+  if (!a || typeof a !== "object" || !Array.isArray(a.probes) || !Array.isArray(a.uncheckable)) return { problems: [{ message: SHAPE }], covered, excused, cases: empty }
+  const units = new Map(group.map(u => [u.id, u]))
+  const caseOf = new Map(group.flatMap(u => u.cases.map(c => [c.id, { unit: u, c }] as const)))
   for (const u of a.uncheckable) {
-    if (!u || typeof u.unit !== "string" || !ids.has(u.unit)) problems.push({ message: `uncheckable unit ${JSON.stringify(u?.unit)} is not in this group` })
-    else if (typeof u.reason !== "string" || !u.reason.trim()) problems.push({ message: `uncheckable unit ${u.unit} has no reason` })
+    if (!u || typeof u.unit !== "string" || (!units.has(u.unit) && !caseOf.has(u.unit))) problems.push({ message: `uncheckable ${JSON.stringify(u?.unit)} is not a unit or case of this group` })
+    else if (typeof u.reason !== "string" || !u.reason.trim()) problems.push({ message: `uncheckable ${u.unit} has no reason` })
     else excused.add(u.unit)
   }
   const seen = new Set<string>()
+  const reached = new Map<string, Set<string>>()
   for (const p of a.probes) {
     const name = typeof p?.id === "string" && p.id ? p.id : "(no id)"
     const add = (message: string) => problems.push({ probe: name, message: `probe ${name}: ${message}` })
@@ -164,15 +218,26 @@ export function probeProblems(answer: unknown, group: readonly { id: string }[])
     seen.add(name)
     if (!p.files.every(f => f && typeof f.path === "string" && typeof f.content === "string")) { add("every file needs a path and a content"); continue }
     const hay = [...p.args, ...p.files.flatMap(f => [f.path, f.content])].join("\n")
-    if (p.covers.length > MAX_UNITS) add(`serves ${p.covers.length} units; at most ${MAX_UNITS}: split it`)
+    const served = new Set(p.covers.map(c => c?.unit))
+    if (served.size > MAX_UNITS) add(`serves ${served.size} units; at most ${MAX_UNITS}: divide it`)
+    const mine = new Set<string>()
     for (const c of p.covers) {
-      if (!c || !ids.has(c.unit)) { add(`unit ${JSON.stringify(c?.unit)} is not in this group`); continue }
+      const u = c ? units.get(c.unit) : undefined
+      if (!u) { add(`unit ${JSON.stringify(c?.unit)} is not in this group`); continue }
+      const which = c.case ?? null
+      if (which !== null && !u.cases.some(x => x.id === which)) { add(`unit ${u.id}: ${JSON.stringify(which)} is not one of its cases (${u.cases.map(x => x.id).join(", ") || "it has none: use null"})`); continue }
+      if (which === null && u.cases.length) { add(`unit ${u.id} has cases (${u.cases.map(x => x.id).join(", ")}): each cover names one`); continue }
       const values = Array.isArray(c.trigger_values) ? c.trigger_values : []
       const missing = values.filter(v => typeof v !== "string" || !v || !hay.includes(v))
-      if (!values.length) add(`unit ${c.unit}: no trigger_values`)
-      else if (missing.length) add(`unit ${c.unit}: trigger value(s) ${missing.map(v => JSON.stringify(v)).join(", ")} do not occur in the probe's args or files`)
-      else if (p.covers.length <= MAX_UNITS) covered.add(c.unit)
+      const needs = which === null ? u.needs : u.cases.find(x => x.id === which)!.needs
+      const lacking = needs.filter(n => !values.some(v => typeof v === "string" && v.trim() === n))
+      const label = which === null ? `unit ${u.id}` : `unit ${u.id}, case ${which}`
+      if (!values.length) add(`${label}: no trigger_values`)
+      else if (missing.length) add(`${label}: trigger value(s) ${missing.map(v => JSON.stringify(v)).join(", ")} do not occur in the probe's args or files`)
+      else if (lacking.length) add(`${label}: the trigger values must include ${lacking.map(v => JSON.stringify(v)).join(", ")}, which the text names for this case`)
+      else mine.add(which ?? u.id)
     }
+    reached.set(name, mine)
     if (p.invalid_on_purpose) continue
     const names = new Set(p.files.map(f => f.path))
     p.args.forEach((arg, i) => {
@@ -187,13 +252,22 @@ export function probeProblems(answer: unknown, group: readonly { id: string }[])
       }
     }
   }
-  // A unit counts as exercised only by a probe that has no problem of its own.
+  // Only probes with no problem of their own count.
   const faulty = new Set(problems.filter(p => p.probe).map(p => p.probe!))
-  covered.clear()
-  for (const p of a.probes.filter(x => x && typeof x.id === "string" && !faulty.has(x.id) && Array.isArray(x.covers))) for (const c of p.covers) covered.add(c.unit)
-  const gaps = group.filter(u => !covered.has(u.id) && !excused.has(u.id))
-  if (gaps.length) problems.push({ message: `units not exercised by any probe with valid trigger values: ${gaps.map(u => u.id).join(", ")}` })
-  return { problems, covered, excused }
+  const hit = new Set([...reached.entries()].filter(([n]) => !faulty.has(n)).flatMap(([, s]) => [...s]))
+  const caseCovered: string[] = [], caseExcused: string[] = []
+  const gaps: string[] = []
+  for (const u of group) {
+    if (excused.has(u.id)) continue
+    if (!u.cases.length) { if (hit.has(u.id)) covered.add(u.id); else if (!options.strengthen) gaps.push(u.id); continue }
+    const open = u.cases.filter(c => !hit.has(c.id) && !excused.has(c.id))
+    caseCovered.push(...u.cases.filter(c => hit.has(c.id)).map(c => c.id))
+    caseExcused.push(...u.cases.filter(c => !hit.has(c.id) && excused.has(c.id)).map(c => c.id))
+    if (!open.length) covered.add(u.id)
+    else if (!options.strengthen) gaps.push(open.length === u.cases.length ? u.id : `${u.id} (cases not reached: ${open.map(c => c.id).join(", ")})`)
+  }
+  if (gaps.length) problems.push({ message: `units not exercised by any probe with valid trigger values: ${gaps.join(", ")}` })
+  return { problems, covered, excused, cases: { total: empty.total, covered: caseCovered, excused: caseExcused } }
 }
 
 const within = (registry: Registry, inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
@@ -230,56 +304,110 @@ export function probeUnits(registry: Registry, round: number, staleNow: readonly
   return [...new Set([...units, ...again])]
 }
 
+export interface DerivedProbes {
+  status: "accepted" | "interrupted"
+  probes: Omit<ProbeRecord, "id">[]
+  calls: ProbeCallRecord[]
+  covered: string[]
+  uncheckable: { unit: string; reason: string }[]
+  uncovered: string[]
+  dropped: { key: string; problems: string[] }[]
+  cases: { total: number; covered: number; excused: number; open: string[] }
+  issues?: { code: string; message: string }[]
+}
+
+type GroupAsk = { kind: "write" } | { kind: "strengthen"; weak: string[]; existing: ProbeDraft[] }
+
+/**
+ * Asks for one group's probes: the first answer and up to `maxRepairs` repairs, each sent back with the exact
+ * problems code found. A transport failure is retried without using up a repair (TRANSPORT_RETRIES per call of
+ * this function's caller); a strengthening request says what the measure found weak and gives the existing probes.
+ */
+async function askGroup(transport: ProbeTransport, round: number, sources: string, group: GroupUnit[], gi: number, ask: GroupAsk, options: { maxRepairs: number; callId: (n: number) => string }, calls: ProbeCallRecord[], failures: { n: number }): Promise<{ answer: ProbesAnswer | null; checked: ReturnType<typeof probeProblems> | null; call: string } | { interrupted: { code: string; message: string } }> {
+  const units = group.map(u => ({ id: u.id, text: u.text, ...(u.cases.length ? { cases: u.cases.map(c => ({ id: c.id, text: c.text })) } : {}) }))
+  const strengthen = ask.kind === "strengthen"
+  let answer: ProbesAnswer | null = null, checked: ReturnType<typeof probeProblems> | null = null, call = "", lastBad = ""
+  for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
+    const opening = strengthen ? { existing: ask.existing, problems: ask.weak, task: "Add probes so that each listed weakness is removed; return only the new probes." } : {}
+    const repair = answer && checked ? { previous_answer: answer, problems: [...(strengthen ? ask.weak : []), ...checked.problems.map(p => p.message)], task: strengthen ? "Fix exactly these problems and return the whole set of new probes." : "Fix exactly these problems and return the whole answer for this group." } : lastBad ? { problems: [lastBad], task: "Return one JSON object matching the schema." } : {}
+    const request: ProbeRequest = { round, sources, units, ...opening, ...repair }
+    const text = requestJson(request)
+    const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "probes" as const, group: gi + 1, attempt, request_sha256: createHash("sha256").update(text).digest("hex"), request_chars: text.length }
+    let reply: ModelReply
+    try { reply = await transport(request) } catch (e) {
+      if (e instanceof ReplayMiss || e instanceof EnvironmentBlocked) throw e
+      calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
+      if (e instanceof QuotaExhausted || e instanceof AuthInvalid) return { interrupted: { code: e instanceof AuthInvalid ? "auth" : "quota", message: (e as Error).message } }
+      // A transport failure is no answer: retried without using up a repair, and past the limit the writer is unavailable.
+      if (++failures.n > TRANSPORT_RETRIES) return { interrupted: { code: "unavailable", message: `${failures.n} probe-writer calls failed; last: ${(e as Error).message}` } }
+      attempt--
+      continue
+    }
+    let parsed: unknown = null
+    try { parsed = JSON.parse(reply.text) } catch { parsed = null }
+    const now = parsed === null ? { problems: [{ message: "the reply is not JSON" }], covered: new Set<string>(), excused: new Set<string>(), cases: { total: 0, covered: [], excused: [] } } : probeProblems(parsed, group, { strengthen })
+    const usable = parsed !== null && now.problems[0]?.message !== SHAPE
+    calls.push({ ...base, response_text: reply.text, problems: now.problems.map(p => p.message), usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) })
+    // Keep the last answer that parsed: a broken repair does not undo a usable earlier answer.
+    if (usable) { answer = parsed as ProbesAnswer; checked = now; call = base.id }
+    else lastBad = now.problems[0].message
+    if (checked && !checked.problems.length) break
+  }
+  return { answer, checked, call }
+}
+
+/** The admitted probes of one answer: those with no problem of their own; the others are dropped with their problems. */
+function admit(answer: ProbesAnswer, checked: ReturnType<typeof probeProblems>, round: number, gi: number, call: string, prefix: string, out: Pick<DerivedProbes, "probes" | "dropped">): void {
+  const faulty = new Map<string, string[]>()
+  for (const p of checked.problems.filter(x => x.probe)) faulty.set(p.probe!, [...(faulty.get(p.probe!) ?? []), p.message])
+  for (const p of answer.probes) {
+    const key = `${prefix}${gi + 1}_${p.id}`
+    if (faulty.has(p.id)) { out.dropped.push({ key, problems: faulty.get(p.id)! }); continue }
+    out.probes.push({ round, key, args: p.args, files: p.files, invalid_on_purpose: p.invalid_on_purpose === true, covers: p.covers.map(c => ({ unit: c.unit, case: c.case ?? null, trigger_values: c.trigger_values, wrong_would: c.wrong_would })), call })
+  }
+}
+
 /** Writes the probes for `units`, a group of GROUP_SIZE at a time, each with up to `maxRepairs` repairs. */
-export async function deriveProbes(registry: Registry, round: number, units: readonly string[], transport: ProbeTransport, options: { maxRepairs: number; callId: (n: number) => string }): Promise<{
-  status: "accepted" | "interrupted"; probes: Omit<ProbeRecord, "id">[]; calls: ProbeCallRecord[]; covered: string[]; uncheckable: { unit: string; reason: string }[]; uncovered: string[]; dropped: { key: string; problems: string[] }[]; issues?: { code: string; message: string }[]
-}> {
+export async function deriveProbes(registry: Registry, round: number, units: readonly string[], transport: ProbeTransport, options: { maxRepairs: number; callId: (n: number) => string }): Promise<DerivedProbes> {
   const sources = sourcesUpTo(registry, round)
   const calls: ProbeCallRecord[] = []
-  const out = { probes: [] as Omit<ProbeRecord, "id">[], covered: [] as string[], uncheckable: [] as { unit: string; reason: string }[], uncovered: [] as string[], dropped: [] as { key: string; problems: string[] }[] }
-  const groups: { id: string; text: string }[][] = []
-  for (let i = 0; i < units.length; i += GROUP_SIZE) groups.push(units.slice(i, i + GROUP_SIZE).map(id => ({ id, text: registry.block(id)!.text })))
-  let transportFailures = 0
+  const out: Omit<DerivedProbes, "status" | "calls"> = { probes: [], covered: [], uncheckable: [], uncovered: [], dropped: [], cases: { total: 0, covered: 0, excused: 0, open: [] } }
+  const groups: GroupUnit[][] = []
+  for (let i = 0; i < units.length; i += GROUP_SIZE) groups.push(units.slice(i, i + GROUP_SIZE).map(id => groupUnit(registry, id)))
+  const failures = { n: 0 }
   for (const [gi, group] of groups.entries()) {
-    let answer: ProbesAnswer | null = null, checked: ReturnType<typeof probeProblems> | null = null, call = "", lastBad = ""
-    for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
-      const request: ProbeRequest = { round, sources, units: group, ...(answer && checked ? { previous_answer: answer, problems: checked.problems.map(p => p.message), task: "Fix exactly these problems and return the whole answer for this group." } : lastBad ? { problems: [lastBad], task: "Return one JSON object matching the schema." } : {}) }
-      const text = requestJson(request)
-      const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "probes" as const, group: gi + 1, attempt, request_sha256: createHash("sha256").update(text).digest("hex"), request_chars: text.length }
-      let reply: ModelReply
-      try { reply = await transport(request) } catch (e) {
-        if (e instanceof ReplayMiss || e instanceof EnvironmentBlocked) throw e
-        if (e instanceof QuotaExhausted || e instanceof AuthInvalid) {
-          calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
-          return { status: "interrupted", ...out, calls, issues: [{ code: e instanceof AuthInvalid ? "auth" : "quota", message: (e as Error).message }] }
-        }
-        calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
-        // A transport failure is no answer: retried without using up a repair, and past the limit the writer is unavailable.
-        if (++transportFailures > TRANSPORT_RETRIES) return { status: "interrupted", ...out, calls, issues: [{ code: "unavailable", message: `${transportFailures} probe-writer calls failed; last: ${(e as Error).message}` }] }
-        attempt--
-        continue
-      }
-      let parsed: unknown = null
-      try { parsed = JSON.parse(reply.text) } catch { parsed = null }
-      const now = parsed === null ? { problems: [{ message: "the reply is not JSON" }], covered: new Set<string>(), excused: new Set<string>() } : probeProblems(parsed, group)
-      const usable = parsed !== null && now.problems[0]?.message !== SHAPE
-      calls.push({ ...base, response_text: reply.text, problems: now.problems.map(p => p.message), usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) })
-      // Keep the last answer that parsed: a broken repair does not undo a usable earlier answer.
-      if (usable) { answer = parsed as ProbesAnswer; checked = now; call = base.id }
-      else lastBad = now.problems[0].message
-      if (checked && !checked.problems.length) break
-    }
-    if (!answer || !checked) { out.uncovered.push(...group.map(u => u.id)); continue }
-    const faulty = new Map<string, string[]>()
-    for (const p of checked.problems.filter(x => x.probe)) faulty.set(p.probe!, [...(faulty.get(p.probe!) ?? []), p.message])
-    for (const p of answer.probes) {
-      const key = `g${gi + 1}_${p.id}`
-      if (faulty.has(p.id)) { out.dropped.push({ key, problems: faulty.get(p.id)! }); continue }
-      out.probes.push({ round, key, args: p.args, files: p.files, invalid_on_purpose: p.invalid_on_purpose === true, covers: p.covers.map(c => ({ unit: c.unit, trigger_values: c.trigger_values, wrong_would: c.wrong_would })), call })
-    }
-    out.covered.push(...group.filter(u => checked!.covered.has(u.id)).map(u => u.id))
-    out.uncheckable.push(...answer.uncheckable.filter(u => checked!.excused.has(u.unit)))
-    out.uncovered.push(...group.filter(u => !checked!.covered.has(u.id) && !checked!.excused.has(u.id)).map(u => u.id))
+    out.cases.total += group.reduce((n, u) => n + u.cases.length, 0)
+    const r = await askGroup(transport, round, sources, group, gi, { kind: "write" }, options, calls, failures)
+    if ("interrupted" in r) return { status: "interrupted", ...out, calls, issues: [r.interrupted] }
+    const { answer, checked, call } = r
+    if (!answer || !checked) { out.uncovered.push(...group.map(u => u.id)); out.cases.open.push(...group.flatMap(u => u.cases.map(c => c.id))); continue }
+    admit(answer, checked, round, gi, call, "g", out)
+    out.covered.push(...group.filter(u => checked.covered.has(u.id)).map(u => u.id))
+    out.uncheckable.push(...answer.uncheckable.filter(u => checked.excused.has(u.unit)))
+    out.uncovered.push(...group.filter(u => !checked.covered.has(u.id) && !checked.excused.has(u.id)).map(u => u.id))
+    out.cases.covered += checked.cases.covered.length
+    out.cases.excused += checked.cases.excused.length
+    out.cases.open.push(...group.flatMap(u => checked.excused.has(u.id) ? [] : u.cases.filter(c => !checked.cases.covered.includes(c.id) && !checked.cases.excused.includes(c.id)).map(c => c.id)))
+  }
+  return { status: "accepted", ...out, calls }
+}
+
+/**
+ * Strengthens probes where the discrimination measure found them weak (BLOCK10 §7.3): per group of weak units, the
+ * writer gets the units, their existing probes and what was found, and adds probes; the additions pass the same code
+ * checks and repairs as any probe.
+ */
+export async function strengthenProbes(registry: Registry, round: number, weak: readonly { units: string[]; message: string }[], existing: readonly ProbeRecord[], transport: ProbeTransport, options: { maxRepairs: number; callId: (n: number) => string }): Promise<Omit<DerivedProbes, "covered" | "uncheckable" | "uncovered" | "cases">> {
+  const sources = sourcesUpTo(registry, round)
+  const calls: ProbeCallRecord[] = []
+  const out = { probes: [] as Omit<ProbeRecord, "id">[], dropped: [] as { key: string; problems: string[] }[] }
+  const failures = { n: 0 }
+  for (const [gi, w] of weak.entries()) {
+    const group = w.units.map(id => groupUnit(registry, id))
+    const mine = existing.filter(p => p.covers.some(c => w.units.includes(c.unit))).map(p => ({ id: p.key, args: p.args, files: p.files, invalid_on_purpose: p.invalid_on_purpose, covers: p.covers }))
+    const r = await askGroup(transport, round, sources, group, gi, { kind: "strengthen", weak: [w.message], existing: mine }, options, calls, failures)
+    if ("interrupted" in r) return { status: "interrupted", ...out, calls, issues: [r.interrupted] }
+    if (r.answer && r.checked) admit(r.answer, r.checked, round, gi, r.call, `s${round}.`, out)
   }
   return { status: "accepted", ...out, calls }
 }

@@ -18,7 +18,7 @@ import type { CodeFacts } from "./checks.js"
  * that passes on the original fails on it. Mutants that do not build are counted apart.
  */
 
-export interface MutationSite { id: string; kind: "compare" | "constant" | "branch"; file: string; line: number; start: number; end: number; from: string; to: string }
+export interface MutationSite { id: string; kind: "compare" | "boundary" | "constant" | "branch"; file: string; line: number; start: number; end: number; from: string; to: string }
 
 export function mutationSites(dir: string, platform: PlatformOptions = {}): MutationSite[] {
   const bin = buildGoHelper(helperSource("mutate"), "mutate", platform)

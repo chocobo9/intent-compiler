@@ -37,6 +37,12 @@ var opposite = map[token.Token]token.Token{
 	token.GTR: token.LEQ, token.LEQ: token.GTR,
 }
 
+// A boundary moved by one: the classic mutant that only an input at the boundary itself tells apart.
+var boundary = map[token.Token]token.Token{
+	token.LSS: token.LEQ, token.LEQ: token.LSS,
+	token.GTR: token.GEQ, token.GEQ: token.GTR,
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Fprintln(os.Stderr, "usage: mutate <dir>")
@@ -82,6 +88,9 @@ func main() {
 			case *ast.BinaryExpr:
 				if to, ok := opposite[x.Op]; ok {
 					add("compare", x.OpPos, x.OpPos+token.Pos(len(x.Op.String())), to.String())
+				}
+				if to, ok := boundary[x.Op]; ok {
+					add("boundary", x.OpPos, x.OpPos+token.Pos(len(x.Op.String())), to.String())
 				}
 			case *ast.BasicLit:
 				if x.Kind == token.INT {

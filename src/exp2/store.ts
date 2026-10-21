@@ -241,7 +241,7 @@ export class Exp2Store {
       if (out.status === "accepted") for (const p of out.probes) { const id = `P${s.probes.length + 1}`; s.probes.push({ id, ...p }); entered.push(id) }
       const record: ProbeRoundRecord = {
         round, status: out.status, calls: out.calls.map(c => c.id), entered, stale: stale.map(e => e.probe), units,
-        covered: out.covered, uncheckable: out.uncheckable, uncovered: out.uncovered, dropped: out.dropped, ...(out.issues ? { issues: out.issues } : {}),
+        covered: out.covered, uncheckable: out.uncheckable, uncovered: out.uncovered, dropped: out.dropped, cases: out.cases, ...(out.issues ? { issues: out.issues } : {}),
       }
       s.probe_rounds.push(record)
       return record

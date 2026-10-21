@@ -9,7 +9,7 @@ import { codeFacts, replacedBasis } from "../../src/exp2/checks.js"
 import { executeRound, DEFAULT_LIMITS } from "../../src/exp2/execution.js"
 import { initRepo } from "../../src/exp2/git.js"
 import { correctionItems, judgeRuns, pairKey, probeStatuses } from "../../src/exp2/judge.js"
-import { activeProbes, MAX_UNITS, normalizeOutput, probeProblems, probeUnits, runProbes, type ProbeRun } from "../../src/exp2/probes.js"
+import { activeProbes, groupUnit, MAX_UNITS, normalizeOutput, probeProblems, probeUnits, runProbes, type ProbeRun } from "../../src/exp2/probes.js"
 import { LocalProcessRunner } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
@@ -31,20 +31,53 @@ describe("exp2 block 10: probes are written for every rule unit, checked by code
   before(async () => { for (const r of [1, 2, 3]) assert.equal((await store.ingestRound(r, roundText(r), stubTransport())).status, "accepted") })
 
   it("code checks: trigger values must occur in the input, at most four units a probe, inputs well formed, every unit exercised", () => {
-    const group = [{ id: "R1.S3.P2.s4" }, { id: "R1.S3.P9.s2" }, { id: "R1.S3.P9.s3" }]
-    const ok = filterProbe("R1.S3.P2.s4")
-    const base = { probes: [ok, { ...ok, id: "b", covers: [{ unit: "R1.S3.P9.s2", trigger_values: ["20"], wrong_would: "" }] }], uncheckable: [{ unit: "R1.S3.P9.s3", reason: "no output names it" }] }
+    const group = ["R1.S3.P9.s3", "R1.S3.P9.s4", "R1.S3.P12.s10"].map(id => groupUnit(store.registry(), id))
+    assert.ok(group.every(u => !u.cases.length), "units without cases")
+    const ok = { ...filterProbe("R1.S3.P9.s3"), covers: [{ unit: "R1.S3.P9.s3", case: null, trigger_values: ["20"], wrong_would: "" }] }
+    const base = { probes: [ok, { ...ok, id: "b", covers: [{ unit: "R1.S3.P9.s4", case: null, trigger_values: ["12"], wrong_would: "" }] }], uncheckable: [{ unit: "R1.S3.P12.s10", reason: "no output names it" }] }
     assert.deepEqual(probeProblems(base, group).problems, [])
     const msgs = (a: unknown) => probeProblems(a, group).problems.map(p => p.message)
-    assert.match(msgs({ ...base, probes: [{ ...ok, covers: [{ unit: "R1.S3.P2.s4", trigger_values: ["999"], wrong_would: "" }] }, base.probes[1]] }).join(), /trigger value\(s\) "999" do not occur.*units not exercised.*R1\.S3\.P2\.s4/su)
-    const five = Array.from({ length: MAX_UNITS + 1 }, () => ({ unit: "R1.S3.P2.s4", trigger_values: ["20"], wrong_would: "" }))
+    assert.match(msgs({ ...base, probes: [{ ...ok, covers: [{ ...ok.covers[0], trigger_values: ["999"] }] }, base.probes[1]] }).join(), /trigger value\(s\) "999" do not occur.*units not exercised.*R1\.S3\.P9\.s3/su)
+    const five = ["R1.S3.P9.s3", "R1.S3.P9.s4", "R1.S3.P12.s10", "R1.S3.P2.s4", "R1.S3.P9.s2"].map(unit => ({ unit, case: null, trigger_values: ["20"], wrong_would: "" }))
     assert.match(msgs({ ...base, probes: [{ ...ok, covers: five }, base.probes[1]] }).join(), /serves 5 units; at most 4/u)
     assert.match(msgs({ ...base, probes: [{ ...ok, files: [{ path: "recipe.json", content: "[{" }, ok.files[0]] }, base.probes[1]] }).join(), /recipe\.json is not valid JSON/u)
     assert.match(msgs({ ...base, probes: [{ ...ok, files: [ok.files[1]] }, base.probes[1]] }).join(), /argument data\.csv names a file the probe does not give/u)
     assert.match(msgs({ ...base, probes: [{ ...ok, files: [{ path: "data.csv", content: "id,value\n1,2,3\n" }, ok.files[1]] }, base.probes[1]] }).join(), /data\.csv line 2 has 3 fields, the first line has 2/u)
-    assert.match(msgs({ ...base, probes: [{ ...ok, covers: [{ unit: "R9.S1", trigger_values: ["20"], wrong_would: "" }] }, base.probes[1]] }).join(), /unit "R9\.S1" is not in this group/u)
+    assert.match(msgs({ ...base, probes: [{ ...ok, covers: [{ ...ok.covers[0], unit: "R9.S1" }] }, base.probes[1]] }).join(), /unit "R9\.S1" is not in this group/u)
     // A deliberately missing input is not a problem; the output file named after --output is not an input.
-    assert.deepEqual(msgs({ ...base, probes: [{ ...ok, files: [], invalid_on_purpose: true, covers: [{ unit: "R1.S3.P2.s4", trigger_values: ["data.csv"], wrong_would: "" }] }, base.probes[1]] }), [])
+    assert.deepEqual(msgs({ ...base, probes: [{ ...ok, files: [], invalid_on_purpose: true, covers: [{ ...ok.covers[0], trigger_values: ["data.csv"] }] }, base.probes[1]] }), [])
+  })
+
+  it("cases (BLOCK10 §7.3): a sentence with two cases, only one exercised, is not covered and goes back; alternatives and compared numbers must be named", () => {
+    const registry = store.registry()
+    const log = groupUnit(registry, "R1.S3.P5.s8")
+    assert.deepEqual(log.cases.map(c => c.id), ["R1.S3.P5.s8.c1", "R1.S3.P5.s8.c2"], "a clause per case")
+    const probe = (covers: unknown[]) => ({ id: "p", args: ["transform", "--input", "data.csv"], files: [{ path: "data.csv", content: "x\n-2\n8\n" }], invalid_on_purpose: false, covers })
+    const one = probeProblems({ probes: [probe([{ unit: log.id, case: "R1.S3.P5.s8.c1", trigger_values: ["8"], wrong_would: "" }])], uncheckable: [] }, [log])
+    assert.ok(!one.covered.has(log.id))
+    assert.deepEqual(one.problems.map(p => p.message), ["units not exercised by any probe with valid trigger values: R1.S3.P5.s8 (cases not reached: R1.S3.P5.s8.c2)"])
+    const both = probeProblems({ probes: [probe([{ unit: log.id, case: "R1.S3.P5.s8.c1", trigger_values: ["8"], wrong_would: "" }, { unit: log.id, case: "R1.S3.P5.s8.c2", trigger_values: ["-2"], wrong_would: "" }])], uncheckable: [] }, [log])
+    assert.ok(both.covered.has(log.id) && !both.problems.length)
+    assert.deepEqual(both.cases, { total: 2, covered: ["R1.S3.P5.s8.c1", "R1.S3.P5.s8.c2"], excused: [] })
+    // Each listed alternative is a case, and its cover names it; the cover of a unit with cases names its case.
+    const filter = groupUnit(registry, "R1.S3.P2.s4")
+    assert.deepEqual(filter.cases.filter(c => c.kind === "alternative").map(c => c.text), ["gt", "gte", "lt", "lte", "eq", "neq"])
+    assert.ok(!filter.cases.some(c => c.kind === "clause" && c.text === "`gte`,"), "a clause that is only an alternative adds no case")
+    const gt = probeProblems({ probes: [{ ...filterProbe(filter.id, `${filter.id}#1`) }], uncheckable: [] }, [filter])
+    assert.match(gt.problems.map(p => p.message).join(), /R1\.S3\.P2\.s4 \(cases not reached: R1\.S3\.P2\.s4#2, R1\.S3\.P2\.s4#3, R1\.S3\.P2\.s4#4, R1\.S3\.P2\.s4#5, R1\.S3\.P2\.s4#6, R1\.S3\.P2\.s4\.c1\)/u)
+    const wrongAlt = probeProblems({ probes: [{ ...filterProbe(filter.id, `${filter.id}#2`) }], uncheckable: [] }, [filter])
+    assert.match(wrongAlt.problems.map(p => p.message).join(), /case R1\.S3\.P2\.s4#2: the trigger values must include "gte"/u)
+    const nullCase = probeProblems({ probes: [{ ...filterProbe(filter.id, null) }], uncheckable: [] }, [filter])
+    assert.match(nullCase.problems.map(p => p.message).join(), /unit R1\.S3\.P2\.s4 has cases \(R1\.S3\.P2\.s4#1, .*\): each cover names one/u)
+    // A case that compares with a number needs that number among its trigger values.
+    const or = groupUnit(registry, "R1.S3.P3.s2")
+    const c3 = or.cases.find(c => c.text.includes("> 0"))!
+    assert.deepEqual(c3.needs, ["0"])
+    const without = probeProblems({ probes: [probe([{ unit: or.id, case: c3.id, trigger_values: ["8"], wrong_would: "" }])], uncheckable: [] }, [or])
+    assert.match(without.problems.map(p => p.message).join(), new RegExp(`case ${c3.id.replace(/\./gu, "\\.")}: the trigger values must include "0"`, "u"))
+    // Uncheckable may name a case.
+    const excused = probeProblems({ probes: [probe([{ unit: log.id, case: "R1.S3.P5.s8.c1", trigger_values: ["8"], wrong_would: "" }])], uncheckable: [{ unit: "R1.S3.P5.s8.c2", reason: "no run shows it" }] }, [log])
+    assert.ok(excused.covered.has(log.id) && !excused.problems.length)
   })
 
   it("R1: every unit is exercised after the repairs; a probe that stays faulty is dropped alone", async () => {
@@ -54,6 +87,7 @@ describe("exp2 block 10: probes are written for every rule unit, checked by code
     assert.deepEqual(record.units, units)
     assert.equal(units.length, 131)
     assert.deepEqual([record.status, record.uncovered, record.dropped], ["accepted", [], []])
+    assert.deepEqual([record.cases!.total, record.cases!.covered, record.cases!.open], [155, 155, []])
     // 131 units in groups of 22: six groups, each first answer sent back once.
     assert.equal(record.calls.length, 12)
     assert.match(writer.requests[1].problems!.join("\n"), /trigger value\(s\) "not-in-the-probe" do not occur[\s\S]*serves 5 units; at most 4/u)
@@ -67,7 +101,7 @@ describe("exp2 block 10: probes are written for every rule unit, checked by code
     await other.ingestRound(1, roundText(1), stubTransport())
     const r = await other.deriveRoundProbes(1, stubProbeWriter({ mistakes: true }), { maxRepairs: 0 })
     assert.equal(r.dropped.length, 12)
-    assert.ok(r.uncovered.length > 0 && r.entered.length === 131 - 6 * 2)
+    assert.ok(r.uncovered.length > 0 && r.entered.length === store.inspect().probe_rounds[0].entered.length - 12)
     assert.ok(r.dropped[0].problems[0].startsWith("probe u1: unit"))
   })
 
@@ -261,7 +295,7 @@ describe("exp2 block 10: the serial with probes and judge (stand-ins), checks of
     const r1 = store.inspect().reports.find(r => r.round === 1)!
     assert.equal(r1.probes!.writer.calls, 6)
     assert.ok(r1.probes!.judge.calls > 0)
-    assert.equal(r1.probes!.written, 131)
+    assert.equal(r1.probes!.written, 133, "a probe per unit, and two more where a real probe covers one case and a generic one the rest")
     // Rerunning unchanged probes costs nothing: the judge is asked only about outputs it has not seen.
     const s = store.inspect()
     const asked = s.judge_calls.filter(c => c.round === 3).reduce((n, c) => n + c.items, 0)
@@ -300,7 +334,7 @@ console.log(JSON.stringify({ passed: Object.values(cases).filter(Boolean).length
     ]
     const judge = stubJudge()
     const r = await probeDetect({ store, probes: stubProbeWriter(), judge, build: goBuilder(join(dir, "builds"), {}, "dpipe"), runner, timeoutMs: 10_000 }, products)
-    assert.equal(r.written!.entered.length, 131)
+    assert.equal(r.written!.entered.length, 133)
     const keyOf = (id: string) => store.inspect().probes.find(p => p.id === id)!.key
     const score = scoreDefects({ clean: ["clean"], defects: [{ name: "filter", products: ["wrong-filter"], pattern: "value > 10" }, { name: "sort numeric", products: ["text-sort"], pattern: "sort[\\s\\S]*ascending" }] }, r.products.map(p => ({ product: p.product.name, items: p.items, findings: p.findings, probeKey: keyOf })))
     assert.equal(`${score.hits}/${score.total}`, "2/2")
