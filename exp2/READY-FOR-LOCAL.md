@@ -124,3 +124,9 @@ new Serial({
 - **比较工具**：`intent-exp2-compare --state <checkpoints/round-15/state.json> --independent <标注.json> --inputs exp2/inputs/dpipe --out cmp.md`。标注格式：`{label, rounds: [{round, answer}]}`，`answer` 是整份 `AttributionAnswer`，要能通过同一套核对。
 - **变异测试**：`intent-exp2-mutate --tree <某轮代码的副本> --state <该轮 state.json> --round <n> [--config <本地配置>] [--max 30] --out mut.md`。只对已有产物运行。
 - **消融**：配置里的 `ablation: { zoning, checks, clauses }`，都默认 true，写进状态；用不同设置打开同一状态会报错，所以消融运行要换 `run_id` 和全部目录。
+
+## 9. 第 8 块之后的变化
+
+- **回放已有录音**：请求字节随提示词和报错变化。录音和当前代码不是同一版本时，用 `replayByRound(loadCassette(file))`：按步骤和轮次、按回答顺序回放，剩下没用上的回答由 `unused()` 列出。`replayTransports` 只用于同一版本代码录下的文件。
+- **新状态 amended**：代码块、表格被新原文修订时不再被替换，工单原文区里两者都在，标明新原文优先。看工单时注意这个标记。
+- 第一批的 `exp2/recordings/haiku-reference/cassette.json` 已不再被测试使用，第二批的 `batch2/cassette.json` 包含它的 4 条回答。

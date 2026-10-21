@@ -173,8 +173,8 @@ function r10(request: ModelRequest, twice: boolean): AttributionAnswer {
     fresh("R10.S2", "reconcile"),
     to("R10.S7", "pipeline"),
     to("R10.S8", "lineage"),
-    // The first answer also gives the lineage outputs item on its own, inside the section it already gave.
-    ...(twice ? [to("R10.S8.P1.s3", "lineage")] : []),
+    // The first answer also gives the lineage outputs item to pipeline, inside the section it gave to lineage.
+    ...(twice ? [to("R10.S8.P1.s3", "pipeline")] : []),
   ], [
     refers("R10.S2.P2", "R1.S5.P2"),
     refers("R10.S4.P1.s6", "R10.S1.P2.s1"),

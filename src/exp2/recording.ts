@@ -129,6 +129,48 @@ export function orderedAnswers(answers: Record<RecordedStep, string[]>): { attri
   return { attribution: give("attribution"), checks: give("checks") }
 }
 
+/** The round a recorded request was for (its request JSON names it). */
+export function entryRound(e: CassetteEntry): number {
+  const at = e.prompt.indexOf("# REQUEST\n")
+  return (JSON.parse(e.prompt.slice(at + "# REQUEST\n".length)) as { round: number }).round
+}
+
+export interface RoundReplay {
+  attribution: AttributionTransport
+  checks: ChecksTransport
+  /** Recorded answers not asked for, by step and round, with their position in that round's list (1-based). */
+  unused(): { step: RecordedStep; round: number; answer: number }[]
+}
+
+/**
+ * Re-keying by answer order, per step and round (DESIGN §12d): the current code builds each request, and each
+ * call of a round gets that round's next recorded answer for the step. When the current code accepts a round
+ * sooner, the answers left over are reported, never passed on to the next round. Running out is a miss.
+ */
+export function replayByRound(cassette: Cassette): RoundReplay {
+  const lists = new Map<string, CassetteEntry[]>()
+  for (const e of cassette.entries) {
+    const key = `${e.step}:${entryRound(e)}`
+    lists.set(key, [...(lists.get(key) ?? []), e])
+  }
+  const used = new Map<string, number>()
+  const give = (step: RecordedStep) => async (request: { round: number }): Promise<ModelReply> => {
+    const key = `${step}:${request.round}`
+    const n = used.get(key) ?? 0
+    const entry = lists.get(key)?.[n]
+    if (!entry) throw new ReplayMiss(`no recorded ${step} answer ${n + 1} for round ${request.round}`)
+    used.set(key, n + 1)
+    return { text: entry.answer, stub: entry.stub === true, model: entry.model, ...(entry.usage ? { usage: entry.usage } : {}) }
+  }
+  return {
+    attribution: give("attribution") as AttributionTransport, checks: give("checks") as ChecksTransport,
+    unused: () => [...lists.entries()].flatMap(([key, list]) => {
+      const [step, round] = key.split(":")
+      return list.slice(used.get(key) ?? 0).map((_, k) => ({ step: step as RecordedStep, round: Number(round), answer: (used.get(key) ?? 0) + k + 1 }))
+    }),
+  }
+}
+
 /**
  * Re-keys recorded attribution rounds: ingests rounds 1..n into a fresh store, giving each round its recorded
  * answers in order, and records the requests the current code builds. Returns the cassette and, per round, the

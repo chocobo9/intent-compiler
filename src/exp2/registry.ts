@@ -31,7 +31,7 @@ export interface Assignment {
  * An edge from a block of this round to what its wording names (DESIGN §4.3). refers_to: the block uses something
  * another block defines (later: checks go stale when that block is revised); the named object gets no change.
  * applies_to: the block's requirement also lands on another object, which gets a change record from this block.
- * `to` is a block id; for applies_to it may also be an object id. The block keeps its one owner either way.
+ * `to` is a block id or an object id (DESIGN §12d item 1). The block keeps its one owner either way.
  */
 export interface Reference { from: string; to: string; kind: "refers_to" | "applies_to" }
 export interface Interpretation { blocks: string[]; text: string }
@@ -42,7 +42,17 @@ export interface AttributionAnswer {
   interpretations: Interpretation[]
 }
 
-export type BlockState = "active" | "partially_modified" | "superseded" | "withdrawn"
+/**
+ * amended (DESIGN §12d item 6): a block that cannot be cut (a code block, a table, a JSON sample) revised by newer
+ * text. It stays in the object's current text, next to the text that amends it; where they differ, the newer wins.
+ */
+export type BlockState = "active" | "partially_modified" | "amended" | "superseded" | "withdrawn"
+
+/** Blocks that have no smaller units for a revision to name. */
+export const UNCUTTABLE_KINDS = new Set(["code", "table"])
+
+/** States whose text is still part of the object's current text. */
+export const LIVE_STATES = new Set<BlockState>(["active", "partially_modified", "amended"])
 
 export interface Modification {
   round: number
@@ -53,6 +63,11 @@ export interface Modification {
   /** The new units, and the object that owns them (which may be another object). */
   by: string[]
   by_object: string
+  /**
+   * Parts that cannot be cut (code blocks, tables) and were revised, not withdrawn: amended, not replaced. They stay
+   * in force next to `by`; where the two differ, `by` wins (DESIGN §12d item 6).
+   */
+  amended?: string[]
 }
 
 export interface Ownership {
@@ -151,6 +166,15 @@ export class Registry {
     return this.objects.get(cover.owner)!.blocks.find(o => o.block === cover.block)
   }
 
+  /**
+   * The text an edge points at: the block itself, or for an object id the object's text as it stood in the edge's
+   * round (its blocks from that round or earlier). A revision of any of it later is a revision of what is referred to.
+   */
+  referredText(edge: Reference & { round: number }): string[] {
+    if (!/^O\d+$/u.test(edge.to)) return [edge.to]
+    return (this.objects.get(edge.to)?.blocks ?? []).filter(b => b.round <= edge.round).map(b => b.block)
+  }
+
   /** The object an applies_to edge lands on: an object id, or the owner of the named block. */
   appliesTo(to: string): string | undefined {
     if (/^O\d+$/u.test(to)) return this.objects.has(to) ? to : undefined
@@ -215,10 +239,14 @@ export class Registry {
       const record = this.objects.get(object)!
       const id = `C${round}.${i + 1}`
       const mods = [...grouped.values()].filter(g => g.own.object === object).map(g => {
-        const m: Modification = { ...g.mod, change: id, parts: g.parts }
+        const amended = g.mod.kind === "withdraw" ? [] : g.parts.filter(p => UNCUTTABLE_KINDS.has(this.blocks.get(p)!.kind))
+        const m: Modification = { ...g.mod, change: id, parts: g.parts, ...(amended.length ? { amended } : {}) }
         g.own.modifications.push(m)
         const whole = g.parts.includes(g.own.block)
-        g.own.state = whole && m.kind === "revise" ? "superseded" : whole && m.kind === "withdraw" ? "withdrawn"
+        const uncuttable = UNCUTTABLE_KINDS.has(this.blocks.get(g.own.block)!.kind)
+        g.own.state = whole && m.kind === "withdraw" ? "withdrawn"
+          : whole && uncuttable && g.own.state !== "superseded" ? "amended"
+          : whole && m.kind === "revise" ? "superseded"
           : g.own.state === "active" ? "partially_modified" : g.own.state
         return m
       })

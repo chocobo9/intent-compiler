@@ -4,7 +4,7 @@ import { join, resolve } from "node:path"
 import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { compareAttributions, registryOf, renderComparison, type IndependentAttribution } from "../../src/exp2/compare.js"
-import { loadCassette, replayTransports } from "../../src/exp2/recording.js"
+import { loadCassette, replayByRound } from "../../src/exp2/recording.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { roundText } from "./inputs.js"
 import { stubTransport } from "./stubs.js"
@@ -29,7 +29,7 @@ describe("exp2 attribution comparison (block and clause level)", () => {
   it("the stand-in against the Haiku reference: objects matched by shared clauses, disagreements listed by block", async () => {
     const texts = [1, 2, 3].map(roundText)
     const stub = registryOf(texts, await attributed(stubTransport(), "stand-in"))
-    const haikuAnswers = await attributed(replayTransports(loadCassette(resolve(process.cwd(), "exp2/recordings/haiku-reference/cassette.json"))).attribution, "haiku")
+    const haikuAnswers = await attributed(replayByRound(loadCassette(resolve(process.cwd(), "exp2/recordings/haiku-reference/batch2/cassette.json"))).attribution, "haiku")
     const haiku = registryOf(texts, haikuAnswers)
     assert.equal(haiku.failed, null)
     const c = compareAttributions(stub.registry, haiku.registry, [1, 2, 3])

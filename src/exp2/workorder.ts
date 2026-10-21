@@ -1,6 +1,6 @@
 import type { Anchor } from "./anchors.js"
 import { activeChecks, type CheckEvent, type CheckRecord } from "./checks.js"
-import type { Registry } from "./registry.js"
+import { LIVE_STATES, type Registry } from "./registry.js"
 import type { CheckRun, ObjectStatus } from "./verdict.js"
 import { contextOf } from "./view.js"
 
@@ -119,7 +119,7 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
     if (!t.why.includes("carried")) t.why.push("carried")
     t.carried_from = input.steps.filter(s => s.round === round - 1 && s.objects.some(o => o.object === object)).at(-1)?.id ?? `R${round - 1} task zone`
   }
-  if (input.zoning === false) for (const o of registry.objects.values()) if (o.blocks.some(b => b.state === "active" || b.state === "partially_modified")) entry(o.id)
+  if (input.zoning === false) for (const o of registry.objects.values()) if (o.blocks.some(b => LIVE_STATES.has(b.state))) entry(o.id)
   const task = [...tasks.values()].sort((a, b) => Number(a.object.slice(1)) - Number(b.object.slice(1)))
   const inTask = new Set(task.map(t => t.object))
 
@@ -138,7 +138,12 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
 
   // Source zone: every assigned block once, in its object's group, in round and document order.
   const groups = new Map<string | null, { id: string; state: string; heading_path: string[]; text: string }[]>()
-  const states = new Map([...registry.objects.values()].flatMap(o => o.blocks.map(b => [b.block, b.state] as const)))
+  // An amended block names the newer text that amends it; both stay in the source zone, and the newer wins.
+  const amendedBy = (b: (typeof registry.objects extends Map<string, infer O> ? O : never)["blocks"][number]) => b.modifications.filter(m => m.amended?.length).map(m => `${m.amended!.join(", ")} amended by ${m.by.join(", ")}`)
+  const states = new Map([...registry.objects.values()].flatMap(o => o.blocks.map(b => {
+    const notes = b.state === "amended" ? [`amended by ${[...new Set(b.modifications.flatMap(m => m.by))].join(", ")}`] : amendedBy(b)
+    return [b.block, notes.length ? `${b.state === "amended" ? "" : `${b.state}; `}${notes.join("; ")}; where they differ, the newer text wins` : b.state] as const
+  })))
   for (const source of [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)) {
     for (const b of source.blocks) {
       const owner = registry.assigned.get(b.id)

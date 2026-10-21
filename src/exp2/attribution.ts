@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
 import { annotate, parseRef, roundOf, type RoundSource, type SourceBlock } from "./source.js"
-import { isWithin, nameKey, type Assignment, type AttributionAnswer, type Override, type Reference, type Registry, type RoundAcceptance } from "./registry.js"
+import { isWithin, LIVE_STATES, nameKey, type Assignment, type AttributionAnswer, type Override, type Reference, type Registry, type RoundAcceptance } from "./registry.js"
 
 /**
  * Exp2 attribution step (DESIGN §4.2–§4.4): the model reads the full source and gives each block of the new round
@@ -18,6 +18,8 @@ export interface ObjectBrief {
   blocks: string[]
   /** Parts of those blocks already replaced or overridden by later text; cite the newer text instead. */
   modified?: string[]
+  /** Code blocks and tables amended by later text: still in force, the newer text winning where they differ. */
+  amended?: string[]
 }
 
 /**
@@ -141,9 +143,10 @@ export function buildRequest(registry: Registry, round: number, previous: Attrib
   const rounds = [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)
   const sources = rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n")
   const objects = [...registry.objects.values()].map((o): ObjectBrief => {
-    const live = o.blocks.filter(b => b.state === "active" || b.state === "partially_modified")
-    const modified = live.flatMap(b => b.modifications.flatMap(m => m.parts))
-    return { id: o.id, name: o.name, version: o.version, blocks: live.map(b => b.block), ...(modified.length ? { modified } : {}) }
+    const live = o.blocks.filter(b => LIVE_STATES.has(b.state))
+    const amended = [...new Set(live.flatMap(b => b.modifications.flatMap(m => m.amended ?? [])))]
+    const modified = live.flatMap(b => b.modifications.flatMap(m => m.parts.filter(p => !(m.amended ?? []).includes(p))))
+    return { id: o.id, name: o.name, version: o.version, blocks: live.map(b => b.block), ...(modified.length ? { modified } : {}), ...(amended.length ? { amended } : {}) }
   })
   // The model reads an issue's message, which names its blocks; the `blocks` list is for code and is not sent twice.
   const sent = issues.map(({ blocks: _, ...i }) => i)
@@ -251,6 +254,16 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
     assignments.push({ ...a, block: id, object_id: a.object_id || null, new_object: a.new_object?.trim() || null, replaces, overrides })
   }
 
+  // Nested assignments with the same owner and the same plain change are one assignment (DESIGN §12d item 2): the
+  // inner ones are dropped. Only different owners (or an inner one with its own targets) are an overlap.
+  const ownerKey = (a: Assignment) => a.change === "none" ? "none" : a.object_id ?? `new:${nameKey(a.new_object ?? "")}`
+  const byBlock = new Map(assignments.map(a => [a.block, a]))
+  const redundant = new Set(assignments.filter(a => {
+    const outer = registry.lineage(a.block).slice(1).map(b => byBlock.get(b.id)).find(Boolean)
+    return outer && ownerKey(outer) === ownerKey(a) && outer.change === a.change && !a.replaces.length && !a.overrides.length
+  }).map(a => a.block))
+  for (let i = assignments.length - 1; i >= 0; i--) if (redundant.has(assignments[i].block)) assignments.splice(i, 1)
+
   // Coverage: every block of the round exactly once.
   const assigned = new Set(assignments.map(a => a.block))
   const byId = new Map(source.blocks.map(b => [b.id, b]))
@@ -262,7 +275,9 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   }
   for (const [outer, ids] of inside) {
     const heading = byId.get(outer)?.heading
-    add("overlap", `${outer} is assigned and so ${ids.length === 1 ? "is" : `are ${ids.length} blocks`} inside it (${ids.join(", ")}); a block is covered once: drop ${outer}${heading ? ` (to give its heading line alone an owner, assign ${outer}.H)` : ""}, or drop ${ids.length === 1 ? "that block" : "those"}`, outer)
+    const owner = (id: string) => { const a = byBlock.get(id)!; return a.change === "none" ? "none" : a.object_id ?? a.new_object! }
+    const owners = [...new Set(ids.map(owner))]
+    add("overlap", `${outer} is assigned to ${owner(outer)} and ${ids.length === 1 ? "a block" : `${ids.length} blocks`} inside it to ${owners.length > 4 ? `${owners.slice(0, 4).join(", ")} and ${owners.length - 4} more` : owners.join(", ")}${owners.includes(owner(outer)) ? " (or with targets of their own)" : ""} (${ids.join(", ")}); a block is covered once: drop ${outer}${heading ? ` (to give its heading line alone an owner, assign ${outer}.H)` : ""}, or drop ${ids.length === 1 ? "that block" : "those"}`, outer)
     issues[issues.length - 1].blocks = [outer, ...ids]
   }
   // A heading unit needs no owner of its own when its section has other content.
@@ -293,8 +308,9 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   for (const [i, r] of answer.references.entries()) {
     const w = `edge ${i + 1} (${r.kind} ${r.from} -> ${r.to})`
     if (r.kind !== "refers_to" && r.kind !== "applies_to") { add("reference_invalid", `${w}: kind must be refers_to or applies_to`); continue }
-    const objectTarget = r.kind === "applies_to" && /^O\d+$/u.test(r.to.trim())
-    if (objectTarget && !registry.objects.has(r.to.trim())) { add("reference_invalid", `${w}: object ${r.to} does not exist`); continue }
+    // Either kind may point at an object by id (DESIGN §12d item 1): refers_to then means that object's current text.
+    const objectTarget = /^O\d+$/u.test(r.to.trim())
+    if (objectTarget && !registry.objects.has(r.to.trim())) { add("reference_invalid", `${w}: there is no object ${r.to.trim()} yet (objects so far: O1–O${registry.allocatedCount}); an object made this round has no id until it is accepted, so point at one of its blocks instead`); continue }
     const from = resolve(r.from, `${w} from`), to = objectTarget ? [r.to.trim()] : resolve(r.to, `${w} to`)
     if (!from || !to) continue
     if (from.length !== 1 || to.length !== 1) { add("reference_invalid", `${w}: each end names one block`); continue }
@@ -310,7 +326,7 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   }
   const interpretations = answer.interpretations.map((n, i) => ({ blocks: n.blocks.flatMap(b => resolve(b, `interpretation ${i + 1}`) ?? []), text: n.text }))
 
-  if (issues.length) return { issues }
+  if (issues.length) return { issues: byCause(issues) }
   // Ids for new objects: next free numbers, in document order of their first block.
   const order = source.blocks.map(b => b.id)
   const firsts = [...newNames.entries()].map(([key, name]) => ({ key, name, at: Math.min(...assignments.filter(a => a.new_object && nameKey(a.new_object) === key).map(a => order.indexOf(a.block))) }))
@@ -318,6 +334,30 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   const allocated = firsts.map((f, k) => ({ name: f.name, id: `O${registry.allocatedCount + k + 1}` }))
   assignments.sort((a, b) => order.indexOf(a.block) - order.indexOf(b.block))
   return { issues, acceptance: { round, answer: { assignments, references, interpretations }, allocated } }
+}
+
+/**
+ * One issue per root cause (DESIGN §12d item 3): issues of the same code whose cause (the text after the place it
+ * was found) is the same become one, naming every place.
+ */
+export function byCause(issues: Issue[]): Issue[] {
+  const out: Issue[] = []
+  const groups = new Map<string, { issue: Issue; cause: string; places: string[]; blocks: string[] }>()
+  for (const i of issues) {
+    const m = /^((?:assignment|edge|interpretation) \d+(?: \([^)]*\))?(?: [a-z]+(?: \d+)?)*): (.*)$/su.exec(i.message)
+    if (!m) { out.push(i); continue }
+    const key = `${i.code}|${m[2]}`
+    const g = groups.get(key)
+    if (g) { g.places.push(m[1]); if (i.block) g.blocks.push(i.block); continue }
+    const entry = { issue: { ...i }, cause: m[2], places: [m[1]], blocks: i.block ? [i.block] : [] }
+    groups.set(key, entry)
+    out.push(entry.issue)
+  }
+  for (const g of groups.values()) if (g.places.length > 1) {
+    g.issue.message = `${g.places.join("; ")}: ${g.cause}`
+    g.issue.blocks = [...new Set(g.blocks)]
+  }
+  return out
 }
 
 function targetProblems(registry: Registry, round: number, target: string, where: string, add: (c: IssueCode, m: string, b?: string) => void, block: string): void {
@@ -330,7 +370,8 @@ function targetProblems(registry: Registry, round: number, target: string, where
     add("target_replaced", `${where}: ${target} lies in ${own.block}, ${own.state} in round ${last.round} by ${last.by.join(", ")}; ${now}${own.state === "superseded" ? ", cite that instead" : ""}`, block)
     return
   }
-  const clash = own.modifications.find(m => m.parts.some(p => isWithin(registry, target, p) || isWithin(registry, p, target)))
+  // An amended code block or table is still in force, so it may be revised again.
+  const clash = own.modifications.find(m => m.parts.some(p => !(m.amended ?? []).includes(p) && (isWithin(registry, target, p) || isWithin(registry, p, target))))
   if (clash) {
     const now = clash.kind === "withdraw" ? "it was withdrawn and nothing replaced it" : `the text in force is ${clash.by.join(", ")} (round ${clash.round}), cite that instead`
     add("target_replaced", `${where}: ${target} overlaps ${clash.parts.join(", ")}, already replaced in round ${clash.round} by ${clash.by.join(", ")}; ${now}`, block)
@@ -497,7 +538,7 @@ const edgeSchema = {
   type: "object",
   additionalProperties: false,
   required: ["from", "to", "kind"],
-  description: "Only for an object the block's own wording names. refers_to: the block uses what the target block defines; the target's object gets no change. applies_to: the block's requirement also lands on the named object (to = one of its blocks or its id); that object gets a change record. The block keeps its one owner.",
+  description: "Only for an object the block's own wording names; to = a block or an object id. refers_to: this block depends on that text or object, so its checks are derived again when that changes; the target gets no change. applies_to: this block changes that object's behaviour, so that object gets a change record and is worked on this round. The block keeps its one owner.",
   properties: { from: { type: "string" }, to: { type: "string" }, kind: { type: "string", enum: ["refers_to", "applies_to"] } },
 }
 
@@ -521,7 +562,7 @@ export const ATTRIBUTION_SYSTEM_PROMPT = [
   "An object is a unit of requirement that the text names with a stable name and whose parts are revised together: a command, an operation, a pipeline step, a shared convention. Parameters, fields and options are never objects; a change to them is a change to their object.",
   "A section's heading line alone, without anything under it, is the unit R3.S2.H (no marker of its own); give it an owner only when the heading itself needs one apart from its content (for example none for a heading over subsections that belong elsewhere). For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round is covered exactly once: a section covers everything inside it, so do not also assign its paragraphs. Clauses serve to say which part of earlier text a partial revision changes.",
   "The change field's values are defined by their effect on earlier text, as its description says. Cite ids only; never copy text. Earlier units may belong to another object; cite them anyway. Ranges like R2.S9.P4.s2..s4 are allowed. Cite only text still in force: what a later round replaced is cited through its replacement.",
-  "Edges: when a block's own wording names another object, add an edge (refers_to or applies_to, as the schema describes). `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself names it, not whether it ought to. Never infer edges from patterns across rounds.",
+  "Edges: when a block's own wording names another object, add an edge. refers_to: this block depends on that text or object (so its checks are derived again when that changes). applies_to: this block changes that object's behaviour (so that object gets a change record and is worked on this round). Either may point at a block or at an object's id. `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself names it, not whether it ought to. Never infer edges from patterns across rounds.",
   "interpretations: only when two blocks of the same round disagree, or the extent of a partial revision is unclear, write a short reading citing the blocks; it is marked as interpretation, not source.",
   "Answer as a patch on `previous_draft` (empty on the first call): upsert adds or replaces a block's assignment, remove drops one, edges_add/edges_remove and interpretations_add edit the rest. When `issues` is not empty, the code found these problems in the draft: fix exactly these, and do not restate what needs no change.",
 ].join("\n")

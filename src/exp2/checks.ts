@@ -214,7 +214,7 @@ export function staleChecks(registry: Registry, library: readonly CheckRecord[],
     }
     const refs = registry.references.filter(e => e.kind === "refers_to" && basis.some(u => within(registry, e.from, u) || within(registry, u, e.from)))
     for (const e of refs) {
-      const hit = replacedBasis(registry, [e.to], c.round, round)
+      const hit = replacedBasis(registry, registry.referredText(e), c.round, round)
       if (hit.length) return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "refers_to", source: e.to }, reason: `${e.from} refers to ${e.to}, ${verb(hit[0].kind)} in round ${hit[0].round} by ${hit[0].by.join(", ")}` }]
     }
     for (const u of c.uses) {
@@ -349,8 +349,10 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
     const missing = blocks.filter(b => !registry.block(b) || roundOf(b) > round)
     for (const b of missing) add("unknown_block", `${w}: block ${b} does not exist`, k.key)
     const applied = new Set(registry.changes.filter(c => c.object === k.object).flatMap(c => c.applied.map(a => a.from)))
-    const basis = (b: string) => registry.coverOf(b)?.owner === k.object || [...applied].some(a => registry.lineage(a).some(x => x.id === b) || registry.lineage(b).some(x => x.id === a))
-    if (!missing.length && !blocks.some(basis)) add("basis_not_object", `${w}: none of ${blocks.join(", ") || "(no blocks)"} is text of ${k.object} (${name(k.object)})`, k.key)
+    // The basis is the object's own text, text that applies to it, or the text of a convention in its uses (§12d item 5).
+    const owners = new Set([k.object, ...k.uses])
+    const basis = (b: string) => owners.has(registry.coverOf(b)?.owner ?? "") || [...applied].some(a => registry.lineage(a).some(x => x.id === b) || registry.lineage(b).some(x => x.id === a))
+    if (!missing.length && !blocks.some(basis)) add("basis_not_object", `${w}: none of ${blocks.join(", ") || "(no blocks)"} is text of ${k.object} (${name(k.object)})${k.uses.length ? ` or of a convention in its uses (${k.uses.join(", ")})` : ""}; ${[...new Set(blocks.map(b => registry.coverOf(b)?.owner).filter((o): o is string => !!o && o !== "none" && o !== k.object))].map(o => `${o} (${name(o)})`).join(", ") || "they belong to no object"}${blocks.some(b => { const o = registry.coverOf(b)?.owner; return o && o !== "none" && o !== k.object }) ? ": text of another object is a basis only when that object is a shared convention the check lists in uses" : ""}`, k.key)
     // Input: safe relative paths, each once.
     const paths = k.input.files.map(f => f.path)
     for (const p of paths) if (!safePath(p)) add("input_invalid", `${w}: input path ${p} must be relative and stay inside the run directory`, k.key)
@@ -386,7 +388,7 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
         const block = registry.block(ref.id)
         if (!block || roundOf(ref.id) > round) add("verbatim_not_found", `${aw}: quoted block ${a.source.block} does not exist`, k.key)
         else if (!a.source.quote || !block.text.includes(a.source.quote)) add("verbatim_not_found", `${aw}: the quote ${JSON.stringify(a.source.quote)} is not in ${ref.id}; quote its text exactly, or derive the value`, k.key)
-        else if (!quoteSays(a.source.quote, expect)) add("verbatim_mismatch", `${aw}: the expected value ${a.expect_json} is not what the quote ${JSON.stringify(a.source.quote)} says`, k.key)
+        else if (!quoteSays(a.source.quote, expect)) add("verbatim_mismatch", `${aw}: the expected value ${a.expect_json} does not occur literally in the quote ${JSON.stringify(a.source.quote)}; when the text states the value in words (say "an empty string" for "", "writes the file" for the file existing), make the source derived and have the reference script compute it`, k.key)
       }
       // A key form of a shared convention in the expectation needs that convention in uses.
       for (const text of strings(expect)) {
@@ -404,7 +406,26 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
   // A retire proposal must name a check that exists and is not retired yet; whether it is accepted is the code's call later.
   const retired = new Set(events.filter(e => e.status === "retired").map(e => e.check))
   for (const r of draft.retire) if (!library.some(c => c.id === r.check && c.admission === "admitted") || retired.has(r.check)) add("retire_invalid", `retire ${r.check}: no check in the library has that id, or it is already retired`)
-  return issues
+  return checkIssuesByCause(issues)
+}
+
+/** One issue per check and kind of problem (DESIGN §12d item 3), listing every assertion or place it was found. */
+export function checkIssuesByCause(issues: CheckIssue[]): CheckIssue[] {
+  const out: CheckIssue[] = []
+  const groups = new Map<string, { issue: CheckIssue; parts: string[] }>()
+  for (const i of issues) {
+    if (!i.check) { out.push(i); continue }
+    const key = `${i.code}|${i.check}`
+    const prefix = `check ${i.check}`
+    const part = i.message.startsWith(prefix) ? i.message.slice(prefix.length).replace(/^ /u, "") : i.message
+    const g = groups.get(key)
+    if (g) { g.parts.push(part); continue }
+    const entry = { issue: { ...i }, parts: [part] }
+    groups.set(key, entry)
+    out.push(entry.issue)
+  }
+  for (const g of groups.values()) if (g.parts.length > 1) g.issue.message = `check ${g.issue.check}, ${g.parts.length} problems of one kind (${g.issue.code}): ${g.parts.map(p => p.replace(/^: /u, "")).join("; ")}`
+  return out
 }
 
 function namesOf(k: CheckDraft): { what: string; name: string }[] {

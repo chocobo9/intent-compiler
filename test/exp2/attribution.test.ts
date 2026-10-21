@@ -39,7 +39,8 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     const variant = (edit: (a: AttributionAnswer) => void) => { const a = structuredClone(good); edit(a); return codes(a, r3, 3) }
     assert.deepEqual(variant(a => { a.assignments.splice(5, 1) }), ["uncovered"], "a missing block")
     assert.deepEqual(variant(a => { a.assignments[2].block = "R3.S33" }), ["uncovered", "unknown_block"], "a wrong id")
-    assert.deepEqual(variant(a => { a.assignments.push({ ...a.assignments[4], block: "R3.S8.P1" }) }), ["overlap"], "a block inside one already given")
+    assert.deepEqual(variant(a => { a.assignments.push({ ...a.assignments[4], block: "R3.S8.P1", object_id: a.assignments[4].object_id === "O1" ? "O2" : "O1", new_object: null }) }), ["overlap"], "a block inside one already given, to another object")
+    assert.deepEqual(variant(a => { a.assignments.push({ ...a.assignments[4], block: "R3.S8.P1" }) }), [], "the same owner nested is one assignment (§12d item 2)")
     assert.deepEqual(variant(a => { a.assignments.push(a.assignments[4]) }), ["duplicate"], "the same block twice")
     assert.deepEqual(variant(a => { a.assignments[1].overrides[0].old = ["R2.S13.P4.s4..s9"] }), ["range_invalid"], "a range past the end")
     assert.deepEqual(variant(a => { a.assignments[1].overrides[0].old = ["R2.S13.P4.s3..s2"] }), ["range_invalid"], "a reversed range")

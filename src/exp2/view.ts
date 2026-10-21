@@ -83,7 +83,7 @@ export function objectView(registry: Registry, objectId: string): ObjectView {
     const context = registry.block(ctxId)!
     // One mark per replaced unit, however many later texts replaced it.
     const labels = new Map<string, string[]>()
-    for (const m of owns.flatMap(o => o.modifications)) for (const p of m.parts) labels.set(p, [...new Set([...(labels.get(p) ?? []), `R${m.round} ${m.kind}`])])
+    for (const m of owns.flatMap(o => o.modifications)) for (const p of m.parts) labels.set(p, [...new Set([...(labels.get(p) ?? []), `R${m.round} ${(m.amended ?? []).includes(p) ? "amended" : m.kind}`])])
     const replacedSpans = [...labels.entries()].map(([id, l]) => ({ id, open: "⟦", close: `⟧(${l.join(", ")})` }))
     const ownedSpans = owns.map(o => ({ id: o.block, open: "«", close: "»" }))
     const base = side(registry, context, [...ownedSpans, ...replacedSpans])
