@@ -28,7 +28,7 @@ const compared = (text: string) => [...text.replace(/`([^`]*)`/gu, " $1 ").match
 /** The filter probe again, now with a value exactly at the threshold: tells `>` from `>=`. */
 export const filterAtBoundary = (unit: string, kase: string | null): ProbeDraft => {
   const p = filterProbe(unit, kase)
-  return { ...p, id: "filter-gt-boundary", files: [{ path: "data.csv", content: "id,value\n1,5\n2,20\n3,10\n4,12\n" }, p.files[1]], covers: [{ ...p.covers[0], trigger_values: ["\"gt\"", "10", "20"] }] }
+  return { ...p, id: "filter-gt-boundary", files: [{ path: "data.csv", content: "id,value\n1,5\n2,20\n3,10\n4,12\n" }, p.files[1]], covers: [{ ...p.covers[0], trigger_values: ["gt", "10", "20"] }] }
 }
 
 /** A generic probe for a unit: every case (or the unit) covered by a value taken from its own text. */

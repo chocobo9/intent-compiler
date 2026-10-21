@@ -4,7 +4,7 @@ import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
 import { AuthInvalid, QuotaExhausted, RoleUnavailable, type AttributionTransport, type ModelReply } from "./attribution.js"
 import { codeFacts, type ChecksTransport } from "./checks.js"
-import { executeRound, type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
+import { executeRound, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
 import { head, initRepo, resetTo } from "./git.js"
 import { buildReport, codingCost, renderReport, type RoundReport, type StageCost } from "./report.js"
 import { EnvironmentBlocked } from "./platform.js"
@@ -17,6 +17,10 @@ import { upheldKinds } from "./store.js"
 import { activeProbes, runProbes, type ProbeRecord, type ProbeTransport } from "./probes.js"
 import { correctionItems, pairKey, probeStatuses, renderCorrections, type Finding, type JudgeTransport } from "./judge.js"
 import type { ObjectStatus } from "./verdict.js"
+import { discriminate, remeasure } from "./discrimination.js"
+import type { MeasureRecord } from "./store.js"
+import type { PlatformOptions } from "./platform.js"
+import type { AnchorLink } from "./workorder.js"
 
 /**
  * The end-to-end serial (DESIGN §9, §14). Each round, from the previous round's checkpoint:
@@ -38,6 +42,8 @@ export interface SerialLimits {
   checkTimeoutMs: number
   /** Repairs of one group's probes (default 2). */
   probeRepairs?: number
+  /** Mutants the discrimination measure runs a round at most (default 20; 0 switches the measure off). */
+  mutants?: number
   execution: ExecutionLimits
 }
 
@@ -60,6 +66,8 @@ export interface SerialConfig {
   adjudicate?: AdjudicationTransport
   /** The program's name as the requirements call it (for the calls in correction lists). */
   binary?: string
+  /** Where the local Go tool is, for the mutation helper. */
+  platform?: PlatformOptions
   /** Probe writer and judge (BLOCK10): with both, probes are written every round and drive the repairs. */
   probes?: ProbeTransport
   judge?: JudgeTransport
@@ -263,7 +271,8 @@ export class Serial {
       registry, library: state.checks, events: state.check_events, links, anchors: this.c.anchors, build: this.c.build, runner: this.c.runner,
       facts: codeFacts(registry, round), passing, checkTimeoutMs: limits.checkTimeoutMs, onProgress: r => { this.progress = r },
       upheld: check => upheldKinds(store.inspect(), check),
-      ...(probing ? { detect: { passed, program: programName(baseline.kind === "null" ? { command: [this.c.binary ?? "program"] } as ProgramRef : baseline), run: (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => this.probe(round, this.activeProbes(), program, before, contests).then(r => ({ items: r.items, findings: r.findings })) } } : {}),
+      ...(probing ? { detect: { passed, program: programName(baseline.kind === "null" ? { command: [this.c.binary ?? "program"] } as ProgramRef : baseline), run: (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => this.probe(round, this.activeProbes(), program, before, contests).then(r => ({ items: r.items, findings: r.findings })),
+        ...((limits.mutants ?? 20) > 0 ? { measure: (wd: string, program: ProgramRef, known: readonly AnchorLink[]) => this.measure(round, wd, program, known, new Set(workorder.task.map(t => t.object))) } : {}) } } : {}),
       ...(this.c.adjudicate ? { settle: (disputes: Parameters<Exp2Store["settle"]>[1]) => store.settle(round, disputes, this.c.adjudicate!) } : {}),
     }, limits.execution)
 
@@ -312,6 +321,25 @@ export class Serial {
     writeFileSync(join(this.dir(round), "report.md"), renderReport(scored), "utf8")
     const frozen = JSON.parse(readFileSync(join(this.dir(round), "prediction.json"), "utf8")) as { sha256: string }
     writeFileSync(join(this.c.checkpoints, "scores.jsonl"), JSON.stringify({ round, commit, ...score, prediction_sha256: frozen.sha256 }) + "\n", { encoding: "utf8", flag: "a" })
+  }
+
+  /**
+   * The discrimination measure on the round's program (BLOCK10 §7.3): mutants in the task objects' code; where no
+   * probe tells one apart, the writer strengthens those units' probes, and the survivors are run again.
+   */
+  private async measure(round: number, workdir: string, program: ProgramRef, links: readonly AnchorLink[], objects: ReadonlySet<string>): Promise<NonNullable<CycleRecord["measure"]>> {
+    const { store, limits } = this.c
+    const deps = { build: this.c.build, runner: this.c.runner, registry: store.registry(), anchors: this.c.anchors.extract(workdir), links, timeoutMs: limits.checkTimeoutMs, max: limits.mutants ?? 20, objects, platform: this.c.platform }
+    const d = await discriminate(workdir, program, this.activeProbes(), deps)
+    let strengthen: MeasureRecord["strengthen"] = null, after: MeasureRecord["after"] = null
+    if (d.weak.length) {
+      const s = await store.strengthen(round, d.weak, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 })
+      if (s.status === "interrupted") throw stopping(s.issues ?? [], `probes (strengthening), round ${round}`)
+      strengthen = { status: s.status, calls: s.calls, entered: s.entered, dropped: s.dropped }
+      if (s.entered.length) after = await remeasure(workdir, program, this.activeProbes(), d, { ...deps, registry: store.registry() })
+    }
+    await store.recordMeasure({ round, label: "round program", sites: d.sites, counts: d.counts, score: d.score, weak: d.weak.map(w => ({ object: w.object, units: w.units, sites: w.sites })), strengthen, after })
+    return { mutants: d.mutants.length, ...d.counts, score: d.score, weak_units: [...new Set(d.weak.flatMap(w => w.units))], strengthened: strengthen?.entered ?? [], still_weak: after ? after.still.length : d.counts.survived }
   }
 
   private activeProbes(): ProbeRecord[] {

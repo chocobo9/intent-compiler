@@ -1,5 +1,7 @@
 import { execFileSync } from "node:child_process"
-import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { discriminate, remeasure } from "./discrimination.js"
+import type { PlatformOptions } from "./platform.js"
 import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
 import { AuthInvalid, QuotaExhausted, RoleUnavailable, type TokenUsage } from "./attribution.js"
@@ -11,7 +13,7 @@ import { correctionItems, pairKey, probeStatuses, renderCorrections, type Correc
 import { activeProbes, runProbes, type ProbeRoundRecord, type ProbeTransport } from "./probes.js"
 import { addUsage } from "./report.js"
 import type { CheckRunner, ProgramRef } from "./runner.js"
-import type { Exp2Store } from "./store.js"
+import { Exp2Store } from "./store.js"
 import { buildWorkOrder } from "./workorder.js"
 
 /**
@@ -91,15 +93,20 @@ export interface DetectedProduct {
   items: CorrectionItem[]
   findings: Finding[]
   ambiguous: Finding[]
-  /** Judge calls for this product (outputs seen on an earlier product are not judged again). */
   judge_calls: number
   judge_tokens: TokenUsage
+  /** The discrimination measure on this product and the strengthening it led to (null when off). */
+  measure: null | { mutants: number; killed: number; survived: number; build_failed: number; score: number | null; weak_units: string[]; strengthened: string[]; still_weak: number; writer_calls: number; writer_tokens: TokenUsage }
 }
 
-/** Writes the round's probes once (unless the state has them), then runs and judges them on each product in turn. */
-export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport }, products: readonly Product[], round = 1): Promise<{ written: ProbeRoundRecord | null; products: DetectedProduct[] }> {
-  const { store } = deps
-  const written = store.inspect().probe_rounds.some(r => r.round === round && r.status === "accepted") ? null : await store.deriveRoundProbes(round, deps.probes)
+/**
+ * Writes the round's probes once (unless the state has them). Then, for each product on its own copy of the state:
+ * the discrimination measure on the product and the strengthening it calls for (when `mutants` > 0), and the runs
+ * and the judge. A product never benefits from another's mutants or verdicts, as a round has only its own program.
+ */
+export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport; root: string; anchors?: AnchorExtractor; mutants?: number; platform?: PlatformOptions; maxRepairs?: number }, products: readonly Product[], round = 1): Promise<{ written: ProbeRoundRecord | null; products: DetectedProduct[] }> {
+  const base = deps.store
+  const written = base.inspect().probe_rounds.some(r => r.round === round && r.status === "accepted") ? null : await base.deriveRoundProbes(round, deps.probes)
   // A writer that could not be reached, or wrote nothing usable, is no result: the harness stops with the cause.
   if (written?.status === "interrupted") {
     const i = written.issues?.[0]
@@ -109,7 +116,25 @@ export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport }
   const out: DetectedProduct[] = []
   for (const p of products) {
     const b = deps.build(p.path, `probe-${p.name}`)
-    if (!b.ok) { out.push({ product: p, built: false, build_output: b.output.slice(0, 2000), items: [], findings: [], ambiguous: [], judge_calls: 0, judge_tokens: zero() }); continue }
+    if (!b.ok) { out.push({ product: p, built: false, build_output: b.output.slice(0, 2000), items: [], findings: [], ambiguous: [], judge_calls: 0, judge_tokens: zero(), measure: null }); continue }
+    const store = productStore(base, deps.root, p.name)
+    let measure: DetectedProduct["measure"] = null
+    if ((deps.mutants ?? 0) > 0 && deps.anchors) {
+      const calls0 = store.inspect().probe_calls.length
+      const md = { build: deps.build, runner: deps.runner, registry: store.registry(), anchors: deps.anchors.extract(p.path), links: [], timeoutMs: deps.timeoutMs, max: deps.mutants!, platform: deps.platform }
+      const s0 = store.inspect()
+      const d = await discriminate(p.path, b.program!, activeProbes(s0.probes, s0.probe_events).filter(x => x.round <= p.round), md)
+      let entered: string[] = [], after: { still: string[]; killed: string[] } | null = null
+      if (d.weak.length) {
+        const st = await store.strengthen(round, d.weak, deps.probes, { maxRepairs: deps.maxRepairs ?? 2 })
+        if (st.status === "interrupted") throw new RoleUnavailable("probe strengthening", st.issues?.[0]?.message ?? "interrupted")
+        entered = st.entered
+        if (entered.length) { const s1 = store.inspect(); after = await remeasure(p.path, b.program!, activeProbes(s1.probes, s1.probe_events), d, { ...md, registry: store.registry() }) }
+        await store.recordMeasure({ round, label: p.name, sites: d.sites, counts: d.counts, score: d.score, weak: d.weak.map(w => ({ object: w.object, units: w.units, sites: w.sites })), strengthen: { status: st.status, calls: st.calls, entered, dropped: st.dropped }, after })
+      } else await store.recordMeasure({ round, label: p.name, sites: d.sites, counts: d.counts, score: d.score, weak: [], strengthen: null, after: null })
+      const wc = store.inspect().probe_calls.slice(calls0)
+      measure = { mutants: d.mutants.length, ...d.counts, score: d.score, weak_units: [...new Set(d.weak.flatMap(w => w.units))], strengthened: entered, still_weak: after ? after.still.length : d.counts.survived, writer_calls: wc.length, writer_tokens: wc.reduce((t, c) => addUsage(t, c.usage), zero()) }
+    }
     const s = store.inspect(), probes = activeProbes(s.probes, s.probe_events).filter(x => x.round <= p.round)
     const runs = await runProbes(probes, b.program!, deps.runner, deps.timeoutMs)
     const before = store.inspect().judge_calls.length
@@ -117,10 +142,18 @@ export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport }
     const calls = store.inspect().judge_calls.slice(before)
     out.push({
       product: p, built: true, findings, items: correctionItems(store.registry(), probes, runs, findings), ambiguous: findings.filter(f => f.verdict === "ambiguous"),
-      judge_calls: calls.length, judge_tokens: calls.reduce((t, c) => addUsage(t, c.usage), zero()),
+      judge_calls: calls.length, judge_tokens: calls.reduce((t, c) => addUsage(t, c.usage), zero()), measure,
     })
   }
   return { written, products: out }
+}
+
+/** A product's own copy of the state, under <root>/products/<name>/store: made from the base the first time. */
+export function productStore(base: Exp2Store, root: string, name: string): Exp2Store {
+  const dir = join(root, "products", name, "store")
+  if (!existsSync(join(dir, "exp2-state.json"))) { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, "exp2-state.json"), base.exportState(), "utf8") }
+  const s = base.inspect()
+  return new Exp2Store(dir, s.run_id, s.ablation ?? {})
 }
 
 export interface RepairedProduct {
@@ -139,7 +172,7 @@ export interface RepairedProduct {
  * execution session whose first message is the requirements and the correction list, then the cycles (probes run
  * again on every reply, the judge sees what changed). Scored before and after with the official command, if given.
  */
-export async function repairProducts(deps: HarnessDeps & { executor: () => Executor; anchors: AnchorExtractor; limits: ExecutionLimits; binary: string; text: (round: number) => string; score?: (commit: string, repo: string, round: number) => OfficialResult }, products: readonly Product[], root: string): Promise<RepairedProduct[]> {
+export async function repairProducts(deps: HarnessDeps & { storeFor?: (product: Product) => Exp2Store; executor: () => Executor; anchors: AnchorExtractor; limits: ExecutionLimits; binary: string; text: (round: number) => string; score?: (commit: string, repo: string, round: number) => OfficialResult }, products: readonly Product[], root: string): Promise<RepairedProduct[]> {
   const out: RepairedProduct[] = []
   for (const p of products) {
     const workdir = join(root, p.name, "app")
@@ -149,12 +182,13 @@ export async function repairProducts(deps: HarnessDeps & { executor: () => Execu
       else { cpSync(p.path, workdir, { recursive: true }); initRepo(workdir); commitStep(workdir, "product as given", [["IC-Round", "0"]]) }
     }
     const base = head(workdir)
-    const registry = deps.store.registry()
-    const s = deps.store.inspect(), probes = activeProbes(s.probes, s.probe_events).filter(x => x.round <= p.round)
+    const store = deps.storeFor?.(p) ?? deps.store
+    const registry = store.registry()
+    const s = store.inspect(), probes = activeProbes(s.probes, s.probe_events).filter(x => x.round <= p.round)
     const detect = async (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => {
       const runs = await runProbes(probes, program, deps.runner, deps.timeoutMs)
-      const findings = await deps.store.judge(p.round, runs, deps.judge, { contests })
-      return { findings, items: correctionItems(deps.store.registry(), probes, runs, findings, before) }
+      const findings = await store.judge(p.round, runs, deps.judge, { contests })
+      return { findings, items: correctionItems(store.registry(), probes, runs, findings, before) }
     }
     const b = deps.build(workdir, `repair-${p.name}-base`)
     if (!b.ok) { out.push({ product: p, base, record: null, items_before: [], open_after: [] }); continue }

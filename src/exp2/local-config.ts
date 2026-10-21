@@ -54,6 +54,8 @@ export interface LocalConfig {
     management_timeout_ms?: number
     check_timeout_ms?: number
     probe_repairs?: number
+    /** Mutants the discrimination measure runs a round at most (default 20; 0 switches it off). */
+    mutants?: number
     execution?: Partial<ExecutionLimits>
   }
   runner: { kind: "local" } | ({ kind: "docker"; docker?: string[] } & Omit<DockerOptions, "docker">)
@@ -208,6 +210,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       ...(c.roles === null ? {} : { probes: createOpenCodeProbesTransport(roleOptions(management, c, "probes"), rateLimit), judge: createOpenCodeJudgeTransport(roleOptions(management, c, "judge"), rateLimit) }),
     }),
     binary,
+    platform,
     executor: () => new OpenCodeExecutor({ client: coding, providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant, agent: c.coding.agent, rateLimit }),
     executorIsStub: false,
     anchors: new GoAnchorExtractor(undefined, platform),
@@ -220,6 +223,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       managementTimeoutMs: c.limits?.management_timeout_ms ?? 30 * 60_000,
       checkTimeoutMs: c.limits?.check_timeout_ms ?? 60_000,
       probeRepairs: c.limits?.probe_repairs ?? 2,
+      mutants: c.limits?.mutants ?? 20,
       execution: { ...DEFAULT_LIMITS, ...c.limits?.execution },
     },
     ...(c.scoring ? { score: scoringHook(c.scoring.command, at(c.repo_dir)) } : {}),

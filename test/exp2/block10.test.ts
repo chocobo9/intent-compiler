@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { before, describe, it } from "node:test"
@@ -21,6 +21,8 @@ import { stubTransport } from "./stubs.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { serialExecutor } from "./serial-executor.js"
 import { Serial } from "../../src/exp2/serial.js"
+import { renderReport } from "../../src/exp2/report.js"
+import { discriminate, remeasure } from "../../src/exp2/discrimination.js"
 import { casesFromLog, compareCases, officialScore, probeDetect, repairProducts, scoreDefects } from "../../src/exp2/acceptance.js"
 import { LocalScriptSandbox } from "../../src/exp2/runner.js"
 
@@ -264,7 +266,7 @@ describe("exp2 block 10: the serial with probes and judge (stand-ins), checks of
     executor: round => { const e = inner(round); return { open: async ctx => { first[round] ??= ctx.text; return e.open(ctx) } } }, executorIsStub: true,
     anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
     probes: stubProbeWriter(), judge: async r => { const reg = store.registry(); profile = new Set([...reg.assigned.entries()].filter(([, o]) => o === reg.objectByName("profile")?.id).flatMap(([b]) => [b, ...[...reg.blocks.values()].filter(x => reg.lineage(x.id).some(y => y.id === b)).map(x => x.id)])); return judge(r) },
-    limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
+    limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, mutants: 4, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
   })
   let outcome: Awaited<ReturnType<Serial["run"]>>
   before(async () => { outcome = await serial.run({ to: 3 }) })
@@ -293,9 +295,14 @@ describe("exp2 block 10: the serial with probes and judge (stand-ins), checks of
 
   it("the report gives the writer's and the judge's calls and tokens, and their share of the coding tokens", () => {
     const r1 = store.inspect().reports.find(r => r.round === 1)!
-    assert.equal(r1.probes!.writer.calls, 6)
+    const m1 = store.inspect().probe_measures.find(m => m.round === 1)!
+    assert.equal(r1.probes!.writer.calls, 6 + (m1.strengthen?.calls.length ?? 0), "six groups, and the strengthening calls")
     assert.ok(r1.probes!.judge.calls > 0)
     assert.equal(r1.probes!.written, 133, "a probe per unit, and two more where a real probe covers one case and a generic one the rest")
+    // Case-level coverage and the measure, in the report.
+    assert.deepEqual([r1.probes!.cases!.total, r1.probes!.cases!.covered, r1.probes!.cases!.open], [155, 155, []])
+    assert.ok(r1.probes!.discrimination && r1.probes!.discrimination.mutants > 0 && r1.probes!.discrimination.mutants <= 4)
+    assert.match(renderReport(r1), /Cases: 155\/155 reached, 0 uncheckable, 0 open\. Discrimination: \d+ of \d+ mutants told apart/u)
     // Rerunning unchanged probes costs nothing: the judge is asked only about outputs it has not seen.
     const s = store.inspect()
     const asked = s.judge_calls.filter(c => c.round === 3).reduce((n, c) => n + c.items, 0)
@@ -333,15 +340,15 @@ console.log(JSON.stringify({ passed: Object.values(cases).filter(Boolean).length
       { name: "text-sort", round: 1, path: product("text-sort", false, true) },
     ]
     const judge = stubJudge()
-    const r = await probeDetect({ store, probes: stubProbeWriter(), judge, build: goBuilder(join(dir, "builds"), {}, "dpipe"), runner, timeoutMs: 10_000 }, products)
+    const r = await probeDetect({ store, probes: stubProbeWriter(), judge, build: goBuilder(join(dir, "builds"), {}, "dpipe"), runner, timeoutMs: 10_000, root: join(dir, "detect") }, products)
     assert.equal(r.written!.entered.length, 133)
     const keyOf = (id: string) => store.inspect().probes.find(p => p.id === id)!.key
     const score = scoreDefects({ clean: ["clean"], defects: [{ name: "filter", products: ["wrong-filter"], pattern: "value > 10" }, { name: "sort numeric", products: ["text-sort"], pattern: "sort[\\s\\S]*ascending" }] }, r.products.map(p => ({ product: p.product.name, items: p.items, findings: p.findings, probeKey: keyOf })))
     assert.equal(`${score.hits}/${score.total}`, "2/2")
     assert.deepEqual(score.clean, [{ product: "clean", items: 0 }])
-    // Each later product differs from the clean one in one probe's output: only that run is judged again.
-    assert.deepEqual(r.products.map(p => p.judge_calls), [6, 1, 1])
-    assert.deepEqual(judge.requests.slice(-2).map(q => q.items.length), [1, 1])
+    // Each product is judged on its own copy of the state: no verdict carries over from another product.
+    assert.deepEqual(r.products.map(p => p.judge_calls), [6, 6, 6])
+    assert.ok(existsSync(join(dir, "detect", "products", "text-sort", "store", "exp2-state.json")))
   })
 
   it("repair: a copy of each product is repaired in one session from its correction list; official cases compared before and after", async () => {
@@ -370,5 +377,49 @@ console.log(JSON.stringify({ passed: Object.values(cases).filter(Boolean).length
     const log = 'CASE_RESULT case_id=c001 x requirement_ref=R1.3 case_type=t status=pass intent="filter" scenario="gt"\nCASE_RESULT case_id=c002 x requirement_ref=R1.3 case_type=t status=fail intent="sort" scenario="numeric"\n'
     assert.deepEqual([...casesFromLog(log)], [["R1.3 | filter | gt", true], ["R1.3 | sort | numeric", false]])
     assert.deepEqual(compareCases(new Map([["a", true], ["b", false], ["c", false]]), new Map([["a", false], ["b", true], ["c", false]])), { fixed: ["b"], broke: ["a"], still: ["c"] })
+  })
+})
+
+describe("exp2 block 10b: whether the probes tell right from wrong is measured by code (mutants of the program)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-b10m-"))
+  const store = new Exp2Store(join(dir, "store"), "b10m")
+  const runner = new LocalProcessRunner(), anchors = new GoAnchorExtractor()
+  const SORT_NUM = SORT.replace('import "sort"', 'import (\n\t"sort"\n\t"strconv"\n)').replace("return t.rows[a][i] < t.rows[b][i]", "x, _ := strconv.ParseFloat(t.rows[a][i], 64)\n\t\ty, _ := strconv.ParseFloat(t.rows[b][i], 64)\n\t\treturn x < y")
+  const tree = join(dir, "correct")
+  before(async () => {
+    await store.ingestRound(1, roundText(1), stubTransport())
+    await store.deriveRoundProbes(1, stubProbeWriter())
+    mkdirSync(tree, { recursive: true })
+    write(tree, { "go.mod": GO_MOD, "main.go": MAIN, "verify.go": VERIFY(), "transform.go": TRANSFORM(["filter", "sort", "rename", "drop"]), "filter.go": FILTER(false), "sort.go": SORT_NUM, "rename.go": RENAME, "drop.go": DROP })
+  })
+
+  it("a probe whose output is the same for the correct program and a deliberately wrong one is reported weak; strengthened, the variant is told apart", async () => {
+    const build = goBuilder(join(dir, "builds"), {}, "dpipe")
+    const program = build(tree, "correct").program!
+    const registry = store.registry(), filter = registry.objectByName("filter")!.id
+    const probes = () => activeProbes(store.inspect().probes, store.inspect().probe_events)
+    const deps = { build, runner, registry, anchors: anchors.extract(tree), links: [], timeoutMs: 10_000, max: 40, objects: new Set([filter]) }
+    const d = await discriminate(tree, program, probes(), deps)
+    // The `>` of the gt case moved to `>=`: the probe has no value at the threshold, so its output does not change.
+    const gtBoundary = d.mutants.find(m => m.site.kind === "boundary" && m.site.from === ">" && m.site.to === ">=")!
+    assert.equal(gtBoundary.status, "survived")
+    assert.ok(gtBoundary.anchor!.endsWith(":func:opFilter") && gtBoundary.objects.includes(filter))
+    // Negating the same comparison changes the output: killed by the filter probe.
+    const gtNegated = d.mutants.find(m => m.site.kind === "compare" && m.site.from === ">" && m.site.line === gtBoundary.site.line)!
+    assert.equal(gtNegated.status, "killed")
+    assert.ok(gtNegated.killed_by.some(id => store.inspect().probes.find(p => p.id === id)!.key.endsWith("filter-gt")))
+    const weak = d.weak.find(w => w.object === filter)!
+    assert.ok(weak.units.includes("R1.S3.P2.s4") && weak.sites.includes(gtBoundary.site.id))
+    assert.match(weak.message, /gave the same output for the program and for variants of it .*a comparison > changed to >=/u)
+    assert.ok(d.score !== null && d.score > 0 && d.score < 1)
+    // Back to the writer, through the same checks; the stand-in adds a probe with a value at the threshold.
+    const writer = stubProbeWriter()
+    const s = await store.strengthen(1, d.weak, writer)
+    assert.equal(s.status, "accepted")
+    assert.equal(s.entered.length, 1)
+    assert.ok(writer.requests[0].existing!.some(p => p.id.endsWith("filter-gt")) && writer.requests[0].problems![0] === weak.message)
+    const after = await remeasure(tree, program, probes(), d, { ...deps, registry: store.registry() })
+    assert.ok(after.killed.includes(gtBoundary.site.id), "the boundary variant is now told apart")
+    assert.ok(!after.still.includes(gtBoundary.site.id))
   })
 })

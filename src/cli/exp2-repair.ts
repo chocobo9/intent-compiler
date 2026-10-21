@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { officialScore, repairProducts } from "../exp2/acceptance.js"
+import { officialScore, productStore, repairProducts } from "../exp2/acceptance.js"
 import { parseProducts } from "../exp2/detect.js"
 import { assembleSerial, loadLocalConfig } from "../exp2/local-config.js"
 import { Exp2Store, type Exp2State } from "../exp2/store.js"
@@ -28,7 +28,7 @@ async function main(argv: string[]): Promise<number> {
   const products = parseProducts(readFileSync(resolve(list), "utf8")).map(p => ({ ...p, path: resolve(p.path) }))
   const score = local.scoring ? (commit: string, repo: string, round: number) => officialScore(local.scoring!.command, round, commit, repo) : undefined
   const results = await repairProducts({
-    store, judge: c.judge, build: c.build, runner: c.runner, timeoutMs: c.limits.checkTimeoutMs, executor: () => c.executor(1), anchors: c.anchors,
+    store, storeFor: p => existsSync(join(resolve(detectDir), "products", p.name, "store", "exp2-state.json")) ? productStore(store, resolve(detectDir), p.name) : store, judge: c.judge, build: c.build, runner: c.runner, timeoutMs: c.limits.checkTimeoutMs, executor: () => c.executor(1), anchors: c.anchors,
     limits: c.limits.execution, binary: c.binary ?? "app", text: c.text, ...(score ? { score } : {}),
   }, products, resolve(outDir))
   const lines = ["# Repair from correction lists", "", "| product | items | official before → after | fixed | broke | still failing | cycles | open after | coding tokens (in / cache / out) |", "|---|---|---|---|---|---|---|---|---|"]

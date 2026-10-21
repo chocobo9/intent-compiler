@@ -26,17 +26,20 @@ async function main(argv: string[]): Promise<number> {
   const { config: c } = assembleSerial(loadLocalConfig(resolve(config)))
   if (!c.probes || !c.judge) { process.stderr.write("the config switches the probe writer or the judge off (roles: null)\n"); return 2 }
   const products = parseProducts(readFileSync(resolve(list), "utf8")).map(p => ({ ...p, path: resolve(p.path) }))
-  const result = await probeDetect({ store, probes: c.probes, judge: c.judge, build: c.build, runner: c.runner, timeoutMs: c.limits.checkTimeoutMs }, products)
+  const result = await probeDetect({ store, probes: c.probes, judge: c.judge, build: c.build, runner: c.runner, timeoutMs: c.limits.checkTimeoutMs, root: out, anchors: c.anchors, mutants: c.limits.mutants ?? 20, platform: c.platform, maxRepairs: c.limits.probeRepairs }, products)
   const s = store.inspect()
   const key = (id: string) => s.probes.find(p => p.id === id)?.key ?? id
   const lines = ["# Probes and judge on products with known official results", ""]
   const w = s.probe_rounds.find(r => r.status === "accepted")
   const writerCalls = s.probe_calls.filter(x => w?.calls.includes(x.id))
   const sum = (cs: readonly { usage: { input_tokens: number; cache_read_tokens: number; output_tokens: number } }[]) => cs.reduce((t, x) => ({ input: t.input + x.usage.input_tokens, cache: t.cache + x.usage.cache_read_tokens, output: t.output + x.usage.output_tokens }), { input: 0, cache: 0, output: 0 })
-  lines.push(`Probes: ${w?.entered.length ?? 0} for ${w?.units.length ?? 0} units (${w?.uncovered.length ?? 0} not exercised, ${w?.dropped.length ?? 0} dropped); writer ${[...new Set(writerCalls.map(x => x.model).filter(Boolean))].join(", ") || "?"}, ${writerCalls.length} calls, tokens ${JSON.stringify(sum(writerCalls))}.`)
+  lines.push(`Probes: ${w?.entered.length ?? 0} for ${w?.units.length ?? 0} units (${w?.uncovered.length ?? 0} not exercised, ${w?.dropped.length ?? 0} dropped); cases ${w?.cases ? `${w.cases.covered}/${w.cases.total} reached, ${w.cases.excused} uncheckable, ${w.cases.open.length} open` : "n/a"}; writer ${[...new Set(writerCalls.map(x => x.model).filter(Boolean))].join(", ") || "?"}, ${writerCalls.length} calls, tokens ${JSON.stringify(sum(writerCalls))}.`)
   lines.push(`Judge: ${[...new Set(s.judge_calls.map(x => x.model).filter(Boolean))].join(", ") || "?"}, ${s.judge_calls.length} calls, tokens ${JSON.stringify(sum(s.judge_calls))}.`, "")
-  lines.push("| product | official | built | items | ambiguous | cannot tell | judge calls | judge tokens (in / cache / out) |", "|---|---|---|---|---|---|---|---|")
-  for (const p of result.products) lines.push(`| ${p.product.name} | ${p.product.official ?? ""} | ${p.built ? "yes" : "**no**"} | ${p.items.length} | ${p.ambiguous.length} | ${p.findings.filter(f => f.verdict === "cannot_tell").length} | ${p.judge_calls} | ${p.judge_tokens.input_tokens} / ${p.judge_tokens.cache_read_tokens} / ${p.judge_tokens.output_tokens} |`)
+  lines.push("| product | official | built | items | ambiguous | cannot tell | mutants told apart | weak units | probes added | still not told apart | strengthening tokens (in / cache / out) | judge calls | judge tokens (in / cache / out) |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+  for (const p of result.products) {
+    const m = p.measure, t = (u: { input_tokens: number; cache_read_tokens: number; output_tokens: number }) => `${u.input_tokens} / ${u.cache_read_tokens} / ${u.output_tokens}`
+    lines.push(`| ${p.product.name} | ${p.product.official ?? ""} | ${p.built ? "yes" : "**no**"} | ${p.items.length} | ${p.ambiguous.length} | ${p.findings.filter(f => f.verdict === "cannot_tell").length} | ${m ? `${m.killed}/${m.killed + m.survived}` : "—"} | ${m?.weak_units.length ?? "—"} | ${m?.strengthened.length ?? "—"} | ${m?.still_weak ?? "—"} | ${m ? t(m.writer_tokens) : "—"} | ${p.judge_calls} | ${t(p.judge_tokens)} |`)
+  }
   const defects = at("--defects")
   if (defects) {
     const table = JSON.parse(readFileSync(resolve(defects), "utf8")) as DefectTable

@@ -10,7 +10,8 @@ import type { ExecutionRecord } from "./execution.js"
 import type { RoundReport } from "./report.js"
 import { objectStatuses, runCheck, strength, type CheckRun, type DisputeKind, type ObjectStatus } from "./verdict.js"
 import { adjudicate, type AdjudicationCallRecord, type AdjudicationTransport, type Ruling } from "./adjudication.js"
-import { activeProbes, deriveProbes, probeUnits, staleProbes, type ProbeCallRecord, type ProbeEvent, type ProbeRecord, type ProbeRoundRecord, type ProbeRun, type ProbeTransport } from "./probes.js"
+import type { Discrimination } from "./discrimination.js"
+import { activeProbes, deriveProbes, probeUnits, staleProbes, strengthenProbes, type ProbeCallRecord, type ProbeEvent, type ProbeRecord, type ProbeRoundRecord, type ProbeRun, type ProbeTransport } from "./probes.js"
 import { judgeRuns, type Finding, type JudgeCallRecord, type Judgment, type JudgeTransport } from "./judge.js"
 
 /**
@@ -59,6 +60,20 @@ export interface Exp2State {
   /** Verdicts kept by (probe, unit, unit text, output), and the judge's calls (BLOCK10 §1.4). */
   judgments: Judgment[]
   judge_calls: JudgeCallRecord[]
+  /** Each round's measure of whether the probes tell right from wrong, and the strengthening it led to (BLOCK10 §7.3). */
+  probe_measures: MeasureRecord[]
+}
+
+export interface MeasureRecord {
+  round: number
+  label: string
+  sites: Discrimination["sites"]
+  counts: Discrimination["counts"]
+  score: number | null
+  weak: { object: string; units: string[]; sites: string[] }[]
+  strengthen: null | { status: "accepted" | "interrupted"; calls: string[]; entered: string[]; dropped: { key: string; problems: string[] }[] }
+  /** The surviving mutants run again with the strengthened probes. */
+  after: null | { still: string[]; killed: string[] }
 }
 
 /** A dispute to settle: a failed run of a check, the kind, and what code saw or the executor claimed. */
@@ -248,6 +263,21 @@ export class Exp2Store {
     })
   }
 
+  /** Adds probes where the measure found the probes weak; the additions pass the same checks and repairs (BLOCK10 §7.3). */
+  async strengthen(round: number, weak: readonly { units: string[]; message: string }[], transport: ProbeTransport, options: { maxRepairs?: number } = {}): Promise<NonNullable<MeasureRecord["strengthen"]> & { issues?: { code: string; message: string }[] }> {
+    return this.transaction(async s => {
+      const out = await strengthenProbes(this.registry(s), round, weak, activeProbes(s.probes, s.probe_events), transport, { maxRepairs: options.maxRepairs ?? 2, callId: n => `W${s.probe_calls.length + n}` })
+      s.probe_calls.push(...out.calls)
+      const entered: string[] = []
+      if (out.status === "accepted") for (const p of out.probes) { const id = `P${s.probes.length + 1}`; s.probes.push({ id, ...p }); entered.push(id) }
+      return { status: out.status, calls: out.calls.map(c => c.id), entered, dropped: out.dropped, ...(out.issues ? { issues: out.issues } : {}) }
+    })
+  }
+
+  async recordMeasure(record: MeasureRecord): Promise<void> {
+    await this.transaction(s => { s.probe_measures.push(record) })
+  }
+
   /** Judges one program's runs of active probes; verdicts already kept for the same output are reused. */
   async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number } = {}): Promise<Finding[]> {
     const out = await this.transaction(async s => {
@@ -361,12 +391,12 @@ export function upheldKinds(s: Pick<Exp2State, "rulings">, check: string): Set<D
 
 function emptyChecks() {
   return { checks: [] as CheckRecord[], check_events: [] as CheckEvent[], check_runs: [] as CheckRun[], check_calls: [] as CheckCallRecord[], check_rounds: [] as CheckRoundRecord[], executions: [] as ExecutionRecord[], reports: [] as RoundReport[], rulings: [] as Ruling[], adjudication_calls: [] as AdjudicationCallRecord[],
-    probes: [] as ProbeRecord[], probe_events: [] as ProbeEvent[], probe_calls: [] as ProbeCallRecord[], probe_rounds: [] as ProbeRoundRecord[], judgments: [] as Judgment[], judge_calls: [] as JudgeCallRecord[] }
+    probes: [] as ProbeRecord[], probe_events: [] as ProbeEvent[], probe_calls: [] as ProbeCallRecord[], probe_rounds: [] as ProbeRoundRecord[], judgments: [] as Judgment[], judge_calls: [] as JudgeCallRecord[], probe_measures: [] as MeasureRecord[] }
 }
 
 /** Every list in the state may only grow; existing entries must stay byte-identical. */
 export function appendOnly(before: Exp2State, after: Exp2State): void {
-  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports", "rulings", "adjudication_calls", "probes", "probe_events", "probe_calls", "probe_rounds", "judgments", "judge_calls"] as const) {
+  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports", "rulings", "adjudication_calls", "probes", "probe_events", "probe_calls", "probe_rounds", "judgments", "judge_calls", "probe_measures"] as const) {
     const a = (before[key] ?? []) as unknown[], b = (after[key] ?? []) as unknown[]
     if (b.length < a.length || a.some((x, i) => JSON.stringify(x) !== JSON.stringify(b[i]))) throw new Error(`Exp2 state ${key} is append-only`)
   }
