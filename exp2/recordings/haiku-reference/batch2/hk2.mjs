@@ -74,7 +74,7 @@ if (mode === "add") {
   const serial = new Serial({
     store, workdir: join(root, "work"), checkpoints: join(root, "checkpoints"), text,
     attribution: catching("attribution", replay.attribution), checks: catching("checks", replay.checks),
-    executor: serialExecutor([], new Set()), executorIsStub: true,
+    executor: round => { const inner = serialExecutor([], new Set())(round); return { async open(ctx) { if (!ctx.resume) writeFileSync(join(DIR, `workorder-R${round}.md`), ctx.text); return inner.open(ctx) } } }, executorIsStub: true,
     anchors: new GoAnchorExtractor(), runner: new DockerRunner(dk), sandbox: new DockerScriptSandbox(dk), build: dockerGoBuilder(join(root, "builds"), dk, 10 * 60_000, "dpipe"),
     limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 600_000, checkTimeoutMs: 20_000, execution: DEFAULT_LIMITS },
   })
