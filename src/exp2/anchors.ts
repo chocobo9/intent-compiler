@@ -24,15 +24,25 @@ export interface Anchor {
 
 export interface AnchorExtractor { extract(dir: string): Anchor[] }
 
-/** Finds the helper's source by walking up from this module to the package root. */
-function helperSource(): string {
+/** Finds a Go helper's source (src/exp2/go/<name>) by walking up from this module to the package root. */
+export function helperSource(name = "anchors"): string {
   let at = dirname(fileURLToPath(import.meta.url))
   for (let i = 0; i < 8; i++) {
-    const candidate = join(at, "src", "exp2", "go", "anchors")
+    const candidate = join(at, "src", "exp2", "go", name)
     if (existsSync(join(candidate, "main.go"))) return candidate
     at = dirname(at)
   }
-  throw new Error("anchors helper source (src/exp2/go/anchors) not found")
+  throw new Error(`${name} helper source (src/exp2/go/${name}) not found`)
+}
+
+/** Builds a Go helper once per source version (cached by hash under the temporary directory) and returns its path. */
+export function buildGoHelper(source: string, name: string, platform: PlatformOptions = {}): string {
+  const main = readFileSync(join(source, "main.go"))
+  const out = join(tmpdir(), `exp2-${name}`, createHash("sha256").update(main).digest("hex").slice(0, 16))
+  mkdirSync(out, { recursive: true })
+  const bin = join(out, exeName(name, platform))
+  if (!existsSync(bin)) execFileSync(goCommand(platform), ["build", "-o", bin, "."], { cwd: source, stdio: ["ignore", "pipe", "pipe"] })
+  return bin
 }
 
 /** Builds the Go helper once per source version (cached by hash) and runs it on a directory. */
@@ -40,14 +50,7 @@ export class GoAnchorExtractor implements AnchorExtractor {
   private binary: string | null = null
   constructor(private readonly source = helperSource(), private readonly platform: PlatformOptions = {}) {}
   private build(): string {
-    if (this.binary) return this.binary
-    const main = readFileSync(join(this.source, "main.go"))
-    const out = join(tmpdir(), "exp2-anchors", createHash("sha256").update(main).digest("hex").slice(0, 16))
-    mkdirSync(out, { recursive: true })
-    const bin = join(out, exeName("anchors", this.platform))
-    if (!existsSync(bin)) execFileSync(goCommand(this.platform), ["build", "-o", bin, "."], { cwd: this.source, stdio: ["ignore", "pipe", "pipe"] })
-    this.binary = bin
-    return bin
+    return this.binary ??= buildGoHelper(this.source, "anchors", this.platform)
   }
   extract(dir: string): Anchor[] {
     return JSON.parse(execFileSync(this.build(), [resolve(dir)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })) as Anchor[]
