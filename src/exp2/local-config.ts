@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { isAbsolute, join, posix, relative, resolve, win32 } from "node:path"
 import type { OpenCodeModelClient } from "../model/opencode-transport.js"
 import { GoAnchorExtractor } from "./anchors.js"
-import { goBuilder } from "./build.js"
+import { binaryFromSource, goBuilder } from "./build.js"
 import { dockerGoBuilder, DockerRunner, DockerScriptSandbox, type DockerOptions } from "./docker.js"
 import { DEFAULT_LIMITS, type ExecutionLimits } from "./execution.js"
 import { OpenCodeExecutor, type OpenCodeCodingClient } from "./opencode-executor.js"
@@ -139,6 +139,9 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   const docker = c.runner.kind === "docker" ? { ...c.runner } as DockerOptions : null
   const management = { client: openCodeHttpClient(c.management), directory: c.management.directory, providerId: c.management.provider, modelId: c.management.model, variant: c.management.variant, timeoutMs: c.management.request_timeout_ms }
   const coding = openCodeHttpClient(c.coding)
+  // The program's name comes from the build command the requirements state.
+  const texts = Array.from({ length: c.rounds }, (_, i) => join(at(c.inputs_dir), `round-${pad(i + 1)}.md`)).filter(existsSync).map(f => readFileSync(f, "utf8"))
+  const binary = binaryFromSource(texts) ?? "app"
   const config: SerialConfig = {
     store: new Exp2Store(at(c.state_dir), c.run_id),
     workdir: at(c.repo_dir),
@@ -155,7 +158,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
     anchors: new GoAnchorExtractor(undefined, platform),
     runner: docker ? new DockerRunner(docker) : new LocalProcessRunner(platform),
     sandbox: docker ? new DockerScriptSandbox(docker) : new LocalScriptSandbox(platform),
-    build: docker ? dockerGoBuilder(at(c.builds_dir), docker) : goBuilder(at(c.builds_dir), platform),
+    build: docker ? dockerGoBuilder(at(c.builds_dir), docker, undefined, binary) : goBuilder(at(c.builds_dir), platform, binary),
     limits: {
       attributionRepairs: c.limits?.attribution_repairs ?? 2,
       checkRepairs: c.limits?.check_repairs ?? 2,

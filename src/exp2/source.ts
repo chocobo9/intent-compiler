@@ -8,7 +8,9 @@ import { createHash } from "node:crypto"
  * and carry a content hash; the same text always yields the same ids.
  *
  * - section: a heading and everything under it up to the next heading of the same or a higher level; text before
- *   the first heading is section S0. Sections nest; their children are their own paragraphs, then subsections.
+ *   the first heading is section S0. Sections nest; their children are the heading unit (`S<n>.H`, the heading line
+ *   alone), their own paragraphs, then subsections. A heading unit needs no owner of its own: when it has none, it
+ *   goes with its section's content.
  * - paragraph: the section's own content cut at blank lines; a blank line inside a fenced code block does not cut.
  * - sentence layer ("s"): the paragraph's units. A fenced code block, a table and a list item (with its continuation
  *   lines and any code inside it) are each one unit; prose is cut into sentences.
@@ -17,7 +19,7 @@ import { createHash } from "node:crypto"
  */
 
 export type Level = "section" | "paragraph" | "sentence" | "clause"
-export type BlockKind = "section" | "prose" | "list" | "code" | "table" | "mixed" | "sentence" | "item" | "clause"
+export type BlockKind = "section" | "heading" | "prose" | "list" | "code" | "table" | "mixed" | "sentence" | "item" | "clause"
 
 export interface SourceBlock {
   id: string
@@ -115,9 +117,14 @@ export function splitRound(round: number, text: string): RoundSource {
     stack.push({ level: h.level, block: section })
     // Own content: after the heading line, up to the next heading of any level.
     const ownEnd = n + 1 < headings.length ? Math.min(end, lines[headings[n + 1].index].start) : end
-    paragraphs(section, lines[h.index].end, ownEnd)
+    // The heading line alone (with the blank lines after it) is a unit of its own, `S<n>.H`: it can be given an
+    // owner without what is under it (DESIGN §12b item 8).
+    const firstContent = lines.slice(h.index + 1).find(l => l.start >= lines[h.index].end && l.start < ownEnd && !blank(l))
+    const headEnd = firstContent ? firstContent.start : ownEnd
+    make(`${section.id}.H`, "paragraph", "heading", section.id, start, headEnd)
+    paragraphs(section, headEnd, ownEnd)
   })
-  // Children were appended in creation order: own paragraphs first, then subsections, as required.
+  // Children were appended in creation order: the heading unit, own paragraphs, then subsections, as required.
 
   function paragraphs(section: SourceBlock, start: number, end: number): void {
     const own = linesOf(text, start, end)
@@ -288,9 +295,9 @@ export function tilingProblems(source: RoundSource): string[] {
   for (const b of source.blocks) {
     if (!b.children.length) continue
     const kids = b.children.map(id => byId.get(id)!)
-    // A section's heading line sits before its first child; everything else must be covered by the children.
+    // A section's heading line is its first child (the heading unit), or, for S0, there is none.
     const head = b.level === "section" ? source.text.slice(b.start, kids[0].start) : ""
-    if (b.level === "section" && b.heading !== undefined && head.split(/\r?\n/u)[0] !== b.heading) problems.push(`${b.id}: heading not before children`)
+    if (b.level === "section" && b.heading !== undefined && (kids[0].kind !== "heading" || kids[0].text.split(/\r?\n/u)[0] !== b.heading)) problems.push(`${b.id}: heading unit not first`)
     if (head.trim() !== "" && b.heading === undefined) problems.push(`${b.id}: uncovered text before children`)
     if (b.level === "section" && head.replace(b.heading ?? "", "").trim() !== "") problems.push(`${b.id}: uncovered text after heading`)
     if (head + kids.map(k => k.text).join("") !== b.text) problems.push(`${b.id}: children do not tile it`)
@@ -310,6 +317,8 @@ export function annotate(source: RoundSource): string {
   const put = (at: number, mark: string) => marks.set(at, [...(marks.get(at) ?? []), mark])
   for (const b of source.blocks) {
     if (b.level === "section") put(b.start, `⟦${b.id}#${b.hash}⟧ `)
+    // A heading unit is named by its section (`R3.S2.H`); it gets no marker of its own.
+    else if (b.kind === "heading") continue
     else if (b.level === "paragraph") put(b.start, `⟦${b.id}#${b.hash}⟧${eol}`)
     else {
       const parent = byId.get(b.parent!)!

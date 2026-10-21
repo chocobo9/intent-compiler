@@ -242,7 +242,9 @@ export class Registry {
     for (const b of source.blocks) {
       const covers = this.lineage(b.id).filter(x => this.assigned.has(x.id))
       if (covers.length > 1) problems.push(`${b.id} is covered ${covers.length} times`)
-      if (!b.children.length && covers.length === 0) problems.push(`${b.id} is not covered`)
+      // A heading unit with other content in its section goes with that content when it has no owner.
+      const optional = b.kind === "heading" && (this.blocks.get(b.parent!)?.children.length ?? 0) > 1
+      if (!b.children.length && covers.length === 0 && !optional) problems.push(`${b.id} is not covered`)
     }
     return problems
   }

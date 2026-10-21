@@ -5,7 +5,7 @@ import { describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { AuthInvalid, QuotaExhausted, type AttributionTransport } from "../../src/exp2/attribution.js"
-import { goBuilder } from "../../src/exp2/build.js"
+import { binaryFromSource, goBuilder } from "../../src/exp2/build.js"
 import { dockerGoBuilder, dockerRunArgs, DockerRunner, DockerScriptSandbox } from "../../src/exp2/docker.js"
 import { DEFAULT_LIMITS, SessionBroken } from "../../src/exp2/execution.js"
 import { assembleSerial, localConfigProblems, loadLocalConfig, preflight, scoringHook, type LocalConfig } from "../../src/exp2/local-config.js"
@@ -149,17 +149,31 @@ describe("exp2 local: docker runners (command line only; containers run locally)
     const sandbox = new DockerScriptSandbox({ docker: fake.command, image: "img:1" })
     const r = await sandbox.run("python", "print(1)", [{ path: "in.csv", content: "a\n" }], 5000)
     assert.equal(r.exit_code, 0)
-    assert.deepEqual(fake.calls()[0].slice(-4), ["img:1", "python3", "-I", "__reference__.py"])
+    assert.deepEqual(fake.calls()[0].slice(-4), ["img:1", "/opt/sdd-python/bin/python3", "-I", "__reference__.py"])
+    const node = await sandbox.run("node", "console.log(1)", [], 5000)
+    assert.match(node.stderr, /no node/u, "the image has no node")
+    assert.equal(fake.calls().length, 1)
     const work = join(dir, "work")
     mkdirSync(work)
-    const build = dockerGoBuilder(join(dir, "builds"), { docker: fake.command, image: "img:1" })(work, "R3-final")
+    const build = dockerGoBuilder(join(dir, "builds"), { docker: fake.command, image: "img:1", buildCache: "exp2-gocache" }, undefined, "tool")(work, "R3-final")
     assert.equal(build.ok, true)
     const b = fake.calls()[1]
     assert.ok(b.includes(`${work}:/src:ro`), "the work tree is read-only to the build")
     assert.ok(b.includes(`${join(dir, "builds", "R3-final")}:/out`), "only the output directory is writable")
-    assert.deepEqual(build.program!.command, ["/prog/dpipe"])
+    assert.ok(b.includes("exp2-gocache:/gocache") && b.at(-1)!.includes("GOCACHE=/gocache go build -o /out/tool"), "the build cache is mounted for builds")
+    assert.deepEqual(build.program!.command, ["/prog/tool"])
+    await new DockerRunner({ docker: fake.command, image: "img:1", buildCache: "exp2-gocache" }).run(build.program!, { args: [], files: [] }, 5000)
+    assert.ok(!fake.calls()[2].some(a => a.includes("gocache")), "check runs do not mount the build cache")
     assert.deepEqual(build.program!.mount, { host: join(dir, "builds", "R3-final"), container: "/prog" })
     assert.equal(build.program!.source_dir, work, "the code-fact test still reads the source")
+  })
+})
+
+describe("exp2 local: the program's name", () => {
+  it("is read from the build command the requirements state", () => {
+    assert.equal(binaryFromSource([roundText(1)]), "dpipe")
+    assert.equal(binaryFromSource(["Build it with `go build -o ./bin/tool.exe ./cmd/tool`."]), "tool")
+    assert.equal(binaryFromSource(["no build command here"]), null)
   })
 })
 

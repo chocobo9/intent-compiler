@@ -57,7 +57,7 @@ describe("exp2 source: three layers over the real dpipe rounds", () => {
       const a = splitRound(round, roundText(round)), b = splitRound(round, roundText(round))
       assert.deepEqual(a, b)
       assert.equal(new Set(a.blocks.map(x => x.id)).size, a.blocks.length)
-      for (const x of a.blocks) assert.match(x.id, new RegExp(`^R${round}\\.S\\d+(\\.P\\d+(\\.s\\d+(\\.c\\d+)?)?)?$`, "u"))
+      for (const x of a.blocks) assert.match(x.id, new RegExp(`^R${round}\\.S\\d+(\\.H|\\.P\\d+(\\.s\\d+(\\.c\\d+)?)?)?$`, "u"))
       for (const x of a.blocks) assert.match(x.hash, /^[0-9a-f]{8}$/u)
     }
   })
@@ -81,6 +81,19 @@ describe("exp2 source: three layers over the real dpipe rounds", () => {
     assert.ok(clauses.length >= 2)
     assert.equal(clauses.join(""), r1.blocks.find(b => b.id === "R1.S2.P4.s2")!.text)
     for (const c of r1.blocks.filter(b => b.level === "clause")) assert.equal((c.text.match(/`/gu) ?? []).length % 2, 0, `${c.id} cuts inline code`)
+  })
+
+  it("every heading line is a unit of its own, first in its section, and the section's text still tiles", () => {
+    for (const round of ROUNDS) {
+      const source = splitRound(round, roundText(round))
+      for (const s of source.blocks.filter(b => b.level === "section" && b.heading !== undefined)) {
+        const h = source.blocks.find(b => b.id === `${s.id}.H`)!
+        assert.equal(s.children[0], h.id)
+        assert.equal(h.kind, "heading")
+        assert.equal(h.text.trimEnd(), s.heading)
+        assert.deepEqual(h.children, [])
+      }
+    }
   })
 
   it("list items are cut into clauses outside inline and fenced code", () => {
@@ -118,7 +131,7 @@ describe("exp2 source: three layers over the real dpipe rounds", () => {
         .replace(/⟦R\d+\.S\d+\.P\d+#[0-9a-f]{8}⟧\n/gu, "")
         .replace(/‹s\d+(?:\.c\d+)?›/gu, "")
       assert.equal(stripped, source.text)
-      for (const b of source.blocks.filter(x => x.level === "paragraph")) assert.ok(annotated.includes(`⟦${b.id}#${b.hash}⟧`))
+      for (const b of source.blocks.filter(x => x.level === "paragraph" && x.kind !== "heading")) assert.ok(annotated.includes(`⟦${b.id}#${b.hash}⟧`))
     }
   })
 })

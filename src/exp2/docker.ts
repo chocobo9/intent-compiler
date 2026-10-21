@@ -18,9 +18,17 @@ export interface DockerOptions {
   image: string
   /** Where the run directory appears in the container. */
   workdir?: string
-  /** Interpreters inside the image (Linux paths). */
+  /**
+   * Interpreters inside the image (Linux paths). Python defaults to the SDD image's `/opt/sdd-python/bin/python3`;
+   * the image has no node, so node reference scripts fail unless `node` is given.
+   */
   python?: string
   node?: string
+  /**
+   * A Go build cache for builds only: a docker volume name or a host directory, mounted at /gocache in build
+   * containers. Check and reference-script containers never mount it.
+   */
+  buildCache?: string
   /** `--user` for the container, so files it writes can be removed afterwards (e.g. "1000:1000"). */
   user?: string
   /** Extra `docker run` flags (memory, cpus, …). */
@@ -35,6 +43,8 @@ export function containerName(prefix = "exp2"): string {
 }
 
 /** The `docker run` arguments: no network, only the run directory mounted (plus the program, read-only). */
+export const DOCKER_PYTHON = "/opt/sdd-python/bin/python3"
+
 export function dockerRunArgs(o: DockerOptions, name: string, runDir: string, command: string[], mounts: { host: string; container: string; readonly?: boolean }[] = []): string[] {
   const work = o.workdir ?? "/work"
   return [
@@ -86,32 +96,33 @@ export class DockerScriptSandbox implements ScriptSandbox {
   async run(language: "python" | "node", code: string, files: InputFile[], timeoutMs: number): Promise<ScriptResult> {
     const dir = mkdtempSync(join(tmpdir(), "exp2-ref-"))
     try {
+      if (language === "node" && !this.o.node) return { exit_code: 127, stdout: "", stderr: "the image has no node; set runner.node or use python", timed_out: false }
       writeInputs(dir, files)
       const script = scriptFile(language)
       writeFileSync(join(dir, script), code, "utf8")
       // Inside the container it is Linux, whatever the host: the image's interpreters, named directly.
-      const command = scriptCommand(language, script, { platform: "linux", python: this.o.python ?? "python3", node: this.o.node ?? "node" })
+      const command = scriptCommand(language, script, { platform: "linux", python: this.o.python ?? DOCKER_PYTHON, node: this.o.node ?? "node" })
       return await runInContainer(this.o, dir, command, timeoutMs)
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }
 }
 
 /**
- * Builds the work tree inside the image (`go build -o /out/dpipe ./...`, no network, the tree mounted read-only)
+ * Builds the work tree inside the image (`go build -o /out/<binary> ./...`, no network, the tree mounted read-only)
  * into a host directory outside the work tree; the program then runs in a container with that directory mounted.
  */
-export function dockerGoBuilder(outRoot: string, o: DockerOptions, timeoutMs = 10 * 60_000): (workdir: string, label: string) => BuildResult {
+export function dockerGoBuilder(outRoot: string, o: DockerOptions, timeoutMs = 10 * 60_000, binary = "app"): (workdir: string, label: string) => BuildResult {
   return (workdir, label) => {
     const out = join(outRoot, label.replace(/[^A-Za-z0-9._-]/gu, "_"))
     mkdirSync(out, { recursive: true })
     const name = containerName()
     // The output directory is the writable mount; the work tree is mounted read-only, so the build cannot change it.
-    const args = dockerRunArgs({ ...o, workdir: "/out" }, name, out, ["sh", "-c", "cd /src && GOFLAGS=-mod=readonly GOCACHE=/tmp/gocache go build -o /out/dpipe ./..."], [{ host: workdir, container: "/src" }])
+    const args = dockerRunArgs({ ...o, workdir: "/out" }, name, out, ["sh", "-c", `cd /src && GOFLAGS=-mod=readonly GOCACHE=${o.buildCache ? "/gocache" : "/tmp/gocache"} go build -o /out/${binary} ./...`], [{ host: workdir, container: "/src" }, ...(o.buildCache ? [{ host: o.buildCache, container: "/gocache", readonly: false }] : [])])
     const [cmd, ...pre] = docker(o)
     const r = spawnSync(cmd, [...pre, ...args], { encoding: "utf8", timeout: timeoutMs })
     if (r.error && (r.error as NodeJS.ErrnoException).code === "ETIMEDOUT") removeContainer(o, name)
     const output = `${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? String(r.error) : ""}`
     if (r.status !== 0) return { ok: false, output, program: null }
-    return { ok: true, output, program: { id: label, label: `build of ${label} (docker)`, command: ["/prog/dpipe"], source_dir: workdir, mount: { host: out, container: "/prog" } } }
+    return { ok: true, output, program: { id: label, label: `build of ${label} (docker)`, command: [`/prog/${binary}`], source_dir: workdir, mount: { host: out, container: "/prog" } } }
   }
 }

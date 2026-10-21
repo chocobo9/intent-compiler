@@ -92,7 +92,8 @@ export type IssueCode =
   | "object_choice" | "unknown_object" | "name_taken" | "change_shape" | "range_invalid" | "target_unknown"
   | "target_not_earlier" | "target_unowned" | "target_replaced" | "by_outside_block" | "reference_invalid" | "transport" | "quota" | "auth"
 
-export interface Issue { code: IssueCode; block?: string; message: string }
+/** One problem; when one root cause affects several blocks, a single issue names them all in `blocks`. */
+export interface Issue { code: IssueCode; block?: string; blocks?: string[]; message: string }
 
 export interface ModelCallRecord {
   id: string
@@ -145,7 +146,7 @@ export function buildRequest(registry: Registry, round: number, previous: Attrib
 function outline(source: RoundSource): string[] {
   const byId = new Map(source.blocks.map(b => [b.id, b]))
   return source.blocks.filter(b => b.level === "section").map(s => {
-    const paras = s.children.map(id => byId.get(id)!).filter(b => b.level === "paragraph")
+    const paras = s.children.map(id => byId.get(id)!).filter(b => b.level === "paragraph" && b.kind !== "heading")
     const head = s.heading ?? "(text before the first heading)"
     return `${s.id} ${head}${paras.length ? ": " + paras.map(p => `${p.id.slice(s.id.length + 1)}(${p.children.length})`).join(" ") : ""}`
   })
@@ -246,17 +247,33 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   // Coverage: every block of the round exactly once.
   const assigned = new Set(assignments.map(a => a.block))
   const byId = new Map(source.blocks.map(b => [b.id, b]))
+  // One issue per root cause (DESIGN §12b item 8): an assigned block with assigned blocks inside it is one overlap.
+  const inside = new Map<string, string[]>()
   for (const id of assigned) {
     const above = registry.lineage(id).slice(1).find(b => assigned.has(b.id))
-    if (above) add("overlap", `${id} is inside ${above.id}, which is also assigned; a block is covered once, so drop one of them`, id)
+    if (above) inside.set(above.id, [...(inside.get(above.id) ?? []), id])
   }
+  for (const [outer, ids] of inside) {
+    const heading = byId.get(outer)?.heading
+    add("overlap", `${outer} is assigned and so ${ids.length === 1 ? "is" : `are ${ids.length} blocks`} inside it (${ids.join(", ")}); a block is covered once: drop ${outer}${heading ? ` (to give its heading line alone an owner, assign ${outer}.H)` : ""}, or drop ${ids.length === 1 ? "that block" : "those"}`, outer)
+    issues[issues.length - 1].blocks = [outer, ...ids]
+  }
+  // A heading unit needs no owner of its own when its section has other content.
+  const optional = (b: SourceBlock) => b.kind === "heading" && (byId.get(b.parent!)?.children.length ?? 0) > 1
   const hasAssigned = (b: SourceBlock): boolean => assigned.has(b.id) || b.children.some(c => hasAssigned(byId.get(c)!))
+  const missing = new Map<string | null, string[]>()
   const uncovered = (b: SourceBlock): void => {
-    if (assigned.has(b.id)) return
-    if (!b.children.length || !hasAssigned(b)) { add("uncovered", `${b.id} is not covered${b.heading ? ` (${b.heading.trim()})` : ""}: assign it or the units inside it`, b.id); return }
+    if (assigned.has(b.id) || optional(b)) return
+    if (!b.children.length || !hasAssigned(b)) { missing.set(b.parent, [...(missing.get(b.parent) ?? []), b.id]); return }
     for (const c of b.children) uncovered(byId.get(c)!)
   }
   for (const b of source.blocks.filter(x => x.parent === null)) uncovered(b)
+  // Uncovered siblings are one issue under their parent.
+  for (const [parent, ids] of missing) {
+    const label = (id: string) => { const h = byId.get(id)?.heading; return h ? `${id} (${h.trim()})` : id }
+    add("uncovered", ids.length === 1 ? `${label(ids[0])} is not covered: assign it or the units inside it` : `${ids.length} blocks${parent ? ` in ${parent}` : ""} are not covered: ${ids.map(label).join(", ")}; assign them or the units inside them`, ids[0])
+    issues[issues.length - 1].blocks = ids
+  }
 
   // Edges: both ends exist; the citing end is in this round; applies_to lands on another object.
   const references: Reference[] = []
@@ -493,7 +510,7 @@ export const ATTRIBUTION_SYSTEM_PROMPT = [
   "You register requirement text into objects. The request holds every round of the original requirements so far (`sources`, the new round last); the original text is the only authority, and newer text overrides older text.",
   "Block ids: ⟦R3.S2⟧ marks a section (a heading and everything under it, subsections included), ⟦R3.S2.P1⟧ a paragraph, ‹s2› a unit inside the paragraph (a sentence, a list item, a code block or a table) and ‹s2.c1› a clause of a sentence or list item; the full id of a unit is R3.S2.P1.s2, of a clause R3.S2.P1.s2.c1. Ids may carry the shown hash (R3.S2.P1#ab12cd34). Units are marked only where a paragraph has more than one, clauses only where a unit has more than one.",
   "An object is a unit of requirement that the text names with a stable name and whose parts are revised together: a command, an operation, a pipeline step, a shared convention. Parameters, fields and options are never objects; a change to them is a change to their object.",
-  "For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round is covered exactly once: a section covers everything inside it, so do not also assign its paragraphs. Clauses serve to say which part of earlier text a partial revision changes.",
+  "A section's heading line alone, without anything under it, is the unit R3.S2.H (no marker of its own); give it an owner only when the heading itself needs one apart from its content (for example none for a heading over subsections that belong elsewhere). For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round is covered exactly once: a section covers everything inside it, so do not also assign its paragraphs. Clauses serve to say which part of earlier text a partial revision changes.",
   "The change field's values are defined by their effect on earlier text, as its description says. Cite ids only; never copy text. Earlier units may belong to another object; cite them anyway. Ranges like R2.S9.P4.s2..s4 are allowed. Cite only text still in force: what a later round replaced is cited through its replacement.",
   "Edges: when a block's own wording names another object, add an edge (refers_to or applies_to, as the schema describes). `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself names it, not whether it ought to. Never infer edges from patterns across rounds.",
   "interpretations: only when two blocks of the same round disagree, or the extent of a partial revision is unclear, write a short reading citing the blocks; it is marked as interpretation, not source.",

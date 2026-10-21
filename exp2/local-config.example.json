@@ -42,7 +42,8 @@
     "kind": "docker",
     "docker": ["docker"],
     "image": "sdd-unattended-preflight:latest",
-    "python": "python3",
+    "python": "/opt/sdd-python/bin/python3",
+    "buildCache": "exp2-gocache",
     "graceMs": 10000
   },
   "tools": { "python": "python", "go": "go" },

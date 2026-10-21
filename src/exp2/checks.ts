@@ -583,7 +583,7 @@ const checkSchema = {
     input: {
       type: "object", additionalProperties: false, required: ["args", "files"],
       properties: {
-        args: { ...stringArray, description: "Arguments after the program name, e.g. [\"transform\", \"--input\", \"in.csv\", …]." },
+        args: { ...stringArray, description: "Arguments after the program name, e.g. [\"<command>\", \"--<option>\", \"<input file>\", …]." },
         files: { type: "array", items: { type: "object", additionalProperties: false, required: ["path", "content"], properties: { path: { type: "string" }, content: { type: "string" } } }, description: "Files written into an empty run directory before the call." },
       },
     },
@@ -605,7 +605,7 @@ const checkSchema = {
               column: { ...nullableString, description: "csv_cell: header name." },
             },
           },
-          expect_json: { type: "string", description: "The expected value, JSON-encoded (\"\\\"VERIFIED\\\"\", \"1\", \"0.5\")." },
+          expect_json: { type: "string", description: "The expected value, JSON-encoded (\"\\\"some text\\\"\", \"1\", \"0.5\", \"[\\\"a\\\"]\")." },
           tolerance: { type: ["number", "null"], description: "Allowed relative numeric difference; null for the default." },
           source: {
             type: "object", additionalProperties: false, required: ["kind", "block", "quote"],
