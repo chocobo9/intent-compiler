@@ -6,7 +6,7 @@ import { execFileSync } from "node:child_process"
  */
 
 export function git(dir: string, args: string[], input?: string): string {
-  return execFileSync("git", args, { cwd: dir, encoding: "utf8", input, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, GIT_AUTHOR_NAME: "exp2-ic", GIT_AUTHOR_EMAIL: "exp2-ic@local", GIT_COMMITTER_NAME: "exp2-ic", GIT_COMMITTER_EMAIL: "exp2-ic@local" } })
+  return execFileSync("git", args, { cwd: dir, encoding: "utf8", input, stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, GIT_AUTHOR_NAME: "exp2-ic", GIT_AUTHOR_EMAIL: "exp2-ic@local", GIT_COMMITTER_NAME: "exp2-ic", GIT_COMMITTER_EMAIL: "exp2-ic@local", GIT_PAGER: "cat", PAGER: "cat" } })
 }
 
 export function initRepo(dir: string): string {

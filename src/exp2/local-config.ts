@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process"
+import { request as httpRequest } from "node:http"
+import { request as httpsRequest } from "node:https"
 import { existsSync, readFileSync } from "node:fs"
 import { isAbsolute, join, posix, relative, resolve, win32 } from "node:path"
 import type { OpenCodeModelClient } from "../model/opencode-transport.js"
@@ -11,7 +13,11 @@ import type { PlatformOptions } from "./platform.js"
 import { LocalProcessRunner, LocalScriptSandbox } from "./runner.js"
 import { Serial, type SerialConfig } from "./serial.js"
 import { Exp2Store } from "./store.js"
-import { createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
+import type { AttributionTransport } from "./attribution.js"
+import type { ChecksTransport } from "./checks.js"
+import type { AdjudicationTransport } from "./adjudication.js"
+import { emptyCassette, loadCassette, recordingTransports } from "./recording.js"
+import { createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
 
 /**
  * The local run's configuration file and its assembly into a Serial (READY-FOR-LOCAL §0). Paths are resolved
@@ -52,6 +58,11 @@ export interface LocalConfig {
   resume?: { wait_ms?: number; max_resumes?: number }
   /** Waits before retrying a rate-limited call; when they run out the call counts as a spent quota. */
   rate_limit?: { delays_ms: number[] }
+  /**
+   * Record every management call (attribution, checks, rulings) into this cassette, saved after each call; a run
+   * resumed with the same file appends to it. Labelled with the model.
+   */
+  recording?: { cassette: string; label: string }
   /** Ablation switches (DESIGN §12b item 14); all default true. Kept in the state: an ablation run needs its own state. */
   ablation?: { zoning?: boolean; checks?: boolean; clauses?: boolean }
   /**
@@ -96,22 +107,43 @@ export function localConfigProblems(c: LocalConfig): string[] {
   return p
 }
 
+/**
+ * One HTTP exchange over node:http, with no limit on how long the response headers take (fetch gives up after five
+ * minutes, which a long coding prompt exceeds: O7). The caller's signal, or the configured request timeout, is the
+ * watchdog.
+ */
+export function httpJson(url: URL, method: string, body: unknown, signal: AbortSignal): Promise<{ status: number; text: string }> {
+  const send = url.protocol === "https:" ? httpsRequest : httpRequest
+  return new Promise((done, fail) => {
+    const data = body === undefined ? undefined : JSON.stringify(body)
+    const req = send(url, { method, headers: { "Content-Type": "application/json", ...(data ? { "Content-Length": Buffer.byteLength(data) } : {}) }, signal }, res => {
+      const chunks: Buffer[] = []
+      res.on("data", c => chunks.push(c as Buffer))
+      res.on("end", () => done({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).toString("utf8") }))
+      res.on("error", fail)
+    })
+    req.on("error", fail)
+    if (data) req.write(data)
+    req.end()
+  })
+}
+
 /** A minimal OpenCode HTTP client. Errors carry the status and the body, so quota and login failures can be told. */
 export function openCodeHttpClient(server: ServerConfig): OpenCodeModelClient & OpenCodeCodingClient {
   const base = new URL(server.server_url)
   const request = async (path: string, method: string, body: unknown, directory: string, signal?: AbortSignal) => {
     const url = new URL(path, base)
     url.searchParams.set("directory", directory)
-    const response = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body), signal: signal ?? AbortSignal.timeout(server.request_timeout_ms ?? 30 * 60_000) })
-    const text = await response.text()
-    if (!response.ok) throw new Error(`OpenCode HTTP ${response.status}: ${text.slice(0, 2000)}`)
-    return text ? JSON.parse(text) : {}
+    const response = await httpJson(url, method, body, signal ?? AbortSignal.timeout(server.request_timeout_ms ?? 60 * 60_000))
+    if (response.status < 200 || response.status >= 300) throw new Error(`OpenCode HTTP ${response.status}: ${response.text.slice(0, 2000)}`)
+    return response.text ? JSON.parse(response.text) : {}
   }
   return {
     session: {
       create: async (r: { query: { directory: string }; body: { title: string } }) => request("/session", "POST", r.body, r.query.directory),
       prompt: async (r: { path: { id: string }; query: { directory: string }; body: unknown; signal?: AbortSignal }) => request(`/session/${encodeURIComponent(r.path.id)}/message`, "POST", r.body, r.query.directory, r.signal),
       abort: async (r: { path: { id: string }; query: { directory: string }; signal?: AbortSignal }) => request(`/session/${encodeURIComponent(r.path.id)}/abort`, "POST", {}, r.query.directory, r.signal),
+      messages: async (r: { path: { id: string }; query: { directory: string } }) => request(`/session/${encodeURIComponent(r.path.id)}/message`, "GET", undefined, r.query.directory),
     },
   } as OpenCodeModelClient & OpenCodeCodingClient
 }
@@ -128,8 +160,10 @@ export async function preflight(c: LocalConfig, fetchImpl: typeof fetch = fetch)
       url.searchParams.set("directory", s.directory)
       const response = await fetchImpl(url, { signal: AbortSignal.timeout(10_000) })
       if (!response.ok) { problems.push(`${name} server: HTTP ${response.status}`); continue }
-      const config = await response.json() as { plugin?: unknown[]; instructions?: unknown[] }
+      const config = await response.json() as { plugin?: unknown[]; instructions?: unknown[]; permission?: Record<string, unknown> }
       if (name === "management" && (config.plugin?.length || config.instructions?.length)) problems.push("management server inherits plugins or instructions; use an isolated empty configuration")
+      // A request to write outside the work tree must be refused at once, not wait for a person (O7, A3: 27 minutes).
+      if (name === "coding" && config.permission?.external_directory !== "deny") problems.push("coding server: set permission.external_directory to \"deny\" so requests outside the work tree are refused instead of waiting")
     } catch (e) { problems.push(`${name} server unreachable: ${(e as Error).message}`) }
   }
   return problems
@@ -157,8 +191,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       if (!existsSync(file)) throw new Error(`No requirement text for round ${round}: ${file}`)
       return readFileSync(file, "utf8")
     },
-    attribution: createOpenCodeAttributionTransport(management, rateLimit),
-    checks: createOpenCodeChecksTransport(management, rateLimit),
+    ...recorded(c, at, { attribution: createOpenCodeAttributionTransport(management, rateLimit), checks: createOpenCodeChecksTransport(management, rateLimit), adjudicate: createOpenCodeAdjudicationTransport(management, rateLimit) }),
     executor: () => new OpenCodeExecutor({ client: coding, providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant, agent: c.coding.agent, rateLimit }),
     executorIsStub: false,
     anchors: new GoAnchorExtractor(undefined, platform),
@@ -175,6 +208,14 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
     ...(c.scoring ? { score: scoringHook(c.scoring.command, at(c.repo_dir)) } : {}),
   }
   return { serial: new Serial(config), config }
+}
+
+function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate: AdjudicationTransport }) {
+  if (!c.recording) return t
+  const file = at(c.recording.cassette)
+  const cassette = existsSync(file) ? loadCassette(file) : emptyCassette(c.recording.label)
+  const r = recordingTransports(t, cassette, file)
+  return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate! }
 }
 
 /** Runs the scoring command for a round; its stdout must be {"passed": n, "total": m}. */

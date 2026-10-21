@@ -1,5 +1,5 @@
 {
-  "run_id": "exp2-dpipe-luna-1",
+  "run_id": "exp2-dpipe-luna56-medium-1",
   "inputs_dir": "C:/exp2/intent-compiler/exp2/inputs/dpipe",
   "state_dir": "C:/exp2/run1/state",
   "checkpoints_dir": "C:/exp2/run1/checkpoints",
@@ -10,16 +10,16 @@
     "server_url": "http://127.0.0.1:4096",
     "directory": "C:/exp2/run1/management",
     "provider": "openai",
-    "model": "gpt-6-luna-fast",
-    "variant": "high-fast",
+    "model": "gpt-5.6-luna-fast",
+    "variant": "medium",
     "request_timeout_ms": 1800000
   },
   "coding": {
     "server_url": "http://127.0.0.1:4097",
     "directory": "C:/exp2/run1/app",
     "provider": "openai",
-    "model": "gpt-6-luna-fast",
-    "variant": "high-fast",
+    "model": "gpt-5.6-luna-fast",
+    "variant": "medium",
     "agent": "build",
     "request_timeout_ms": 3600000
   },
@@ -29,25 +29,39 @@
     "management_timeout_ms": 1800000,
     "check_timeout_ms": 60000,
     "execution": {
-      "maxSteps": 12,
-      "maxObjectsPerStep": 6,
-      "maxProposals": 3,
-      "maxAttemptsPerStep": 3,
+      "repairCycles": 3,
       "maxSessions": 3,
-      "stepTimeoutMs": 1200000,
-      "roundAttempts": 30
+      "callTimeoutMs": 2400000
     }
   },
   "runner": {
     "kind": "docker",
-    "docker": ["docker"],
+    "docker": [
+      "docker"
+    ],
     "image": "sdd-unattended-preflight:latest",
     "python": "/opt/sdd-python/bin/python3",
     "buildCache": "exp2-gocache",
     "graceMs": 10000
   },
-  "tools": { "python": "python", "go": "go" },
-  "resume": { "wait_ms": 1800000, "max_resumes": 48 },
-  "rate_limit": { "delays_ms": [15000, 45000, 120000] },
-  "scoring": null
+  "tools": {
+    "python": "python",
+    "go": "go"
+  },
+  "resume": {
+    "wait_ms": 1800000,
+    "max_resumes": 48
+  },
+  "rate_limit": {
+    "delays_ms": [
+      15000,
+      45000,
+      120000
+    ]
+  },
+  "scoring": null,
+  "recording": {
+    "cassette": "C:/exp2/run1/recording/cassette.json",
+    "label": "gpt-5.6-luna-fast medium (real)"
+  }
 }

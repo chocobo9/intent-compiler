@@ -2,6 +2,7 @@ import { createOpenCodeStructuredTransport, type OpenCodeModelTransportV2Options
 import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, type AttributionTransport, type ModelRequest } from "./attribution.js"
 import { CHECKS_SCHEMA, CHECKS_SYSTEM_PROMPT, type CheckRequest, type ChecksTransport } from "./checks.js"
 import { withProviderErrors, type RateLimitPolicy } from "./provider-errors.js"
+import { ADJUDICATION_SCHEMA, ADJUDICATION_SYSTEM_PROMPT, type AdjudicationRequest, type AdjudicationTransport } from "./adjudication.js"
 
 /**
  * The attribution step over OpenCode structured output. The first answer and every repair use the same system
@@ -41,5 +42,14 @@ export function createOpenCodeChecksTransport(options: OpenCodeModelTransportV2O
       ...(call.completed_at ? { completed_at: call.completed_at } : {}),
       ...(call.structured_schema_errors?.length ? { schema_errors: call.structured_schema_errors } : {}),
     }
+  }
+}
+
+/** Rulings on disputed checks (BLOCK9 §2.3) over OpenCode structured output, the same model as the other management calls. */
+export function createOpenCodeAdjudicationTransport(options: OpenCodeModelTransportV2Options, rateLimit?: RateLimitPolicy): AdjudicationTransport {
+  const transport = withProviderErrors(createOpenCodeStructuredTransport<AdjudicationRequest>(options, ADJUDICATION_SYSTEM_PROMPT, ADJUDICATION_SCHEMA), rateLimit)
+  return async request => {
+    const call = await transport(request)
+    return { text: call.text, usage: call.usage, stub: false, ...(call.model ? { model: call.model } : {}), ...(call.provider ? { provider: call.provider } : {}) }
   }
 }

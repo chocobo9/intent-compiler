@@ -8,7 +8,7 @@ import { AuthInvalid, QuotaExhausted, type AttributionTransport } from "../../sr
 import { binaryFromSource, goBuilder } from "../../src/exp2/build.js"
 import { dockerGoBuilder, dockerRunArgs, DockerRunner, DockerScriptSandbox } from "../../src/exp2/docker.js"
 import { DEFAULT_LIMITS, SessionBroken } from "../../src/exp2/execution.js"
-import { assembleSerial, localConfigProblems, loadLocalConfig, preflight, scoringHook, type LocalConfig } from "../../src/exp2/local-config.js"
+import { assembleSerial, httpJson, localConfigProblems, loadLocalConfig, openCodeHttpClient, preflight, scoringHook, type LocalConfig } from "../../src/exp2/local-config.js"
 import { OpenCodeExecutor } from "../../src/exp2/opencode-executor.js"
 import { classifyProviderError, withRateLimitRetry } from "../../src/exp2/provider-errors.js"
 import { EnvironmentBlocked, guardedSync, isEnvironmentBlock } from "../../src/exp2/platform.js"
@@ -285,8 +285,25 @@ describe("exp2 local: the configuration file and the entry point", () => {
   it("preflight refuses a management server that inherits plugins or instructions", async () => {
     const good = JSON.parse(readFileSync(resolve(process.cwd(), "exp2/local-config.example.json"), "utf8")) as LocalConfig
     const fake = (body: unknown) => (async () => new Response(JSON.stringify(body), { status: 200 })) as unknown as typeof fetch
-    assert.deepEqual(await preflight(good, fake({ plugin: [], instructions: [] })), [])
-    assert.match((await preflight(good, fake({ plugin: ["x"] }))).join(), /inherits plugins or instructions/u)
+    assert.deepEqual(await preflight(good, fake({ plugin: [], instructions: [], permission: { external_directory: "deny" } })), [])
+    assert.match((await preflight(good, fake({ plugin: ["x"], permission: { external_directory: "deny" } }))).join(), /inherits plugins or instructions/u)
+    // A coding server that would ask before writing outside the work tree waits for a person: refused (A3, O7).
+    assert.match((await preflight(good, fake({ plugin: [], permission: { external_directory: "ask" } }))).join(), /external_directory to "deny"/u)
+  })
+
+  it("the OpenCode client waits as long as the server takes (no header timeout), and its watchdog still stops it", async () => {
+    const { createServer } = await import("node:http")
+    const server = createServer((req, res) => { setTimeout(() => { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ id: "s1", path: req.url })) }, Number(new URL(req.url!, "http://x").searchParams.get("delay") ?? 0)) })
+    await new Promise<void>(r => server.listen(0, "127.0.0.1", r))
+    const port = (server.address() as { port: number }).port
+    try {
+      const ok = await httpJson(new URL(`http://127.0.0.1:${port}/session?delay=300`), "POST", { title: "t" }, AbortSignal.timeout(5000))
+      assert.deepEqual([ok.status, JSON.parse(ok.text).id], [200, "s1"])
+      await assert.rejects(httpJson(new URL(`http://127.0.0.1:${port}/session?delay=2000`), "POST", {}, AbortSignal.timeout(200)), /abort|timeout/iu)
+      const client = openCodeHttpClient({ server_url: `http://127.0.0.1:${port}`, directory: "/w", provider: "p", model: "m" })
+      const listed = await client.session.messages!({ path: { id: "s1" }, query: { directory: "/w" } }) as { path: string }
+      assert.match(listed.path, /^\/session\/s1\/message\?directory=%2Fw$/u)
+    } finally { server.close() }
   })
 
   it("the scoring hook runs a command and reads {passed, total}", async () => {
