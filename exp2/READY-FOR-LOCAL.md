@@ -112,3 +112,15 @@ new Serial({
   - 容器里编译时 Go 缓存每次都从空开始。如果太慢，可以用 `runner.extra` 挂一个缓存卷。注意 `extra` 对检查运行也生效。
 - **官方计分**：配置里的 `scoring.command`，例如 `["node", "score.mjs", "{round}", "{commit}", "{repo}"]`，要求输出 `{"passed": n, "total": m}`。结果只写进那一轮检查点的 `report.json`、`report.md`，以及 `checkpoints/scores.jsonl`；状态文件里的 `official_score` 始终为 null，系统不读取它。
 - **Windows**：可执行文件名、解释器、命令行和子进程环境都集中在 `src/exp2/platform.ts`。Python 默认用 `python`，可以用 `tools.python` 或环境变量 `EXP2_PYTHON` 指定完整路径；Go 用 `tools.go` 或 `EXP2_GO` 指定。
+
+## 8. 第 7 块之后的变化（以本节为准，覆盖第 7 节里与之冲突的说法）
+
+- **docker**：Python 默认 `/opt/sdd-python/bin/python3`（`runner.python` 可改）；镜像没有 node，node 参考脚本直接失败。Go 构建缓存用 `runner.buildCache`（卷名或主机目录），只挂进编译容器；不要再用 `runner.extra` 挂缓存。
+- **程序名**从原文的构建命令读出（dpipe 为 `dpipe`），本地和 docker 构建都用它。
+- **限流和额度**：429、rate limit 在同一次调用里按 `rate_limit.delays_ms` 退避重试，用尽后按额度用完处理；只有明确的额度文本才直接走 `resume.wait_ms` 的等待。**本地要做**：把真实遇到的限流文本补进 `test/exp2/local.test.ts` 的 `RATE_TEXTS`。
+- **环境拦截**（Smart App Control：spawn `UNKNOWN`、"Application Control policy"）：启动重试 3 次，仍被拒时串行停下，写 `stopped-round-NN.json`，原因以 `environment:` 开头，不算步骤失败。处理完环境后用同一配置再运行即续跑。编码会话里 OpenCode 自己执行的命令仍在主机上（BLOCK7-NOTES 4.1）。
+- **预先登记**：每轮检查点有 `prediction.json`（对象状态和 sha256），`checkpoints/predictions.jsonl` 汇总；计分记录带 `prediction_sha256`。**本地要做**：把官方逐条结果对回对象，写成 `{id, passed, objects}[]`，调用 `reconcile(prediction, cases)`（`src/exp2/prediction.ts`）。对账结果不放进状态或检查点。
+- **录音**：`recordingTransports(t, cassette, file)` 包住真实的两个管理传输层，每次调用后保存回放文件；`replayTransports(loadCassette(file))` 回放（`src/exp2/recording.ts`）。**本地要做**：luna 的第一次真实运行用录音方式包一层，回放文件放在 `exp2/recordings/<名字>/`。命令行入口还没有录音开关，需要时在 `assembleSerial` 里包一层即可。
+- **比较工具**：`intent-exp2-compare --state <checkpoints/round-15/state.json> --independent <标注.json> --inputs exp2/inputs/dpipe --out cmp.md`。标注格式：`{label, rounds: [{round, answer}]}`，`answer` 是整份 `AttributionAnswer`，要能通过同一套核对。
+- **变异测试**：`intent-exp2-mutate --tree <某轮代码的副本> --state <该轮 state.json> --round <n> [--config <本地配置>] [--max 30] --out mut.md`。只对已有产物运行。
+- **消融**：配置里的 `ablation: { zoning, checks, clauses }`，都默认 true。消融运行要换 `run_id` 和全部目录。
