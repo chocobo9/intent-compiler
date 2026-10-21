@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
-import { AuthInvalid, QuotaExhausted, ReplayMiss, type ModelReply, type TokenUsage } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, ReplayMiss, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
+import { EnvironmentBlocked } from "./platform.js"
 import { coverage, EMPTY_CHECKS, replacedBasis } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef, RunOutput } from "./runner.js"
@@ -238,6 +239,7 @@ export async function deriveProbes(registry: Registry, round: number, units: rea
   const out = { probes: [] as Omit<ProbeRecord, "id">[], covered: [] as string[], uncheckable: [] as { unit: string; reason: string }[], uncovered: [] as string[], dropped: [] as { key: string; problems: string[] }[] }
   const groups: { id: string; text: string }[][] = []
   for (let i = 0; i < units.length; i += GROUP_SIZE) groups.push(units.slice(i, i + GROUP_SIZE).map(id => ({ id, text: registry.block(id)!.text })))
+  let transportFailures = 0
   for (const [gi, group] of groups.entries()) {
     let answer: ProbesAnswer | null = null, checked: ReturnType<typeof probeProblems> | null = null, call = "", lastBad = ""
     for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
@@ -246,12 +248,15 @@ export async function deriveProbes(registry: Registry, round: number, units: rea
       const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "probes" as const, group: gi + 1, attempt, request_sha256: createHash("sha256").update(text).digest("hex"), request_chars: text.length }
       let reply: ModelReply
       try { reply = await transport(request) } catch (e) {
-        if (e instanceof ReplayMiss) throw e
+        if (e instanceof ReplayMiss || e instanceof EnvironmentBlocked) throw e
         if (e instanceof QuotaExhausted || e instanceof AuthInvalid) {
           calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
           return { status: "interrupted", ...out, calls, issues: [{ code: e instanceof AuthInvalid ? "auth" : "quota", message: (e as Error).message }] }
         }
         calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
+        // A transport failure is no answer: retried without using up a repair, and past the limit the writer is unavailable.
+        if (++transportFailures > TRANSPORT_RETRIES) return { status: "interrupted", ...out, calls, issues: [{ code: "unavailable", message: `${transportFailures} probe-writer calls failed; last: ${(e as Error).message}` }] }
+        attempt--
         continue
       }
       let parsed: unknown = null

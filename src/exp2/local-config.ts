@@ -16,7 +16,7 @@ import { Exp2Store } from "./store.js"
 import type { AttributionTransport } from "./attribution.js"
 import type { ChecksTransport } from "./checks.js"
 import type { AdjudicationTransport } from "./adjudication.js"
-import { emptyCassette, loadCassette, recordingTransports } from "./recording.js"
+import { emptyCassette, loadCassette, recordingTransports, saveCassette } from "./recording.js"
 import type { ProbeTransport } from "./probes.js"
 import type { JudgeTransport } from "./judge.js"
 import { createOpenCodeJudgeTransport, createOpenCodeProbesTransport, createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
@@ -231,6 +231,8 @@ function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: A
   if (!c.recording) return t
   const file = at(c.recording.cassette)
   const cassette = existsSync(file) ? loadCassette(file) : emptyCassette(c.recording.label)
+  // Written now, so a path that cannot be written stops the run before any call is made.
+  saveCassette(file, cassette)
   const r = recordingTransports(t, cassette, file)
   return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate!, ...(r.probes ? { probes: r.probes, judge: r.judge! } : {}) }
 }

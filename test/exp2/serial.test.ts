@@ -15,7 +15,7 @@ import { Exp2Store, type Exp2State } from "../../src/exp2/store.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { ROUNDS, roundText } from "./inputs.js"
 import { ProcessCrash, serialExecutor, type Injection } from "./serial-executor.js"
-import { stubTransport } from "./stubs.js"
+import { SCRIPTS, stubTransport } from "./stubs.js"
 
 // Fixed commit dates: the same work gives the same commits, so two runs can be compared commit for commit.
 process.env.GIT_AUTHOR_DATE = "2026-10-20T00:00:00Z"
@@ -137,10 +137,10 @@ describe("exp2 block 5: the serial R1–R15 with stand-in model and executor", (
     const d = mkdtempSync(join(tmpdir(), "exp2-serial-stop-"))
     const { serial, store } = serialIn(d)
     // Swap in a model that never covers R2's profile section.
-    const inner = stubTransport({ 2: [() => ({ upsert: [], remove: [], edges_add: [], edges_remove: [], interpretations_add: [] })] })
+    const inner = stubTransport({ ...SCRIPTS, 2: [() => ({ upsert: [], remove: [], edges_add: [], edges_remove: [], interpretations_add: [] })] })
     ;(serial as unknown as { c: { attribution: AttributionTransport } }).c.attribution = inner
     const outcome = await serial.run({ to: 15 })
-    assert.deepEqual([outcome.status, outcome.last_checkpoint, outcome.stopped!.round], ["stopped", 1, 2])
+    assert.deepEqual([outcome.status, outcome.last_checkpoint, outcome.stopped!.round], ["stopped", 1, 2], outcome.stopped!.reason)
     const stop = JSON.parse(readFileSync(join(d, "checkpoints", "stopped-round-02.json"), "utf8")) as { reason: string; issues: { code: string }[] }
     assert.match(stop.reason, /attribution did not pass/u)
     assert.ok(stop.issues.some(i => i.code === "uncovered"))

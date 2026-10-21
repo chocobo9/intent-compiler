@@ -128,8 +128,11 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
 
     const broken = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-attr-")), "t")
     const down = await broken.ingestRound(1, roundText(1), async () => { throw new Error("connection reset") })
-    assert.equal(down.status, "failed")
-    // A failed call uses up one attempt; every one is recorded.
+    // A failed call is retried without using up an attempt; past the retries the step is unavailable (BLOCK10 §7.2),
+    // an interruption that names the cause, not a failed attribution. Every call is recorded.
+    assert.equal(down.status, "interrupted")
+    assert.deepEqual(down.issues!.map(i => i.code), ["unavailable"])
+    assert.match(down.issues![0].message, /3 attribution calls failed; last: connection reset/u)
     const calls = broken.inspect().calls
     assert.equal(calls.length, 3)
     assert.ok(calls.every(c => c.error === "connection reset" && c.stub === false))

@@ -11,6 +11,14 @@
  */
 export class EnvironmentBlocked extends Error {}
 
+/** A local file or directory the run needs (state, recording, output) cannot be written: an environment error too. */
+export class LocalWriteFailed extends EnvironmentBlocked {}
+
+/** Runs a local write; a failure becomes LocalWriteFailed naming what was written where. */
+export function writing<T>(what: string, path: string, f: () => T): T {
+  try { return f() } catch (e) { throw new LocalWriteFailed(`cannot write ${what} at ${path}: ${(e as Error).message}`) }
+}
+
 /** Whether a spawn failure (or its output) is the host blocking the program. */
 export function isEnvironmentBlock(e: unknown, output = ""): boolean {
   const code = (e as NodeJS.ErrnoException | undefined)?.code

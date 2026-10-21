@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
-import { AuthInvalid, QuotaExhausted, ReplayMiss, type ModelReply, type TokenUsage } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, ReplayMiss, RoleUnavailable, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
+import { EnvironmentBlocked } from "./platform.js"
 import type { CheckRecord } from "./checks.js"
 import type { Registry } from "./registry.js"
 import { annotate } from "./source.js"
@@ -101,14 +102,16 @@ export function adjudicationProblems(registry: Registry, value: unknown): string
 /** One ruling, with one repair when the answer has definite errors. Null when no valid answer came back. */
 export async function adjudicate(registry: Registry, round: number, check: CheckRecord, run: CheckRun, kind: DisputeKind, detail: string, transport: AdjudicationTransport, callId: (n: number) => string): Promise<{ ruling: Omit<Ruling, "call"> | null; calls: AdjudicationCallRecord[] }> {
   const calls: AdjudicationCallRecord[] = []
-  let request = buildAdjudicationRequest(registry, round, check, run, kind, detail)
+  let request = buildAdjudicationRequest(registry, round, check, run, kind, detail), transportFailures = 0
   for (let attempt = 1; attempt <= 2; attempt++) {
     const text = requestJson(request)
     const base = { id: callId(calls.length + 1), round, stage: "acceptance" as const, step: "adjudication" as const, check: check.id, kind, request_sha256: createHash("sha256").update(text).digest("hex"), request_chars: text.length }
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
-      if (e instanceof ReplayMiss || e instanceof QuotaExhausted || e instanceof AuthInvalid) throw e
+      if (e instanceof ReplayMiss || e instanceof QuotaExhausted || e instanceof AuthInvalid || e instanceof EnvironmentBlocked) throw e
       calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
+      if (++transportFailures > TRANSPORT_RETRIES) throw new RoleUnavailable("adjudication", `${transportFailures} ruling calls failed; last: ${(e as Error).message}`, calls)
+      attempt--
       continue
     }
     let parsed: unknown = null, problems: string[]

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
-import { AuthInvalid, QuotaExhausted, type AttributionTransport, type ModelReply } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, RoleUnavailable, type AttributionTransport, type ModelReply } from "./attribution.js"
 import { codeFacts, type ChecksTransport } from "./checks.js"
 import { executeRound, type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
 import { head, initRepo, resetTo } from "./git.js"
@@ -189,10 +189,10 @@ export class Serial {
       try {
         outcome = await this.runRound(round)
       } catch (e) {
-        if (e instanceof AuthInvalid || e instanceof EnvironmentBlocked) {
+        if (e instanceof AuthInvalid || e instanceof EnvironmentBlocked || e instanceof RoleUnavailable) {
           // A dead login, or a host that will not start programs, is not waited out: keep what the attempt spent,
           // go back to the checkpoint, stop and report. Neither counts as a failed step.
-          const why = e instanceof AuthInvalid ? `login invalid: ${e.message}` : `environment: ${e.message}`
+          const why = e instanceof AuthInvalid ? `login invalid: ${e.message}` : e instanceof RoleUnavailable ? `unavailable: ${e.message}` : `environment: ${e.message}`
           this.salvage(round, why)
           await this.restore(last)
           const stop = { status: "stopped", reason: why, issues: [] }
@@ -359,8 +359,8 @@ export function mergeStatuses(checks: readonly ObjectStatus[], probes: readonly 
 
 /** The error a stopped management step stands for: a spent quota, or an invalid login. */
 function stopping(issues: { code: string; message: string }[], where: string): Error {
-  const auth = issues.find(i => i.code === "auth")
-  return auth ? new AuthInvalid(`${where}: ${auth.message}`) : new QuotaExhausted(where)
+  const auth = issues.find(i => i.code === "auth"), gone = issues.find(i => i.code === "unavailable")
+  return auth ? new AuthInvalid(`${where}: ${auth.message}`) : gone ? new RoleUnavailable(where, gone.message) : new QuotaExhausted(where)
 }
 
 function sumUsage(a: StageCost["tokens"], b: StageCost["tokens"]): StageCost["tokens"] {

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
-import { AuthInvalid, QuotaExhausted, ReplayMiss, type ModelReply, type TokenUsage } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, ReplayMiss, RoleUnavailable, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
+import { EnvironmentBlocked } from "./platform.js"
 import type { ProbeOutput, ProbeRecord, ProbeRun } from "./probes.js"
 import { sourcesUpTo } from "./probes.js"
 import type { Registry } from "./registry.js"
@@ -150,6 +151,7 @@ export async function judgeRuns(registry: Registry, round: number, probes: reado
   }
   const sources = pending.length ? sourcesUpTo(registry, round) : ""
   const size = options.batchSize ?? 25
+  let transportFailures = 0
   for (let i = 0; i < pending.length; i += size) {
     const batch = pending.slice(i, i + size)
     let ask = batch.map(b => b.item)
@@ -160,8 +162,11 @@ export async function judgeRuns(registry: Registry, round: number, probes: reado
       const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "judge" as const, items: ask.length, request_sha256: createHash("sha256").update(text).digest("hex"), request_chars: text.length }
       let reply: ModelReply
       try { reply = await transport(request) } catch (e) {
-        if (e instanceof ReplayMiss || e instanceof QuotaExhausted || e instanceof AuthInvalid) throw e
+        if (e instanceof ReplayMiss || e instanceof QuotaExhausted || e instanceof AuthInvalid || e instanceof EnvironmentBlocked) throw e
         calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
+        // No verdict is no "cannot tell": retried without using up an attempt, then the judge is unavailable.
+        if (++transportFailures > TRANSPORT_RETRIES) throw new RoleUnavailable("judge", `${transportFailures} judge calls failed; last: ${(e as Error).message}`, calls)
+        attempt--
         continue
       }
       let parsed: unknown = null

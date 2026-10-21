@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto"
-import { readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { dirname } from "node:path"
+import { writing } from "./platform.js"
 import { requestJson } from "../model/opencode-transport.js"
 import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, ReplayMiss, type AttributionTransport, type ModelReply, type ModelRequest, type TokenUsage } from "./attribution.js"
 import { CHECKS_SCHEMA, CHECKS_SYSTEM_PROMPT, type CheckRequest, type ChecksTransport } from "./checks.js"
@@ -68,8 +70,9 @@ export function loadCassette(file: string): Cassette {
   return c
 }
 
+/** Saves the cassette, making its directory first; a failure is a LocalWriteFailed (the run stops, nothing is lost silently). */
 export function saveCassette(file: string, c: Cassette): void {
-  writeFileSync(file, JSON.stringify(c, null, 1) + "\n", "utf8")
+  writing("the recording", file, () => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, JSON.stringify(c, null, 1) + "\n", "utf8") })
 }
 
 function recorder<R>(step: RecordedStep, inner: (r: R) => Promise<ModelReply>, cassette: Cassette, onEntry?: () => void): (r: R) => Promise<ModelReply> {

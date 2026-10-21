@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process"
 import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
-import type { TokenUsage } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, RoleUnavailable, type TokenUsage } from "./attribution.js"
 import { codeFacts } from "./checks.js"
 import type { Product } from "./detect.js"
 import { executeRound, repairMessage, type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
@@ -100,7 +100,12 @@ export interface DetectedProduct {
 export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport }, products: readonly Product[], round = 1): Promise<{ written: ProbeRoundRecord | null; products: DetectedProduct[] }> {
   const { store } = deps
   const written = store.inspect().probe_rounds.some(r => r.round === round && r.status === "accepted") ? null : await store.deriveRoundProbes(round, deps.probes)
-  if (written?.status === "interrupted") throw new Error(`probe writing interrupted: ${JSON.stringify(written.issues)}`)
+  // A writer that could not be reached, or wrote nothing usable, is no result: the harness stops with the cause.
+  if (written?.status === "interrupted") {
+    const i = written.issues?.[0]
+    throw i?.code === "quota" ? new QuotaExhausted(`probe writing: ${i.message}`) : i?.code === "auth" ? new AuthInvalid(`probe writing: ${i.message}`) : new RoleUnavailable("probe writing", i?.message ?? "interrupted")
+  }
+  if (written && written.units.length && !written.entered.length) throw new Error(`probe writing admitted no probe for ${written.units.length} units (${written.calls.length} calls; ${written.dropped.length} dropped)`)
   const out: DetectedProduct[] = []
   for (const p of products) {
     const b = deps.build(p.path, `probe-${p.name}`)

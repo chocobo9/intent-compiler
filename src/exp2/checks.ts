@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
-import { AuthInvalid, QuotaExhausted, ReplayMiss, type ModelReply, type TokenUsage } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, ReplayMiss, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
+import { EnvironmentBlocked } from "./platform.js"
 import type { Registry } from "./registry.js"
 import { safePath, type CheckInput, type ScriptSandbox } from "./runner.js"
 import { annotate, LEVEL_RANK, parseRef, roundOf, type SourceBlock } from "./source.js"
@@ -315,7 +316,7 @@ export interface CheckRequest {
 export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
-  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth"
+  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth" | "unavailable"
 
 /** `blocks`: for code, the units an `uncovered` issue names. */
 export interface CheckIssue { code: CheckIssueCode; check?: string; message: string; blocks?: string[] }
@@ -733,20 +734,22 @@ export async function deriveChecks(registry: Registry, round: number, library: r
   const facts = codeFacts(registry, round)
   let draft = EMPTY_CHECKS
   let issues: CheckIssue[] = []
-  let parsedOnce = false
+  let parsedOnce = false, transportFailures = 0
   for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
     const request = buildCheckRequest(registry, round, library, events, draft, issues)
     const text = requestJson(request)
     const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "checks" as const, kind: attempt === 1 ? "attribute" as const : "repair" as const, attempt, request, request_chars: text.length, request_sha256: createHash("sha256").update(text).digest("hex") }
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
-      if (e instanceof ReplayMiss) throw e
-      // As in attribution: a spent quota stops the step; any other failure uses up this attempt.
+      if (e instanceof ReplayMiss || e instanceof EnvironmentBlocked) throw e
+      // As in attribution: a spent quota stops the step; a transport failure is retried without using up an attempt.
       const stop = e instanceof QuotaExhausted ? "quota" as const : e instanceof AuthInvalid ? "auth" as const : null
       const failed: CheckIssue[] = [{ code: stop ?? "transport", message: `The model call failed: ${(e as Error).message}` }]
       calls.push({ ...base, response_text: "", issues: failed, usage: zero(), stub: false, error: (e as Error).message })
       if (stop) return { status: "interrupted", calls, issues: failed }
+      if (++transportFailures > TRANSPORT_RETRIES) return { status: "interrupted", calls, issues: [{ code: "unavailable", message: `${transportFailures} check calls failed; last: ${(e as Error).message}` }] }
       if (!issues.length) issues = failed
+      attempt--
       continue
     }
     const record: CheckCallRecord = { ...base, response_text: reply.text, issues: [], usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) }

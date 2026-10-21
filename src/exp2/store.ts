@@ -1,6 +1,7 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { attributeRound, type AttributionTransport, type Issue, type ModelCallRecord } from "./attribution.js"
+import { attributeRound, RoleUnavailable, type AttributionTransport, type Issue, type ModelCallRecord } from "./attribution.js"
+import { writing } from "./platform.js"
 import { materialize, type Registry, type RoundAcceptance, type Signal } from "./registry.js"
 import { contentHash } from "./source.js"
 import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport, type Coverage } from "./checks.js"
@@ -108,7 +109,7 @@ export class Exp2Store {
   constructor(directory: string, readonly runId: string, ablation: Ablation = {}) {
     this.ablation = ablationOff(ablation)
     this.directory = resolve(directory)
-    mkdirSync(this.directory, { recursive: true })
+    writing("the state directory", this.directory, () => mkdirSync(this.directory, { recursive: true }))
     this.file = resolve(this.directory, "exp2-state.json")
   }
 
@@ -249,13 +250,21 @@ export class Exp2Store {
 
   /** Judges one program's runs of active probes; verdicts already kept for the same output are reused. */
   async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number } = {}): Promise<Finding[]> {
-    return this.transaction(async s => {
+    const out = await this.transaction(async s => {
       const registry = this.registry(s)
-      const out = await judgeRuns(registry, round, activeProbes(s.probes, s.probe_events), runs, s.judgments, transport, { callId: n => `J${s.judge_calls.length + n}`, ...options })
-      s.judge_calls.push(...out.calls)
-      s.judgments.push(...out.judgments)
-      return out.findings
+      let r: Awaited<ReturnType<typeof judgeRuns>>
+      try { r = await judgeRuns(registry, round, activeProbes(s.probes, s.probe_events), runs, s.judgments, transport, { callId: n => `J${s.judge_calls.length + n}`, ...options }) } catch (e) {
+        // The failed calls are kept; the judge's being unavailable goes up once they are saved.
+        if (!(e instanceof RoleUnavailable)) throw e
+        s.judge_calls.push(...(e.calls as JudgeCallRecord[]))
+        return e
+      }
+      s.judge_calls.push(...r.calls)
+      s.judgments.push(...r.judgments)
+      return r.findings
     })
+    if (out instanceof RoleUnavailable) throw out
+    return out
   }
 
   async settle(round: number, disputes: readonly Dispute[], transport: AdjudicationTransport): Promise<{ wrong: Set<string>; right: Set<string> }> {
@@ -319,8 +328,7 @@ export class Exp2Store {
   private save(before: Exp2State, after: Exp2State): void {
     appendOnly(before, after)
     const temp = `${this.file}.${process.pid}.tmp`
-    writeFileSync(temp, JSON.stringify(after, null, 2) + "\n", "utf8")
-    renameSync(temp, this.file)
+    writing("the state", this.file, () => { writeFileSync(temp, JSON.stringify(after, null, 2) + "\n", "utf8"); renameSync(temp, this.file) })
   }
 
   private async transaction<T>(action: (s: Exp2State) => Promise<T> | T): Promise<T> {

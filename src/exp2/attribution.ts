@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { EnvironmentBlocked } from "./platform.js"
 import { requestJson } from "../model/opencode-transport.js"
 import { annotate, parseRef, roundOf, type RoundSource, type SourceBlock } from "./source.js"
 import { isWithin, LIVE_STATES, nameKey, type Assignment, type AttributionAnswer, type Override, type Reference, type Registry, type RoundAcceptance } from "./registry.js"
@@ -92,10 +93,21 @@ export class AuthInvalid extends Error {}
 /** A replayed run asked something the recording does not hold: the run stops; it never falls back to a stand-in. */
 export class ReplayMiss extends Error {}
 
+/**
+ * A role's calls keep failing for a reason outside the model's answer (network, server, a watchdog): the step cannot
+ * go on, and the run stops and says so rather than carry on without it (BLOCK10 §7.2). `calls` are the failed calls.
+ */
+export class RoleUnavailable extends Error {
+  constructor(readonly step: string, message: string, readonly calls: unknown[] = []) { super(`${step}: ${message}`) }
+}
+
+/** Transport failures one step tolerates before its role counts as unavailable; they do not use up a repair attempt. */
+export const TRANSPORT_RETRIES = 2
+
 export type IssueCode =
   | "unparseable" | "shape" | "unknown_block" | "not_this_round" | "hash_mismatch" | "duplicate" | "overlap" | "uncovered"
   | "object_choice" | "unknown_object" | "name_taken" | "change_shape" | "range_invalid" | "target_unknown"
-  | "target_not_earlier" | "target_unowned" | "target_replaced" | "by_outside_block" | "reference_invalid" | "transport" | "quota" | "auth"
+  | "target_not_earlier" | "target_unowned" | "target_replaced" | "by_outside_block" | "reference_invalid" | "transport" | "quota" | "auth" | "unavailable"
 
 /** One problem; when one root cause affects several blocks, a single issue names them all in `blocks`. */
 export interface Issue { code: IssueCode; block?: string; blocks?: string[]; message: string }
@@ -484,6 +496,7 @@ export async function attributeRound(registry: Registry, round: number, transpor
   const calls: ModelCallRecord[] = []
   let draft: AttributionAnswer = EMPTY_DRAFT
   let issues: Issue[] = []
+  let transportFailures = 0
   for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
     const request = buildRequest(registry, round, draft, issues)
     const kind = attempt === 1 ? "attribute" : "repair"
@@ -491,15 +504,18 @@ export async function attributeRound(registry: Registry, round: number, transpor
     const sha = createHash("sha256").update(text).digest("hex")
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
-      if (e instanceof ReplayMiss) throw e
-      // Keep the record of a failed call. A spent quota stops here; anything else uses up this attempt.
+      if (e instanceof ReplayMiss || e instanceof EnvironmentBlocked) throw e
+      // Keep the record of a failed call. A spent quota stops here; a transport failure is retried without using up
+      // an attempt, a few times, and then the step stops as unavailable.
       const stop = e instanceof QuotaExhausted ? "quota" as const : e instanceof AuthInvalid ? "auth" as const : null
       const failed: Issue[] = [{ code: stop ?? "transport", message: `The model call failed: ${(e as Error).message}` }]
       calls.push({ id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind, attempt,
         request, request_chars: text.length, request_sha256: sha, response_text: "", issues: failed, usage: usageOf({ text: "" }), stub: false, error: (e as Error).message })
       if (stop) return { status: "interrupted", calls, issues: failed }
+      if (++transportFailures > TRANSPORT_RETRIES) return { status: "interrupted", calls, issues: [{ code: "unavailable", message: `${transportFailures} attribution calls failed; last: ${(e as Error).message}` }] }
       // The draft stays as it was; with no problems of its own yet, the next request says why it is asked again.
       if (!issues.length) issues = failed
+      attempt--
       continue
     }
     const record: ModelCallRecord = {
