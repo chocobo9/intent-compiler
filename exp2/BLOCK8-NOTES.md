@@ -32,8 +32,8 @@
 
 **检查推导 R1–R3**：走完整串行，编码用替身执行方，构建、检查和参考脚本都在本地运行（录音时在 docker 里）。三轮都在修补 1 次后通过，录音回答全部用上。入库 26、17、12 条，合计 55 条，其中强检查 49 条，与录音时相同。首答的问题条数：
 
-- R1：9 条。录音时第 7 块的代码报 9 条，现在仍是 9 条，因为同一检查里没有重复的同类问题；verbatim_mismatch 的报错现在指出改走推导，basis_not_object 的报错指出 uses 的路径。
-- R2：3 条（录音时 6 条，同一检查里的合并了）。
+- R1：共 9 条，其中 verbatim_mismatch 7 条，分属 7 个检查（README 记的 9 条 verbatim_mismatch 里，同一检查的已合并）；verbatim_mismatch 的报错现在指出改走推导，basis_not_object 的报错指出 uses 的路径。
+- R2：3 条 verbatim_mismatch（README 记 6 条，同一检查里的合并了）。
 - R3：1 条。
 
 **单元情形**（真实原文）：
