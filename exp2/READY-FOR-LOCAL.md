@@ -130,3 +130,17 @@ new Serial({
 - **回放已有录音**：请求字节随提示词和报错变化。录音和当前代码不是同一版本时，用 `replayByRound(loadCassette(file))`：按步骤和轮次、按回答顺序回放，剩下没用上的回答由 `unused()` 列出。`replayTransports` 只用于同一版本代码录下的文件。
 - **新状态 amended**：代码块、表格被新原文修订时不再被替换，工单原文区里两者都在，标明新原文优先。看工单时注意这个标记。
 - 第一批的 `exp2/recordings/haiku-reference/cassette.json` 已不再被测试使用，第二批的 `batch2/cassette.json` 包含它的 4 条回答。
+
+## 10. 第 9 块之后的变化（以本节为准，与前面冲突的地方以这里为准）
+
+- **执行**：不再分步。每轮一个编码会话拿到工单，一次做完。之后代码构建、跑整个检查库、提交一个周期；有失败就把证据发回同一会话，最多 `limits.execution.repairCycles` 次（默认 3）。限额现在只有三项：`repairCycles`、`maxSessions`、`callTimeoutMs`，原来的分步限额已删除。执行方可以在回复里写 `CONTEST <检查编号>: …` 对检查提出异议，由裁决调用决定。
+- **裁决**：用管理服务器、同一个模型，配置里不用另加。每条有争议的检查只裁决一次，结果记在状态的 `rulings` 里。
+- **模型**：示例配置的管理调用和编码都是 `gpt-5.6-luna-fast` medium。**本地要做**：OpenCode 配置里给 `gpt-5.6-luna-fast` 也设上 promptCacheKey（O8：现在只给 gpt-6 设了，修补请求的缓存读大多是 0）。
+- **编码服务器**：
+  - 用 `GIT_PAGER=cat`、`PAGER=cat` 启动；
+  - 配置里设 `"permission": { "external_directory": "deny" }`，否则连接前检查不通过；
+  - 若 SDD 单独执行的编码代理是在 `sdd-unattended-preflight` 镜像里跑的，OpenCode 也放进同一镜像（DESIGN §12c 第 3 条）。
+- **客户端**：IC 的 OpenCode 客户端改用 `node:http`，不再有 5 分钟的响应头超时。单次请求的上限是 `request_timeout_ms`（默认 60 分钟），编码时由 `callTimeoutMs` 的看门狗兜底，超时就中止会话。
+- **token**：编码的 token 按会话全部助手消息加总（读 `/session/{id}/message`）。编码提示不再使用 json_schema。
+- **录音**：配置项 `recording: { cassette, label }`。打开后，每次管理调用（归属、检查、裁决）都在调用后写进这个文件；续跑时接着往后写。回放用 `replayByRound`。
+- **离线验收**：`intent-exp2-detect --products <list.tsv> --state <state.json> [--config <file>] --out detect.md`，见 BLOCK9-NOTES 第 6 节。state 用含 Haiku R1–R3 检查的那份（例如 hk2 串行的 store 状态）。
