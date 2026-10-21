@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
-export const PRODUCTS = ["bare_219", "bare_rep2_218", "bare_rep3_218", "bare_rep4_218", "shell_191", "cf_218", "cf_rep2_217", "cf_rep3_203", "cf_rep4_215", "IC_215", "luna56m_201", "luna56m_208", "luna56m_219", "luna6m_91", "luna6m_84", "luna6m_122"]
+export const PRODUCTS = process.env.PRODUCTS ? process.env.PRODUCTS.split(",") : ["bare_219", "bare_rep2_218", "bare_rep3_218", "bare_rep4_218", "shell_191", "cf_218", "cf_rep2_217", "cf_rep3_203", "cf_rep4_215", "IC_215", "luna56m_201", "luna56m_208", "luna56m_219", "luna6m_91", "luna6m_84", "luna6m_122"]
 const BUILDS = join(process.cwd(), "hk2", "detect9", "builds")
 const units = Object.fromEntries(JSON.parse(readFileSync("hk2/judge/r1-units.json", "utf8")).map(u => [u.id, u.text]))
 const cut = (s, n = 1500) => (s.length > n ? s.slice(0, n) + `…(${s.length - n} more chars)` : s)

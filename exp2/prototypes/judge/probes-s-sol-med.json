@@ -1,0 +1,2872 @@
+{
+ "probes": [
+  {
+   "id": "g1_ingest-types-and-rejected",
+   "args": [
+    "ingest",
+    "--input",
+    "raw.csv",
+    "--schema",
+    "schema.json",
+    "--output",
+    "clean.csv"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id,value,label,timestamp\n10,2.5,Alpha,2024-01-01T00:00:00Z\n2,0,,2023-01-01T00:00:00Z\nx,3,Beta,2024-01-01T00:00:00Z\n4,2,Gamma,2024-01-01\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true},{\"name\":\"value\",\"type\":\"float\",\"required\":true},{\"name\":\"label\",\"type\":\"string\",\"required\":false},{\"name\":\"timestamp\",\"type\":\"datetime\",\"required\":true}],\"primary_key\":[\"id\"]}"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S2.P1.s1",
+     "trigger_values": [
+      "ingest",
+      "--input",
+      "raw.csv",
+      "--schema",
+      "schema.json",
+      "--output",
+      "clean.csv"
+     ],
+     "wrong_would": "Reject the documented ingest invocation or fail to create clean.csv."
+    },
+    {
+     "unit": "R1.S2.P2.s1",
+     "trigger_values": [
+      "raw.csv",
+      "id,value,label,timestamp"
+     ],
+     "wrong_would": "Treat the header as data, reject it for non-integer id, or omit the CSV header from clean.csv."
+    },
+    {
+     "unit": "R1.S2.P2.s2",
+     "trigger_values": [
+      "x",
+      "2024-01-01",
+      "2024-01-01T00:00:00Z",
+      "2.5"
+     ],
+     "wrong_would": "Accept x as an integer or 2024-01-01 as an RFC 3339 datetime, or reject valid floating-point and RFC 3339 values."
+    },
+    {
+     "unit": "R1.S2.P6.s1",
+     "trigger_values": [
+      "x,3,Beta,2024-01-01T00:00:00Z",
+      "4,2,Gamma,2024-01-01",
+      "clean.csv"
+     ],
+     "wrong_would": "Place invalid records in clean.csv, omit clean.csv.rejected, or write rejected rows without the appended rejection_reason header and reasons."
+    }
+   ],
+   "units": [
+    "R1.S2.P1.s1",
+    "R1.S2.P2.s1",
+    "R1.S2.P2.s2",
+    "R1.S2.P6.s1"
+   ]
+  },
+  {
+   "id": "g1_ingest-validation-priority-and-unique",
+   "args": [
+    "ingest",
+    "--input",
+    "raw.csv",
+    "--schema",
+    "schema.json",
+    "--output",
+    "clean.csv"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id,value,label\nx,-1,bad\n9,-1,bad\n10,1,bad\n7,-1,bad\n7,1,Good\n7,2,Later\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true,\"unique\":true},{\"name\":\"value\",\"type\":\"float\",\"required\":true,\"min\":0,\"max\":10},{\"name\":\"label\",\"type\":\"string\",\"required\":true,\"pattern\":\"^[A-Z]\"}],\"primary_key\":[\"id\"]}"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S2.P3.s2",
+     "trigger_values": [
+      "7,1,Good",
+      "7,2,Later",
+      "\"unique\":true"
+     ],
+     "wrong_would": "Keep both valid id=7 rows, keep Later instead of Good, or reject Later with a reason other than duplicate value for unique column: id."
+    },
+    {
+     "unit": "R1.S2.P3.s4",
+     "trigger_values": [
+      "\"pattern\":\"^[A-Z]\"",
+      "10,1,bad"
+     ],
+     "wrong_would": "Accept lowercase bad or reject it with a reason other than value does not match pattern for column label: bad."
+    },
+    {
+     "unit": "R1.S2.P4.s1",
+     "trigger_values": [
+      "x,-1,bad",
+      "9,-1,bad",
+      "10,1,bad"
+     ],
+     "wrong_would": "Report the range or pattern violation for x,-1,bad instead of its invalid id type, or report the pattern violation for 9,-1,bad instead of the value range violation."
+    },
+    {
+     "unit": "R1.S2.P4.s2",
+     "trigger_values": [
+      "7,-1,bad",
+      "7,1,Good",
+      "7,2,Later"
+     ],
+     "wrong_would": "Count the earlier invalid id=7 row as the unique occurrence and reject Good, or keep Later instead of the first valid occurrence Good."
+    }
+   ],
+   "units": [
+    "R1.S2.P3.s2",
+    "R1.S2.P3.s4",
+    "R1.S2.P4.s1",
+    "R1.S2.P4.s2"
+   ]
+  },
+  {
+   "id": "g1_ingest-composite-bounds-checksum",
+   "args": [
+    "ingest",
+    "--input",
+    "raw.csv",
+    "--schema",
+    "schema.json",
+    "--output",
+    "clean.csv"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "region,id,value\nB,10,1\nA,10,0.5\nA,2,0\nA,3,1.01\nA,-1,0.4\na,1,0.3\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"region\",\"type\":\"string\",\"pattern\":\"^[A-Z]\"},{\"name\":\"id\",\"type\":\"int\",\"min\":0,\"max\":10},{\"name\":\"value\",\"type\":\"float\",\"min\":0,\"max\":1}],\"primary_key\":[\"region\",\"id\"]}"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S2.P3.s3",
+     "trigger_values": [
+      "\"min\":0,\"max\":10",
+      "\"min\":0,\"max\":1",
+      "A,3,1.01",
+      "A,-1,0.4",
+      "B,10,1",
+      "A,2,0"
+     ],
+     "wrong_would": "Accept 1.01 or -1, reject inclusive boundary values 0, 1, or 10, or give an out-of-range rejection reason naming the wrong column or value."
+    },
+    {
+     "unit": "R1.S2.P5.s1",
+     "trigger_values": [
+      "\"primary_key\":[\"region\",\"id\"]",
+      "A,10,0.5",
+      "A,2,0",
+      "B,10,1"
+     ],
+     "wrong_would": "Sort by id alone, preserving A,10 before A,2, or reject the two-column key rather than sort by region and then numeric id."
+    },
+    {
+     "unit": "R1.S2.P6.s3",
+     "trigger_values": [
+      "clean.csv",
+      "--output"
+     ],
+     "wrong_would": "Omit clean.csv.sha256, hash raw.csv instead of clean.csv, or write the digest without its final newline."
+    }
+   ],
+   "units": [
+    "R1.S2.P3.s3",
+    "R1.S2.P5.s1",
+    "R1.S2.P6.s3"
+   ]
+  },
+  {
+   "id": "g1_transform-ordered-operations",
+   "args": [
+    "transform",
+    "--input",
+    "raw.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "final.csv",
+    "--seed",
+    "12345"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id,value,label\n1,2,Low\n2,5,High\n3,7,Top\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"score\",\"expression\":\"value * 2 + 1\"},{\"op\":\"filter\",\"column\":\"score\",\"condition\":\"gt\",\"threshold\":10},{\"op\":\"rename\",\"from\":\"label\",\"to\":\"category\"},{\"op\":\"sort\",\"column\":\"score\",\"order\":\"desc\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P1.s1",
+     "trigger_values": [
+      "transform",
+      "--input",
+      "raw.csv",
+      "--recipe",
+      "recipe.json",
+      "--output",
+      "final.csv",
+      "--seed",
+      "12345"
+     ],
+     "wrong_would": "Reject the documented transform invocation or ignore the supplied recipe or seed flag."
+    },
+    {
+     "unit": "R1.S3.P2.s2",
+     "trigger_values": [
+      "\"op\":\"derive\"",
+      "\"column\":\"score\"",
+      "\"op\":\"rename\"",
+      "\"op\":\"sort\""
+     ],
+     "wrong_would": "Apply filter before derive and fail to find score, or apply sort before deriving score rather than processing recipe entries in array order."
+    },
+    {
+     "unit": "R1.S3.P24.s1",
+     "trigger_values": [
+      "final.csv",
+      "\"order\":\"desc\""
+     ],
+     "wrong_would": "Write intermediate rows rather than the final renamed and sorted CSV, or omit final.csv.sha256 or hash an intermediate file."
+    },
+    {
+     "unit": "R1.S3.P2.s5",
+     "trigger_values": [
+      "\"name\":\"score\"",
+      "\"expression\":\"value * 2 + 1\"",
+      "2,5,High"
+     ],
+     "wrong_would": "Leave out the appended score column, copy value unchanged, or calculate score for value 5 as 10 rather than 11."
+    }
+   ],
+   "units": [
+    "R1.S3.P1.s1",
+    "R1.S3.P2.s2",
+    "R1.S3.P24.s1",
+    "R1.S3.P2.s5"
+   ]
+  },
+  {
+   "id": "g1_transform-all-filter-conditions",
+   "args": [
+    "transform",
+    "--input",
+    "raw.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "final.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id,v,w,x,y,z\n1,3,2,3,4,4\n2,2,2,3,4,4\n3,3,1,3,4,4\n4,3,2,4,4,4\n5,3,2,3,5,4\n6,3,2,3,4,5\n9,3,2,3,4,4\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"filter\",\"column\":\"v\",\"condition\":\"gt\",\"threshold\":2},{\"op\":\"filter\",\"column\":\"w\",\"condition\":\"gte\",\"threshold\":2},{\"op\":\"filter\",\"column\":\"x\",\"condition\":\"lt\",\"threshold\":4},{\"op\":\"filter\",\"column\":\"y\",\"condition\":\"lte\",\"threshold\":4},{\"op\":\"filter\",\"column\":\"z\",\"condition\":\"eq\",\"threshold\":4},{\"op\":\"filter\",\"column\":\"id\",\"condition\":\"neq\",\"threshold\":9}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P2.s4",
+     "trigger_values": [
+      "\"condition\":\"gt\"",
+      "\"condition\":\"gte\"",
+      "\"condition\":\"lt\"",
+      "\"condition\":\"lte\"",
+      "\"condition\":\"eq\"",
+      "\"condition\":\"neq\"",
+      "2,2,2,3,4,4",
+      "3,3,1,3,4,4",
+      "4,3,2,4,4,4",
+      "5,3,2,3,5,4",
+      "6,3,2,3,4,5",
+      "9,3,2,3,4,4"
+     ],
+     "wrong_would": "Keep any of ids 2, 3, 4, 5, 6, or 9 by misapplying a strict/inclusive/equality condition, or remove the sole row id 1 that satisfies all six."
+    }
+   ],
+   "units": [
+    "R1.S3.P2.s4"
+   ]
+  },
+  {
+   "id": "g1_transform-derive-decimal-and-nan",
+   "args": [
+    "transform",
+    "--input",
+    "raw.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "final.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"half\",\"expression\":\"5 / 2\"},{\"op\":\"derive\",\"name\":\"whole\",\"expression\":\"10 / 2\"},{\"op\":\"derive\",\"name\":\"undefined\",\"expression\":\"0 / 0\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P8.s1",
+     "trigger_values": [
+      "5 / 2",
+      "10 / 2"
+     ],
+     "wrong_would": "Write 2.50 or 5.0 rather than the shortest decimal representations 2.5 and 5."
+    },
+    {
+     "unit": "R1.S3.P8.s2",
+     "trigger_values": [
+      "0 / 0"
+     ],
+     "wrong_would": "Write an empty cell, zero, an error, or lowercase nan instead of literal NaN."
+    }
+   ],
+   "units": [
+    "R1.S3.P8.s1",
+    "R1.S3.P8.s2"
+   ]
+  },
+  {
+   "id": "g1_transform-expression-precedence",
+   "args": [
+    "transform",
+    "--input",
+    "raw.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "final.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"or_result\",\"expression\":\"1 || 0 && 0\"},{\"op\":\"derive\",\"name\":\"and_result\",\"expression\":\"-1 && 1\"},{\"op\":\"derive\",\"name\":\"equality_result\",\"expression\":\"2 == 1 < 2\"},{\"op\":\"derive\",\"name\":\"relational_result\",\"expression\":\"3 > 2 + 1\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P3.s2",
+     "trigger_values": [
+      "1 || 0 && 0"
+     ],
+     "wrong_would": "Evaluate left to right as (1 || 0) && 0 and write 0 instead of 1."
+    },
+    {
+     "unit": "R1.S3.P3.s3",
+     "trigger_values": [
+      "-1 && 1"
+     ],
+     "wrong_would": "Treat negative one as truthy merely because it is nonzero and write 1 instead of 0."
+    },
+    {
+     "unit": "R1.S3.P3.s4",
+     "trigger_values": [
+      "2 == 1 < 2"
+     ],
+     "wrong_would": "Give equality higher precedence than relational comparison and write 1 for (2 == 1) < 2 instead of 0."
+    },
+    {
+     "unit": "R1.S3.P3.s5",
+     "trigger_values": [
+      "3 > 2 + 1"
+     ],
+     "wrong_would": "Apply > before addition, producing (3 > 2) + 1 = 2 instead of numeric comparison 3 > 3 = 0."
+    }
+   ],
+   "units": [
+    "R1.S3.P3.s2",
+    "R1.S3.P3.s3",
+    "R1.S3.P3.s4",
+    "R1.S3.P3.s5"
+   ]
+  },
+  {
+   "id": "g2_arithmetic-precedence",
+   "args": [
+    "transform",
+    "--input",
+    "numbers.csv",
+    "--recipe",
+    "arithmetic.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "numbers.csv",
+     "content": "value\n3\n"
+    },
+    {
+     "path": "arithmetic.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"mixed\",\"expression\":\"2 + 3 * 4 - 8 / 2\"},{\"op\":\"derive\",\"name\":\"modulo\",\"expression\":\"17 % 5 * 2\"},{\"op\":\"derive\",\"name\":\"negative\",\"expression\":\"-2 * 3 + 9\"},{\"op\":\"derive\",\"name\":\"grouped\",\"expression\":\"(value + 2) * 3\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P3.s6",
+     "trigger_values": [
+      "2 + 3 * 4 - 8 / 2"
+     ],
+     "wrong_would": "Evaluate addition before multiplication and write 18 for mixed rather than 10."
+    },
+    {
+     "unit": "R1.S3.P3.s7",
+     "trigger_values": [
+      "17 % 5 * 2",
+      "2 + 3 * 4 - 8 / 2"
+     ],
+     "wrong_would": "Group 17 % (5 * 2) and write 7 for modulo rather than 4."
+    },
+    {
+     "unit": "R1.S3.P3.s8",
+     "trigger_values": [
+      "-2 * 3 + 9"
+     ],
+     "wrong_would": "Negate the whole expression and write -15 for negative rather than 3."
+    },
+    {
+     "unit": "R1.S3.P3.s9",
+     "trigger_values": [
+      "(value + 2) * 3",
+      "value\n3"
+     ],
+     "wrong_would": "Ignore parentheses and write 9 for grouped instead of 15."
+    }
+   ],
+   "units": [
+    "R1.S3.P3.s6",
+    "R1.S3.P3.s7",
+    "R1.S3.P3.s8",
+    "R1.S3.P3.s9"
+   ]
+  },
+  {
+   "id": "g2_zero-and-nan-comparison",
+   "args": [
+    "transform",
+    "--input",
+    "one.csv",
+    "--recipe",
+    "zeros.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "one.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "zeros.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"quotient\",\"expression\":\"5 / 0\"},{\"op\":\"derive\",\"name\":\"remainder\",\"expression\":\"5 % 0\"},{\"op\":\"derive\",\"name\":\"nan_comparison\",\"expression\":\"1 != (0 / 0)\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P4.s1",
+     "trigger_values": [
+      "5 / 0"
+     ],
+     "wrong_would": "Write Inf or 0 for quotient, or fail, instead of NaN."
+    },
+    {
+     "unit": "R1.S3.P4.s2",
+     "trigger_values": [
+      "5 % 0"
+     ],
+     "wrong_would": "Write 0 for remainder or fail instead of NaN."
+    },
+    {
+     "unit": "R1.S3.P4.s3",
+     "trigger_values": [
+      "1 != (0 / 0)"
+     ],
+     "wrong_would": "Write 1 for nan_comparison using ordinary IEEE NaN inequality rather than 0."
+    }
+   ],
+   "units": [
+    "R1.S3.P4.s1",
+    "R1.S3.P4.s2",
+    "R1.S3.P4.s3"
+   ]
+  },
+  {
+   "id": "g2_basic-math-functions",
+   "args": [
+    "transform",
+    "--input",
+    "signed.csv",
+    "--recipe",
+    "basic.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "signed.csv",
+     "content": "value\n-9\n9\n"
+    },
+    {
+     "path": "basic.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"absolute\",\"expression\":\"abs(value)\"},{\"op\":\"derive\",\"name\":\"root\",\"expression\":\"sqrt(value)\"},{\"op\":\"derive\",\"name\":\"ceiling\",\"expression\":\"ceil(value / 4)\"},{\"op\":\"derive\",\"name\":\"flooring\",\"expression\":\"floor(value / 4)\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P5.s2",
+     "trigger_values": [
+      "abs(value)",
+      "-9"
+     ],
+     "wrong_would": "Leave absolute as -9 on the negative row rather than 9."
+    },
+    {
+     "unit": "R1.S3.P5.s3",
+     "trigger_values": [
+      "sqrt(value)",
+      "-9"
+     ],
+     "wrong_would": "Write 3 for root of -9 using sqrt(abs(value)) instead of NaN."
+    },
+    {
+     "unit": "R1.S3.P5.s4",
+     "trigger_values": [
+      "ceil(value / 4)",
+      "-9"
+     ],
+     "wrong_would": "Write -3 for ceiling of -2.25 by rounding down rather than -2."
+    },
+    {
+     "unit": "R1.S3.P5.s5",
+     "trigger_values": [
+      "floor(value / 4)",
+      "-9"
+     ],
+     "wrong_would": "Write -2 for flooring of -2.25 by truncating toward zero rather than -3."
+    }
+   ],
+   "units": [
+    "R1.S3.P5.s2",
+    "R1.S3.P5.s3",
+    "R1.S3.P5.s4",
+    "R1.S3.P5.s5"
+   ]
+  },
+  {
+   "id": "g2_round-power-log-min",
+   "args": [
+    "transform",
+    "--input",
+    "one.csv",
+    "--recipe",
+    "functions.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "one.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "functions.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"rounded\",\"expression\":\"round(-2.5, 0)\"},{\"op\":\"derive\",\"name\":\"powered\",\"expression\":\"pow(2, 3)\"},{\"op\":\"derive\",\"name\":\"logged\",\"expression\":\"log(2.718281828459045)\"},{\"op\":\"derive\",\"name\":\"minimum\",\"expression\":\"min(3, 8)\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P5.s6",
+     "trigger_values": [
+      "round(-2.5, 0)"
+     ],
+     "wrong_would": "Write -2 for rounded using ties-to-even rather than -3."
+    },
+    {
+     "unit": "R1.S3.P5.s7",
+     "trigger_values": [
+      "pow(2, 3)"
+     ],
+     "wrong_would": "Write 6 for powered by multiplying the arguments rather than 8."
+    },
+    {
+     "unit": "R1.S3.P5.s8",
+     "trigger_values": [
+      "log(2.718281828459045)"
+     ],
+     "wrong_would": "Write approximately 0.43429448 for logged using base-10 logarithm instead of approximately 1."
+    },
+    {
+     "unit": "R1.S3.P5.s9",
+     "trigger_values": [
+      "min(3, 8)"
+     ],
+     "wrong_would": "Write 8 for minimum by choosing the larger argument rather than 3."
+    }
+   ],
+   "units": [
+    "R1.S3.P5.s6",
+    "R1.S3.P5.s7",
+    "R1.S3.P5.s8",
+    "R1.S3.P5.s9"
+   ]
+  },
+  {
+   "id": "g2_conditional-functions",
+   "args": [
+    "transform",
+    "--input",
+    "one.csv",
+    "--recipe",
+    "conditional.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "one.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "conditional.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"maximum\",\"expression\":\"max(-2, 3)\"},{\"op\":\"derive\",\"name\":\"chosen\",\"expression\":\"if(-1, 7, 9)\"},{\"op\":\"derive\",\"name\":\"bounded\",\"expression\":\"clamp(13, 2, 8)\"},{\"op\":\"derive\",\"name\":\"fallback\",\"expression\":\"coalesce(0 / 0, 7)\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P5.s10",
+     "trigger_values": [
+      "max(-2, 3)"
+     ],
+     "wrong_would": "Write -2 for maximum by choosing the smaller argument rather than 3."
+    },
+    {
+     "unit": "R1.S3.P5.s11",
+     "trigger_values": [
+      "if(-1, 7, 9)"
+     ],
+     "wrong_would": "Write 7 for chosen by treating any nonzero condition as true rather than 9."
+    },
+    {
+     "unit": "R1.S3.P5.s12",
+     "trigger_values": [
+      "clamp(13, 2, 8)"
+     ],
+     "wrong_would": "Write 13 for bounded by omitting the upper bound rather than 8."
+    },
+    {
+     "unit": "R1.S3.P5.s13",
+     "trigger_values": [
+      "coalesce(0 / 0, 7)"
+     ],
+     "wrong_would": "Write NaN for fallback by retaining the first argument rather than 7."
+    }
+   ],
+   "units": [
+    "R1.S3.P5.s10",
+    "R1.S3.P5.s11",
+    "R1.S3.P5.s12",
+    "R1.S3.P5.s13"
+   ]
+  },
+  {
+   "id": "g2_nested-and-inline",
+   "args": [
+    "transform",
+    "--input",
+    "values.csv",
+    "--recipe",
+    "expressions.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "values.csv",
+     "content": "value\n-2\n50\n150\n"
+    },
+    {
+     "path": "expressions.json",
+     "content": "[{\"op\":\"derive\",\"name\":\"nested\",\"expression\":\"round(sqrt(abs(value)), 2)\"},{\"op\":\"derive\",\"name\":\"in_range\",\"expression\":\"(value > 10 && value < 100) * value\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P6.s1",
+     "trigger_values": [
+      "round(sqrt(abs(value)), 2)",
+      "-2"
+     ],
+     "wrong_would": "Write NaN for nested on the -2 row by taking the square root before abs instead of approximately 1.41."
+    },
+    {
+     "unit": "R1.S3.P7.s1",
+     "trigger_values": [
+      "(value > 10 && value < 100) * value",
+      "50",
+      "150"
+     ],
+     "wrong_would": "Write 150 for in_range on the 150 row by testing only value > 10 rather than 0, while the 50 row remains 50."
+    }
+   ],
+   "units": [
+    "R1.S3.P6.s1",
+    "R1.S3.P7.s1"
+   ]
+  },
+  {
+   "id": "g2_seeded-row-sampling",
+   "args": [
+    "transform",
+    "--input",
+    "rows.csv",
+    "--recipe",
+    "sample.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "rows.csv",
+     "content": "id\n1\n2\n3\n4\n5\n6\n7\n8\n"
+    },
+    {
+     "path": "sample.json",
+     "content": "[{\"op\":\"sample\",\"fraction\":0.5}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P9.s1",
+     "trigger_values": [
+      "--seed",
+      "1",
+      "\"fraction\":0.5",
+      "id\n1\n2\n3\n4\n5\n6\n7\n8"
+     ],
+     "wrong_would": "Retain ids 1 through 4 by selecting the first half of the file, or choose an unseeded random subset; Go math/rand seeded with 1 rejects the first three rows at fraction 0.5."
+    }
+   ],
+   "units": [
+    "R1.S3.P9.s1"
+   ]
+  },
+  {
+   "id": "g3_sort-rename-drop",
+   "args": [
+    "transform",
+    "--input",
+    "input.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "input.csv",
+     "content": "score,label,discard,id\n2,B,old,first\n1,A,old,second\n2,C,old,third\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"sort\",\"column\":\"score\",\"order\":\"asc\"},{\"op\":\"rename\",\"from\":\"label\",\"to\":\"category\"},{\"op\":\"drop\",\"columns\":[\"discard\"]}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P9.s2",
+     "trigger_values": [
+      "\"op\":\"sort\"",
+      "\"order\":\"asc\"",
+      "2,B,old,first",
+      "2,C,old,third"
+     ],
+     "wrong_would": "The two rows with score 2 appear in reverse order, or the score 1 row is not first."
+    },
+    {
+     "unit": "R1.S3.P9.s3",
+     "trigger_values": [
+      "\"op\":\"rename\"",
+      "\"from\":\"label\"",
+      "\"to\":\"category\""
+     ],
+     "wrong_would": "The output header still says label or contains both label and category."
+    },
+    {
+     "unit": "R1.S3.P9.s4",
+     "trigger_values": [
+      "\"op\":\"drop\"",
+      "\"discard\""
+     ],
+     "wrong_would": "The output retains the discard column and its old values."
+    }
+   ],
+   "units": [
+    "R1.S3.P9.s2",
+    "R1.S3.P9.s3",
+    "R1.S3.P9.s4"
+   ]
+  },
+  {
+   "id": "g3_aggregate-skipped-values",
+   "args": [
+    "transform",
+    "--input",
+    "input.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "input.csv",
+     "content": "group,amount\nA,2\nA,oops\nA,\nB,\nB,nope\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"aggregate\",\"group_by\":[\"group\"],\"aggregations\":[{\"column\":\"amount\",\"function\":\"sum\",\"as\":\"total\"},{\"column\":\"amount\",\"function\":\"avg\",\"as\":\"mean\"},{\"column\":\"amount\",\"function\":\"count\",\"as\":\"filled\"}]}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P9.s5",
+     "trigger_values": [
+      "\"op\":\"aggregate\"",
+      "\"group_by\":[\"group\"]",
+      "A,2",
+      "A,oops"
+     ],
+     "wrong_would": "Rows are emitted individually instead of one aggregated row for A and one for B."
+    },
+    {
+     "unit": "R1.S3.P9.s6",
+     "trigger_values": [
+      "\"function\":\"sum\"",
+      "A,oops",
+      "B,nope"
+     ],
+     "wrong_would": "A's total treats the invalid string as an error, or B's total is NaN instead of 0."
+    },
+    {
+     "unit": "R1.S3.P9.s7",
+     "trigger_values": [
+      "\"function\":\"avg\"",
+      "A,2",
+      "A,oops",
+      "B,nope"
+     ],
+     "wrong_would": "A's mean divides by all three A rows rather than just the numeric value, or B's mean is 0 instead of NaN."
+    },
+    {
+     "unit": "R1.S3.P9.s8",
+     "trigger_values": [
+      "\"function\":\"count\"",
+      "A,oops",
+      "B,nope"
+     ],
+     "wrong_would": "The count excludes nonnumeric but non-empty values, giving A 1 and B 0 rather than A 2 and B 1."
+    }
+   ],
+   "units": [
+    "R1.S3.P9.s5",
+    "R1.S3.P9.s6",
+    "R1.S3.P9.s7",
+    "R1.S3.P9.s8"
+   ]
+  },
+  {
+   "id": "g3_aggregate-extrema-layout-format",
+   "args": [
+    "transform",
+    "--input",
+    "input.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "input.csv",
+     "content": "region,dept,amount\nwest,B,\neast,A,10\nwest,B,not-a-number\neast,A,2.50\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"aggregate\",\"group_by\":[\"region\",\"dept\"],\"aggregations\":[{\"column\":\"amount\",\"function\":\"max\",\"as\":\"highest\"},{\"column\":\"amount\",\"function\":\"min\",\"as\":\"lowest\"},{\"column\":\"amount\",\"function\":\"sum\",\"as\":\"total\"}]}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P9.s9",
+     "trigger_values": [
+      "\"function\":\"min\"",
+      "west,B,not-a-number",
+      "east,A,2.50"
+     ],
+     "wrong_would": "The empty/nonnumeric west group gets 0 instead of NaN, or east's minimum is 10 instead of 2.5."
+    },
+    {
+     "unit": "R1.S3.P9.s10",
+     "trigger_values": [
+      "\"function\":\"max\"",
+      "west,B,not-a-number",
+      "east,A,10"
+     ],
+     "wrong_would": "The west maximum is 0 instead of NaN, or the east maximum is 2.5 instead of 10."
+    },
+    {
+     "unit": "R1.S3.P10.s1",
+     "trigger_values": [
+      "\"group_by\":[\"region\",\"dept\"]",
+      "\"as\":\"highest\"",
+      "\"as\":\"lowest\"",
+      "\"as\":\"total\""
+     ],
+     "wrong_would": "The output header puts aggregation columns before region and dept, or orders lowest before highest."
+    },
+    {
+     "unit": "R1.S3.P10.s3",
+     "trigger_values": [
+      "east,A,10",
+      "east,A,2.50",
+      "\"function\":\"sum\""
+     ],
+     "wrong_would": "The east row prints total as 12.50 or highest as 10.0 instead of using shortest numeric formatting."
+    }
+   ],
+   "units": [
+    "R1.S3.P9.s9",
+    "R1.S3.P9.s10",
+    "R1.S3.P10.s1",
+    "R1.S3.P10.s3"
+   ]
+  },
+  {
+   "id": "g3_having-after-aggregation",
+   "args": [
+    "transform",
+    "--input",
+    "input.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "input.csv",
+     "content": "label,value\nz,150\na,100\nm,60\nm,50\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"aggregate\",\"group_by\":[\"label\"],\"aggregations\":[{\"column\":\"value\",\"function\":\"sum\",\"as\":\"total\"}],\"having\":{\"column\":\"total\",\"condition\":\"gt\",\"threshold\":100}}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P11.s1",
+     "trigger_values": [
+      "\"having\"",
+      "\"as\":\"total\"",
+      "a,100",
+      "m,60",
+      "m,50"
+     ],
+     "wrong_would": "Filtering input rows before summing drops both m rows and omits m despite its aggregate total of 110."
+    },
+    {
+     "unit": "R1.S3.P11.s3",
+     "trigger_values": [
+      "\"column\":\"value\",\"function\":\"sum\",\"as\":\"total\"",
+      "\"column\":\"total\",\"condition\":\"gt\",\"threshold\":100"
+     ],
+     "wrong_would": "The example-style having clause is ignored, so the group totaling exactly 100 remains."
+    },
+    {
+     "unit": "R1.S3.P11.s8",
+     "trigger_values": [
+      "z,150",
+      "a,100",
+      "m,60",
+      "\"group_by\":[\"label\"]",
+      "\"having\""
+     ],
+     "wrong_would": "Remaining groups are output in input order z,m rather than sorted order m,z."
+    }
+   ],
+   "units": [
+    "R1.S3.P11.s1",
+    "R1.S3.P11.s3",
+    "R1.S3.P11.s8"
+   ]
+  },
+  {
+   "id": "g3_having-neq-numeric",
+   "args": [
+    "transform",
+    "--input",
+    "input.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "input.csv",
+     "content": "label,value\nA,2.50\nB,3\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"aggregate\",\"group_by\":[\"label\"],\"aggregations\":[{\"column\":\"value\",\"function\":\"sum\",\"as\":\"total\"}],\"having\":{\"column\":\"total\",\"condition\":\"neq\",\"threshold\":2.5}}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P11.s4",
+     "trigger_values": [
+      "\"condition\":\"neq\"",
+      "\"threshold\":2.5",
+      "A,2.50",
+      "B,3"
+     ],
+     "wrong_would": "A remains because its formatted result is compared as text against 2.5, or the neq operator is rejected instead of retaining only B."
+    }
+   ],
+   "units": [
+    "R1.S3.P11.s4"
+   ]
+  },
+  {
+   "id": "g3_having-references-aggregation-alias",
+   "args": [
+    "transform",
+    "--input",
+    "input.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "input.csv",
+     "content": "label,value\nA,7\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"aggregate\",\"group_by\":[\"label\"],\"aggregations\":[{\"column\":\"value\",\"function\":\"sum\",\"as\":\"total\"}],\"having\":{\"column\":\"value\",\"condition\":\"gt\",\"threshold\":0}}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P11.s5",
+     "trigger_values": [
+      "\"as\":\"total\"",
+      "\"having\":{\"column\":\"value\""
+     ],
+     "wrong_would": "The program accepts value as a having column and produces a successful output instead of rejecting the reference to a non-aggregation result name."
+    }
+   ],
+   "units": [
+    "R1.S3.P11.s5"
+   ]
+  },
+  {
+   "id": "g3_join-inner-first-match",
+   "args": [
+    "transform",
+    "--input",
+    "left.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "left.csv",
+     "content": "id,left_value\n2,two\n9,unmatched\n1,one\n"
+    },
+    {
+     "path": "right.csv",
+     "content": "id,right_value\n1,first\n1,second\n2,other\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"join\",\"right\":\"right.csv\",\"on\":\"id\",\"type\":\"inner\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P12.s1",
+     "trigger_values": [
+      "\"op\":\"join\"",
+      "2,two",
+      "1,first"
+     ],
+     "wrong_would": "The result merely copies left.csv without adding the matching right_value column."
+    },
+    {
+     "unit": "R1.S3.P12.s2",
+     "trigger_values": [
+      "\"right\":\"right.csv\"",
+      "right_value",
+      "1,first"
+     ],
+     "wrong_would": "The program reads the left file again or ignores right.csv, so the joined first value is missing."
+    },
+    {
+     "unit": "R1.S3.P12.s3",
+     "trigger_values": [
+      "\"on\":\"id\"",
+      "id,right_value",
+      "id,left_value"
+     ],
+     "wrong_would": "Rows are paired by position instead of id, assigning first to id 2 or other to id 1."
+    },
+    {
+     "unit": "R1.S3.P12.s5",
+     "trigger_values": [
+      "\"type\":\"inner\"",
+      "9,unmatched",
+      "1,first"
+     ],
+     "wrong_would": "The unmatched id 9 is included, as in a left join."
+    }
+   ],
+   "units": [
+    "R1.S3.P12.s1",
+    "R1.S3.P12.s2",
+    "R1.S3.P12.s3",
+    "R1.S3.P12.s5"
+   ]
+  },
+  {
+   "id": "g3_join-left-unmatched",
+   "args": [
+    "transform",
+    "--input",
+    "left.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "left.csv",
+     "content": "id,left_value\n9,nine\n1,one\n"
+    },
+    {
+     "path": "right.csv",
+     "content": "id,right_value,flag\n1,matched,yes\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"join\",\"right\":\"right.csv\",\"on\":\"id\",\"type\":\"left\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P12.s4",
+     "trigger_values": [
+      "\"type\":\"left\"",
+      "9,nine",
+      "1,matched,yes"
+     ],
+     "wrong_would": "The implementation always performs an inner join and discards id 9."
+    },
+    {
+     "unit": "R1.S3.P12.s6",
+     "trigger_values": [
+      "\"type\":\"left\"",
+      "9,nine",
+      "right_value,flag"
+     ],
+     "wrong_would": "The unmatched id 9 is dropped or has nonempty right_value/flag fields rather than two empty right-side fields."
+    }
+   ],
+   "units": [
+    "R1.S3.P12.s4",
+    "R1.S3.P12.s6"
+   ]
+  },
+  {
+   "id": "g4_join-missing-right-key",
+   "args": [
+    "transform",
+    "--input",
+    "left.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "left.csv",
+     "content": "id,lookup\n1,X\n"
+    },
+    {
+     "path": "right.csv",
+     "content": "id,description\n1,one\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"join\",\"right\":\"right.csv\",\"on\":\"lookup\",\"type\":\"left\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P12.s10",
+     "trigger_values": [
+      "lookup",
+      "right.csv",
+      "id,description"
+     ],
+     "wrong_would": "Exit successfully and write a joined CSV despite the missing right-side key, rather than report `ERROR: invalid recipe: join key lookup not found in right dataset`."
+    }
+   ],
+   "units": [
+    "R1.S3.P12.s10"
+   ]
+  },
+  {
+   "id": "g4_window-partition-multikey",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "cat,priority,tie,id\nB,2,a,b0\nA,2,b,a0\nA,1,z,a1\nB,1,z,b1\nA,1,z,a2\nA,1,a,a3\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"row_number\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"priority\",\"order\":\"asc\"},{\"column\":\"tie\",\"order\":\"desc\"}],\"as\":\"position\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P13.s1",
+     "trigger_values": [
+      "window",
+      "cat",
+      "position"
+     ],
+     "wrong_would": "Treat window as a sort, reordering the input rows instead of appending per-row positions to the original rows."
+    },
+    {
+     "unit": "R1.S3.P13.s2",
+     "trigger_values": [
+      "partition_by",
+      "cat",
+      "A",
+      "B"
+     ],
+     "wrong_would": "Number B's rows in the same sequence as A's, instead of restarting at 1 within B."
+    },
+    {
+     "unit": "R1.S3.P13.s3",
+     "trigger_values": [
+      "priority",
+      "asc",
+      "tie",
+      "desc",
+      "A,1,z,a1",
+      "A,1,z,a2",
+      "A,1,a,a3"
+     ],
+     "wrong_would": "Ignore the secondary descending tie key and place a3 ahead of a1, or break the a1/a2 tie by a different order instead of input order."
+    },
+    {
+     "unit": "R1.S3.P13.s4",
+     "trigger_values": [
+      "as",
+      "position"
+     ],
+     "wrong_would": "Name the appended column `row_number` rather than `position`."
+    }
+   ],
+   "units": [
+    "R1.S3.P13.s1",
+    "R1.S3.P13.s2",
+    "R1.S3.P13.s3",
+    "R1.S3.P13.s4"
+   ]
+  },
+  {
+   "id": "g4_window-ranking-ties",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,score\nc,8\na,9\nb,9\nd,9\ne,7\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"rank\",\"order_by\":[{\"column\":\"score\",\"order\":\"desc\"}],\"as\":\"r\"},{\"op\":\"window\",\"function\":\"dense_rank\",\"order_by\":[{\"column\":\"score\",\"order\":\"desc\"}],\"as\":\"dr\"},{\"op\":\"window\",\"function\":\"row_number\",\"order_by\":[{\"column\":\"score\",\"order\":\"desc\"}],\"as\":\"rn\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P14.s1",
+     "trigger_values": [
+      "function",
+      "rank",
+      "dense_rank",
+      "row_number"
+     ],
+     "wrong_would": "Recognize only one window function and reject the recipe instead of creating all three computed columns."
+    },
+    {
+     "unit": "R1.S3.P14.s2",
+     "trigger_values": [
+      "rank",
+      "a,9",
+      "b,9",
+      "d,9",
+      "c,8"
+     ],
+     "wrong_would": "Use dense ranking and assign c rank 2 after three tied rows, rather than competition rank 4."
+    },
+    {
+     "unit": "R1.S3.P14.s3",
+     "trigger_values": [
+      "dense_rank",
+      "a,9",
+      "b,9",
+      "d,9",
+      "c,8"
+     ],
+     "wrong_would": "Use competition ranking and assign c dense rank 4 rather than 2."
+    },
+    {
+     "unit": "R1.S3.P14.s4",
+     "trigger_values": [
+      "row_number",
+      "a,9",
+      "b,9",
+      "d,9"
+     ],
+     "wrong_would": "Assign all three tied rows the same number, rather than distinct numbers in input order."
+    }
+   ],
+   "units": [
+    "R1.S3.P14.s1",
+    "R1.S3.P14.s2",
+    "R1.S3.P14.s3",
+    "R1.S3.P14.s4"
+   ]
+  },
+  {
+   "id": "g4_window-offset-and-running",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,cat,val\n3,A,2.50\n1,A,garbage\n2,A,1.25\n5,B,\n4,B,4\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"lag\",\"source_column\":\"val\",\"offset\":2,\"default\":\"NONE\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"previous_two\"},{\"op\":\"window\",\"function\":\"lead\",\"source_column\":\"val\",\"offset\":2,\"default\":\"NONE\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"next_two\"},{\"op\":\"window\",\"function\":\"running_sum\",\"source_column\":\"val\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"total\"},{\"op\":\"window\",\"function\":\"running_avg\",\"source_column\":\"val\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"average\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P14.s5",
+     "trigger_values": [
+      "lag",
+      "val",
+      "offset",
+      "2",
+      "NONE",
+      "3,A,2.50",
+      "1,A,garbage"
+     ],
+     "wrong_would": "For A/id 3 use the immediately prior id 2 value instead of the value two ordered rows back from id 1, or leave the first ordered row blank instead of using `NONE`."
+    },
+    {
+     "unit": "R1.S3.P14.s6",
+     "trigger_values": [
+      "lead",
+      "val",
+      "offset",
+      "2",
+      "NONE",
+      "1,A,garbage",
+      "3,A,2.50"
+     ],
+     "wrong_would": "For A/id 1 look two rows ahead in file order or use offset 1, rather than using A/id 3's value in partition order."
+    },
+    {
+     "unit": "R1.S3.P14.s7",
+     "trigger_values": [
+      "running_sum",
+      "garbage",
+      "1.25",
+      "2.50"
+     ],
+     "wrong_would": "Include garbage as an error or accumulate in file order rather than treating it as zero and obtaining 3.75 at A/id 3."
+    },
+    {
+     "unit": "R1.S3.P14.s8",
+     "trigger_values": [
+      "running_avg",
+      "garbage",
+      "1.25",
+      "2.50"
+     ],
+     "wrong_would": "Count the nonnumeric first A value in the denominator, producing 1.25 at A/id 3 instead of 1.875, or produce zero rather than NaN at A/id 1."
+    }
+   ],
+   "units": [
+    "R1.S3.P14.s5",
+    "R1.S3.P14.s6",
+    "R1.S3.P14.s7",
+    "R1.S3.P14.s8"
+   ]
+  },
+  {
+   "id": "g4_window-ntile-formatting",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,value\n1,1.50\n2,2.00\n3,3\n4,4\n5,5\n6,6\n7,7\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"ntile\",\"n\":3,\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"bucket\"},{\"op\":\"window\",\"function\":\"rank\",\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"ranked\"},{\"op\":\"window\",\"function\":\"dense_rank\",\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"dense\"},{\"op\":\"window\",\"function\":\"row_number\",\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"numbered\"},{\"op\":\"window\",\"function\":\"running_sum\",\"source_column\":\"value\",\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"sum\"},{\"op\":\"window\",\"function\":\"running_avg\",\"source_column\":\"value\",\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"avg\"},{\"op\":\"window\",\"function\":\"lag\",\"source_column\":\"value\",\"offset\":1,\"default\":\"0.00\",\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"prev\"},{\"op\":\"window\",\"function\":\"lead\",\"source_column\":\"value\",\"offset\":1,\"default\":\"0.00\",\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"next\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P14.s9",
+     "trigger_values": [
+      "ntile",
+      "\"n\":3",
+      "7,7"
+     ],
+     "wrong_would": "Put the extra row into the last bucket, yielding bucket sizes 2,2,3 instead of 3,2,2."
+    },
+    {
+     "unit": "R1.S3.P16.s1",
+     "trigger_values": [
+      "rank",
+      "dense_rank",
+      "row_number",
+      "ntile"
+     ],
+     "wrong_would": "Write `1.0` instead of `1` for ranking and bucket values."
+    },
+    {
+     "unit": "R1.S3.P16.s2",
+     "trigger_values": [
+      "running_sum",
+      "running_avg",
+      "lag",
+      "lead",
+      "1.50",
+      "2.00"
+     ],
+     "wrong_would": "Write padded numeric results such as `1.50` instead of `1.5` for the first cumulative sum or the lag of id 1's value."
+    }
+   ],
+   "units": [
+    "R1.S3.P14.s9",
+    "R1.S3.P16.s1",
+    "R1.S3.P16.s2"
+   ]
+  },
+  {
+   "id": "g4_window-missing-partition-column",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,value\n1,3\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"rank\",\"partition_by\":[\"missing_partition\"],\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"r\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P17.s1",
+     "trigger_values": [
+      "partition_by",
+      "missing_partition"
+     ],
+     "wrong_would": "Ignore the unknown partition column and write output instead of exiting with `ERROR: invalid recipe: column missing_partition not found`."
+    }
+   ],
+   "units": [
+    "R1.S3.P17.s1"
+   ]
+  },
+  {
+   "id": "g4_window-missing-order-column",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,value\n1,3\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"rank\",\"order_by\":[{\"column\":\"missing_order\",\"order\":\"asc\"}],\"as\":\"r\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P17.s1",
+     "trigger_values": [
+      "order_by",
+      "missing_order"
+     ],
+     "wrong_would": "Ignore the unknown ordering column and write output instead of exiting with `ERROR: invalid recipe: column missing_order not found`."
+    }
+   ],
+   "units": [
+    "R1.S3.P17.s1"
+   ]
+  },
+  {
+   "id": "g4_window-missing-source-column",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "id,value\n1,3\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"window\",\"function\":\"running_sum\",\"source_column\":\"missing_source\",\"order_by\":[{\"column\":\"id\",\"order\":\"asc\"}],\"as\":\"total\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P17.s1",
+     "trigger_values": [
+      "source_column",
+      "missing_source"
+     ],
+     "wrong_would": "Treat the unknown source column as zero and write output instead of exiting with `ERROR: invalid recipe: column missing_source not found`."
+    }
+   ],
+   "units": [
+    "R1.S3.P17.s1"
+   ]
+  },
+  {
+   "id": "g4_pivot-composite-and-first-value",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "region,id,metric,amount\nZ,2,b,20\nA,2,z,9\nA,1,b,first\nA,1,a,old\nA,1,b,second\nZ,2,a,10\nA,2,a,8\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"pivot\",\"index\":[\"region\",\"id\"],\"column\":\"metric\",\"value\":\"amount\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P18.s1",
+     "trigger_values": [
+      "pivot",
+      "metric",
+      "amount"
+     ],
+     "wrong_would": "Keep the seven long-format input records rather than producing three wide rows with metric columns."
+    },
+    {
+     "unit": "R1.S3.P18.s2",
+     "trigger_values": [
+      "index",
+      "region",
+      "id",
+      "A,1",
+      "A,2"
+     ],
+     "wrong_would": "Group only by region and collapse A/id 1 and A/id 2 into one row."
+    },
+    {
+     "unit": "R1.S3.P18.s3",
+     "trigger_values": [
+      "\"column\":\"metric\"",
+      "b,20",
+      "z,9",
+      "a,old"
+     ],
+     "wrong_would": "Use encounter order for the new column headers, putting b and z before a rather than sorting the distinct metric values lexicographically."
+    },
+    {
+     "unit": "R1.S3.P18.s4",
+     "trigger_values": [
+      "\"value\":\"amount\"",
+      "first",
+      "second"
+     ],
+     "wrong_would": "Use the last duplicate or the metric text for the A/id 1, b cell, yielding `second` or `b` instead of the first amount `first`."
+    }
+   ],
+   "units": [
+    "R1.S3.P18.s1",
+    "R1.S3.P18.s2",
+    "R1.S3.P18.s3",
+    "R1.S3.P18.s4"
+   ]
+  },
+  {
+   "id": "g4_pivot-distinct-composite-keys",
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "data.csv",
+     "content": "region,id,metric,amount\nB,1,x,b1\nA,2,x,a2\nA,1,x,a1\nB,1,y,b1y\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"pivot\",\"index\":[\"region\",\"id\"],\"column\":\"metric\",\"value\":\"amount\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P19.s2",
+     "trigger_values": [
+      "region",
+      "id",
+      "B,1",
+      "A,1",
+      "B,1,y,b1y"
+     ],
+     "wrong_would": "Group by id alone and merge A/id 1 with B/id 1, or emit separate rows for B/id 1's x and y records instead of one row per composite key."
+    }
+   ],
+   "units": [
+    "R1.S3.P19.s2"
+   ]
+  },
+  {
+   "id": "g5_pivot-layout-and-first-match",
+   "args": [
+    "transform",
+    "--input",
+    "long.csv",
+    "--recipe",
+    "pivot.json",
+    "--output",
+    "wide.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "long.csv",
+     "content": "team,period,kind,amount\nz,Z,low,9\na,Y,high,20\na,X,low,10\na,X,low,99\na,X,high,11\nz,Z,high,8\n"
+    },
+    {
+     "path": "pivot.json",
+     "content": "[{\"op\":\"pivot\",\"index\":[\"team\",\"period\"],\"column\":\"kind\",\"value\":\"amount\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P19.s3",
+     "trigger_values": [
+      "\"column\":\"kind\"",
+      "high",
+      "low"
+     ],
+     "wrong_would": "Produces one column named kind instead of separate high and low columns."
+    },
+    {
+     "unit": "R1.S3.P19.s4",
+     "trigger_values": [
+      "a,X,low,10",
+      "a,X,low,99"
+     ],
+     "wrong_would": "Uses the later duplicate and puts 99 in the (a,X,low) cell instead of the first value, 10."
+    },
+    {
+     "unit": "R1.S3.P19.s6",
+     "trigger_values": [
+      "\"index\":[\"team\",\"period\"]",
+      "high",
+      "low"
+     ],
+     "wrong_would": "Puts low before high based on first-seen order, or swaps period and team."
+    },
+    {
+     "unit": "R1.S3.P19.s7",
+     "trigger_values": [
+      "z,Z,low,9",
+      "a,Y,high,20",
+      "a,X,low,10"
+     ],
+     "wrong_would": "Keeps first-seen row-key order (z,Z then a,Y then a,X) rather than lexicographic order (a,X then a,Y then z,Z)."
+    }
+   ],
+   "units": [
+    "R1.S3.P19.s3",
+    "R1.S3.P19.s4",
+    "R1.S3.P19.s6",
+    "R1.S3.P19.s7"
+   ]
+  },
+  {
+   "id": "g5_pivot-missing-value-column",
+   "args": [
+    "transform",
+    "--input",
+    "long.csv",
+    "--recipe",
+    "pivot.json",
+    "--output",
+    "wide.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "long.csv",
+     "content": "team,kind,amount\na,low,10\n"
+    },
+    {
+     "path": "pivot.json",
+     "content": "[{\"op\":\"pivot\",\"index\":[\"team\"],\"column\":\"kind\",\"value\":\"missing_amount\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P19.s8",
+     "trigger_values": [
+      "\"value\":\"missing_amount\""
+     ],
+     "wrong_would": "Exits successfully with blank pivot cells instead of reporting ERROR: invalid recipe: column missing_amount not found."
+    }
+   ],
+   "units": [
+    "R1.S3.P19.s8"
+   ]
+  },
+  {
+   "id": "g5_unpivot-identifiers-and-names",
+   "args": [
+    "transform",
+    "--input",
+    "wide.csv",
+    "--recipe",
+    "unpivot.json",
+    "--output",
+    "long.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "wide.csv",
+     "content": "id,city,q2,q1,unused\nb,Oslo,20,,X\na,Rome,30,10,Y\n"
+    },
+    {
+     "path": "unpivot.json",
+     "content": "[{\"op\":\"unpivot\",\"index\":[\"city\",\"id\"],\"columns\":[\"q1\",\"q2\"],\"name_to\":\"quarter\",\"value_to\":\"amount\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P20.s1",
+     "trigger_values": [
+      "\"op\":\"unpivot\"",
+      "q1",
+      "q2"
+     ],
+     "wrong_would": "Keeps q1 and q2 as separate wide columns rather than melting them into long rows."
+    },
+    {
+     "unit": "R1.S3.P20.s2",
+     "trigger_values": [
+      "\"index\":[\"city\",\"id\"]",
+      "b,Oslo,20,,X"
+     ],
+     "wrong_would": "Omits city or id from the melted rows, or replaces their values with blanks."
+    },
+    {
+     "unit": "R1.S3.P20.s3",
+     "trigger_values": [
+      "\"columns\":[\"q1\",\"q2\"]",
+      "unused"
+     ],
+     "wrong_would": "Melts the unlisted unused column as well, creating extra rows."
+    },
+    {
+     "unit": "R1.S3.P20.s4",
+     "trigger_values": [
+      "\"name_to\":\"quarter\"",
+      "\"columns\":[\"q1\",\"q2\"]"
+     ],
+     "wrong_would": "Creates quarter but fills it with numeric cell values instead of the strings q1 and q2."
+    }
+   ],
+   "units": [
+    "R1.S3.P20.s1",
+    "R1.S3.P20.s2",
+    "R1.S3.P20.s3",
+    "R1.S3.P20.s4"
+   ]
+  },
+  {
+   "id": "g5_unpivot-values-order-and-empty",
+   "args": [
+    "transform",
+    "--input",
+    "wide.csv",
+    "--recipe",
+    "unpivot.json",
+    "--output",
+    "long.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "wide.csv",
+     "content": "id,city,q2,q1,unused\nb,Oslo,20,,X\na,Rome,30,10,Y\n"
+    },
+    {
+     "path": "unpivot.json",
+     "content": "[{\"op\":\"unpivot\",\"index\":[\"city\",\"id\"],\"columns\":[\"q1\",\"q2\"],\"name_to\":\"quarter\",\"value_to\":\"amount\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P20.s5",
+     "trigger_values": [
+      "\"value_to\":\"amount\"",
+      "a,Rome,30,10,Y"
+     ],
+     "wrong_would": "Puts q1 and q2 labels, rather than their cell values 10 and 30, in amount."
+    },
+    {
+     "unit": "R1.S3.P21.s2",
+     "trigger_values": [
+      "b,Oslo,20,,X",
+      "\"columns\":[\"q1\",\"q2\"]"
+     ],
+     "wrong_would": "Drops the empty q1 cell and produces only one row for b instead of two."
+    },
+    {
+     "unit": "R1.S3.P21.s3",
+     "trigger_values": [
+      "\"index\":[\"city\",\"id\"]",
+      "\"name_to\":\"quarter\"",
+      "\"value_to\":\"amount\""
+     ],
+     "wrong_would": "Outputs id,city,amount,quarter or retains the original q1 and q2 columns instead of city,id,quarter,amount."
+    },
+    {
+     "unit": "R1.S3.P21.s4",
+     "trigger_values": [
+      "b,Oslo,20,,X",
+      "a,Rome,30,10,Y",
+      "\"columns\":[\"q1\",\"q2\"]"
+     ],
+     "wrong_would": "Sorts the output by id or emits q2 before q1; the first two rows should belong to b, in q1-then-q2 order."
+    }
+   ],
+   "units": [
+    "R1.S3.P20.s5",
+    "R1.S3.P21.s2",
+    "R1.S3.P21.s3",
+    "R1.S3.P21.s4"
+   ]
+  },
+  {
+   "id": "g5_unpivot-missing-melt-column",
+   "args": [
+    "transform",
+    "--input",
+    "wide.csv",
+    "--recipe",
+    "unpivot.json",
+    "--output",
+    "long.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "wide.csv",
+     "content": "id,q1\nb,10\n"
+    },
+    {
+     "path": "unpivot.json",
+     "content": "[{\"op\":\"unpivot\",\"index\":[\"id\"],\"columns\":[\"q1\",\"absent_q\"],\"name_to\":\"quarter\",\"value_to\":\"amount\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P21.s6",
+     "trigger_values": [
+      "\"columns\":[\"q1\",\"absent_q\""
+     ],
+     "wrong_would": "Silently omits absent_q or emits an empty value instead of exiting with ERROR: invalid recipe: column absent_q not found."
+    }
+   ],
+   "units": [
+    "R1.S3.P21.s6"
+   ]
+  },
+  {
+   "id": "g5_fill-forward-independent-columns",
+   "args": [
+    "transform",
+    "--input",
+    "gaps.csv",
+    "--recipe",
+    "fill.json",
+    "--output",
+    "filled.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "gaps.csv",
+     "content": "id,a,b\n1,,B0\n2,A1,\n3,,B2\n4,A3,\n5,,\n"
+    },
+    {
+     "path": "fill.json",
+     "content": "[{\"op\":\"fill\",\"columns\":[\"a\",\"b\"],\"strategy\":\"forward\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P22.s1",
+     "trigger_values": [
+      "\"op\":\"fill\"",
+      "3,,B2"
+     ],
+     "wrong_would": "Leaves row 3's a cell empty rather than filling it."
+    },
+    {
+     "unit": "R1.S3.P22.s2",
+     "trigger_values": [
+      "\"columns\":[\"a\",\"b\"]",
+      "2,A1,"
+     ],
+     "wrong_would": "Fills only a and leaves row 2's b cell empty."
+    },
+    {
+     "unit": "R1.S3.P22.s3",
+     "trigger_values": [
+      "\"strategy\":\"forward\"",
+      "3,,B2"
+     ],
+     "wrong_would": "Rejects forward as an unsupported strategy instead of processing the recipe."
+    },
+    {
+     "unit": "R1.S3.P23.s2",
+     "trigger_values": [
+      "1,,B0",
+      "2,A1,",
+      "3,,B2",
+      "4,A3,",
+      "5,,"
+     ],
+     "wrong_would": "Uses the next value A1 for the leading empty a cell, or fills row 5's b cell with the stale B0 instead of the most recent B2."
+    }
+   ],
+   "units": [
+    "R1.S3.P22.s1",
+    "R1.S3.P22.s2",
+    "R1.S3.P22.s3",
+    "R1.S3.P23.s2"
+   ]
+  },
+  {
+   "id": "g5_fill-backward-independent-columns",
+   "args": [
+    "transform",
+    "--input",
+    "gaps.csv",
+    "--recipe",
+    "fill.json",
+    "--output",
+    "filled.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "gaps.csv",
+     "content": "id,a,b\n1,,B0\n2,A1,\n3,,B2\n4,A3,\n5,,\n"
+    },
+    {
+     "path": "fill.json",
+     "content": "[{\"op\":\"fill\",\"columns\":[\"a\",\"b\"],\"strategy\":\"backward\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P23.s3",
+     "trigger_values": [
+      "\"strategy\":\"backward\"",
+      "1,,B0",
+      "2,A1,",
+      "3,,B2",
+      "4,A3,",
+      "5,,"
+     ],
+     "wrong_would": "Uses earlier values for gaps (row 3 a becomes A1 instead of A3), or fills trailing row 5 despite there being no value below it."
+    }
+   ],
+   "units": [
+    "R1.S3.P23.s3"
+   ]
+  },
+  {
+   "id": "g5_fill-constant-replacement",
+   "args": [
+    "transform",
+    "--input",
+    "gaps.csv",
+    "--recipe",
+    "fill.json",
+    "--output",
+    "filled.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "gaps.csv",
+     "content": "id,a,b\n1,,B0\n2,A1,\n3,,B2\n"
+    },
+    {
+     "path": "fill.json",
+     "content": "[{\"op\":\"fill\",\"columns\":[\"a\",\"b\"],\"strategy\":\"constant\",\"value\":\"EMPTY!\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P22.s4",
+     "trigger_values": [
+      "\"strategy\":\"constant\"",
+      "\"value\":\"EMPTY!\""
+     ],
+     "wrong_would": "Ignores value and replaces blanks with 0 instead of EMPTY!."
+    },
+    {
+     "unit": "R1.S3.P23.s4",
+     "trigger_values": [
+      "\"columns\":[\"a\",\"b\"]",
+      "\"value\":\"EMPTY!\"",
+      "1,,B0",
+      "2,A1,"
+     ],
+     "wrong_would": "Replaces only the first blank, or overwrites non-empty B0 or A1 with EMPTY!."
+    }
+   ],
+   "units": [
+    "R1.S3.P22.s4",
+    "R1.S3.P23.s4"
+   ]
+  },
+  {
+   "id": "g5_fill-missing-column",
+   "args": [
+    "transform",
+    "--input",
+    "gaps.csv",
+    "--recipe",
+    "fill.json",
+    "--output",
+    "filled.csv",
+    "--seed",
+    "7"
+   ],
+   "files": [
+    {
+     "path": "gaps.csv",
+     "content": "id,a\n1,\n"
+    },
+    {
+     "path": "fill.json",
+     "content": "[{\"op\":\"fill\",\"columns\":[\"absent_a\"],\"strategy\":\"constant\",\"value\":\"X\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S3.P23.s7",
+     "trigger_values": [
+      "\"columns\":[\"absent_a\""
+     ],
+     "wrong_would": "Creates a new absent_a column or silently ignores it instead of exiting with ERROR: invalid recipe: column absent_a not found."
+    }
+   ],
+   "units": [
+    "R1.S3.P23.s7"
+   ]
+  },
+  {
+   "id": "g6_verify-match",
+   "args": [
+    "verify",
+    "--file",
+    "data.txt",
+    "--checksum",
+    "data.sha256"
+   ],
+   "files": [
+    {
+     "path": "data.txt",
+     "content": ""
+    },
+    {
+     "path": "data.sha256",
+     "content": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S4.P1.s1",
+     "trigger_values": [
+      "verify",
+      "--file",
+      "data.txt",
+      "--checksum",
+      "data.sha256"
+     ],
+     "wrong_would": "Reject the documented flags or read a different file."
+    },
+    {
+     "unit": "R1.S4.P2.s1",
+     "trigger_values": [
+      "data.txt",
+      "data.sha256",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+     ],
+     "wrong_would": "Report a mismatch after hashing the checksum file rather than data.txt, or compare the checksum's newline as part of the digest."
+    },
+    {
+     "unit": "R1.S4.P2.s2",
+     "trigger_values": [
+      "data.txt",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+     ],
+     "wrong_would": "Exit nonzero or print OK instead of VERIFIED on stdout."
+    }
+   ],
+   "units": [
+    "R1.S4.P1.s1",
+    "R1.S4.P2.s1",
+    "R1.S4.P2.s2"
+   ]
+  },
+  {
+   "id": "g6_verify-mismatch",
+   "args": [
+    "verify",
+    "--file",
+    "data.txt",
+    "--checksum",
+    "bad.sha256"
+   ],
+   "files": [
+    {
+     "path": "data.txt",
+     "content": ""
+    },
+    {
+     "path": "bad.sha256",
+     "content": "0000000000000000000000000000000000000000000000000000000000000000\n"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S4.P2.s2",
+     "trigger_values": [
+      "0000000000000000000000000000000000000000000000000000000000000000",
+      "data.txt"
+     ],
+     "wrong_would": "Exit 0 and print VERIFIED, or omit expected= and actual= from the mismatch message."
+    }
+   ],
+   "units": [
+    "R1.S4.P2.s2"
+   ]
+  },
+  {
+   "id": "g6_manifest-recursive",
+   "args": [
+    "manifest",
+    "--dir",
+    "dataset",
+    "--output",
+    "manifest.json"
+   ],
+   "files": [
+    {
+     "path": "dataset/z.csv",
+     "content": "id\n9\n"
+    },
+    {
+     "path": "dataset/sub/b.csv",
+     "content": "id\n2\n3\n"
+    },
+    {
+     "path": "dataset/a.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "dataset/sub/ignore.txt",
+     "content": "id\n4\n"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S5.P1.s1",
+     "trigger_values": [
+      "manifest",
+      "--dir",
+      "dataset",
+      "--output",
+      "manifest.json"
+     ],
+     "wrong_would": "Reject the documented flags or write to another path."
+    },
+    {
+     "unit": "R1.S5.P2.s1",
+     "trigger_values": [
+      "dataset",
+      "dataset/sub/b.csv",
+      "dataset/sub/ignore.txt"
+     ],
+     "wrong_would": "Scan only top-level CSVs or include the .txt file."
+    },
+    {
+     "unit": "R1.S5.P2.s2",
+     "trigger_values": [
+      "dataset/z.csv",
+      "dataset/sub/b.csv",
+      "dataset/a.csv"
+     ],
+     "wrong_would": "Use placeholder or identical hashes for different CSV contents."
+    },
+    {
+     "unit": "R1.S5.P2.s3",
+     "trigger_values": [
+      "manifest.json",
+      "dataset/sub/b.csv",
+      "id\n2\n3\n"
+     ],
+     "wrong_would": "Emit absolute paths, omit size_bytes or rows, or count the header as a data row."
+    }
+   ],
+   "units": [
+    "R1.S5.P1.s1",
+    "R1.S5.P2.s1",
+    "R1.S5.P2.s2",
+    "R1.S5.P2.s3"
+   ]
+  },
+  {
+   "id": "g6_manifest-order-and-clock",
+   "args": [
+    "manifest",
+    "--dir",
+    "records",
+    "--output",
+    "report.json"
+   ],
+   "files": [
+    {
+     "path": "records/z.csv",
+     "content": "id\n9\n"
+    },
+    {
+     "path": "records/sub/b.csv",
+     "content": "id\n2\n"
+    },
+    {
+     "path": "records/a.csv",
+     "content": "id\n1\n"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S5.P2.s4",
+     "trigger_values": [
+      "records/z.csv",
+      "records/sub/b.csv",
+      "records/a.csv"
+     ],
+     "wrong_would": "Emit file entries in discovery order instead of ascending relative-path order."
+    },
+    {
+     "unit": "R1.S5.P2.s5",
+     "trigger_values": [
+      "report.json",
+      "records"
+     ],
+     "wrong_would": "Emit a hard-coded historical timestamp or a timestamp outside the command's execution interval."
+    },
+    {
+     "unit": "R1.S7.P1.s3",
+     "trigger_values": [
+      "report.json",
+      "records"
+     ],
+     "wrong_would": "Freeze generated_at to a constant for determinism rather than use the wall clock."
+    }
+   ],
+   "units": [
+    "R1.S5.P2.s4",
+    "R1.S5.P2.s5",
+    "R1.S7.P1.s3"
+   ]
+  },
+  {
+   "id": "g6_pipeline-all-steps",
+   "args": [
+    "pipeline",
+    "--config",
+    "pipeline.json"
+   ],
+   "files": [
+    {
+     "path": "pipeline.json",
+     "content": "{\"seed\":12345,\"steps\":[{\"type\":\"ingest\",\"input\":\"raw.csv\",\"schema\":\"schema.json\",\"output\":\"clean.csv\"},{\"type\":\"transform\",\"input\":\"clean.csv\",\"recipe\":\"recipe.json\",\"output\":\"final.csv\"},{\"type\":\"verify\",\"file\":\"final.csv\",\"checksum\":\"final.csv.sha256\"},{\"type\":\"manifest\",\"dir\":\".\",\"output\":\"manifest.json\"}]}"
+    },
+    {
+     "path": "raw.csv",
+     "content": "id,value\n2,20\n1,10\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true},{\"name\":\"value\",\"type\":\"int\",\"required\":true}],\"primary_key\":[\"id\"]}"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"filter\",\"column\":\"value\",\"condition\":\"gt\",\"threshold\":10}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S6.P1.s1",
+     "trigger_values": [
+      "pipeline",
+      "--config",
+      "pipeline.json"
+     ],
+     "wrong_would": "Reject the subcommand or ignore --config."
+    },
+    {
+     "unit": "R1.S6.P2.s1",
+     "trigger_values": [
+      "\"seed\":12345",
+      "\"type\":\"ingest\"",
+      "\"type\":\"transform\"",
+      "\"type\":\"verify\"",
+      "\"type\":\"manifest\""
+     ],
+     "wrong_would": "Ignore one config step, fail to pass clean.csv to transform, or fail to verify the generated checksum."
+    },
+    {
+     "unit": "R1.S6.P2.s3",
+     "trigger_values": [
+      "pipeline.json",
+      "\"type\":\"manifest\""
+     ],
+     "wrong_would": "Exit nonzero or report fewer than four steps completed."
+    }
+   ],
+   "units": [
+    "R1.S6.P1.s1",
+    "R1.S6.P2.s1",
+    "R1.S6.P2.s3"
+   ]
+  },
+  {
+   "id": "g6_pipeline-stop-on-failure",
+   "args": [
+    "pipeline",
+    "--config",
+    "pipeline.json"
+   ],
+   "files": [
+    {
+     "path": "pipeline.json",
+     "content": "{\"seed\":7,\"steps\":[{\"type\":\"verify\",\"file\":\"present.txt\",\"checksum\":\"present.sha256\"},{\"type\":\"verify\",\"file\":\"missing.txt\",\"checksum\":\"present.sha256\"},{\"type\":\"manifest\",\"dir\":\".\",\"output\":\"must-not-exist.json\"}]}"
+    },
+    {
+     "path": "present.txt",
+     "content": ""
+    },
+    {
+     "path": "present.sha256",
+     "content": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S6.P2.s2",
+     "trigger_values": [
+      "\"file\":\"present.txt\"",
+      "\"file\":\"missing.txt\"",
+      "\"output\":\"must-not-exist.json\""
+     ],
+     "wrong_would": "Claim failure at step 1 or 3, continue to create must-not-exist.json, or return success rather than exit 1 with PIPELINE FAILED at step 2."
+    }
+   ],
+   "units": [
+    "R1.S6.P2.s2"
+   ]
+  },
+  {
+   "id": "g6_missing-input",
+   "args": [
+    "verify",
+    "--file",
+    "absent.txt",
+    "--checksum",
+    "digest.txt"
+   ],
+   "files": [
+    {
+     "path": "digest.txt",
+     "content": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S8.P1.s1",
+     "trigger_values": [
+      "absent.txt",
+      "digest.txt"
+     ],
+     "wrong_would": "Print MISMATCH on stdout or a generic open error instead of reporting the absent path on stderr and exiting 1."
+    }
+   ],
+   "units": [
+    "R1.S8.P1.s1"
+   ]
+  },
+  {
+   "id": "g6_ingest-rejected-row",
+   "args": [
+    "ingest",
+    "--input",
+    "raw.csv",
+    "--schema",
+    "schema.json",
+    "--output",
+    "clean.csv"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id,amount\n1,5\n2,not-a-number\n3,7\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true},{\"name\":\"amount\",\"type\":\"float\",\"required\":true}],\"primary_key\":[\"id\"]}"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S8.P1.s2",
+     "trigger_values": [
+      "2,not-a-number",
+      "\"type\":\"float\"",
+      "clean.csv"
+     ],
+     "wrong_would": "Exit 1 on the invalid row, discard it without creating clean.csv.rejected, or put it in clean.csv."
+    }
+   ],
+   "units": [
+    "R1.S8.P1.s2"
+   ]
+  },
+  {
+   "id": "g6_invalid-recipe-unknown-op",
+   "args": [
+    "transform",
+    "--input",
+    "source.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "result.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "source.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"teleport\"}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S8.P1.s3",
+     "trigger_values": [
+      "\"op\":\"teleport\""
+     ],
+     "wrong_would": "Skip the unknown operation and succeed, or call the valid JSON malformed instead of reporting an invalid recipe."
+    }
+   ],
+   "units": [
+    "R1.S8.P1.s3"
+   ]
+  },
+  {
+   "id": "g6_invalid-recipe-missing-column",
+   "args": [
+    "transform",
+    "--input",
+    "source.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "result.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "source.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "recipe.json",
+     "content": "[{\"op\":\"filter\",\"column\":\"absent\",\"condition\":\"gt\",\"threshold\":0}]"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S8.P1.s3",
+     "trigger_values": [
+      "\"op\":\"filter\"",
+      "\"column\":\"absent\"",
+      "id\n1\n"
+     ],
+     "wrong_would": "Treat absent as zero and finish successfully rather than exiting 1 and printing ERROR: invalid recipe on stderr."
+    }
+   ],
+   "units": [
+    "R1.S8.P1.s3"
+   ]
+  },
+  {
+   "id": "g6_malformed-config",
+   "args": [
+    "pipeline",
+    "--config",
+    "broken.json"
+   ],
+   "files": [
+    {
+     "path": "broken.json",
+     "content": "{\"steps\":\"not-an-array\"}"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S8.P1.s4",
+     "trigger_values": [
+      "broken.json",
+      "\"steps\":\"not-an-array\""
+     ],
+     "wrong_would": "Coerce the invalid steps field to an empty list and report pipeline success, or print a generic decode error rather than ERROR: malformed JSON: broken.json."
+    }
+   ],
+   "units": [
+    "R1.S8.P1.s4"
+   ]
+  },
+  {
+   "id": "g6_malformed-schema",
+   "args": [
+    "ingest",
+    "--input",
+    "raw.csv",
+    "--schema",
+    "broken.json",
+    "--output",
+    "clean.csv"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "broken.json",
+     "content": "{\"columns\":\"not-an-array\",\"primary_key\":[\"id\"]}"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S8.P1.s4",
+     "trigger_values": [
+      "broken.json",
+      "\"columns\":\"not-an-array\""
+     ],
+     "wrong_would": "Ignore the invalid schema structure and ingest without validation, or print a generic decode error rather than ERROR: malformed JSON: broken.json."
+    }
+   ],
+   "units": [
+    "R1.S8.P1.s4"
+   ]
+  },
+  {
+   "id": "g6_malformed-recipe",
+   "args": [
+    "transform",
+    "--input",
+    "source.csv",
+    "--recipe",
+    "broken.json",
+    "--output",
+    "result.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "path": "source.csv",
+     "content": "id\n1\n"
+    },
+    {
+     "path": "broken.json",
+     "content": "{\"op\":\"sort\",\"column\":\"id\",\"order\":\"asc\"}"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S8.P1.s4",
+     "trigger_values": [
+      "broken.json",
+      "{\"op\":\"sort\""
+     ],
+     "wrong_would": "Accept a recipe object where an array is required, or print a generic decode error rather than ERROR: malformed JSON: broken.json."
+    }
+   ],
+   "units": [
+    "R1.S8.P1.s4"
+   ]
+  },
+  {
+   "id": "g6_invalid-schema-regex",
+   "args": [
+    "ingest",
+    "--input",
+    "raw.csv",
+    "--schema",
+    "schema.json",
+    "--output",
+    "clean.csv"
+   ],
+   "files": [
+    {
+     "path": "raw.csv",
+     "content": "id,label\n1,Alpha\n"
+    },
+    {
+     "path": "schema.json",
+     "content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true},{\"name\":\"label\",\"type\":\"string\",\"pattern\":\"(\"}],\"primary_key\":[\"id\"]}"
+    }
+   ],
+   "covers": [
+    {
+     "unit": "R1.S8.P1.s5",
+     "trigger_values": [
+      "\"pattern\":\"(\"",
+      "Alpha"
+     ],
+     "wrong_would": "Accept Alpha by ignoring the bad regex, reject the row rather than the schema, or report only a generic error rather than ERROR: invalid pattern: (."
+    }
+   ],
+   "units": [
+    "R1.S8.P1.s5"
+   ]
+  }
+ ],
+ "uncheckable": [
+  {
+   "unit": "R1.S8.P2.s1",
+   "reason": "A dpipe invocation with fixture files cannot execute go build or inspect the Go source tree at /app/."
+  }
+ ]
+}
