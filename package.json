@@ -39,7 +39,9 @@
     "intent-exp2-rekey": "./dist/cli/exp2-rekey.js",
     "intent-exp2-compare": "./dist/cli/exp2-compare.js",
     "intent-exp2-mutate": "./dist/cli/exp2-mutate.js",
-    "intent-exp2-detect": "./dist/cli/exp2-detect.js"
+    "intent-exp2-detect": "./dist/cli/exp2-detect.js",
+    "intent-exp2-probe-detect": "./dist/cli/exp2-probe-detect.js",
+    "intent-exp2-repair": "./dist/cli/exp2-repair.js"
   },
   "engines": {
     "node": ">=22"

@@ -21,6 +21,7 @@ import { stubTransport } from "./stubs.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { serialExecutor } from "./serial-executor.js"
 import { Serial } from "../../src/exp2/serial.js"
+import { casesFromLog, compareCases, officialScore, probeDetect, repairProducts, scoreDefects } from "../../src/exp2/acceptance.js"
 import { LocalScriptSandbox } from "../../src/exp2/runner.js"
 
 const out = (o: Partial<ProbeRun["output"]> = {}): ProbeRun["output"] => ({ exit_code: 0, timed_out: false, stdout: "", stderr: "", files: {}, ...o })
@@ -265,5 +266,75 @@ describe("exp2 block 10: the serial with probes and judge (stand-ins), checks of
     const s = store.inspect()
     const asked = s.judge_calls.filter(c => c.round === 3).reduce((n, c) => n + c.items, 0)
     assert.ok(asked < activeProbes(s.probes, s.probe_events).length, `${asked} items judged in R3`)
+  })
+})
+
+describe("exp2 block 10: the offline acceptance harnesses (detection on products, repair with official before/after)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-b10h-"))
+  const store = new Exp2Store(join(dir, "store"), "b10h")
+  const runner = new LocalProcessRunner()
+  const SORT_NUM = SORT.replace('import "sort"', 'import (\n\t"sort"\n\t"strconv"\n)').replace("return t.rows[a][i] < t.rows[b][i]", "x, _ := strconv.ParseFloat(t.rows[a][i], 64)\n\t\ty, _ := strconv.ParseFloat(t.rows[b][i], 64)\n\t\treturn x < y")
+  const product = (name: string, filterWrong: boolean, textSort: boolean) => {
+    const p = join(dir, "products", name)
+    mkdirSync(p, { recursive: true })
+    write(p, { "go.mod": GO_MOD, "main.go": MAIN, "verify.go": VERIFY(), "transform.go": TRANSFORM(["filter", "sort", "rename", "drop"]), "filter.go": FILTER(filterWrong), "sort.go": textSort ? SORT : SORT_NUM, "rename.go": RENAME, "drop.go": DROP })
+    return p
+  }
+  // The official verdict, faked from the code: a case per defect; and one case the text leaves open that a careless fix would break.
+  const scorer = join(dir, "score.mjs")
+  before(async () => {
+    await store.ingestRound(1, roundText(1), stubTransport())
+    const { writeFileSync } = await import("node:fs")
+    writeFileSync(scorer, `import { readFileSync } from "node:fs"
+const repo = process.argv[2], f = readFileSync(repo + "/filter.go", "utf8"), s = readFileSync(repo + "/sort.go", "utf8")
+const cases = { "R1 | filter keeps rows above | gt": !f.includes("keep != true"), "R1 | sort numeric | asc": s.includes("strconv"), "R1 | verify | ok": true }
+console.log(JSON.stringify({ passed: Object.values(cases).filter(Boolean).length, total: 3, cases }))
+`)
+  })
+
+  it("detection: a correction list per product, hits on the defect table, nothing on the clean product", async () => {
+    const products = [
+      { name: "clean", round: 1, path: product("clean", false, false) },
+      { name: "wrong-filter", round: 1, path: product("wrong-filter", true, false) },
+      { name: "text-sort", round: 1, path: product("text-sort", false, true) },
+    ]
+    const judge = stubJudge()
+    const r = await probeDetect({ store, probes: stubProbeWriter(), judge, build: goBuilder(join(dir, "builds"), {}, "dpipe"), runner, timeoutMs: 10_000 }, products)
+    assert.equal(r.written!.entered.length, 131)
+    const keyOf = (id: string) => store.inspect().probes.find(p => p.id === id)!.key
+    const score = scoreDefects({ clean: ["clean"], defects: [{ name: "filter", products: ["wrong-filter"], pattern: "value > 10" }, { name: "sort numeric", products: ["text-sort"], pattern: "sort[\\s\\S]*ascending" }] }, r.products.map(p => ({ product: p.product.name, items: p.items, findings: p.findings, probeKey: keyOf })))
+    assert.equal(`${score.hits}/${score.total}`, "2/2")
+    assert.deepEqual(score.clean, [{ product: "clean", items: 0 }])
+    // Each later product differs from the clean one in one probe's output: only that run is judged again.
+    assert.deepEqual(r.products.map(p => p.judge_calls), [6, 1, 1])
+    assert.deepEqual(judge.requests.slice(-2).map(q => q.items.length), [1, 1])
+  })
+
+  it("repair: a copy of each product is repaired in one session from its correction list; official cases compared before and after", async () => {
+    const products = [{ name: "wrong-filter", round: 1, path: join(dir, "products", "wrong-filter") }, { name: "text-sort", round: 1, path: join(dir, "products", "text-sort") }]
+    const executor = new StubExecutor({ messages: [wd => { write(wd, { "filter.go": FILTER(false), "sort.go": SORT_NUM }) }] })
+    const results = await repairProducts({
+      store, judge: stubJudge(), build: goBuilder(join(dir, "rbuilds"), {}, "dpipe"), runner, timeoutMs: 10_000, executor: () => executor, anchors: new GoAnchorExtractor(),
+      limits: { ...DEFAULT_LIMITS, repairCycles: 2 }, binary: "dpipe", text: roundText, score: (commit, repo, round) => officialScore([process.execPath, scorer, "{repo}"], round, commit, repo),
+    }, products, join(dir, "repair"))
+    for (const r of results) {
+      assert.equal(r.items_before.length, 1)
+      assert.deepEqual(r.open_after, [])
+      assert.equal(r.official_after!.passed, 3)
+      assert.deepEqual(r.cases!.broke, [])
+      assert.equal(r.cases!.fixed.length, 1)
+    }
+    // The first message: the requirements and the correction list, and the instruction not to touch other behaviour.
+    const first = executor.log.messages[0].text
+    assert.ok(first.includes("# Requirements") && first.includes("Build a deterministic data pipeline tool") && first.includes("# Correction list") && first.includes("Do not change behaviour the items do not concern"))
+    // The products themselves are untouched; the repair works on a copy.
+    const { readFileSync } = await import("node:fs")
+    assert.ok(readFileSync(join(dir, "products", "wrong-filter", "filter.go"), "utf8").includes("keep != true"))
+  })
+
+  it("official cases from a verifier log, by requirement, intent and scenario", () => {
+    const log = 'CASE_RESULT case_id=c001 x requirement_ref=R1.3 case_type=t status=pass intent="filter" scenario="gt"\nCASE_RESULT case_id=c002 x requirement_ref=R1.3 case_type=t status=fail intent="sort" scenario="numeric"\n'
+    assert.deepEqual([...casesFromLog(log)], [["R1.3 | filter | gt", true], ["R1.3 | sort | numeric", false]])
+    assert.deepEqual(compareCases(new Map([["a", true], ["b", false], ["c", false]]), new Map([["a", false], ["b", true], ["c", false]])), { fixed: ["b"], broke: ["a"], still: ["c"] })
   })
 })

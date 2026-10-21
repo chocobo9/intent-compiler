@@ -1,0 +1,13 @@
+# name	round	source tree of the product (a git checkout at the scored commit)	official	note
+# The names must match exp2/acceptance/r1-defects.json. Paths are placeholders.
+bare_219	1	D:/exp2/products/bare_219	219	clean
+luna56m_219	1	D:/exp2/products/luna56m_219	219	clean
+bare_rep2_218	1	D:/exp2/products/bare_rep2_218	218
+bare_rep3_218	1	D:/exp2/products/bare_rep3_218	218
+shell_191	1	D:/exp2/products/shell_191	191	repair
+cf_rep2_217	1	D:/exp2/products/cf_rep2_217	217
+cf_rep3_203	1	D:/exp2/products/cf_rep3_203	203
+cf_rep4_215	1	D:/exp2/products/cf_rep4_215	215	repair
+IC_215	1	D:/exp2/products/IC_215	215	repair
+luna56m_201	1	D:/exp2/products/luna56m_201	201
+luna56m_208	1	D:/exp2/products/luna56m_208	208	repair

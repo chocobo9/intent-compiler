@@ -144,3 +144,27 @@ new Serial({
 - **token**：编码的 token 按会话全部助手消息加总（读 `/session/{id}/message`）。编码提示不再使用 json_schema。
 - **录音**：配置项 `recording: { cassette, label }`。打开后，每次管理调用（归属、检查、裁决）都在调用后写进这个文件；续跑时接着往后写。回放用 `replayByRound`。
 - **离线验收**：`intent-exp2-detect --products <list.tsv> --state <state.json> [--config <file>] --out detect.md`，见 BLOCK9-NOTES 第 6 节。state 用含 Haiku R1–R3 检查的那份（例如 hk2 串行的 store 状态）。
+
+## 11. 第 10 块之后的变化（以本节为准）
+
+- **默认流程**：检查关闭（`ablation.checks: false`），每轮写探针（`gpt-6-sol-fast` low），每个周期在目标镜像里跑全部有效探针，判断（`gpt-5.6-luna-fast` medium）给出纠错单，在执行会话里修。两个角色都在管理服务器上，每次调用一个新会话。配置项 `roles` 可以改模型；`roles: null` 关闭。要确认管理服务器能用 `gpt-6-sol-fast`，并给它也设上 promptCacheKey。
+- **状态**：新增 `probes`、`probe_events`、`probe_calls`、`probe_rounds`、`judgments`、`judge_calls`。旧状态打开时这些为空，可以接着用；但检查开关写在状态里，第 9 块的状态（检查打开）不能用 `ablation.checks: false` 打开，要新开一个 `state_dir`。
+- **离线发现**（§4 第一项）：
+
+  ```
+  intent-exp2-probe-detect --config <本地配置> --state <含 R1 归属的 exp2-state.json> --products exp2/acceptance/r1-products.tsv --defects exp2/acceptance/r1-defects.json --out <目录>
+  ```
+
+  - `--state` 用实验 1 所用的 Haiku 归属状态（`hk2/checks-run/store/exp2-state.json`），覆盖单位与 P 的 130 条一致（替身归属是 131 条）。状态会复制到 `<目录>/store`；
+  - 产物列表照 `r1-products.example.tsv` 填路径，名字要与缺陷表一致；
+  - 输出 `detect.md`、`detect.json`：每份产物的纠错条目、歧义条目、判断调用与 token，缺陷表命中数，满分产物上的条目数。
+- **离线修复**（§4 第二项）：
+
+  ```
+  intent-exp2-repair --config <本地配置> --detect <上一步的目录> --products <4 份缺陷产物的列表> --out <目录>
+  ```
+
+  - 用上一步写好的探针和判断缓存，产物仓库复制到 `<目录>/<名字>/app` 再修；
+  - 配置的 `scoring.command` 修前、修后各调一次。逐题对比要求它在最后一行 JSON 里给出 `cases`（键为"要求 | 意图 | 场景"，值 pass/fail）或 `verifier_log`（官方日志路径，按 `CASE_RESULT` 行解析）；
+  - 输出 `repair.md`、`repair.json`：条目数、修前→修后、修好、改坏、仍失败、周期数、编码 token。
+- **报告**：每轮报告多一节 Probes，含写探针、判断的模型、调用、token，以及占编码 token 的比例。

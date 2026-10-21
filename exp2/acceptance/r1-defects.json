@@ -1,0 +1,19 @@
+{
+  "note": "The 13 typical R1 defects (19 occurrences) of PROBE-MODELS-R1-2026-10-21 §1, with the product names and the matching patterns of exp2/prototypes/judge/score2.mjs (written from the official failures before any correction list was read). A pattern is matched, case-insensitively, against '<probe key> <unit> <finding>' of each correction item of the product.",
+  "clean": ["bare_219", "luna56m_219"],
+  "defects": [
+    { "name": "log(0) -> NaN", "products": ["bare_rep3_218", "shell_191", "cf_rep2_217", "cf_rep4_215", "luna56m_208"], "pattern": "log\\(0\\)|log\\(x\\)|-Inf|non-positive" },
+    { "name": "window column name", "products": ["bare_rep2_218", "IC_215"], "pattern": "header|column name|empty name|blank|unnamed|`as`|as name" },
+    { "name": "window crash", "products": ["shell_191"], "pattern": "panic|index out of range|crash" },
+    { "name": "ntile", "products": ["IC_215", "luna56m_201"], "pattern": "ntile|tile" },
+    { "name": "aggregate min/max", "products": ["IC_215"], "pattern": "\\bmax\\b|\\bmin\\b" },
+    { "name": "expression parser", "products": ["cf_rep3_203"], "pattern": "missing \\)|parse|function" },
+    { "name": "expression operators", "products": ["luna56m_201"], "pattern": "NaN|precedence|comparison|logical|operator" },
+    { "name": "unary minus", "products": ["luna56m_208"], "pattern": "unary|negat" },
+    { "name": "avg no numeric -> NaN", "products": ["luna56m_208"], "pattern": "\\bavg\\b" },
+    { "name": "window missing column error", "products": ["luna56m_208"], "pattern": "(window|partition|order_by)[\\s\\S]*(not found|invalid reference)|(not found|invalid reference)[\\s\\S]*(window|partition)" },
+    { "name": "sort missing column error", "products": ["luna56m_208"], "pattern": "sort[\\s\\S]*(nonexist|missing|nope|not found|exit)" },
+    { "name": "pivot composite order", "products": ["luna56m_208"], "pattern": "pivot" },
+    { "name": "sort numeric desc", "products": ["cf_rep4_215"], "pattern": "sort[\\s\\S]*(desc|order|numeric|string)" }
+  ]
+}
