@@ -69,6 +69,25 @@ describe("exp2 block 4: propagation over the real R1–R15 registry", () => {
     assert.match(renderWorkOrder(w), /affected by the revision of convention O\d+ \(checks K1 to be derived again\)/u)
   })
 
+  it("a check made stale by its basis is derived again in the same round even outside the scope, without entering the task zone", () => {
+    // A determinism-contract check citing manifest's text: R10 revises that text; determinism contract did not change.
+    const det = id("determinism contract")
+    const k = libraryCheck("K1", 1, det, ["R1.S5.P2"])
+    const events = staleChecks(registry, [k], [], 10)
+    assert.deepEqual(events.map(e => [e.check, e.cause?.kind]), [["K1", "basis"]])
+    assert.ok(!registry.roundScope(10).some(c => c.object === det))
+    const request = buildCheckRequest(registry, 10, [k], events)
+    assert.deepEqual(request.stale.map(s => s.id), ["K1"])
+    const again: CheckDraft = {
+      key: "again", object: det, blocks: ["R1.S7"], uses: [], direction: "holds", note: null, reference_script: { language: "python", code: "print('{}')" },
+      input: { args: ["manifest", "--dir", ".", "--output", "m.json"], files: [] },
+      assertions: [{ id: "x", role: "business", target: { kind: "exit_code", path: null, line: null, pointer: null, column: null }, expect_json: "0", tolerance: null, source: { kind: "derived", block: null, quote: null } }],
+    }
+    assert.deepEqual(checkChecks(registry, 10, { checks: [again], retire: [] }, [k], events), [])
+    const w = buildWorkOrder({ registry, round: 10, library: [k], events, statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [] })
+    assert.ok(!w.task.some(t => t.object === det), "re-derivation is no task")
+  })
+
   it("applies_to alone puts the target object in the round's scope and the task zone", async () => {
     // A variant of the R5 answer where transform has no block of its own: only the applies_to edge reaches it.
     const fixPatch = SCRIPTS[5][1]

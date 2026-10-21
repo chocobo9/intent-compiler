@@ -1,6 +1,12 @@
 import type { TokenUsage } from "./attribution.js"
 import type { ApprovedStep, Executor, ExecutorContext, ExecutorSession, StepProposal } from "./execution.js"
 import { SessionBroken } from "./execution.js"
+import { classifyProviderError, asProviderError } from "./provider-errors.js"
+
+/** A quota or login failure is no broken session: it goes up as itself, so the serial waits or stops. */
+function broken(what: string, e: unknown): Error {
+  return classifyProviderError(e) ? asProviderError(e) as Error : new SessionBroken(`${what} failed: ${(e as Error).message}`)
+}
 
 /**
  * The coding executor over OpenCode sessions (DESIGN §7), for the local run. One OpenCode session per executor
@@ -76,17 +82,21 @@ export class OpenCodeExecutor implements Executor {
   async open(context: ExecutorContext): Promise<ExecutorSession> {
     const { client } = this.options
     let created: Record<string, any>
-    try { created = unwrap(await client.session.create({ query: { directory: context.workdir }, body: { title: `exp2 R${context.round} coding` } })) } catch (e) { throw new SessionBroken(`session.create failed: ${(e as Error).message}`) }
+    try { created = unwrap(await client.session.create({ query: { directory: context.workdir }, body: { title: `exp2 R${context.round} coding` } })) } catch (e) { throw broken("session.create", e) }
     const id = String(created.id ?? "")
     if (!id) throw new SessionBroken("session.create returned no id")
     const options = this.options
     const prompt = async (text: string, format?: { type: "json_schema"; schema: unknown; retryCount?: number }) => {
+      let r: Record<string, any>
       try {
-        return unwrap(await client.session.prompt({
+        r = unwrap(await client.session.prompt({
           path: { id }, query: { directory: context.workdir },
           body: { model: { providerID: options.providerId, modelID: options.modelId }, ...(options.variant ? { variant: options.variant } : {}), agent: options.agent ?? "build", system: EXECUTOR_SYSTEM_PROMPT, ...(format ? { format } : {}), parts: [{ type: "text", text }] },
         }))
-      } catch (e) { throw new SessionBroken(`session.prompt failed: ${(e as Error).message}`) }
+      } catch (e) { throw broken("session.prompt", e) }
+      // A provider failure can come back inside a normal reply.
+      if (r.info?.error) throw broken("session.prompt", new Error(JSON.stringify(r.info.error)))
+      return r
     }
     const opening = context.resume
       ? `${context.text}\nA previous session stopped. Steps already committed: ${context.resume.done.join(", ") || "none"}. Do only the steps left: ${context.resume.remaining.map(s => `${s.id} ${s.label}`).join("; ")}.`

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
-import { QuotaExhausted, type ModelReply, type TokenUsage } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, type ModelReply, type TokenUsage } from "./attribution.js"
 import type { Registry } from "./registry.js"
 import { safePath, type CheckInput, type ScriptSandbox } from "./runner.js"
 import { annotate, LEVEL_RANK, parseRef, roundOf, type SourceBlock } from "./source.js"
@@ -279,7 +279,7 @@ export interface CheckRequest {
 export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
-  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "transport"
+  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "transport" | "quota" | "auth"
 
 export interface CheckIssue { code: CheckIssueCode; check?: string; message: string }
 
@@ -543,9 +543,10 @@ export async function deriveChecks(registry: Registry, round: number, library: r
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
       // As in attribution: a spent quota stops the step; any other failure uses up this attempt.
-      const failed: CheckIssue[] = [{ code: "transport", message: `The model call failed: ${(e as Error).message}` }]
+      const stop = e instanceof QuotaExhausted ? "quota" as const : e instanceof AuthInvalid ? "auth" as const : null
+      const failed: CheckIssue[] = [{ code: stop ?? "transport", message: `The model call failed: ${(e as Error).message}` }]
       calls.push({ ...base, response_text: "", issues: failed, usage: zero(), stub: false, error: (e as Error).message })
-      if (e instanceof QuotaExhausted) return { status: "interrupted", calls, issues: failed }
+      if (stop) return { status: "interrupted", calls, issues: failed }
       if (!issues.length) issues = failed
       continue
     }

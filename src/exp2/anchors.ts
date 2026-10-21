@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { exeName, goCommand, type PlatformOptions } from "./platform.js"
 
 /**
  * Code anchors (DESIGN §3, §7): where objects live in the program, taken from the Go AST by a small helper
@@ -37,14 +38,14 @@ function helperSource(): string {
 /** Builds the Go helper once per source version (cached by hash) and runs it on a directory. */
 export class GoAnchorExtractor implements AnchorExtractor {
   private binary: string | null = null
-  constructor(private readonly source = helperSource(), private readonly go = "go") {}
+  constructor(private readonly source = helperSource(), private readonly platform: PlatformOptions = {}) {}
   private build(): string {
     if (this.binary) return this.binary
     const main = readFileSync(join(this.source, "main.go"))
     const out = join(tmpdir(), "exp2-anchors", createHash("sha256").update(main).digest("hex").slice(0, 16))
     mkdirSync(out, { recursive: true })
-    const bin = join(out, process.platform === "win32" ? "anchors.exe" : "anchors")
-    if (!existsSync(bin)) execFileSync(this.go, ["build", "-o", bin, "."], { cwd: this.source, stdio: ["ignore", "pipe", "pipe"] })
+    const bin = join(out, exeName("anchors", this.platform))
+    if (!existsSync(bin)) execFileSync(goCommand(this.platform), ["build", "-o", bin, "."], { cwd: this.source, stdio: ["ignore", "pipe", "pipe"] })
     this.binary = bin
     return bin
   }

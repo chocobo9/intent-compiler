@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ProgramRef } from "../../src/exp2/runner.js"
+import { blake2b256Hex } from "./blake2b.js"
 
 /**
  * Small stand-ins for the program under test, written as Node scripts. Each variant is generated with only the code
@@ -16,6 +17,8 @@ export interface Variant {
   reconcile?: boolean
   /** Whether transform writes the <output>.sha256 sidecar (R1 yes; R5 withdrew it). Default true. */
   sidecar?: boolean
+  /** The digest verify compares: SHA-256 (R1) or BLAKE2b-256 (R5 on). Default sha256. */
+  checksum?: "sha256" | "blake2b"
   /** A dispatcher that knows every command and option but does nothing and exits 0. */
   shell?: boolean
 }
@@ -64,8 +67,8 @@ ops["normalize"] = (t, op) => {
 `)
   parts.push(`
 const commands = {}
-commands["verify"] = (o) => {
-  const actual = createHash("sha256").update(read(o["--file"])).digest("hex")
+${v.checksum === "blake2b" ? `const blake2b256Hex = ${blake2b256Hex.toString()}\n` : ""}commands["verify"] = (o) => {
+  const actual = ${v.checksum === "blake2b" ? `blake2b256Hex(read(o["--file"]))` : `createHash("sha256").update(read(o["--file"])).digest("hex")`}
   const expected = read(o["--checksum"]).trim()
   if (actual === expected) { process.stdout.write("VERIFIED\\n"); process.exit(0) }
   process.stdout.write("MISMATCH expected=" + expected + " actual=" + actual + "\\n"); process.exit(1)

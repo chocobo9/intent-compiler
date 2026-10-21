@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
-import { QuotaExhausted, type AttributionTransport, type ModelReply } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, type AttributionTransport, type ModelReply } from "./attribution.js"
 import { codeFacts, type ChecksTransport } from "./checks.js"
 import { executeRound, type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
 import { head, initRepo, resetTo } from "./git.js"
@@ -47,6 +47,11 @@ export interface SerialConfig {
   sandbox: ScriptSandbox
   build: (workdir: string, label: string) => BuildResult
   limits: SerialLimits
+  /**
+   * Post-round scoring (the official verifier, locally). Its result is written into that round's checkpoint report
+   * only, after the round is complete; nothing in the serial ever reads it back.
+   */
+  score?: (round: number, commit: string, workdir: string) => Promise<{ passed: number; total: number } | null>
 }
 
 export type RoundOutcome =
@@ -161,6 +166,14 @@ export class Serial {
       try {
         outcome = await this.runRound(round)
       } catch (e) {
+        if (e instanceof AuthInvalid) {
+          // A dead login is not waited out: keep what the attempt spent, go back to the checkpoint, stop and report.
+          this.salvage(round, `login invalid: ${e.message}`)
+          await this.restore(last)
+          const stop = { status: "stopped", reason: `login invalid: ${e.message}`, issues: [] }
+          writeFileSync(join(this.c.checkpoints, `stopped-round-${pad(round)}.json`), JSON.stringify(stop, null, 2) + "\n", "utf8")
+          return { status: "stopped", last_checkpoint: last, resumes, stopped: { round, reason: stop.reason } }
+        }
         if (!(e instanceof QuotaExhausted)) throw e
         this.salvage(round, `quota: ${e.message}`)
         await this.restore(last)
@@ -180,13 +193,13 @@ export class Serial {
     this.progress = null
     // 1. Attribution.
     const attribution = await store.ingestRound(round, this.c.text(round), withWatchdog(this.c.attribution, limits.managementTimeoutMs), { maxRepairs: limits.attributionRepairs })
-    if (attribution.status === "interrupted") throw new QuotaExhausted(`attribution, round ${round}`)
+    if (attribution.status === "interrupted") throw stopping(attribution.issues ?? [], `attribution, round ${round}`)
     if (attribution.status === "failed") return { status: "stopped", reason: "attribution did not pass within its repair limit", issues: attribution.issues ?? [] }
 
     // 2. Checks, against the baseline: the last accepted program (the checkpoint's head), or the null program.
     const baseline = this.program(round === 1 ? null : `R${round - 1}-final`)
     const derived = await store.deriveRoundChecks(round, withWatchdog(this.c.checks, limits.managementTimeoutMs), { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs })
-    if (derived.status === "interrupted") throw new QuotaExhausted(`checks, round ${round}`)
+    if (derived.status === "interrupted") throw stopping(derived.issues ?? [], `checks, round ${round}`)
     const start = await store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs })
 
     // 3. The work order.
@@ -226,9 +239,26 @@ export class Serial {
       },
     })
     await store.recordRound(execution, report)
-    this.writeCheckpoint(round, head(workdir), report)
+    const commit = head(workdir)
+    this.writeCheckpoint(round, commit, report)
     this.progress = null
+    if (this.c.score) await this.writeScore(round, commit, report)
     return { status: "done", report }
+  }
+
+  /** The official score goes into the checkpoint's report files and a score log; never into the state. */
+  private async writeScore(round: number, commit: string, report: RoundReport): Promise<void> {
+    let score: { passed: number; total: number } | null
+    try { score = await this.c.score!(round, commit, this.c.workdir) } catch (e) {
+      // Scoring is outside the system: a failure is logged, and the serial goes on.
+      writeFileSync(join(this.c.checkpoints, "scores.jsonl"), JSON.stringify({ round, commit, error: (e as Error).message }) + "\n", { encoding: "utf8", flag: "a" })
+      return
+    }
+    if (!score) return
+    const scored: RoundReport = { ...report, official_score: score }
+    writeFileSync(join(this.dir(round), "report.json"), JSON.stringify(scored, null, 2) + "\n", "utf8")
+    writeFileSync(join(this.dir(round), "report.md"), renderReport(scored), "utf8")
+    writeFileSync(join(this.c.checkpoints, "scores.jsonl"), JSON.stringify({ round, commit, ...score }) + "\n", { encoding: "utf8", flag: "a" })
   }
 
   /** The program at the work tree's current commit, built; the null program when there is nothing to build. */
@@ -239,6 +269,12 @@ export class Serial {
     }
     return nullBaseline(join(this.c.checkpoints, "null-baseline"))
   }
+}
+
+/** The error a stopped management step stands for: a spent quota, or an invalid login. */
+function stopping(issues: { code: string; message: string }[], where: string): Error {
+  const auth = issues.find(i => i.code === "auth")
+  return auth ? new AuthInvalid(`${where}: ${auth.message}`) : new QuotaExhausted(where)
 }
 
 function sumUsage(a: StageCost["tokens"], b: StageCost["tokens"]): StageCost["tokens"] {

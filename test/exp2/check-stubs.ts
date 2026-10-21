@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto"
+import { blake2b256Hex } from "./blake2b.js"
 import type { AssertionDraft, CheckDraft, CheckRequest, ChecksPatch, ChecksTransport, Target } from "../../src/exp2/checks.js"
 
 /**
@@ -184,8 +185,18 @@ function r3(request: CheckRequest, first: boolean): { checks: CheckDraft[]; reti
 
 function r5(request: CheckRequest): CheckDraft[] {
   const id = ids(request)
+  // R1's verify checks went stale with R5's checksum change: verify is derived again in the same round (DESIGN §12a).
+  const verify = request.stale.some(s => s.object === id("verify")) ? [check({
+    key: "verify-blake2b", object: id("verify"), blocks: ["R5.S1.P1", "R5.S1.P2.s1"], uses: [],
+    input: { args: ["verify", "--file", "data.csv", "--checksum", "data.csv.b2"], files: [{ path: "data.csv", content: DATA }, { path: "data.csv.b2", content: blake2b256Hex(DATA) + "\n" }] },
+    assertions: [
+      verbatim("out", t("stdout_line", { line: 1 }), "VERIFIED", "R1.S4.P2.s2", "VERIFIED"),
+      verbatim("exit", t("exit_code"), 0, "R1.S4.P2.s2", "Exit code 0"),
+    ],
+    reference_script: null,
+  })] : []
   const recipe = JSON.stringify([{ op: "filter", column: "value", condition: "gt", threshold: 10 }])
-  return [check({
+  return [...verify, check({
     // The old behaviour, stated as it was: transform wrote <output>.sha256 with the output's digest. It must no longer happen.
     key: "transform-no-sidecar", object: id("transform"), blocks: ["R5.S1.P3.s5"], uses: [], direction: "withdrawn",
     input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [{ path: "data.csv", content: DATA }, { path: "recipe.json", content: recipe }] },

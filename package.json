@@ -34,7 +34,8 @@
     "intent-cost-summary": "./dist/cli/cost-summary.js",
     "intent-audit-report": "./dist/cli/audit-report.js",
     "intent-v2-deepseek-smoke": "./dist/cli/v2-deepseek-smoke.js",
-    "intent-workspace-snapshot": "./dist/cli/workspace-snapshot.js"
+    "intent-workspace-snapshot": "./dist/cli/workspace-snapshot.js",
+    "intent-exp2-serial": "./dist/cli/exp2-serial.js"
   },
   "engines": {
     "node": ">=22"

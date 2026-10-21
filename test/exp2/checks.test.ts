@@ -56,12 +56,12 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     await runOn(3, "r3", true)
     for (const p of ["r2", "shell"]) await runOn(3, p)
     for (const round of [4, 5]) assert.equal((await store.ingestRound(round, roundText(round), t)).status, "accepted")
-    programs.r5 = writeProgram(dir, "r5", "R5: no sidecar", { normalize: "sample", profile: true, sidecar: false })
+    programs.r5 = writeProgram(dir, "r5", "R5: no sidecar, BLAKE2b verify", { normalize: "sample", profile: true, sidecar: false, checksum: "blake2b" })
     assert.equal((await store.deriveRoundChecks(5, checks, { sandbox, runner, baseline: programs.r3 })).status, "accepted")
     await runOn(5, "r5", true)
     await runOn(5, "r3")
     for (let round = 6; round <= 10; round++) assert.equal((await store.ingestRound(round, roundText(round), t)).status, "accepted")
-    programs.r10 = writeProgram(dir, "r10", "R10 with reconcile", { normalize: "sample", profile: true, reconcile: true, sidecar: false })
+    programs.r10 = writeProgram(dir, "r10", "R10 with reconcile", { normalize: "sample", profile: true, reconcile: true, sidecar: false, checksum: "blake2b" })
     programs.r10wrong = writeProgram(dir, "r10-wrong", "R10 with reconcile, wrong error format", { normalize: "sample", profile: true, reconcile: true, errors: "wrong" })
     assert.equal((await store.deriveRoundChecks(10, checks, { sandbox, runner, baseline: programs.r5 })).status, "accepted")
     await runOn(10, "r10", true)
@@ -225,6 +225,22 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.deepEqual([stays.failure!.class, stays.failure!.reason], ["not_landed", "still_present"])
     assert.equal(status("5:r3", "transform").status, "not_landed")
     assert.equal(status("5:r5", "transform").status, "landed")
+  })
+
+  it("R5: a check its round made stale is derived again in that round, and the object's status follows the new check", () => {
+    const state = store.inspect()
+    const old = check("verify-match")
+    const e = state.check_events.find(x => x.check === old.id && x.status === "stale")!
+    assert.deepEqual([e.round, e.by, e.cause?.kind], [5, "code", "basis"])
+    const request = requests.filter(q => q.round === 5)[0]
+    assert.ok(request.stale.some(s => s.id === old.id), "listed for re-derivation in the same round")
+    const fresh = check("verify-blake2b")
+    assert.equal(fresh.round, 5)
+    assert.equal(fresh.strength!.strong, true, "the R3 program still compares SHA-256")
+    const verify = status("5:r5", "verify")
+    assert.equal(verify.status, "landed")
+    assert.deepEqual(verify.passing_strong, [fresh.id])
+    assert.ok(!runs.get("5:r5")!.some(r => r.check === old.id), "the stale check is not run")
   })
 
   it("a repair repeats the first request byte for byte up to the issues and draft", () => {

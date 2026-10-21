@@ -99,3 +99,16 @@ new Serial({
 2. 只跑 R1 的编码：看 OpenCode 执行方的分步是否能通过 `planProblems`，每步是否真的动到了锚点。
 3. 人为制造一次额度错误和一次挂死，确认会走 `QuotaExhausted` 和看门狗的路径，从检查点续跑。
 4. 各 `BLOCKn-NOTES.md` 里"需要设计会话决定"的各项，尤其是 BLOCK3 4.1 和 BLOCK5 3.1（检查在编码之前推导），最好在正式串行之前由设计会话确认。
+
+## 7. 第 6 块之后的变化（以本节为准）
+
+以下几项已经写成代码，本地只需要配置和核实：
+
+- **命令行入口**：`intent-exp2-serial --config <file> [--to <round>]`（`src/cli/exp2-serial.ts`）。配置文件格式见 `exp2/local-config.example.json`，校验、组装和连接前检查在 `src/exp2/local-config.ts`。用同一个配置再运行一次，就从最近的检查点续跑。退出码：0 表示完成，1 表示停下（例如归属失败或登录失效），2 表示配置或连接前检查不通过，3 表示等额度的次数用完。
+- **额度和登录**：`src/exp2/provider-errors.ts` 从错误文本识别额度用完和登录失效，两个管理调用传输层和编码执行方都已接上。额度用完抛 `QuotaExhausted`，串行等待后续跑；登录失效抛 `AuthInvalid`，串行停下并写 `stopped-round-NN.json`。**本地要做**：把真实遇到的报错原文补进 `test/exp2/local.test.ts` 的 `AUTH_TEXTS` 和 `QUOTA_TEXTS`；识别不出的，在 `provider-errors.ts` 里补正则。
+- **docker**：`src/exp2/docker.ts` 有 `DockerRunner`、`DockerScriptSandbox`、`dockerGoBuilder`。配置里设 `runner.kind: "docker"`。命令行的构造已有测试，真正运行容器还没有做过。**本地要做**：
+  - 确认镜像里有 `python3`。参考脚本要用它；如果没有，在 `runner.python` 里指定，或者换一个带 Python 的镜像。
+  - 确认 Docker Desktop 接受 `C:\...:/work` 这种挂载写法。
+  - 容器里编译时 Go 缓存每次都从空开始。如果太慢，可以用 `runner.extra` 挂一个缓存卷。注意 `extra` 对检查运行也生效。
+- **官方计分**：配置里的 `scoring.command`，例如 `["node", "score.mjs", "{round}", "{commit}", "{repo}"]`，要求输出 `{"passed": n, "total": m}`。结果只写进那一轮检查点的 `report.json`、`report.md`，以及 `checkpoints/scores.jsonl`；状态文件里的 `official_score` 始终为 null，系统不读取它。
+- **Windows**：可执行文件名、解释器、命令行和子进程环境都集中在 `src/exp2/platform.ts`。Python 默认用 `python`，可以用 `tools.python` 或环境变量 `EXP2_PYTHON` 指定完整路径；Go 用 `tools.go` 或 `EXP2_GO` 指定。

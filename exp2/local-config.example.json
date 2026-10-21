@@ -1,0 +1,51 @@
+{
+  "run_id": "exp2-dpipe-luna-1",
+  "inputs_dir": "C:/exp2/intent-compiler/exp2/inputs/dpipe",
+  "state_dir": "C:/exp2/run1/state",
+  "checkpoints_dir": "C:/exp2/run1/checkpoints",
+  "repo_dir": "C:/exp2/run1/app",
+  "builds_dir": "C:/exp2/run1/builds",
+  "rounds": 15,
+  "management": {
+    "server_url": "http://127.0.0.1:4096",
+    "directory": "C:/exp2/run1/management",
+    "provider": "openai",
+    "model": "gpt-6-luna-fast",
+    "variant": "high-fast",
+    "request_timeout_ms": 1800000
+  },
+  "coding": {
+    "server_url": "http://127.0.0.1:4097",
+    "directory": "C:/exp2/run1/app",
+    "provider": "openai",
+    "model": "gpt-6-luna-fast",
+    "variant": "high-fast",
+    "agent": "build",
+    "request_timeout_ms": 3600000
+  },
+  "limits": {
+    "attribution_repairs": 2,
+    "check_repairs": 2,
+    "management_timeout_ms": 1800000,
+    "check_timeout_ms": 60000,
+    "execution": {
+      "maxSteps": 12,
+      "maxObjectsPerStep": 6,
+      "maxProposals": 3,
+      "maxAttemptsPerStep": 3,
+      "maxSessions": 3,
+      "stepTimeoutMs": 1200000,
+      "roundAttempts": 30
+    }
+  },
+  "runner": {
+    "kind": "docker",
+    "docker": ["docker"],
+    "image": "sdd-unattended-preflight:latest",
+    "python": "python3",
+    "graceMs": 10000
+  },
+  "tools": { "python": "python", "go": "go" },
+  "resume": { "wait_ms": 1800000, "max_resumes": 48 },
+  "scoring": null
+}

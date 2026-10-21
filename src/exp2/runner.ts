@@ -2,6 +2,7 @@ import { spawn } from "node:child_process"
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, extname, join, relative, resolve, sep } from "node:path"
+import { minimalEnv, scriptCommand, scriptFile, type PlatformOptions } from "./platform.js"
 
 /**
  * Exp2 check runner (DESIGN §8): runs the program under test, or a reference script, in a fresh directory that
@@ -18,6 +19,10 @@ export interface ProgramRef {
   label: string
   command: string[]
   source_dir: string | null
+  /** "null": the code-generated round-1 baseline; every runner answers it directly (exit 1, no output). */
+  kind?: "program" | "null"
+  /** Docker: a host directory holding the program, mounted read-only at this container path. */
+  mount?: { host: string; container: string }
 }
 
 export interface RunOutput {
@@ -47,7 +52,7 @@ export function safePath(path: string): boolean {
   return !path.split(/[\\/]/u).some(part => part === ".." || part === "")
 }
 
-function writeInputs(dir: string, files: InputFile[]): void {
+export function writeInputs(dir: string, files: InputFile[]): void {
   for (const f of files) {
     if (!safePath(f.path)) throw new Error(`Unsafe input path ${f.path}`)
     const target = resolve(dir, f.path)
@@ -56,7 +61,7 @@ function writeInputs(dir: string, files: InputFile[]): void {
   }
 }
 
-function collect(dir: string): Record<string, string> {
+export function collect(dir: string): Record<string, string> {
   const out: Record<string, string> = {}
   const walk = (at: string) => {
     for (const name of readdirSync(at).sort()) {
@@ -69,7 +74,7 @@ function collect(dir: string): Record<string, string> {
   return out
 }
 
-function execute(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<ScriptResult> {
+export function execute(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv): Promise<ScriptResult> {
   return new Promise(done => {
     const child = spawn(command[0], command.slice(1), { cwd, env, stdio: ["ignore", "pipe", "pipe"] })
     let stdout = "", stderr = "", timedOut = false
@@ -81,15 +86,20 @@ function execute(command: string[], cwd: string, timeoutMs: number, env: NodeJS.
   })
 }
 
-const minimalEnv = (): NodeJS.ProcessEnv => ({ PATH: process.env.PATH ?? "", LANG: "C.UTF-8", HOME: tmpdir() })
+/** What the null baseline does for any call: exit 1, no output, the input files left as they were. */
+export function nullRun(input: CheckInput): RunOutput {
+  return { exit_code: 1, stdout: "", stderr: "", files: Object.fromEntries(input.files.map(f => [f.path.split(/[\\/]/u).join("/"), f.content])), timed_out: false }
+}
 
 /** Runs the program as a local process in a fresh temporary directory, removed afterwards. */
 export class LocalProcessRunner implements CheckRunner {
+  constructor(private readonly platform: PlatformOptions = {}) {}
   async run(program: ProgramRef, input: CheckInput, timeoutMs: number): Promise<RunOutput> {
+    if (program.kind === "null") return nullRun(input)
     const dir = mkdtempSync(join(tmpdir(), "exp2-check-"))
     try {
       writeInputs(dir, input.files)
-      const result = await execute([...program.command, ...input.args], dir, timeoutMs, minimalEnv())
+      const result = await execute([...program.command, ...input.args], dir, timeoutMs, minimalEnv(tmpdir(), this.platform))
       return { ...result, files: collect(dir) }
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }
@@ -126,20 +136,21 @@ export function nullBaseline(dir: string): ProgramRef {
   mkdirSync(dir, { recursive: true })
   const file = join(dir, "baseline.mjs")
   writeFileSync(file, "process.exit(1)\n", "utf8")
-  return { id: "baseline:null", label: "code-generated program: exit 1, no output", command: [process.execPath, file], source_dir: dir }
+  // Runners answer it directly; the file is there for anyone who wants to run it by hand.
+  return { id: "baseline:null", label: "code-generated program: exit 1, no output", command: [process.execPath, file], source_dir: dir, kind: "null" }
 }
 
 /** Runs a reference script with the check's input files in a fresh directory, time-limited, minimal environment. */
 export class LocalScriptSandbox implements ScriptSandbox {
+  constructor(private readonly platform: PlatformOptions = {}) {}
   async run(language: "python" | "node", code: string, files: InputFile[], timeoutMs: number): Promise<ScriptResult> {
     const dir = mkdtempSync(join(tmpdir(), "exp2-ref-"))
     try {
       writeInputs(dir, files)
-      const script = language === "python" ? "__reference__.py" : "__reference__.mjs"
+      const script = scriptFile(language)
       writeFileSync(join(dir, script), code, "utf8")
       // python -I: isolated mode, no user site or script-directory imports beyond the run directory itself.
-      const command = language === "python" ? ["python3", "-I", script] : [process.execPath, script]
-      return await execute(command, dir, timeoutMs, minimalEnv())
+      return await execute(scriptCommand(language, script, this.platform), dir, timeoutMs, minimalEnv(tmpdir(), this.platform))
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }
 }
