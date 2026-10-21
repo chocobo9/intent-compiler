@@ -1,0 +1,204 @@
+{
+ "bare_219": [],
+ "luna56m_219": [],
+ "bare_rep2_218": [
+  {
+   "probe": "g4_window-ranks",
+   "unit": "R1.S3.P13.s1; R1.S3.P13.s3; R1.S3.P13.s4; R1.S3.P14.s2",
+   "reason": "The new column must use the as name value_rank. The output header has an empty column name instead."
+  },
+  {
+   "probe": "g4_window-dense",
+   "unit": "R1.S3.P14.s1; R1.S3.P14.s3; R1.S3.P16.s1",
+   "reason": "The dense-rank values are correct, but the appended column header must be dense and is empty."
+  },
+  {
+   "probe": "g4_window-row-number",
+   "unit": "R1.S3.P13.s2; R1.S3.P14.s4",
+   "reason": "The row_number values and tie handling are correct, but the required appended column name seq is missing; the header is empty."
+  },
+  {
+   "probe": "g4_window-lag-lead",
+   "unit": "R1.S3.P14.s5; R1.S3.P14.s6",
+   "reason": "The lag and lead values are correct, but the output omits both required appended column names previous and next."
+  },
+  {
+   "probe": "g4_window-running",
+   "unit": "R1.S3.P14.s7; R1.S3.P14.s8; R1.S3.P16.s2",
+   "reason": "Running values are correct and formatted compactly, but the output omits the required appended column names total and mean."
+  },
+  {
+   "probe": "g4_window-ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "The ntile values are correct, but the required appended column name bucket is missing from the header."
+  }
+ ],
+ "bare_rep3_218": [],
+ "shell_191": [
+  {
+   "probe": "g3_aggregate-extrema-count-format",
+   "unit": "R1.S3.P9.s8; R1.S3.P9.s9; R1.S3.P9.s10; R1.S3.P10.s3",
+   "reason": "For a group with no numeric values, min and max must be NaN. The program outputs +Inf and -Inf."
+  },
+  {
+   "probe": "g4_window-ranks",
+   "unit": "R1.S3.P13.s1; R1.S3.P13.s3; R1.S3.P13.s4; R1.S3.P14.s2",
+   "reason": "The window operation must add the rank column, but the program exits with a runtime panic (`index out of range [-1]`) and produces no output."
+  },
+  {
+   "probe": "g4_window-dense",
+   "unit": "R1.S3.P14.s1; R1.S3.P14.s3; R1.S3.P16.s1",
+   "reason": "The dense_rank operation must produce integer-formatted ranks, but the program exits with a runtime panic and produces no output."
+  },
+  {
+   "probe": "g4_window-row-number",
+   "unit": "R1.S3.P13.s2; R1.S3.P14.s4",
+   "reason": "The row_number operation must number rows within the partition, but the program exits with a runtime panic and produces no output."
+  },
+  {
+   "probe": "g4_window-lag-lead",
+   "unit": "R1.S3.P14.s5; R1.S3.P14.s6",
+   "reason": "The lag and lead operations must return values or defaults at the requested offsets, but the program exits with a runtime panic and produces no output."
+  },
+  {
+   "probe": "g4_window-running",
+   "unit": "R1.S3.P14.s7; R1.S3.P14.s8; R1.S3.P16.s2",
+   "reason": "The running_sum and running_avg operations must compute cumulative values with the specified numeric handling and formatting, but the program exits with a runtime panic and produces no output."
+  },
+  {
+   "probe": "g4_window-ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "The ntile operation must assign partition rows to groups 1 through n, but the program exits with a runtime panic and produces no output."
+  }
+ ],
+ "cf_rep2_217": [],
+ "cf_rep3_203": [
+  {
+   "probe": "g2_round-power-log",
+   "unit": "R1.S3.P5.s6; R1.S3.P5.s7; R1.S3.P5.s8",
+   "reason": "round, pow, and log are explicitly supported, but the program rejects the recipe with a missing-parenthesis error."
+  },
+  {
+   "probe": "g2_selectors-and-bounds",
+   "unit": "R1.S3.P5.s9; R1.S3.P5.s10; R1.S3.P5.s11; R1.S3.P5.s12",
+   "reason": "min, max, if, and clamp are explicitly supported, but the program rejects the recipe with a missing-parenthesis error."
+  },
+  {
+   "probe": "g2_nesting-coalesce-inline",
+   "unit": "R1.S3.P5.s13; R1.S3.P6.s1; R1.S3.P7.s1",
+   "reason": "coalesce, nested functions, and logical comparisons are required, but the program rejects the recipe before producing output."
+  },
+  {
+   "probe": "g6_verify-mismatch",
+   "unit": "R1.S4.P2.s2",
+   "reason": "For a mismatch the required message is printed, but the program writes it to stderr; stdout is empty, whereas the observed requirement says it prints the message."
+  }
+ ],
+ "cf_rep4_215": [],
+ "IC_215": [
+  {
+   "probe": "g4_window-ranks",
+   "unit": "R1.S3.P13.s1; R1.S3.P13.s3; R1.S3.P13.s4; R1.S3.P14.s2",
+   "reason": "The new column must use the as name value_rank. The output header has an empty column name instead."
+  },
+  {
+   "probe": "g4_window-dense",
+   "unit": "R1.S3.P14.s1; R1.S3.P14.s3; R1.S3.P16.s1",
+   "reason": "The dense-rank values are correct, but the appended column header must be dense and is empty."
+  },
+  {
+   "probe": "g4_window-row-number",
+   "unit": "R1.S3.P13.s2; R1.S3.P14.s4",
+   "reason": "The row_number values and tie handling are correct, but the required appended column name seq is missing; the header is empty."
+  },
+  {
+   "probe": "g4_window-lag-lead",
+   "unit": "R1.S3.P14.s5; R1.S3.P14.s6",
+   "reason": "The lag and lead values are correct, but the output omits both required appended column names previous and next."
+  },
+  {
+   "probe": "g4_window-running",
+   "unit": "R1.S3.P14.s7; R1.S3.P14.s8; R1.S3.P16.s2",
+   "reason": "Running values are correct and formatted compactly, but the output omits the required appended column names total and mean."
+  },
+  {
+   "probe": "g3_aggregate-extrema-count-format",
+   "unit": "R1.S3.P9.s9",
+   "reason": "The minimum numeric value for group B is 2.5, but the output reports 10. The max and no-value NaN cases are otherwise consistent."
+  },
+  {
+   "probe": "g4_window-ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "With five rows ordered by id and n=3, ntile groups must be [1,1,2,2,3]. Preserving input order, the values should be 3,2,2,1,1 for ids 5 through 1, but the output is 3,3,3,1,1. The appended header is also blank instead of bucket."
+  }
+ ],
+ "luna56m_201": [
+  {
+   "probe": "g1_transform-order-filter",
+   "unit": "R1.S3.P2.s4; R1.S3.P2.s5",
+   "reason": "After deriving score as value*2+1, rows B (11) and C (13) satisfy score >= 11 and should remain. The output contains only the header."
+  },
+  {
+   "probe": "g1_derive-logical",
+   "unit": "R1.S3.P3.s2; R1.S3.P3.s3; R1.S3.P3.s5",
+   "reason": "Logical and relational expressions should return 0 or 1 for these finite inputs. The program incorrectly outputs NaN for most B and C results."
+  },
+  {
+   "probe": "g1_derive-comparisons",
+   "unit": "R1.S3.P3.s4; R1.S3.P3.s5",
+   "reason": "Finite equality and relational comparisons should produce 0 or 1. The program outputs NaN for B and C instead."
+  },
+  {
+   "probe": "g2_nesting-coalesce-inline",
+   "unit": "R1.S3.P5.s13; R1.S3.P6.s1; R1.S3.P7.s1",
+   "reason": "`coalesce(NaN,7)` must produce 7 for both rows, nested `round(sqrt(abs(value)),2)` must produce 3 and approximately 4.47, and the gated expression must produce 0 and 20. The output instead contains NaN for the second row and for the second gated result."
+  },
+  {
+   "probe": "g4_window-ntile",
+   "unit": "ntile: If the partition has k rows, the first k mod n groups have ceil(k/n) rows each, and the remaining groups have floor(k/n) rows each.",
+   "reason": "With 5 rows and n=3, ascending ids must be assigned buckets 1,1,2,2,3. The output assigns id 4 to bucket 3 instead of bucket 2."
+  }
+ ],
+ "luna56m_208": [
+  {
+   "probe": "g1_derive-logical",
+   "unit": "R1.S3.P3.s3",
+   "reason": "`&&` must return 1 only when both operands are greater than zero. For row A (`x=-2,y=3`) and row C (`x=2,y=-3`), the output is 1, but it must be 0."
+  },
+  {
+   "probe": "g2_arithmetic-precedence",
+   "unit": "R1.S3.P3.s6; R1.S3.P3.s7; R1.S3.P3.s8; R1.S3.P3.s9",
+   "reason": "Unary minus is explicitly supported, but the program rejects -value * 2 as an invalid expression."
+  },
+  {
+   "probe": "g3_aggregate-numeric",
+   "unit": "R1.S3.P9.s5; R1.S3.P9.s6; R1.S3.P9.s7; R1.S3.P10.s1",
+   "reason": "Aggregate rows must be sorted lexicographically by group columns, but output follows a different order; avg with no numeric values must be NaN, but output uses 0."
+  },
+  {
+   "probe": "g3_aggregate-extrema-count-format",
+   "unit": "R1.S3.P9.s9; R1.S3.P9.s10",
+   "reason": "For group B, the numeric minimum is 2.5, but the output reports 0. For group A, there are no numeric values, so both min and max must be NaN, but the output reports 0 for each. The sum and count happen to match."
+  },
+  {
+   "probe": "g3_having-threshold-and-order",
+   "unit": "R1.S3.P11.s1; R1.S3.P11.s5; R1.S3.P11.s8",
+   "reason": "Having is applied after sorted aggregate output, so the retained rows should remain in sorted order C then Z. The program outputs Z then C."
+  },
+  {
+   "probe": "g4_window-running",
+   "unit": "R1.S3.P14.s8; R1.S3.P16.s2",
+   "reason": "Groups with no numeric values must produce NaN for running_avg, but the rows with id 1 and id 4 report 0. The cumulative averages for the ordered x partition are also incorrect: id 2 should be 2.5 and id 3 should be 2, not 1.25 and 1.3333333333333333."
+  },
+  {
+   "probe": "g5_pivot-shape-order-first",
+   "unit": "R1.S3.P19.s3; R1.S3.P19.s4; R1.S3.P19.s6; R1.S3.P19.s7",
+   "reason": "The pivot columns are correctly sorted and first matching values are used, but output rows are not sorted by index: B rows precede A rows."
+  },
+  {
+   "probe": "g6_missing-recipe-column",
+   "unit": "R1.S8.P1.s3",
+   "reason": "Sorting by a nonexistent column is an invalid recipe and must exit 1 with an error. The program succeeds and writes output unchanged."
+  }
+ ]
+}

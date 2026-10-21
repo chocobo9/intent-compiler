@@ -1,0 +1,239 @@
+{
+ "bare_219": [],
+ "bare_rep2_218": [
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s4; R1.S3.P16.s1; R1.S3.P16.s2",
+   "reason": "The output header has empty names for all appended window columns (`id,cat,value,,,,,,,,`) instead of the specified `as` names, so the new columns are not represented as required."
+  }
+ ],
+ "bare_rep3_218": [],
+ "bare_rep4_218": [
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s4; R1.S3.P16.s1; R1.S3.P16.s2",
+   "reason": "The output header has empty names for all appended window columns (`id,cat,value,,,,,,,,`) instead of the specified `as` names, so the new columns are not represented as required."
+  }
+ ],
+ "shell_191": [
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s1-R1.S3.P16.s2",
+   "reason": "The window command panics with an index-out-of-range error instead of producing the requested window columns and preserving the original row order."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s10",
+   "reason": "With no numeric values, max must produce the literal `NaN`; the output contains `-Inf`."
+  }
+ ],
+ "cf_218": [],
+ "cf_rep2_217": [],
+ "cf_rep3_203": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P2.s2; R1.S3.P5.s11; R1.S3.P6.s1",
+   "reason": "The supplied recipe contains valid supported expressions and function calls, but the command exits with `ERROR: invalid recipe: missing ) after function` instead of applying the transformations and writing the output."
+  }
+ ],
+ "cf_rep4_215": [
+  {
+   "probe": "window",
+   "unit": "- `rank`: 1-based rank within the partition. Rows with equal values in all `order_by` columns receive the same rank. The next rank after a group of ties skips ahead by the group size (e.g., two rows tied at rank 1 → next rank is 3).",
+   "reason": "For partition a ordered by value descending, the two rows with value 10 must have rank 1 and the row with value 5 rank 3. The output gives value 5 rank 1 and the value-10 rows rank 2, so the window ordering/ranks are incorrect."
+  }
+ ],
+ "IC_215": [
+  {
+   "probe": "aggregate-having",
+   "unit": "R1.S3.P9.s10",
+   "reason": "The z group's numeric values are 60 and 50, so its maximum must be 60; the output reports 50."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s4; R1.S3.P16.s1",
+   "reason": "The window output header contains blank column names (`id,cat,value,,,,,,,,`) instead of the required original columns followed by the named new columns. The result therefore does not correctly output the appended window columns."
+  }
+ ],
+ "luna56m_201": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P3.s2-R1.S3.P8.s2",
+   "reason": "The derive chain does not correctly evaluate the expressions for every input row: rows 2 and 3 produce NaN for expressions such as precedence, comparisons, and functions even though their inputs are valid. The output also writes -0 for a logical expression whose result is 0."
+  },
+  {
+   "probe": "pipeline-failure",
+   "unit": "R1.S6.P2.s2",
+   "reason": "The required failure message is `PIPELINE FAILED at step 1: file not found: missing.csv`, but stderr includes an extra `ERROR: ` prefix: `ERROR: PIPELINE FAILED at step 1: ...`."
+  }
+ ],
+ "luna56m_208": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P3.s8",
+   "reason": "The recipe uses unary negation in the valid expression \"-value\", but the program exits with `ERROR: invalid recipe: invalid expression \"-value\"` instead of supporting unary `-`."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P14.s8",
+   "reason": "For partition b, the first row has value x, so no numeric values exist up to that row. The requirement says running_avg must be NaN in that case, but the output contains 0."
+  },
+  {
+   "probe": "invalid-recipes",
+   "unit": "R1.S8.P1.s3; R1.S3.P17.s1",
+   "reason": "A missing referenced window column requires `ERROR: invalid recipe: column missing not found`; the command instead reports `ERROR: invalid recipe: invalid reference: missing`."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s10",
+   "reason": "When all values are empty or non-numeric, max must produce NaN. The output contains 0."
+  }
+ ],
+ "luna56m_219": [],
+ "luna6m_91": [
+  {
+   "probe": "transform-expressions",
+   "unit": "- `derive`: Add a new column computed from an expression over existing numeric columns.",
+   "reason": "The recipe begins with the valid numeric expression `1 + 2 * 3`, but the program exits with `ERROR: invalid recipe: derive expression not implemented` instead of applying the derive transformation. This also contradicts the specified operator precedence support."
+  },
+  {
+   "probe": "aggregate-having",
+   "unit": "R1.S3.P9.s5-R1.S3.P11.s8",
+   "reason": "The required aggregate operation is not implemented; the command exits with an invalid-recipe error instead of producing grouped aggregation results and applying having after sorting."
+  },
+  {
+   "probe": "join",
+   "unit": "R1.S3.P12.s1; R1.S3.P12.s5; R1.S3.P12.s6",
+   "reason": "The required left join is supported and should produce output preserving all left rows, but the command exits with `join operation not implemented` and writes no result."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s1; R1.S3.P13.s2; R1.S3.P13.s3; R1.S3.P13.s4; R1.S3.P14.s1; R1.S3.P14.s2; R1.S3.P14.s3; R1.S3.P14.s4; R1.S3.P14.s5; R1.S3.P14.s6; R1.S3.P14.s7; R1.S3.P14.s8; R1.S3.P14.s9; R1.S3.P16.s1; R1.S3.P16.s2",
+   "reason": "The recipe contains supported window operations with valid referenced columns, but the program exits with `ERROR: invalid recipe: window operation not implemented` instead of adding the requested window columns and producing the transformed CSV."
+  },
+  {
+   "probe": "pivot",
+   "unit": "R1.S3.P18.s1; R1.S3.P19.s2; R1.S3.P19.s6; R1.S3.P19.s7",
+   "reason": "Pivot is a required supported operation, but the command exits with `pivot operation not implemented` and produces no output."
+  },
+  {
+   "probe": "unpivot",
+   "unit": "R1.S3.P20.s1; R1.S3.P21.s2; R1.S3.P21.s3; R1.S3.P21.s4",
+   "reason": "Unpivot is a required supported operation, but the command exits with `unpivot operation not implemented` and produces no output."
+  },
+  {
+   "probe": "pipeline-success",
+   "unit": "- On success, exits with code 0 and prints `PIPELINE OK: N steps completed`.",
+   "reason": "The supplied pipeline uses a supported `derive` operation with expression `value * 2`, so the valid four-step pipeline should reach success. Instead, step 2 fails with `derive expression not implemented`, exits 1, and never prints the required success message."
+  },
+  {
+   "probe": "invalid-recipes",
+   "unit": "R1.S8.P1.s3; R1.S3.P17.s1",
+   "reason": "The referenced partition column is missing, so the required error is ERROR: invalid recipe: column missing not found. The program instead reports that the entire window operation is not implemented."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s5; R1.S3.P9.s9; R1.S3.P10.s1",
+   "reason": "The valid aggregate using `max` exits with `ERROR: invalid recipe: aggregate operation not implemented`, although `max` is explicitly a supported aggregation and should produce NaN when no numeric values exist."
+  }
+ ],
+ "luna6m_84": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P24.s1",
+   "reason": "The valid derive recipe command exits with code 1 and produces neither the transformed output nor its checksum, contrary to the requirement to write both after applying the transformations."
+  },
+  {
+   "probe": "aggregate-having",
+   "unit": "R1.S3.P9.s5; R1.S3.P9.s6; R1.S3.P9.s7; R1.S3.P9.s8; R1.S3.P9.s9; R1.S3.P10.s1; R1.S3.P11.s1; R1.S3.P11.s4; R1.S3.P11.s5; R1.S3.P11.s8",
+   "reason": "The valid aggregate recipe exits with no output and no error text, so aggregation and the required post-sort having filtering are not performed."
+  },
+  {
+   "probe": "join",
+   "unit": "R1.S3.P12.s1-R1.S3.P12.s6",
+   "reason": "A valid left join is requested, but the command exits with code 1 and produces no output or diagnostic. It should preserve all left rows and use the first matching right row."
+  },
+  {
+   "probe": "pivot",
+   "unit": "R1.S3.P18.s1-R1.S3.P19.s8",
+   "reason": "The valid pivot operation exits with code 1 without producing output or the required column-not-found diagnostic."
+  },
+  {
+   "probe": "unpivot",
+   "unit": "R1.S3.P20.s1-R1.S3.P21.s6",
+   "reason": "The valid unpivot operation exits with code 1 and produces no output, instead of emitting one row per input/melted-column combination."
+  },
+  {
+   "probe": "pipeline-success",
+   "unit": "R1.S6.P2.s3: On success, exits with code 0 and prints `PIPELINE OK: N steps completed`.",
+   "reason": "The supplied pipeline uses a valid derive expression (`value * 2`) supported by the requirements, but execution exits 1 at step 2 with `ERROR: invalid recipe: derive expression unsupported` instead of completing the pipeline successfully and printing the required success message."
+  },
+  {
+   "probe": "missing-file",
+   "unit": "R1.S8.P1.s1",
+   "reason": "The missing input requires exit code 1 and stderr `ERROR: file not found: missing.csv`; the command exits 1 but stderr is empty."
+  },
+  {
+   "probe": "malformed-json",
+   "unit": "R1.S8.P1.s4",
+   "reason": "Malformed recipe JSON requires exit code 1 and stderr `ERROR: malformed JSON: bad.json`; the command exits 1 but stderr is empty."
+  },
+  {
+   "probe": "invalid-pattern",
+   "unit": "R1.S8.P1.s5",
+   "reason": "An invalid schema regex requires exit code 1 and stderr `ERROR: invalid pattern: [`; the command exits 1 but stderr is empty."
+  },
+  {
+   "probe": "invalid-recipes",
+   "unit": "R1.S8.P1.s2; R1.S3.P17.s1",
+   "reason": "The recipe references missing column `missing`, but the program exits with code 1 and produces no stderr error, rather than `ERROR: invalid recipe: column missing not found`."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "- `max`: maximum numeric value. Empty/non-numeric values are skipped. Result is `NaN` if no numeric values exist.",
+   "reason": "The group has no numeric values, so the supported max aggregation must produce a result containing `NaN`. The program instead exits with `ERROR: invalid recipe: unsupported aggregate configuration` and writes no output."
+  }
+ ],
+ "luna6m_122": [
+  {
+   "probe": "transform-expressions",
+   "unit": "R1.S3.P5.s2; R1.S3.P5.s3; R1.S3.P5.s4; R1.S3.P5.s5; R1.S3.P5.s6; R1.S3.P5.s7; R1.S3.P5.s8; R1.S3.P5.s9; R1.S3.P5.s10; R1.S3.P5.s11; R1.S3.P5.s12; R1.S3.P5.s13; R1.S3.P6.s1; R1.S3.P7.s1; R1.S3.P8.s1",
+   "reason": "The derive output is incorrect for many required expressions: for example abs(-4) is shown as NaN instead of 4, sqrt(abs(value)) is NaN instead of 2 for the first row, and the range expression yields 0 for value 12 instead of 12. The function and inline-condition requirements are therefore contradicted, although the output file and checksum are produced."
+  },
+  {
+   "probe": "aggregate-having",
+   "unit": "- `aggregate`: Group rows by the `group_by` columns and compute aggregations on each group.",
+   "reason": "The recipe uses supported sum, avg, count, min, and max aggregations plus a supported having clause, but the program exits with `ERROR: invalid recipe: unsupported aggregate configuration` and produces no result."
+  },
+  {
+   "probe": "join",
+   "unit": "R1.S3.P12.s1; R1.S3.P12.s2; R1.S3.P12.s3; R1.S3.P12.s4; R1.S3.P12.s6",
+   "reason": "The recipe specifies a valid left join with an existing key in both datasets, but the program exits with `ERROR: invalid recipe: unsupported join configuration` instead of producing the left-join result."
+  },
+  {
+   "probe": "window",
+   "unit": "R1.S3.P13.s1; R1.S3.P14.s1; R1.S3.P17.s1",
+   "reason": "The requirements support the window operation and the supplied recipe uses valid window functions and referenced columns, but the program exits with `ERROR: invalid recipe: unsupported operation window` instead of producing the transformed output."
+  },
+  {
+   "probe": "pivot",
+   "unit": "R1.S3.P18.s1; R1.S3.P18.s2; R1.S3.P18.s3; R1.S3.P18.s4; R1.S3.P19.s2; R1.S3.P19.s3; R1.S3.P19.s4; R1.S3.P19.s6; R1.S3.P19.s7",
+   "reason": "The valid pivot recipe exits with `ERROR: invalid recipe: unsupported operation pivot`, so no pivot transformation or sorted output is produced."
+  },
+  {
+   "probe": "unpivot",
+   "unit": "R1.S3.P20.s1; R1.S3.P20.s2; R1.S3.P20.s3; R1.S3.P20.s4; R1.S3.P20.s5; R1.S3.P21.s2; R1.S3.P21.s3; R1.S3.P21.s4; R1.S3.P21.s6",
+   "reason": "The valid unpivot recipe exits with `ERROR: invalid recipe: unsupported operation unpivot`, so the required melted rows and output columns are not produced."
+  },
+  {
+   "probe": "invalid-recipes",
+   "unit": "If any referenced column (in `partition_by`, `order_by`, or `source_column`) does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.",
+   "reason": "The window recipe references partition column `missing`, so the required error is `ERROR: invalid recipe: column missing not found`. The program instead reports `ERROR: invalid recipe: unsupported operation window`."
+  },
+  {
+   "probe": "aggregate-max-empty",
+   "unit": "R1.S3.P9.s10",
+   "reason": "The recipe uses the supported `max` aggregation, but the program exits with `ERROR: invalid recipe: unsupported aggregate configuration` instead of producing an aggregate result of `NaN` for the group with no numeric values."
+  }
+ ]
+}

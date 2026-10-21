@@ -1,0 +1,174 @@
+{
+ "bare_219": [],
+ "luna56m_219": [],
+ "bare_rep2_218": [
+  {
+   "probe": "g4_window-partition-order-column",
+   "unit": "R1.S3.P13.s1; R1.S3.P13.s2; R1.S3.P13.s3; R1.S3.P13.s4",
+   "reason": "The new window column must use the requested name 'position'. The output appends an unnamed column instead."
+  }
+ ],
+ "bare_rep3_218": [],
+ "shell_191": [
+  {
+   "probe": "g3_aggregate-minmax-layout-format",
+   "unit": "R1.S3.P9.s9; R1.S3.P9.s10; R1.S3.P10.s3",
+   "reason": "For group B, min and max have no numeric values and must both be NaN. The program writes +Inf and -Inf."
+  },
+  {
+   "probe": "g4_window-partition-order-column",
+   "unit": "R1.S3.P13.s1",
+   "reason": "The window operation must add the requested column and produce a result, but the program exited with code 2 due to an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_rank-ties",
+   "unit": "R1.S3.P14.s2",
+   "reason": "The rank operation must compute 1-based ranks with skipped gaps for ties, but the program exited with an index-out-of-range panic instead of producing output."
+  },
+  {
+   "probe": "g4_dense-rank",
+   "unit": "R1.S3.P14.s3",
+   "reason": "The dense_rank operation must produce dense ranks, formatted as integers, but the program exited with an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_row-number-ties",
+   "unit": "R1.S3.P14.s4",
+   "reason": "The row_number operation must produce unique sequential numbers within the partition, but the program exited with an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_window-lag",
+   "unit": "R1.S3.P14.s5",
+   "reason": "The lag operation must return the preceding partition value or the specified default, but the program exited with an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_window-lead",
+   "unit": "R1.S3.P14.s6",
+   "reason": "The lead operation must return the following partition value or the specified default, but the program exited with an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_running-sum",
+   "unit": "R1.S3.P14.s7",
+   "reason": "The running_sum operation must produce cumulative sums, but the program exited with an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_running-average",
+   "unit": "R1.S3.P14.s8",
+   "reason": "The running_avg operation must produce cumulative averages, including `NaN` when no numeric value exists, but the program exited with an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_ntile-integer-format",
+   "unit": "R1.S3.P14.s9",
+   "reason": "The ntile operation must assign roughly equal numbered groups, but the program exited with an index-out-of-range panic."
+  }
+ ],
+ "cf_rep2_217": [],
+ "cf_rep3_203": [
+  {
+   "probe": "g2_sqrt-rounding",
+   "unit": "R1.S3.P5.s3; R1.S3.P5.s4; R1.S3.P5.s5; R1.S3.P5.s6",
+   "reason": "The valid sqrt, ceil, floor, and round expressions should execute, but the program exits with 'missing ) after function'."
+  },
+  {
+   "probe": "g2_pow-log-min-max",
+   "unit": "R1.S3.P5.s7; R1.S3.P5.s8; R1.S3.P5.s9; R1.S3.P5.s10",
+   "reason": "The valid pow, log, min, and max expressions should execute, but the program exits with 'missing ) after function'."
+  },
+  {
+   "probe": "g2_conditional-and-nested-functions",
+   "unit": "R1.S3.P5.s11; R1.S3.P5.s12; R1.S3.P5.s13; R1.S3.P6.s1",
+   "reason": "The valid if, clamp, coalesce, and nested function expressions should execute, but the program exits with 'missing ) after function'."
+  }
+ ],
+ "cf_rep4_215": [],
+ "IC_215": [
+  {
+   "probe": "g4_window-partition-order-column",
+   "unit": "R1.S3.P13.s1; R1.S3.P13.s2; R1.S3.P13.s3; R1.S3.P13.s4",
+   "reason": "The new window column must use the requested name 'position'. The output appends an unnamed column instead."
+  },
+  {
+   "probe": "g3_aggregate-minmax-layout-format",
+   "unit": "R1.S3.P9.s10",
+   "reason": "The maximum numeric value for group A is 5, but the program wrote 2.5 for `maximum`."
+  }
+ ],
+ "luna56m_201": [
+  {
+   "probe": "g1_transform-order-filter-derive",
+   "unit": "R1.S3.P2.s4; R1.S3.P2.s5",
+   "reason": "The recipe should derive scores 6 and 9, then keep the row whose score is greater than 6. The output contains only the header and no data rows."
+  },
+  {
+   "probe": "g1_derive-logical-equality-relational",
+   "unit": "R1.S3.P3.s2; R1.S3.P3.s3; R1.S3.P3.s4; R1.S3.P3.s5",
+   "reason": "For row a=0,b=3, OR should be 1, AND 0, equality 0, inequality 1, and a>b 0. The program writes NaN for every derived result on that row."
+  },
+  {
+   "probe": "g2_inline-logical-condition",
+   "unit": "R1.S3.P7.s1",
+   "reason": "For value=20, both comparisons are true and the expression should produce 20. The program writes NaN."
+  },
+  {
+   "probe": "g4_ntile-integer-format",
+   "unit": "R1.S3.P14.s9",
+   "reason": "For k=5 and n=2, the first k mod n = 1 group must have ceil(5/2)=3 rows, so the tiles should be 1,1,1,2,2. The output is 1,1,2,2,2."
+  },
+  {
+   "probe": "g6_pipeline-failure-stops",
+   "unit": "R1.S6.P2.s2",
+   "reason": "The requirement says to print `PIPELINE FAILED at step 2: file not found: missing.csv`; the program instead prints `ERROR: PIPELINE FAILED at step 2: file not found: missing.csv`, adding an unrequired prefix."
+  }
+ ],
+ "luna56m_208": [
+  {
+   "probe": "g1_derive-logical-equality-relational",
+   "unit": "R1.S3.P3.s3",
+   "reason": "The AND expression `a && b` must return 1 only when both operands are greater than 0. For the first row, `2 && -1` must therefore be 0, but the program wrote 1."
+  },
+  {
+   "probe": "g2_derive-operators",
+   "unit": "R1.S3.P3.s8",
+   "reason": "The recipe uses the valid derive expression `-value`, but the command exits with `ERROR: invalid recipe: invalid expression \"-value\"`. The requirement specifies unary `-` (negation) support, so this run contradicts it."
+  },
+  {
+   "probe": "g2_conditional-and-nested-functions",
+   "unit": "R1.S3.P5.s12",
+   "reason": "`clamp(-4, -2, 2)` must return the lower bound -2, but the program wrote -4."
+  },
+  {
+   "probe": "g3_aggregate-sum-average",
+   "unit": "R1.S3.P9.s5; R1.S3.P9.s6; R1.S3.P9.s7",
+   "reason": "For group B, avg has no numeric values and must be NaN. The program writes 0."
+  },
+  {
+   "probe": "g3_aggregate-minmax-layout-format",
+   "unit": "R1.S3.P9.s9; R1.S3.P9.s10",
+   "reason": "For group B there are no numeric values, and for group A the numeric values are 5.0 and 2.5. The required min/max results are NaN when no numeric values exist and otherwise the numeric minimum/maximum, but the output reports 0 for both B and reports minimum 0 for A."
+  },
+  {
+   "probe": "g3_having-retains-sorted-order",
+   "unit": "R1.S3.P11.s8",
+   "reason": "Having is required to run after aggregation sorting. The remaining groups should retain sorted order A, B, Z, but the program outputs Z, B, A."
+  },
+  {
+   "probe": "g3_sort-rename-drop",
+   "unit": "R1.S3.P9.s2; R1.S3.P9.s3; R1.S3.P9.s4",
+   "reason": "Ascending stable sort by group should output A before B rows. The program preserves the original B, A, B order."
+  },
+  {
+   "probe": "g4_running-average",
+   "unit": "R1.S3.P14.s8",
+   "reason": "The first row has no numeric `value`, so running_avg must be NaN when no numeric values exist up to that row. The output reports `0` instead."
+  },
+  {
+   "probe": "g4_window-missing-column",
+   "unit": "R1.S3.P17.s1",
+   "reason": "The required error is 'ERROR: invalid recipe: column absent not found'. The program emits 'ERROR: invalid recipe: invalid reference: absent'."
+  },
+  {
+   "probe": "g5_pivot-order-and-first-match",
+   "unit": "R1.S3.P19.s3; R1.S3.P19.s4; R1.S3.P19.s6; R1.S3.P19.s7",
+   "reason": "Although pivot columns are sorted and first matching values are used, output rows must be sorted by id. The program outputs b before a."
+  }
+ ]
+}

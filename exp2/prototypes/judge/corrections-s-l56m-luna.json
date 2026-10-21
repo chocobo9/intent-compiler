@@ -1,0 +1,237 @@
+{
+ "bare_219": [
+  {
+   "probe": "g6_missing-input",
+   "unit": "R1.S8.P1.s1",
+   "reason": "The requirement requires stderr `ERROR: file not found: missing.csv`, but the program emits `open missing.csv: no such file or directory`."
+  }
+ ],
+ "luna56m_219": [
+  {
+   "probe": "g6_missing-input",
+   "unit": "R1.S8.P1.s1",
+   "reason": "The requirement requires stderr `ERROR: file not found: missing.csv`, but the program emits `open missing.csv: no such file or directory`."
+  }
+ ],
+ "bare_rep2_218": [
+  {
+   "probe": "g4_window-structure",
+   "unit": "R1.S3.P13.s1 / R1.S3.P13.s2 / R1.S3.P13.s3 / R1.S3.P13.s4",
+   "reason": "The rank values are computed, but the appended column header is empty instead of the requested `as` name `r`."
+  },
+  {
+   "probe": "g4_window-rank",
+   "unit": "R1.S3.P14.s1 / R1.S3.P14.s2",
+   "reason": "The rank values are correct, including the gap after the tie, but the new column header is empty rather than the requested `as` name `rank`."
+  },
+  {
+   "probe": "g4_window-dense",
+   "unit": "R1.S3.P14.s3",
+   "reason": "The dense-rank values are correct, but the appended output column has an empty header instead of the requested `as` name `dr`."
+  },
+  {
+   "probe": "g4_window-row-number",
+   "unit": "R1.S3.P14.s4",
+   "reason": "The row-number values are correct and tie order is preserved, but the appended output column has an empty header instead of the requested `as` name `rn`."
+  },
+  {
+   "probe": "g4_window-lag-lead",
+   "unit": "R1.S3.P14.s5 / R1.S3.P14.s6",
+   "reason": "Lag and lead values are correct, but both appended columns have empty headers instead of the requested `as` names `prev` and `next`."
+  },
+  {
+   "probe": "g4_window-running-sum-avg",
+   "unit": "R1.S3.P14.s7 / R1.S3.P14.s8",
+   "reason": "Running sum and running average values are correct, but both appended columns have empty headers instead of the requested `as` names `sum` and `avg`."
+  },
+  {
+   "probe": "g4_window-ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "The ntile values follow the required 2,2,1 distribution, but the appended column has an empty header instead of the requested `as` name `tile`."
+  },
+  {
+   "probe": "g4_window-format",
+   "unit": "R1.S3.P16.s1 / R1.S3.P16.s2",
+   "reason": "The numeric formatting is correct, but the appended columns have empty headers rather than the requested `as` names."
+  }
+ ],
+ "bare_rep3_218": [],
+ "shell_191": [
+  {
+   "probe": "g4_window-structure",
+   "unit": "R1.S3.P13.s1; R1.S3.P13.s2; R1.S3.P13.s3; R1.S3.P13.s4",
+   "reason": "The window operation does not produce a result; it panics with an index-out-of-range error instead of adding the requested column while preserving the input row order."
+  },
+  {
+   "probe": "g4_window-rank",
+   "unit": "R1.S3.P14.s1; R1.S3.P14.s2",
+   "reason": "The rank operation panics with an index-out-of-range error and produces no output, instead of computing 1-based ranks with ties and gaps."
+  },
+  {
+   "probe": "g4_window-dense",
+   "unit": "R1.S3.P14.s1; R1.S3.P14.s3",
+   "reason": "The dense_rank operation panics with an index-out-of-range error and produces no output, instead of computing dense ranks."
+  },
+  {
+   "probe": "g4_window-row-number",
+   "unit": "R1.S3.P14.s1; R1.S3.P14.s4",
+   "reason": "The row_number operation panics with an index-out-of-range error and produces no output, instead of assigning unique sequential numbers within the partition."
+  },
+  {
+   "probe": "g4_window-lag-lead",
+   "unit": "R1.S3.P14.s5; R1.S3.P14.s6",
+   "reason": "Both lag and lead fail with an index-out-of-range panic and produce no output, instead of using the specified offset and default values."
+  },
+  {
+   "probe": "g4_window-running-sum-avg",
+   "unit": "R1.S3.P14.s7; R1.S3.P14.s8",
+   "reason": "Both running_sum and running_avg fail with an index-out-of-range panic and produce no output."
+  },
+  {
+   "probe": "g4_window-ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "The ntile operation panics with an index-out-of-range error and produces no output, instead of assigning the requested roughly equal groups."
+  },
+  {
+   "probe": "g4_window-format",
+   "unit": "R1.S3.P16.s1; R1.S3.P16.s2",
+   "reason": "No window results are produced because the operation panics before writing output, so the required formatting cannot be satisfied."
+  }
+ ],
+ "cf_rep2_217": [],
+ "cf_rep3_203": [
+  {
+   "probe": "g2_probe-round-pow-log-min",
+   "unit": "R1.S3.P5.s6 / R1.S3.P5.s7 / R1.S3.P5.s8 / R1.S3.P5.s9",
+   "reason": "The recipe uses round, pow, log, and min as specified, but execution fails with `missing ) after function` instead of applying them."
+  },
+  {
+   "probe": "g2_probe-max-conditional-bounds-coalesce",
+   "unit": "R1.S3.P5.s10 / R1.S3.P5.s11 / R1.S3.P5.s12 / R1.S3.P5.s13",
+   "reason": "The recipe uses max, if, clamp, and coalesce as specified, but execution fails with `missing ) after function` instead of applying them."
+  },
+  {
+   "probe": "g2_probe-nested-logical-and-sampling",
+   "unit": "R1.S3.P6.s1 / R1.S3.P7.s1 / R1.S3.P9.s1",
+   "reason": "The nested expression, comparison/logical expression, and deterministic sample operation are not completed because the transform exits with `missing ) after function`."
+  },
+  {
+   "probe": "g6_verify-mismatch",
+   "unit": "R1.S4.P2.s2",
+   "reason": "On checksum mismatch the required message must be printed to stdout, but the program prints it to stderr."
+  },
+  {
+   "probe": "g6_pipeline-success",
+   "unit": "R1.S6.P2.s1, R1.S6.P2.s3",
+   "reason": "The pipeline exited successfully and printed the required success message, but its manifest step wrote \"files\": null. The manifest requirement requires files to be an array, including an empty array when no CSV files are found."
+  }
+ ],
+ "cf_rep4_215": [
+  {
+   "probe": "g4_window-rank",
+   "unit": "R1.S3.P14.s2",
+   "reason": "The `rank` function with descending values 10, 10, 5 must produce ranks 1, 1, 3. The output produces 2, 2, 1."
+  },
+  {
+   "probe": "g4_window-dense",
+   "unit": "R1.S3.P14.s3",
+   "reason": "The `dense_rank` function with descending values 10, 10, 5 must produce 1, 1, 2. The output produces 2, 2, 1."
+  },
+  {
+   "probe": "g4_window-row-number",
+   "unit": "R1.S3.P14.s4",
+   "reason": "`row_number` must follow the descending order while breaking ties by input order, producing 1, 2, 3 for the input rows. The output produces 2, 3, 1."
+  }
+ ],
+ "IC_215": [
+  {
+   "probe": "g4_window-structure",
+   "unit": "R1.S3.P13.s1 / R1.S3.P13.s2 / R1.S3.P13.s3 / R1.S3.P13.s4",
+   "reason": "The rank values are computed, but the appended column header is empty instead of the requested `as` name `r`."
+  },
+  {
+   "probe": "g4_window-rank",
+   "unit": "R1.S3.P14.s1 / R1.S3.P14.s2",
+   "reason": "The rank values are correct, including the gap after the tie, but the new column header is empty rather than the requested `as` name `rank`."
+  },
+  {
+   "probe": "g4_window-dense",
+   "unit": "R1.S3.P14.s3",
+   "reason": "The dense-rank values are correct, but the appended output column has an empty header instead of the requested `as` name `dr`."
+  },
+  {
+   "probe": "g4_window-row-number",
+   "unit": "R1.S3.P14.s4",
+   "reason": "The row-number values are correct and tie order is preserved, but the appended output column has an empty header instead of the requested `as` name `rn`."
+  },
+  {
+   "probe": "g4_window-lag-lead",
+   "unit": "R1.S3.P14.s5 / R1.S3.P14.s6",
+   "reason": "Lag and lead values are correct, but both appended columns have empty headers instead of the requested `as` names `prev` and `next`."
+  },
+  {
+   "probe": "g4_window-running-sum-avg",
+   "unit": "R1.S3.P14.s7 / R1.S3.P14.s8",
+   "reason": "Running sum and running average values are correct, but both appended columns have empty headers instead of the requested `as` names `sum` and `avg`."
+  },
+  {
+   "probe": "g4_window-format",
+   "unit": "R1.S3.P16.s1 / R1.S3.P16.s2",
+   "reason": "The numeric formatting is correct, but the appended columns have empty headers rather than the requested `as` names."
+  },
+  {
+   "probe": "g3_aggregate-min-max-format",
+   "unit": "R1.S3.P9.s9 / R1.S3.P9.s10 / R1.S3.P10.s1 / R1.S3.P10.s3",
+   "reason": "For group B, `min` has no numeric values and must be `NaN`, but the output is `+Inf`."
+  },
+  {
+   "probe": "g4_window-ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "For 5 rows and n=3, ntile must assign group sizes 2, 2, and 1, yielding 1, 1, 2, 2, 3. The output yields 1, 1, 3, 3, 3 and also emits an empty output column name instead of `tile`."
+  }
+ ],
+ "luna56m_201": [
+  {
+   "probe": "g1_transform-filter-derive-order",
+   "unit": "R1.S3.P2.s2 / R1.S3.P2.s4 / R1.S3.P2.s5",
+   "reason": "The filter correctly keeps values above 10, but the derive expression `value * 2 + 1` produces `NaN` for value 20; it must produce 41. The listed transformations therefore were not applied correctly."
+  },
+  {
+   "probe": "g2_probe-nested-logical-and-sampling",
+   "unit": "R1.S3.P6.s1; R1.S3.P7.s1",
+   "reason": "The derive columns are computed as NaN for every retained row. The nested expression should produce rounded square roots of absolute values, and the masked expression should produce 0 or the value based on the comparisons."
+  },
+  {
+   "probe": "g4_window-ntile",
+   "unit": "R1.S3.P14.s9",
+   "reason": "For k=5 and n=3, the first k mod n = 2 groups must have ceil(5/3)=2 rows, so the tiles should be 1,1,2,2,3. The output is 1,2,2,3,3."
+  }
+ ],
+ "luna56m_208": [
+  {
+   "probe": "g2_probe-arithmetic-and-primitives",
+   "unit": "R1.S3.P3.s6 / R1.S3.P3.s7 / R1.S3.P3.s8 / R1.S3.P3.s9",
+   "reason": "The recipe uses valid arithmetic, unary negation, parentheses, and a function call, but execution fails with `invalid expression \"-value\"`; unary negation and the listed expression primitives are required."
+  },
+  {
+   "probe": "g3_aggregate-basic",
+   "unit": "R1.S3.P9.s7; R1.S3.P9.s9; R1.S3.P9.s10",
+   "reason": "The aggregate output is incorrect: for group A, avg should be 2 and min should be 2, but the program writes 0.6666666666666666 and 0. For group B, avg and min should be NaN because there are no numeric values, but the program writes 0 for both."
+  },
+  {
+   "probe": "g3_aggregate-having",
+   "unit": "R1.S3.P11.s1 / R1.S3.P11.s3 / R1.S3.P11.s4 / R1.S3.P11.s5",
+   "reason": "The having predicate itself keeps the correct groups and references a valid aggregation alias, but the aggregate output is `c,b` rather than the required lexicographically sorted group order `b,c` before filtering."
+  },
+  {
+   "probe": "g3_aggregate-having-order",
+   "unit": "R1.S3.P11.s8",
+   "reason": "Having must be applied after sorting and preserve the sorted relative order. The output is `c,b`; after sorting by group it should be `b,c`."
+  },
+  {
+   "probe": "g4_window-missing-column",
+   "unit": "R1.S3.P17.s1",
+   "reason": "A missing referenced column must produce `ERROR: invalid recipe: column missing not found`; the program instead emits `ERROR: invalid recipe: invalid reference: missing`."
+  }
+ ]
+}

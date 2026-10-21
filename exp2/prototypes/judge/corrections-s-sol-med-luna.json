@@ -1,0 +1,279 @@
+{
+ "bare_219": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P16.s2",
+   "reason": "Lag and lead results are required to omit unnecessary trailing zeros, but the output retains values such as 1.50, 2.00, and 0.00."
+  },
+  {
+   "probe": "g6_missing-input",
+   "unit": "R1.S8.P1.s1",
+   "reason": "The missing input causes exit 1, but stderr is `open absent.txt: no such file or directory` instead of the required `ERROR: file not found: absent.txt`."
+  }
+ ],
+ "luna56m_219": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P16.s2",
+   "reason": "Lag and lead results are required to omit unnecessary trailing zeros, but the output retains values such as 1.50, 2.00, and 0.00."
+  },
+  {
+   "probe": "g6_missing-input",
+   "unit": "R1.S8.P1.s1",
+   "reason": "The missing input causes exit 1, but stderr is `open absent.txt: no such file or directory` instead of the required `ERROR: file not found: absent.txt`."
+  }
+ ],
+ "bare_rep2_218": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g4_window-partition-multikey",
+   "unit": "R1.S3.P13.s1, R1.S3.P13.s2, R1.S3.P13.s3, R1.S3.P13.s4",
+   "reason": "The new window column must be appended with its specified name, but the output header ends with an empty column instead of position."
+  },
+  {
+   "probe": "g4_window-ranking-ties",
+   "unit": "R1.S3.P14.s1, R1.S3.P14.s2, R1.S3.P14.s3, R1.S3.P14.s4",
+   "reason": "Although the displayed rank values are plausible, all three window columns are unnamed: the header is id,score,,, rather than including r, dr, and rn."
+  },
+  {
+   "probe": "g4_window-offset-and-running",
+   "unit": "R1.S3.P14.s5, R1.S3.P14.s6, R1.S3.P14.s7, R1.S3.P14.s8",
+   "reason": "The calculated values are present, but the output header has empty appended column names instead of previous_two, next_two, total, and average."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P14.s9, R1.S3.P16.s1, R1.S3.P16.s2",
+   "reason": "The numeric window values appear formatted correctly, but the output header contains empty appended columns rather than the specified window column names."
+  }
+ ],
+ "bare_rep3_218": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P16.s2",
+   "reason": "Lag and lead results are required to omit unnecessary trailing zeros, but the output retains values such as 1.50, 2.00, and 0.00."
+  }
+ ],
+ "shell_191": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g3_aggregate-extrema-layout-format",
+   "unit": "R1.S3.P9.s9, R1.S3.P9.s10",
+   "reason": "Groups with no numeric values must produce NaN for min and max; the output produces -Inf and +Inf."
+  },
+  {
+   "probe": "g4_window-partition-multikey",
+   "unit": "R1.S3.P13.s1; R1.S3.P13.s2; R1.S3.P13.s3; R1.S3.P13.s4",
+   "reason": "The window operation is required to add the requested column and preserve output rows, but the program exits with an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_window-ranking-ties",
+   "unit": "R1.S3.P14.s1; R1.S3.P14.s2; R1.S3.P14.s3; R1.S3.P14.s4",
+   "reason": "The rank, dense_rank, and row_number operations are required to produce window results, but the command panics before writing output."
+  },
+  {
+   "probe": "g4_window-offset-and-running",
+   "unit": "R1.S3.P14.s5; R1.S3.P14.s6; R1.S3.P14.s7; R1.S3.P14.s8",
+   "reason": "The lag, lead, running_sum, and running_avg operations are required to produce results, but the command exits with an index-out-of-range panic."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P14.s9; R1.S3.P16.s1; R1.S3.P16.s2",
+   "reason": "The ntile and other window operations are required to produce formatted results, but the command exits with an index-out-of-range panic and writes no output."
+  }
+ ],
+ "cf_rep2_217": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P16.s2",
+   "reason": "Lag and lead results are required to omit unnecessary trailing zeros, but the output retains values such as 1.50, 2.00, and 0.00."
+  }
+ ],
+ "cf_rep3_203": [
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P16.s2",
+   "reason": "Lag and lead results are required to omit unnecessary trailing zeros, but the output retains values such as 1.50, 2.00, and 0.00."
+  },
+  {
+   "probe": "g2_round-power-log-min",
+   "unit": "R1.S3.P5.s6, R1.S3.P5.s7, R1.S3.P5.s8, R1.S3.P5.s9",
+   "reason": "The required function expressions are rejected with \"missing ) after function\" rather than producing output."
+  },
+  {
+   "probe": "g2_conditional-functions",
+   "unit": "R1.S3.P5.s10, R1.S3.P5.s11, R1.S3.P5.s12, R1.S3.P5.s13",
+   "reason": "The required max, if, clamp, and coalesce expressions are rejected with \"missing ) after function\"."
+  },
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P6.s1, R1.S3.P7.s1",
+   "reason": "The nested function and logical comparison expressions are rejected with \"missing ) after function\" rather than being evaluated."
+  }
+ ],
+ "cf_rep4_215": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P16.s2",
+   "reason": "Lag and lead results are required to omit unnecessary trailing zeros, but the output retains values such as 1.50, 2.00, and 0.00."
+  }
+ ],
+ "IC_215": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g4_window-partition-multikey",
+   "unit": "R1.S3.P13.s1, R1.S3.P13.s2, R1.S3.P13.s3, R1.S3.P13.s4",
+   "reason": "The new window column must be appended with its specified name, but the output header ends with an empty column instead of position."
+  },
+  {
+   "probe": "g4_window-ranking-ties",
+   "unit": "R1.S3.P14.s1, R1.S3.P14.s2, R1.S3.P14.s3, R1.S3.P14.s4",
+   "reason": "Although the displayed rank values are plausible, all three window columns are unnamed: the header is id,score,,, rather than including r, dr, and rn."
+  },
+  {
+   "probe": "g4_window-offset-and-running",
+   "unit": "R1.S3.P14.s5, R1.S3.P14.s6, R1.S3.P14.s7, R1.S3.P14.s8",
+   "reason": "The calculated values are present, but the output header has empty appended column names instead of previous_two, next_two, total, and average."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P16.s2",
+   "reason": "The lag results retain unnecessary trailing zeros, including `0.00`, `1.50`, and `2.00`, contrary to the required formatting. The ntile assignments themselves match the specified group sizing."
+  }
+ ],
+ "luna56m_201": [
+  {
+   "probe": "g1_transform-ordered-operations",
+   "unit": "R1.S3.P2.s2, R1.S3.P2.s5, R1.S3.P24.s1",
+   "reason": "The derive expression should produce scores 5, 11, and 15, so filtering score > 10 should leave rows 2 and 3. The result is empty."
+  },
+  {
+   "probe": "g2_basic-math-functions",
+   "unit": "R1.S3.P5.s2, R1.S3.P5.s3, R1.S3.P5.s4, R1.S3.P5.s5",
+   "reason": "For input 9, abs should be 9, sqrt should be 3, ceil(9/4) should be 3, and floor(9/4) should be 2; the output contains NaN for all four derived values."
+  },
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P6.s1; R1.S3.P7.s1",
+   "reason": "The nested expression should produce 1.41, 7.07, and 12.25 for the three rows, and the range expression should produce 0, 50, and 0. The output instead contains NaN and incorrect -0 values."
+  }
+ ],
+ "luna56m_208": [
+  {
+   "probe": "g2_nested-and-inline",
+   "unit": "R1.S3.P7.s1",
+   "reason": "The requirement says the logical expression yields 0 when out of range, but the out-of-range row is written as -0 in in_range."
+  },
+  {
+   "probe": "g4_window-ntile-formatting",
+   "unit": "R1.S3.P16.s2",
+   "reason": "Lag and lead results are required to omit unnecessary trailing zeros, but the output retains values such as 1.50, 2.00, and 0.00."
+  },
+  {
+   "probe": "g1_ingest-types-and-rejected",
+   "unit": "R1.S2.P2.s2",
+   "reason": "The schema declares timestamp type datetime, which requires RFC 3339. The row with timestamp `2024-01-01` is emitted in `clean.csv` as valid instead of being rejected."
+  },
+  {
+   "probe": "g1_transform-expression-precedence",
+   "unit": "R1.S3.P3.s2, R1.S3.P3.s3, R1.S3.P3.s4, R1.S3.P3.s5",
+   "reason": "The run fails on expression \"-1 && 1\", although unary negation is required and the logical/comparison expressions are required to be supported."
+  },
+  {
+   "probe": "g2_arithmetic-precedence",
+   "unit": "R1.S3.P3.s6, R1.S3.P3.s7, R1.S3.P3.s8, R1.S3.P3.s9",
+   "reason": "The run fails on the required unary-minus expression \"-2 * 3 + 9\" instead of evaluating the arithmetic expressions."
+  },
+  {
+   "probe": "g2_round-power-log-min",
+   "unit": "R1.S3.P5.s6; R1.S3.P5.s7; R1.S3.P5.s8; R1.S3.P5.s9",
+   "reason": "The required round(-2.5, 0) result is -3 under half-away-from-zero rounding, but the output is NaN. The pow, log, and min results shown are correct."
+  },
+  {
+   "probe": "g2_conditional-functions",
+   "unit": "R1.S3.P5.s10; R1.S3.P5.s11; R1.S3.P5.s12; R1.S3.P5.s13",
+   "reason": "max(-2, 3) must return 3, but the output is NaN. The if, clamp, and coalesce results shown are correct."
+  },
+  {
+   "probe": "g3_aggregate-skipped-values",
+   "unit": "R1.S3.P9.s6, R1.S3.P9.s7, R1.S3.P9.s8",
+   "reason": "For group A, avg of the only numeric value is 2, not 0.6666. For group B, no numeric values exist, so avg must be NaN, not 0."
+  },
+  {
+   "probe": "g3_aggregate-extrema-layout-format",
+   "unit": "R1.S3.P9.s9; R1.S3.P9.s10",
+   "reason": "For the west/B group, all amount values are empty or non-numeric, so both min and max must be `NaN`. The output writes `0` for both."
+  },
+  {
+   "probe": "g3_having-after-aggregation",
+   "unit": "R1.S3.P11.s1, R1.S3.P11.s8",
+   "reason": "After lexicographic group sorting, the retained groups should be m then z. The output is z then m, so having is not applied while preserving sorted order."
+  },
+  {
+   "probe": "g3_having-references-aggregation-alias",
+   "unit": "The `column` must reference one of the `as` names from the aggregations.",
+   "reason": "The having clause references `value`, which is not an aggregation `as` name; the run nevertheless exited 0 and produced output instead of rejecting the invalid recipe."
+  },
+  {
+   "probe": "g4_window-offset-and-running",
+   "unit": "R1.S3.P16.s2",
+   "reason": "The lag result for the source value `2.50` is emitted as `2.50`, retaining an unnecessary trailing zero. The requirement says lag results must be formatted without unnecessary trailing zeros."
+  },
+  {
+   "probe": "g4_window-missing-partition-column",
+   "unit": "R1.S3.P17.s1",
+   "reason": "The required error is \"ERROR: invalid recipe: column missing_partition not found\"; the program reports \"ERROR: invalid recipe: invalid reference: missing_partition\"."
+  },
+  {
+   "probe": "g4_pivot-composite-and-first-value",
+   "unit": "R1.S3.P18.s1, R1.S3.P18.s2, R1.S3.P18.s3, R1.S3.P18.s4",
+   "reason": "Pivot output rows must be sorted by index columns ascending. The output order is Z, A, A instead of A, A, Z."
+  },
+  {
+   "probe": "g4_pivot-distinct-composite-keys",
+   "unit": "R1.S3.P19.s2",
+   "reason": "The output correctly has unique index combinations, but the rows are not sorted by the index columns ascending: B,1 appears before A,1 and A,2."
+  },
+  {
+   "probe": "g5_pivot-layout-and-first-match",
+   "unit": "R1.S3.P19.s3, R1.S3.P19.s4, R1.S3.P19.s6, R1.S3.P19.s7",
+   "reason": "The pivot columns and first-match cells are correct, but output rows are not sorted lexicographically by index: z,Z appears before a,Y and a,X."
+  }
+ ]
+}
