@@ -123,4 +123,4 @@ new Serial({
 - **录音**：`recordingTransports(t, cassette, file)` 包住真实的两个管理传输层，每次调用后保存回放文件；`replayTransports(loadCassette(file))` 回放（`src/exp2/recording.ts`）。**本地要做**：luna 的第一次真实运行用录音方式包一层，回放文件放在 `exp2/recordings/<名字>/`。命令行入口还没有录音开关，需要时在 `assembleSerial` 里包一层即可。
 - **比较工具**：`intent-exp2-compare --state <checkpoints/round-15/state.json> --independent <标注.json> --inputs exp2/inputs/dpipe --out cmp.md`。标注格式：`{label, rounds: [{round, answer}]}`，`answer` 是整份 `AttributionAnswer`，要能通过同一套核对。
 - **变异测试**：`intent-exp2-mutate --tree <某轮代码的副本> --state <该轮 state.json> --round <n> [--config <本地配置>] [--max 30] --out mut.md`。只对已有产物运行。
-- **消融**：配置里的 `ablation: { zoning, checks, clauses }`，都默认 true。消融运行要换 `run_id` 和全部目录。
+- **消融**：配置里的 `ablation: { zoning, checks, clauses }`，都默认 true，写进状态；用不同设置打开同一状态会报错，所以消融运行要换 `run_id` 和全部目录。

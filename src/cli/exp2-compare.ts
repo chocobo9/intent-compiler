@@ -19,7 +19,7 @@ function main(argv: string[]): number {
   const independent = JSON.parse(readFileSync(resolve(other), "utf8")) as IndependentAttribution
   const n = Number(at("--rounds") ?? Math.min(accepted.length, independent.rounds.length))
   const texts = Array.from({ length: n }, (_, i) => readFileSync(join(resolve(inputs), `round-${String(i + 1).padStart(2, "0")}.md`), "utf8"))
-  const system = materialize(state.sources.filter(s => s.round <= n), accepted.filter(a => a.round <= n), state.split)
+  const system = materialize(state.sources.filter(s => s.round <= n), accepted.filter(a => a.round <= n), { clauses: state.ablation?.clauses })
   const built = registryOf(texts, { ...independent, rounds: independent.rounds.filter(r => r.round <= n) })
   if (built.failed) process.stderr.write(`independent round ${built.failed.round} does not pass the check (compared up to round ${built.rounds}):\n- ${built.failed.issues.map(i => i.message).join("\n- ")}\n`)
   const rounds = Array.from({ length: built.rounds }, (_, i) => i + 1)

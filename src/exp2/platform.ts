@@ -20,6 +20,26 @@ export function isEnvironmentBlock(e: unknown, output = ""): boolean {
 /** Spawning again when the host blocked it: Smart App Control blocks at random, so a few tries may get through. */
 export const ENVIRONMENT_TRIES = 3
 
+/**
+ * A synchronous start (execFileSync, spawnSync) under the same rule: a host block, thrown or returned, is tried
+ * again, then raised as EnvironmentBlocked; any other error passes through unchanged.
+ */
+export function guardedSync<T>(what: string, start: () => T, blockedResult: (r: T) => string | null = () => null): T {
+  for (let n = 1; ; n++) {
+    let blocked: string | null
+    try {
+      const r = start()
+      blocked = blockedResult(r)
+      if (blocked === null) return r
+    } catch (e) {
+      const output = String((e as { stderr?: unknown }).stderr ?? "")
+      if (!isEnvironmentBlock(e, output)) throw e
+      blocked = String(e)
+    }
+    if (n >= ENVIRONMENT_TRIES) throw new EnvironmentBlocked(`the host blocked ${what} ${n} times: ${blocked.slice(0, 300)}`)
+  }
+}
+
 export interface PlatformOptions {
   platform?: NodeJS.Platform
   /** The Python interpreter: a command on PATH or a full path. */

@@ -101,3 +101,12 @@
 | 3 | 成立：测试未改动，全部通过 |
 | 4 | 成立：测试未改动，全部通过 |
 | 5 | 成立：R1–R15 串行、打断续跑与不打断一致、token 齐全且替身标明；本块另加环境拦截时的停止 |
+
+## 6. 评审后的两处修复（DESIGN §12c）
+
+已合并 `exp2-pure-ic` 的 25a50a0。
+
+- **同步抛出的拦截**：Windows 上 `spawn` 被拦截时会同步抛出 `spawn UNKNOWN`，不触发 `error` 事件。`executeOnce` 原来没有捕获它，原始错误直接冒出来。现在同步异常和 `error` 事件走同一条路：重试 3 次，仍被拒就抛 `EnvironmentBlocked`；其他同步异常照原样抛出。同步的启动点（Go 构建、docker 构建、锚点和变异辅助程序的构建与运行）都改用 `guardedSync`，规则相同。测试里注入同步抛出：连续被拒时抛 `EnvironmentBlocked`，共试 3 次；只被拒一次时，第二次正常运行；`TypeError` 不算拦截。
+- **消融设置写进状态**：三个开关都写进状态的 `ablation` 字段，只记关掉的那几个。用不同的设置打开同一个状态，一律报错。开关从串行配置移到 store：`new Exp2Store(dir, runId, { zoning, checks, clauses })`，串行从 store 读取；本地配置的 `ablation` 原样传给 store。
+
+exp2 共 131 项，全部通过。

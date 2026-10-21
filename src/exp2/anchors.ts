@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import { exeName, goCommand, type PlatformOptions } from "./platform.js"
+import { exeName, goCommand, guardedSync, type PlatformOptions } from "./platform.js"
 
 /**
  * Code anchors (DESIGN §3, §7): where objects live in the program, taken from the Go AST by a small helper
@@ -41,7 +41,7 @@ export function buildGoHelper(source: string, name: string, platform: PlatformOp
   const out = join(tmpdir(), `exp2-${name}`, createHash("sha256").update(main).digest("hex").slice(0, 16))
   mkdirSync(out, { recursive: true })
   const bin = join(out, exeName(name, platform))
-  if (!existsSync(bin)) execFileSync(goCommand(platform), ["build", "-o", bin, "."], { cwd: source, stdio: ["ignore", "pipe", "pipe"] })
+  if (!existsSync(bin)) guardedSync(`the ${name} helper build`, () => execFileSync(goCommand(platform), ["build", "-o", bin, "."], { cwd: source, stdio: ["ignore", "pipe", "pipe"] }))
   return bin
 }
 
@@ -53,7 +53,8 @@ export class GoAnchorExtractor implements AnchorExtractor {
     return this.binary ??= buildGoHelper(this.source, "anchors", this.platform)
   }
   extract(dir: string): Anchor[] {
-    return JSON.parse(execFileSync(this.build(), [resolve(dir)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })) as Anchor[]
+    const bin = this.build()
+    return JSON.parse(guardedSync("the anchors helper", () => execFileSync(bin, [resolve(dir)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }))) as Anchor[]
   }
 }
 

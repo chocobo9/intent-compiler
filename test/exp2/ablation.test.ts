@@ -27,7 +27,9 @@ describe("exp2 ablation switches (inputs and paths only)", () => {
     const store = new Exp2Store(dir, "abl", { clauses: false })
     assert.equal((await store.ingestRound(1, roundText(1), stubTransport())).status, "accepted")
     assert.ok(![...store.registry().blocks.keys()].some(id => /\.c\d+$/u.test(id)))
-    assert.throws(() => new Exp2Store(dir, "abl").inspect(), /split mismatch/u)
+    assert.throws(() => new Exp2Store(dir, "abl").inspect(), /ablation mismatch/u)
+    assert.throws(() => new Exp2Store(dir, "abl", { clauses: false, zoning: false }).inspect(), /ablation mismatch/u)
+    assert.deepEqual(new Exp2Store(dir, "abl", { clauses: false, zoning: true }).inspect().ablation, { clauses: false }, "a switch left on is the same as not given")
   })
 
   it("zoning off: every live object is in the task zone; nothing is protection or status", async () => {
@@ -46,16 +48,17 @@ describe("exp2 ablation switches (inputs and paths only)", () => {
   it("check library off: no checks derived, no check calls, every status unknown", async () => {
     process.env.GIT_AUTHOR_DATE = process.env.GIT_COMMITTER_DATE = "2026-10-20T00:00:00Z"
     const dir = mkdtempSync(join(tmpdir(), "exp2-abl-"))
-    const store = new Exp2Store(join(dir, "store"), "abl")
+    const store = new Exp2Store(join(dir, "store"), "abl", { checks: false })
     const serial = new Serial({
       store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: async () => assert.fail("no check derivation with the library off"),
       executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds")),
       limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, maxAttemptsPerStep: 2 } },
-      ablation: { checks: false },
     })
     assert.equal((await serial.run({ to: 1 })).status, "done")
     const s = store.inspect()
     assert.deepEqual([s.checks.length, s.check_calls.length], [0, 0])
     assert.ok(s.reports[0].objects.every(o => o.status === "unknown"))
+    assert.deepEqual(s.ablation, { checks: false }, "the switch is in the state")
+    assert.throws(() => new Exp2Store(join(dir, "store"), "abl").inspect(), /ablation mismatch/u)
   })
 })

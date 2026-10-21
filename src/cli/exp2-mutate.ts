@@ -21,7 +21,7 @@ async function main(argv: string[]): Promise<number> {
   if (!tree || !stateFile || !roundArg) { process.stderr.write("usage: intent-exp2-mutate --tree <dir> --state <state.json> --round <n> [--config <file>] [--max <n>] [--out <file.md>]\n"); return 2 }
   const round = Number(roundArg)
   const state = JSON.parse(readFileSync(resolve(stateFile), "utf8")) as Exp2State
-  const registry = materialize(state.sources.filter(s => s.round <= round), state.rounds.filter(r => r.status === "accepted" && r.round <= round).map(r => r.acceptance!), state.split)
+  const registry = materialize(state.sources.filter(s => s.round <= round), state.rounds.filter(r => r.status === "accepted" && r.round <= round).map(r => r.acceptance!), { clauses: state.ablation?.clauses })
   const checks = activeChecks(state.checks.filter(c => c.round <= round), state.check_events.filter(e => e.round <= round))
   const config = at("--config")
   const assembled = config ? assembleSerial(loadLocalConfig(resolve(config))).config : null

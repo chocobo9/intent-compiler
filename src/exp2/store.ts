@@ -2,7 +2,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, u
 import { resolve } from "node:path"
 import { attributeRound, type AttributionTransport, type Issue, type ModelCallRecord } from "./attribution.js"
 import { materialize, type Registry, type RoundAcceptance, type Signal } from "./registry.js"
-import { contentHash, type SplitOptions } from "./source.js"
+import { contentHash } from "./source.js"
 import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport } from "./checks.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import type { ExecutionRecord } from "./execution.js"
@@ -28,8 +28,8 @@ export interface RoundRecord {
 export interface Exp2State {
   profile: typeof EXP2_PROFILE
   run_id: string
-  /** How the sources are split; set only for the clause-level ablation (no clauses). */
-  split?: SplitOptions
+  /** The ablation switches the run was started with (DESIGN §12b item 14, §12c); absent when none is off. */
+  ablation?: Ablation
   sources: { round: number; text: string; hash: string }[]
   calls: ModelCallRecord[]
   rounds: RoundRecord[]
@@ -69,26 +69,39 @@ export interface DeriveDeps {
 
 export interface IngestOptions { maxRepairs?: number }
 
+/**
+ * Ablation switches, all default true: zoning false puts every live object in the task zone; checks false derives
+ * no checks; clauses false splits no clauses. They are part of the state: a state opens only with the same settings.
+ */
+export interface Ablation { zoning?: boolean; checks?: boolean; clauses?: boolean }
+
+/** Only the switches that are off, in a fixed order, so equal settings compare equal. */
+export function ablationOff(a: Ablation = {}): Ablation {
+  return Object.fromEntries((["zoning", "checks", "clauses"] as const).filter(k => a[k] === false).map(k => [k, false]))
+}
+
 export class Exp2Store {
   readonly directory: string
   private readonly file: string
-  constructor(directory: string, readonly runId: string, private readonly split: SplitOptions = {}) {
+  readonly ablation: Ablation
+  constructor(directory: string, readonly runId: string, ablation: Ablation = {}) {
+    this.ablation = ablationOff(ablation)
     this.directory = resolve(directory)
     mkdirSync(this.directory, { recursive: true })
     this.file = resolve(this.directory, "exp2-state.json")
   }
 
   inspect(): Exp2State {
-    const split = this.split.clauses === false ? { split: { clauses: false } } : {}
-    if (!existsSync(this.file)) return { profile: EXP2_PROFILE, run_id: this.runId, ...split, sources: [], calls: [], rounds: [], signals: [], ...emptyChecks() }
+    const off = Object.keys(this.ablation).length ? { ablation: this.ablation } : {}
+    if (!existsSync(this.file)) return { profile: EXP2_PROFILE, run_id: this.runId, ...off, sources: [], calls: [], rounds: [], signals: [], ...emptyChecks() }
     const s = JSON.parse(readFileSync(this.file, "utf8")) as Exp2State
     if (s.profile !== EXP2_PROFILE || s.run_id !== this.runId) throw new Error("Store profile/run mismatch")
-    if ((s.split?.clauses === false) !== (this.split.clauses === false)) throw new Error("Store split mismatch: the state was written with another clause setting")
+    if (JSON.stringify(ablationOff(s.ablation)) !== JSON.stringify(this.ablation)) throw new Error(`Store ablation mismatch: the state was written with ${JSON.stringify(ablationOff(s.ablation))}, opened with ${JSON.stringify(this.ablation)}`)
     return { ...emptyChecks(), ...s }
   }
 
   registry(state: Exp2State = this.inspect()): Registry {
-    return materialize(state.sources, state.rounds.filter(r => r.status === "accepted").map(r => r.acceptance!), state.split)
+    return materialize(state.sources, state.rounds.filter(r => r.status === "accepted").map(r => r.acceptance!), { clauses: state.ablation?.clauses })
   }
 
   /** Logs round `round`'s text, runs attribution, and records the outcome; a failed round can be ingested again. */

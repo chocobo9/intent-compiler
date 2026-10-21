@@ -54,11 +54,6 @@ export interface SerialConfig {
    * only, after the round is complete; nothing in the serial ever reads it back.
    */
   score?: (round: number, commit: string, workdir: string) => Promise<{ passed: number; total: number } | null>
-  /**
-   * Ablation switches (DESIGN §12b item 14), each changing an input or a path only: zoning false puts every live
-   * object in the task zone; checks false derives no checks. (Clause-level partial revision is the store's split.)
-   */
-  ablation?: { zoning?: boolean; checks?: boolean }
 }
 
 export type RoundOutcome =
@@ -212,7 +207,7 @@ export class Serial {
     // 2. Checks, against the baseline: the last accepted program (the checkpoint's head), or the null program.
     const baseline = this.program(round === 1 ? null : `R${round - 1}-final`)
     // With the check library switched off (ablation), no checks are derived: every status stays unknown.
-    if (this.c.ablation?.checks !== false) {
+    if (store.ablation.checks !== false) {
       const derived = await store.deriveRoundChecks(round, withWatchdog(this.c.checks, limits.managementTimeoutMs), { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs })
       if (derived.status === "interrupted") throw stopping(derived.issues ?? [], `checks, round ${round}`)
     }
@@ -228,7 +223,7 @@ export class Serial {
     const workorder: WorkOrder = buildWorkOrder({
       registry, round, library: state.checks, events: state.check_events, statuses: start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
       previous_task: previous ? state.executions.find(x => x.round === round - 1)?.task ?? [] : [],
-      zoning: this.c.ablation?.zoning,
+      zoning: store.ablation.zoning,
     })
     // 4. Execution.
     const passing = start.runs.filter(r => r.outcome === "pass").map(r => r.check)

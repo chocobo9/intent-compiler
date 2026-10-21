@@ -5,7 +5,7 @@ import { join, resolve } from "node:path"
 import { buildGoHelper, helperSource } from "./anchors.js"
 import type { CheckRecord } from "./checks.js"
 import type { BuildResult } from "./execution.js"
-import type { PlatformOptions } from "./platform.js"
+import { guardedSync, type PlatformOptions } from "./platform.js"
 import type { Registry } from "./registry.js"
 import type { CheckRunner } from "./runner.js"
 import { runCheck } from "./verdict.js"
@@ -22,7 +22,7 @@ export interface MutationSite { id: string; kind: "compare" | "constant" | "bran
 
 export function mutationSites(dir: string, platform: PlatformOptions = {}): MutationSite[] {
   const bin = buildGoHelper(helperSource("mutate"), "mutate", platform)
-  return JSON.parse(execFileSync(bin, [resolve(dir)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })) as MutationSite[]
+  return JSON.parse(guardedSync("the mutate helper", () => execFileSync(bin, [resolve(dir)], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }))) as MutationSite[]
 }
 
 /** An evenly spread, deterministic choice of at most `max` sites. */

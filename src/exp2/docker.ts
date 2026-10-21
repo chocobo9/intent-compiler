@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { BuildResult } from "./execution.js"
-import { scriptCommand, scriptFile } from "./platform.js"
+import { guardedSync, isEnvironmentBlock, scriptCommand, scriptFile } from "./platform.js"
 import { collect, execute, nullRun, sourceLiterals, writeInputs, type CheckInput, type CheckRunner, type InputFile, type ProgramRef, type RunOutput, type ScriptResult, type ScriptSandbox } from "./runner.js"
 
 /**
@@ -119,7 +119,7 @@ export function dockerGoBuilder(outRoot: string, o: DockerOptions, timeoutMs = 1
     // The output directory is the writable mount; the work tree is mounted read-only, so the build cannot change it.
     const args = dockerRunArgs({ ...o, workdir: "/out" }, name, out, ["sh", "-c", `cd /src && GOFLAGS=-mod=readonly GOCACHE=${o.buildCache ? "/gocache" : "/tmp/gocache"} go build -o /out/${binary} ./...`], [{ host: workdir, container: "/src" }, ...(o.buildCache ? [{ host: o.buildCache, container: "/gocache", readonly: false }] : [])])
     const [cmd, ...pre] = docker(o)
-    const r = spawnSync(cmd, [...pre, ...args], { encoding: "utf8", timeout: timeoutMs })
+    const r = guardedSync("docker", () => spawnSync(cmd, [...pre, ...args], { encoding: "utf8", timeout: timeoutMs }), r => isEnvironmentBlock(r.error) ? String(r.error) : null)
     if (r.error && (r.error as NodeJS.ErrnoException).code === "ETIMEDOUT") removeContainer(o, name)
     const output = `${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? String(r.error) : ""}`
     if (r.status !== 0) return { ok: false, output, program: null }

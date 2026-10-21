@@ -11,9 +11,9 @@ import { DEFAULT_LIMITS, SessionBroken } from "../../src/exp2/execution.js"
 import { assembleSerial, localConfigProblems, loadLocalConfig, preflight, scoringHook, type LocalConfig } from "../../src/exp2/local-config.js"
 import { OpenCodeExecutor } from "../../src/exp2/opencode-executor.js"
 import { classifyProviderError, withRateLimitRetry } from "../../src/exp2/provider-errors.js"
-import { EnvironmentBlocked, isEnvironmentBlock } from "../../src/exp2/platform.js"
+import { EnvironmentBlocked, guardedSync, isEnvironmentBlock } from "../../src/exp2/platform.js"
 import { predictionIntact } from "../../src/exp2/prediction.js"
-import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
+import { execute, LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
 import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { createOpenCodeAttributionTransport } from "../../src/exp2/transport.js"
@@ -79,6 +79,27 @@ describe("exp2 local: provider errors", () => {
     const session = await new OpenCodeExecutor({ client, providerId: "p", modelId: "m", rateLimit: policy }).open({ round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], edges: [] }, text: "", resume: null } as never)
     assert.equal((await session.work({ id: "P1.1", round: 1, label: "s", summary: "", objects: [] }, [])).note, "done")
     assert.equal(prompts, 2)
+  })
+
+  it("a start the host blocks by a synchronous throw (Windows: spawn UNKNOWN) takes the same path as the 'error' event", async () => {
+    const unknown = () => Object.assign(new Error("spawn UNKNOWN"), { code: "UNKNOWN", errno: -4094, syscall: "spawn" })
+    let tries = 0
+    const throwing = (() => { tries++; throw unknown() }) as unknown as typeof import("node:child_process").spawn
+    await assert.rejects(execute(["dpipe.exe"], tmpdir(), 1000, process.env, throwing), (e: Error) => e instanceof EnvironmentBlocked && /3 times/u.test(e.message))
+    assert.equal(tries, 3)
+    // Blocked once, then let through: the run goes on.
+    const { spawn } = await import("node:child_process")
+    let first = true
+    const once = ((...a: Parameters<typeof spawn>) => { if (first) { first = false; throw unknown() } return spawn(...a) }) as typeof spawn
+    assert.equal((await execute([process.execPath, "-e", "process.stdout.write('ok')"], tmpdir(), 5000, process.env, once)).stdout, "ok")
+    // Any other synchronous throw is not an environment block.
+    const other = (() => { throw new TypeError("bad argument") }) as unknown as typeof spawn
+    await assert.rejects(execute(["x"], tmpdir(), 1000, process.env, other), (e: Error) => e instanceof TypeError)
+    // The synchronous starts (builds, helpers) under the same rule.
+    let n = 0
+    assert.throws(() => guardedSync("helper", () => { n++; throw unknown() }), EnvironmentBlocked)
+    assert.equal(n, 3)
+    assert.throws(() => guardedSync("helper", () => { throw new Error("exit 1") }), (e: Error) => !(e instanceof EnvironmentBlocked))
   })
 
   it("a host that blocks the built program is an environment error: the serial stops, no step is failed", async () => {
