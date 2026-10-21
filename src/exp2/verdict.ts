@@ -132,9 +132,15 @@ export function classify(check: CheckRecord, results: AssertionResult[], out: Ru
   if (check.direction === "withdrawn") return { class: "not_landed", reason: "still_present", detail: "the removed behaviour still happens", roles: [...new Set(results.map(r => r.role))] }
   const missing = invokedNames(check, registry).filter(n => !hasLiteral(literals, n))
   if (missing.length) return { class: "not_landed", reason: "missing_name", detail: `no string literal in the program names ${missing.join(", ")}`, roles: ["business"] }
-  // Output matching an error rule the check did not expect: the program refused this input.
   const expected = check.assertions.flatMap(a => typeof a.expect === "string" ? [a.expect] : [])
   const outputLines = [...lines(out.stderr), ...lines(out.stdout)].map(l => l.trim()).filter(Boolean)
+  // Inputs the code computed are right by construction (DESIGN §12b item 2): the program reporting one of its own
+  // object's rules on them (say, a digest mismatch) got the value wrong.
+  if (check.computed_inputs?.length) {
+    const own = outputLines.flatMap(l => facts.templates.filter(t => t.regex.test(l) && t.owners.includes(check.object) && !expected.some(e => t.regex.test(e))).map(t => ({ line: l, rule: t.text })))
+    if (own.length) return { class: "not_landed", reason: "value_mismatch", detail: `on inputs the code computed, the program reported its own rule \`${own[0].rule}\`: ${JSON.stringify(own[0].line)}`, roles: ["business"] }
+  }
+  // Output matching an error rule the check did not expect: the program refused this input.
   const other = outputLines.flatMap(l => facts.templates.filter(t => t.regex.test(l) && !expected.some(e => t.regex.test(e))).map(t => ({ line: l, rule: t.text })))
   if (other.length) return { class: "unknown", reason: "other_error_rule", detail: `the output ${JSON.stringify(other[0].line)} matches another rule, \`${other[0].rule}\`; the input is suspect`, roles }
   const exitExpected = check.assertions.find(a => a.target.kind === "exit_code")?.expect

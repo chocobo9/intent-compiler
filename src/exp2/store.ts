@@ -137,7 +137,8 @@ export class Exp2Store {
         const b = await methodB(draft, deps.sandbox, timeout)
         const record: CheckRecord = {
           id: `K${s.checks.length + 1}`, round, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses, direction: draft.direction,
-          input: draft.input, assertions: b.assertions, unknown: b.unknown, reference_script: draft.reference_script,
+          input: b.input ?? draft.input, assertions: b.assertions, unknown: b.unknown, reference_script: draft.reference_script,
+          ...(b.computed_inputs.length ? { computed_inputs: b.computed_inputs } : {}),
           admission: b.assertions.length ? "admitted" : "unknown", admission_reason: b.assertions.length ? null : b.unknown.map(u => `${u.assertion.id}: ${u.reason}`).join("; "),
           strength: null, status: "active", calls,
         }

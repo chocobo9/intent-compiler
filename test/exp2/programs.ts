@@ -17,8 +17,8 @@ export interface Variant {
   reconcile?: boolean
   /** Whether transform writes the <output>.sha256 sidecar (R1 yes; R5 withdrew it). Default true. */
   sidecar?: boolean
-  /** The digest verify compares: SHA-256 (R1) or BLAKE2b-256 (R5 on). Default sha256. */
-  checksum?: "sha256" | "blake2b"
+  /** The digest verify compares: SHA-256 (R1) or BLAKE2b-256 (R5 on). Default sha256. trimmed: SHA-256 of the content without its final newline (a wrong value). */
+  checksum?: "sha256" | "blake2b" | "trimmed"
   /** A dispatcher that knows every command and option but does nothing and exits 0. */
   shell?: boolean
 }
@@ -68,7 +68,7 @@ ops["normalize"] = (t, op) => {
   parts.push(`
 const commands = {}
 ${v.checksum === "blake2b" ? `const blake2b256Hex = ${blake2b256Hex.toString()}\n` : ""}commands["verify"] = (o) => {
-  const actual = ${v.checksum === "blake2b" ? `blake2b256Hex(read(o["--file"]))` : `createHash("sha256").update(read(o["--file"])).digest("hex")`}
+  const actual = ${v.checksum === "blake2b" ? `blake2b256Hex(read(o["--file"]))` : v.checksum === "trimmed" ? `createHash("sha256").update(read(o["--file"]).trimEnd()).digest("hex")` : `createHash("sha256").update(read(o["--file"])).digest("hex")`}
   const expected = read(o["--checksum"]).trim()
   if (actual === expected) { process.stdout.write("VERIFIED\\n"); process.exit(0) }
   process.stdout.write("MISMATCH expected=" + expected + " actual=" + actual + "\\n"); process.exit(1)

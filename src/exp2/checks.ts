@@ -28,8 +28,13 @@ export interface Target {
   column: string | null
 }
 
+/**
+ * verbatim: quoted from the source. derived: worked out by the model (method A) and by the reference script
+ * (method B), kept when they agree. computed: a value that takes computing (a digest, a hash): only the reference
+ * script gives it, the model never works it out (DESIGN §12b item 2).
+ */
 export interface ExpectSource {
-  kind: "verbatim" | "derived"
+  kind: "verbatim" | "derived" | "computed"
   /** verbatim: the block and the exact text quoted from it. */
   block: string | null
   quote: string | null
@@ -56,7 +61,10 @@ export interface CheckDraft {
   direction: "holds" | "withdrawn"
   input: CheckInput
   assertions: AssertionDraft[]
-  /** Method B: prints one JSON object mapping each derived assertion's id to its value. */
+  /**
+   * Method B: prints one JSON object mapping each derived or computed assertion's id to its value, and each
+   * `{{computed:NAME}}` placeholder in the input files to the text that replaces it.
+   */
   reference_script: { language: "python" | "node"; code: string } | null
   note: string | null
 }
@@ -77,9 +85,18 @@ export const EMPTY_CHECKS: ChecksDraft = { checks: [], retire: [] }
 
 export interface Assertion extends Omit<AssertionDraft, "expect_json"> {
   expect: unknown
-  /** derived only: method B's value, which agreed with method A. */
+  /** derived: method B's value, which agreed with method A; computed: the value itself. */
   method_b?: unknown
 }
+
+/** `{{computed:NAME}}` in an input file: filled by the code from the reference script's output before any run. */
+export const COMPUTED_PLACEHOLDER = /\{\{computed:([A-Za-z0-9_.-]+)\}\}/gu
+
+export const placeholdersOf = (input: CheckInput): string[] =>
+  [...new Set(input.files.flatMap(f => [...f.content.matchAll(COMPUTED_PLACEHOLDER)].map(m => m[1])))]
+
+/** A run of 32 or more hex digits: what a digest or hash looks like. */
+const DIGEST = /(?<![0-9A-Fa-f])[0-9A-Fa-f]{32,}(?![0-9A-Fa-f])/gu
 
 export interface Strength {
   strong: boolean
@@ -103,6 +120,8 @@ export interface CheckRecord {
   /** Derived assertions whose two methods disagreed, or could not be compared: unknown, left out of the check. */
   unknown: { assertion: AssertionDraft; reason: string; method_b?: unknown }[]
   reference_script: CheckDraft["reference_script"]
+  /** Input placeholders the code filled from the reference script (the input above is the filled one). */
+  computed_inputs?: string[]
   /** admitted: in the library. unknown: no assertion survived, recorded with the reason only. */
   admission: "admitted" | "unknown"
   admission_reason: string | null
@@ -279,7 +298,7 @@ export interface CheckRequest {
 export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
-  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "transport" | "quota" | "auth"
+  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "transport" | "quota" | "auth"
 
 export interface CheckIssue { code: CheckIssueCode; check?: string; message: string }
 
@@ -338,9 +357,16 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
     if (new Set(paths).size !== paths.length) add("input_invalid", `${w}: an input path is given twice`, k.key)
     // Names: command, options and JSON keys must appear in the requirements' code fragments.
     for (const n of namesOf(k)) if (!facts.tokens.has(n.name)) add("name_unknown", `${w}: ${n.what} ${n.name} does not appear in any code fragment of the requirements`, k.key)
+    // Computed values come from the reference script only: a digest written into an input or an expectation by hand
+    // is refused, unless the requirements state it.
+    const stated = new Set([...registry.sources.values()].filter(s => s.round <= round).flatMap(s => [...s.text.matchAll(DIGEST)].map(m => m[0].toLowerCase())))
+    const byHand = (text: string) => [...text.matchAll(DIGEST)].map(m => m[0]).filter(d => !stated.has(d.toLowerCase()))
+    for (const f of k.input.files) for (const d of byHand(f.content)) add("computed_by_hand", `${w}: input ${f.path} holds ${d.slice(0, 16)}…, a computed value; write {{computed:NAME}} there and have the reference script print NAME's value`, k.key)
+    for (const a of k.input.args) for (const d of byHand(a)) add("computed_by_hand", `${w}: argument ${d.slice(0, 16)}… is a computed value; computed values go into input files through {{computed:NAME}}`, k.key)
+    const placeholders = placeholdersOf(k.input)
     // Assertions.
     const ids = new Set<string>()
-    let derived = false
+    let derived = placeholders.length > 0
     for (const a of k.assertions) {
       const aw = `${w} assertion ${a.id}`
       if (ids.has(a.id)) add("shape", `${aw}: the id is used twice in this check`, k.key)
@@ -350,7 +376,11 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
       let expect: unknown
       try { expect = JSON.parse(a.expect_json) } catch { add("expect_invalid", `${aw}: expect_json is not JSON`, k.key); continue }
       if (a.tolerance !== null && !(a.tolerance >= 0)) add("expect_invalid", `${aw}: tolerance must be a non-negative number or null`, k.key)
-      if (a.source.kind === "derived") derived = true
+      if (placeholders.includes(a.id)) add("shape", `${aw}: the id is also an input placeholder name`, k.key)
+      if (a.source.kind === "derived") {
+        derived = true
+        for (const text of strings(expect)) for (const d of byHand(text)) add("computed_by_hand", `${aw}: ${d.slice(0, 16)}… is a computed value; mark the source computed and let the reference script give it`, k.key)
+      } else if (a.source.kind === "computed") derived = true
       else {
         const ref = parseRef(a.source.block ?? "")
         const block = registry.block(ref.id)
@@ -369,7 +399,7 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
     }
     if (!k.assertions.length) add("shape", `${w}: a check needs at least one assertion`, k.key)
     if (!k.assertions.some(a => a.target.kind === "exit_code")) add("exit_missing", `${w}: state the expected exit code (an exit_code assertion)`, k.key)
-    if (derived && !k.reference_script) add("script_missing", `${w}: derived values need a reference_script (method B)`, k.key)
+    if (derived && !k.reference_script) add("script_missing", `${w}: derived and computed values, and {{computed:NAME}} inputs, need a reference_script (method B)`, k.key)
   }
   // A retire proposal must name a check that exists and is not retired yet; whether it is accepted is the code's call later.
   const retired = new Set(events.filter(e => e.status === "retired").map(e => e.check))
@@ -438,7 +468,7 @@ export function checksShapeProblems(value: unknown): string[] {
     if (!strs(k.blocks) || !strs(k.uses)) p.push(`${at}: blocks and uses must be string arrays`)
     if (k.direction !== "holds" && k.direction !== "withdrawn") p.push(`${at}.direction: holds or withdrawn`)
     if (!obj(k.input) || !strs(k.input.args) || !Array.isArray(k.input.files) || !k.input.files.every(f => obj(f) && typeof f.path === "string" && typeof f.content === "string")) p.push(`${at}.input: {args: string[], files: {path, content}[]}`)
-    if (!Array.isArray(k.assertions) || !k.assertions.every(a => obj(a) && typeof a.id === "string" && (a.role === "convention" || a.role === "business") && obj(a.target) && typeof a.target.kind === "string" && typeof a.expect_json === "string" && obj(a.source) && (a.source.kind === "verbatim" || a.source.kind === "derived"))) p.push(`${at}.assertions: malformed`)
+    if (!Array.isArray(k.assertions) || !k.assertions.every(a => obj(a) && typeof a.id === "string" && (a.role === "convention" || a.role === "business") && obj(a.target) && typeof a.target.kind === "string" && typeof a.expect_json === "string" && obj(a.source) && (a.source.kind === "verbatim" || a.source.kind === "derived" || a.source.kind === "computed"))) p.push(`${at}.assertions: malformed`)
     if (k.reference_script !== null && !(obj(k.reference_script) && (k.reference_script.language === "python" || k.reference_script.language === "node") && typeof k.reference_script.code === "string")) p.push(`${at}.reference_script: {language, code} or null`)
   })
   if (!strs(value.remove) || !strs(value.retire_remove)) p.push("remove and retire_remove must be string arrays")
@@ -475,14 +505,25 @@ export function sameValue(a: unknown, b: unknown, tolerance: number): boolean {
   return a === b
 }
 
-export interface MethodBOutcome { assertions: Assertion[]; unknown: CheckRecord["unknown"] }
+export interface MethodBOutcome {
+  assertions: Assertion[]
+  unknown: CheckRecord["unknown"]
+  /** The input with its placeholders filled; null when a placeholder got no value (the check cannot run). */
+  input: CheckInput | null
+  computed_inputs: string[]
+  input_failure?: string
+}
 
-/** Runs the reference script and keeps the derived assertions on which methods A and B agree. */
+/**
+ * Runs the reference script (on the input as written, placeholders unfilled), fills the input's placeholders from
+ * its output, keeps the derived assertions on which methods A and B agree, and takes computed values from B alone.
+ */
 export async function methodB(draft: CheckDraft, sandbox: ScriptSandbox, timeoutMs: number): Promise<MethodBOutcome> {
   const assertions: Assertion[] = [], unknown: CheckRecord["unknown"] = []
-  const derived = draft.assertions.filter(a => a.source.kind === "derived")
+  const derived = draft.assertions.filter(a => a.source.kind !== "verbatim")
+  const placeholders = placeholdersOf(draft.input)
   let values: Record<string, unknown> | null = null, failure = ""
-  if (derived.length && draft.reference_script) {
+  if ((derived.length || placeholders.length) && draft.reference_script) {
     const r = await sandbox.run(draft.reference_script.language, draft.reference_script.code, draft.input.files, timeoutMs)
     if (r.timed_out) failure = `reference script timed out after ${timeoutMs} ms`
     else if (r.exit_code !== 0) failure = `reference script exited ${r.exit_code}: ${r.stderr.trim().slice(0, 300)}`
@@ -494,17 +535,25 @@ export async function methodB(draft: CheckDraft, sandbox: ScriptSandbox, timeout
       } catch { failure = "reference script did not print JSON" }
     }
   }
+  let input: CheckInput | null = draft.input, input_failure: string | undefined
+  if (placeholders.length) {
+    const missing = placeholders.filter(n => !values || !(n in values) || values[n] === null || typeof values[n] === "object")
+    if (missing.length) { input = null; input_failure = `no computed value for input ${missing.join(", ")}${failure ? ` (${failure})` : ""}` }
+    else input = { args: draft.input.args, files: draft.input.files.map(f => ({ path: f.path, content: f.content.replace(COMPUTED_PLACEHOLDER, (_, n: string) => String(values![n])) })) }
+  }
   for (const a of draft.assertions) {
     const { expect_json, ...rest } = a
-    const expect = JSON.parse(expect_json)
+    const expect = a.source.kind === "computed" ? null : JSON.parse(expect_json)
+    if (!input) { unknown.push({ assertion: a, reason: input_failure! }); continue }
     if (a.source.kind === "verbatim") { assertions.push({ ...rest, expect }); continue }
     if (!values) { unknown.push({ assertion: a, reason: failure || "no reference script result" }); continue }
     if (!(a.id in values)) { unknown.push({ assertion: a, reason: `reference script gave no value for ${a.id}` }); continue }
     const b = values[a.id]
+    if (a.source.kind === "computed") { assertions.push({ ...rest, expect: b, method_b: b }); continue }
     if (sameValue(expect, b, a.tolerance ?? DEFAULT_TOLERANCE)) assertions.push({ ...rest, expect, method_b: b })
     else unknown.push({ assertion: a, reason: `methods disagree: A ${expect_json}, B ${JSON.stringify(b)}`, method_b: b })
   }
-  return { assertions, unknown }
+  return { assertions, unknown, input, computed_inputs: placeholders, ...(input_failure ? { input_failure } : {}) }
 }
 
 // ---------------------------------------------------------------- loop
@@ -612,7 +661,7 @@ const checkSchema = {
           source: {
             type: "object", additionalProperties: false, required: ["kind", "block", "quote"],
             properties: {
-              kind: { type: "string", enum: ["verbatim", "derived"], description: "verbatim: the value is stated in the source (quote it exactly; <placeholders> may be filled from the input). derived: you computed it; the reference script must compute it too." },
+              kind: { type: "string", enum: ["verbatim", "derived", "computed"], description: "verbatim: the value is stated in the source (quote it exactly; <placeholders> may be filled from the input). derived: you worked it out; the reference script must work it out too. computed: it takes computing (a digest, a hash, a checksum): do not write it (expect_json \"null\"); only the reference script gives it." },
               block: nullableString,
               quote: nullableString,
             },
@@ -622,7 +671,7 @@ const checkSchema = {
     },
     reference_script: {
       type: ["object", "null"], additionalProperties: false, required: ["language", "code"],
-      description: "Method B: a script run in a directory holding only the input files; it prints one JSON object mapping each derived assertion's id to its value. It must not run the program under test.",
+      description: "Method B: a script run in a directory holding only the input files (placeholders unfilled); it prints one JSON object mapping each derived or computed assertion's id, and each {{computed:NAME}} placeholder's NAME, to its value. It must not run the program under test.",
       properties: { language: { type: "string", enum: ["python", "node"] }, code: { type: "string" } },
     },
     note: nullableString,
@@ -644,7 +693,7 @@ export const CHECKS_SCHEMA = {
 export const CHECKS_SYSTEM_PROMPT = [
   "You write acceptance checks for a command-line program from its requirements. `sources` holds every round so far, annotated with block ids; the original text is the only authority and newer text overrides older text.",
   "Write checks for the objects in `scope` (they changed this round), and to replace the checks in `stale` (whose source, a block they refer to, or a convention they use changed); for no other object. A check runs the program once: `input.files` are written into an empty directory, the program is called with `input.args`, and each assertion reads one fact of the result. Command names, options and JSON keys must be those the requirements' code fragments show.",
-  "Every expected value needs a source: verbatim when the requirement states it (quote the block's text exactly), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept.",
+  "Every expected value needs a source: verbatim when the requirement states it (quote the block's text exactly), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept. Never compute a digest, hash or checksum yourself: an expected one is source computed, and one an input file needs is written as {{computed:NAME}} in the file, with the reference script printing NAME's value; the code fills it in before the program runs.",
   "Keep convention facts (a shared error format, an output-formatting rule) in their own assertions with role convention, and list those conventions in `uses`; business facts are the object's own behaviour.",
   "Every check states its expected exit code. Prefer checks whose expected output depends on the input data; a check of the exit code alone shows little. `checks` lists the library's checks for these objects and `stale` those whose source text changed this round: derive their replacements where the text still says something checkable. You may propose retiring a check whose expectation rests on replaced text; the code verifies the proposal.",
   "Answer as a patch on `previous_draft` (empty on the first call). When `issues` is not empty, fix exactly those problems and leave the rest as it is.",

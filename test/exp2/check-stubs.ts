@@ -1,13 +1,12 @@
-import { createHash } from "node:crypto"
-import { blake2b256Hex } from "./blake2b.js"
 import type { AssertionDraft, CheckDraft, CheckRequest, ChecksPatch, ChecksTransport, Target } from "../../src/exp2/checks.js"
 
 /**
  * Fixed offline answers for the check-derivation step, written from the request the way a model would: object ids
  * from the request, inputs and expectations from the source text. Method A values are worked by hand; method B is a
- * Python script. The first answers carry usual mistakes (an option the text never shows, a quote that is not in the
- * block, a convention left out of uses, a paraphrase passed off as a quote), and one input the model got wrong
- * (a checksum file with a miscomputed digest), which only the run can reveal.
+ * Python script. Digests come only from the reference script, through {{computed:NAME}} in an input file. The first
+ * answers carry usual mistakes (an option the text never shows, a quote that is not in the block, a convention left
+ * out of uses, a paraphrase passed off as a quote, a digest written by hand), and one badly built input (a checksum
+ * file named in the arguments but not given), which only the run can reveal.
  */
 
 const t = (kind: Target["kind"], extra: Partial<Target> = {}): Target => ({ kind, path: null, line: null, pointer: null, column: null, ...extra })
@@ -50,7 +49,6 @@ function succeeds(c: CheckDraft): CheckDraft {
 // ------------------------------------------------------------------ R1
 
 const DATA = "id,value\n1,5\n2,15\n3,25\n"
-const sha = (s: string) => createHash("sha256").update(s).digest("hex")
 
 function r1(request: CheckRequest, first: boolean): CheckDraft[] {
   const id = ids(request)
@@ -96,20 +94,23 @@ function r1(request: CheckRequest, first: boolean): CheckDraft[] {
     }),
     check({
       key: "verify-match", object: id("verify"), blocks: ["R1.S4"], uses: [],
-      input: { args: ["verify", "--file", "data.csv", "--checksum", "data.csv.sha256"], files: [{ path: "data.csv", content: DATA }, { path: "data.csv.sha256", content: sha(DATA) + "\n" }] },
+      input: { args: ["verify", "--file", "data.csv", "--checksum", "data.csv.sha256"], files: [{ path: "data.csv", content: DATA }, { path: "data.csv.sha256", content: "{{computed:digest}}\n" }] },
       assertions: [
         // First answer: a quote that is not in the block.
         verbatim("out", t("stdout_line", { line: 1 }), "VERIFIED", "R1.S4.P2.s2", first ? "prints VERIFIED OK" : "VERIFIED"),
         verbatim("exit", t("exit_code"), 0, "R1.S4.P2.s2", "Exit code 0"),
       ],
-      reference_script: null,
+      reference_script: py("import hashlib, json\nprint(json.dumps({'digest': hashlib.sha256(open('data.csv', 'rb').read()).hexdigest()}))"),
     }),
     check({
-      // The model wrote the digest by hand and got it wrong: a badly built input, which the run will reveal.
+      // First answer: the digest written by hand. Repair: computed, but the checksum file named in the arguments is
+      // left out of the input, a badly built input which only the run reveals.
       key: "verify-match-2", object: id("verify"), blocks: ["R1.S4"], uses: [],
-      input: { args: ["verify", "--file", "other.csv", "--checksum", "other.csv.sha256"], files: [{ path: "other.csv", content: "a\n1\n" }, { path: "other.csv.sha256", content: "3f".repeat(32) + "\n" }] },
+      input: first
+        ? { args: ["verify", "--file", "other.csv", "--checksum", "other.csv.sha256"], files: [{ path: "other.csv", content: "a\n1\n" }, { path: "other.csv.sha256", content: "3f".repeat(32) + "\n" }] }
+        : { args: ["verify", "--file", "other.csv", "--checksum", "other.sha256"], files: [{ path: "other.csv", content: "a\n1\n" }, { path: "other.csv.sha256", content: "{{computed:digest}}\n" }] },
       assertions: [verbatim("out", t("stdout_line", { line: 1 }), "VERIFIED", "R1.S4.P2.s2", "VERIFIED"), verbatim("exit", t("exit_code"), 0, "R1.S4.P2.s2", "Exit code 0")],
-      reference_script: null,
+      reference_script: first ? null : py("import hashlib, json\nprint(json.dumps({'digest': hashlib.sha256(open('other.csv', 'rb').read()).hexdigest()}))"),
     }),
   ]
 }
@@ -188,12 +189,12 @@ function r5(request: CheckRequest): CheckDraft[] {
   // R1's verify checks went stale with R5's checksum change: verify is derived again in the same round (DESIGN §12a).
   const verify = request.stale.some(s => s.object === id("verify")) ? [check({
     key: "verify-blake2b", object: id("verify"), blocks: ["R5.S1.P1", "R5.S1.P2.s1"], uses: [],
-    input: { args: ["verify", "--file", "data.csv", "--checksum", "data.csv.b2"], files: [{ path: "data.csv", content: DATA }, { path: "data.csv.b2", content: blake2b256Hex(DATA) + "\n" }] },
+    input: { args: ["verify", "--file", "data.csv", "--checksum", "data.csv.b2"], files: [{ path: "data.csv", content: DATA }, { path: "data.csv.b2", content: "{{computed:digest}}\n" }] },
     assertions: [
       verbatim("out", t("stdout_line", { line: 1 }), "VERIFIED", "R1.S4.P2.s2", "VERIFIED"),
       verbatim("exit", t("exit_code"), 0, "R1.S4.P2.s2", "Exit code 0"),
     ],
-    reference_script: null,
+    reference_script: py("import hashlib, json\nprint(json.dumps({'digest': hashlib.blake2b(open('data.csv', 'rb').read(), digest_size=32).hexdigest()}))"),
   })] : []
   const recipe = JSON.stringify([{ op: "filter", column: "value", condition: "gt", threshold: 10 }])
   return [...verify, check({
@@ -202,7 +203,7 @@ function r5(request: CheckRequest): CheckDraft[] {
     input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [{ path: "data.csv", content: DATA }, { path: "recipe.json", content: recipe }] },
     assertions: [
       derived("exit", t("exit_code"), 0),
-      derived("sidecar", t("file_line", { path: "out.csv.sha256", line: 1 }), sha("id,value\n2,15\n3,25\n")),
+      { id: "sidecar", role: "business", target: t("file_line", { path: "out.csv.sha256", line: 1 }), expect_json: "null", tolerance: null, source: { kind: "computed", block: null, quote: null } },
     ],
     reference_script: py([
       "import csv, json, hashlib",
@@ -256,7 +257,7 @@ function r10(request: CheckRequest): CheckDraft[] {
 export const CHECK_SCRIPTS: Record<number, ((request: CheckRequest) => ChecksPatch)[]> = {
   1: [
     req => patch({ upsert: r1(req, true) }),
-    req => patch({ upsert: r1(req, false).filter(c => ["filter-gt", "transform-missing-input", "verify-match"].includes(c.key)) }),
+    req => patch({ upsert: r1(req, false).filter(c => ["filter-gt", "transform-missing-input", "verify-match", "verify-match-2"].includes(c.key)) }),
   ],
   2: [req => patch({ upsert: r2(req, true) }), req => patch({ upsert: r2(req, false).filter(c => c.key === "profile-numeric") })],
   5: [req => patch({ upsert: r5(req) })],
