@@ -14,3 +14,16 @@
 由此暴露的两个设计问题（替身从来不会这么写）：
 1. 缺一个"只指标题本身、不含子小节"的单位。上级标题的那一行，模型很自然会想单独标注。
 2. 同一个根源的错误，代码会逐条报出（44 条），修补请求从 3.0 万字符涨到 4.3 万字符。应当按根源合并。
+
+## 回放（第 7 块）
+
+`cassette.json` 是这批回答的回放文件，供 `replayTransports`（`src/exp2/recording.ts`）按请求哈希回放，作为回归样本（`test/exp2/recording.test.ts`）。
+
+第 7 块改了请求（标题单位 `R<n>.S<k>.H`、问题按根源合并、修补请求里不再重复列出 `blocks`），请求字节与 dfeb22e 不同，所以 `cassette.json` 是**按回答顺序重新生成键**的：用当前代码逐轮构造请求，按录音顺序给出原回答，记下新请求。原请求仍在 `R<n>-prompt<k>.md`。重新生成：
+
+```
+node dist/cli/exp2-rekey.js --answers exp2/recordings/haiku-reference --inputs exp2/inputs/dpipe --rounds 3 \
+  --label "claude-haiku-5-5 effort medium (reference recording, not luna)" --from dfeb22e --out exp2/recordings/haiku-reference/cassette.json
+```
+
+按当前代码，R1 首答只报 1 条 overlap（R1.S1 与其中 44 个块），提示改用 `R1.S1.H`；修补请求 37,434 字符（dfeb22e 时 42,958）。四次回答全部用上，三轮都通过。录音没有用量，回放时记为 `usage_unknown`，报告里不计为零。

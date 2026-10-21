@@ -1,0 +1,148 @@
+import { createHash } from "node:crypto"
+import { readFileSync, writeFileSync } from "node:fs"
+import { requestJson } from "../model/opencode-transport.js"
+import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, ReplayMiss, type AttributionTransport, type ModelReply, type ModelRequest, type TokenUsage } from "./attribution.js"
+import { CHECKS_SCHEMA, CHECKS_SYSTEM_PROMPT, type CheckRequest, type ChecksTransport } from "./checks.js"
+import { Exp2Store } from "./store.js"
+
+/**
+ * Recording and replay of management calls (DESIGN §12b item 7). A recording keeps each call's request, answer and
+ * usage verbatim, with the label of the model that answered. Replay looks an answer up by the hash of the request it
+ * is asked; a request the recording does not hold is an error (ReplayMiss), never a stand-in answer.
+ */
+
+export type RecordedStep = "attribution" | "checks"
+
+export interface CassetteEntry {
+  step: RecordedStep
+  /** sha256 of `prompt`. */
+  request_sha256: string
+  /** The call as sent: system prompt, schema and request, in the transport's order. */
+  prompt: string
+  answer: string
+  /** Null when the call reported none (unknown, not zero). */
+  usage: Partial<TokenUsage> | null
+  model: string
+  /** A stand-in's answer stays marked as one on replay. */
+  stub?: true
+  recorded_at?: string
+}
+
+export interface Cassette {
+  format: "exp2-cassette-1"
+  /** Which model answered, as a person would name it ("claude-haiku-5-5 (reference, not luna)"). */
+  model_label: string
+  /** How the entries were made, e.g. re-keyed from earlier requests (see `rekeyed_from`). */
+  note?: string
+  /** When the requests were rebuilt by the current code from answers recorded against older requests. */
+  rekeyed_from?: string
+  entries: CassetteEntry[]
+}
+
+const STEPS = {
+  attribution: { system: ATTRIBUTION_SYSTEM_PROMPT, schema: ATTRIBUTION_SCHEMA },
+  checks: { system: CHECKS_SYSTEM_PROMPT, schema: CHECKS_SCHEMA },
+} as const
+
+/** The call's full text, in the format of the reference recordings' prompt files. */
+export function promptText(step: RecordedStep, request: unknown): string {
+  const { system, schema } = STEPS[step]
+  return `# SYSTEM\n${system}\n\n# OUTPUT JSON SCHEMA (answer with one JSON object matching it, nothing else)\n${JSON.stringify(schema)}\n\n# REQUEST\n${requestJson(request)}\n`
+}
+
+export const promptHash = (prompt: string) => createHash("sha256").update(prompt).digest("hex")
+
+export function emptyCassette(model_label: string): Cassette {
+  return { format: "exp2-cassette-1", model_label, entries: [] }
+}
+
+export function loadCassette(file: string): Cassette {
+  const c = JSON.parse(readFileSync(file, "utf8")) as Cassette
+  if (c.format !== "exp2-cassette-1" || !Array.isArray(c.entries)) throw new Error(`${file} is not an exp2 cassette`)
+  return c
+}
+
+export function saveCassette(file: string, c: Cassette): void {
+  writeFileSync(file, JSON.stringify(c, null, 1) + "\n", "utf8")
+}
+
+function recorder<R>(step: RecordedStep, inner: (r: R) => Promise<ModelReply>, cassette: Cassette, onEntry?: () => void): (r: R) => Promise<ModelReply> {
+  return async request => {
+    const reply = await inner(request)
+    const prompt = promptText(step, request)
+    cassette.entries.push({
+      step, request_sha256: promptHash(prompt), prompt, answer: reply.text, usage: reply.usage ?? null,
+      model: reply.model ?? cassette.model_label, ...(reply.stub ? { stub: true as const } : {}), recorded_at: new Date().toISOString(),
+    })
+    onEntry?.()
+    return reply
+  }
+}
+
+/** Wraps real transports; every answered call is appended to the cassette (and saved, when a file is given). */
+export function recordingTransports(t: { attribution: AttributionTransport; checks: ChecksTransport }, cassette: Cassette, file?: string): { attribution: AttributionTransport; checks: ChecksTransport } {
+  const save = file ? () => saveCassette(file, cassette) : undefined
+  return { attribution: recorder<ModelRequest>("attribution", t.attribution, cassette, save), checks: recorder<CheckRequest>("checks", t.checks, cassette, save) }
+}
+
+export interface Replay {
+  attribution: AttributionTransport
+  checks: ChecksTransport
+  /** Entries never asked for, in recording order. */
+  unused(): CassetteEntry[]
+}
+
+/**
+ * Replays a cassette by request hash. The same request recorded more than once is answered in recording order.
+ * The replayed reply is marked as not a stand-in, carries the recorded usage (absent when unknown) and the model.
+ */
+export function replayTransports(cassette: Cassette): Replay {
+  const queues = new Map<string, CassetteEntry[]>()
+  for (const e of cassette.entries) {
+    const key = `${e.step}:${e.request_sha256}`
+    queues.set(key, [...(queues.get(key) ?? []), e])
+  }
+  const used = new Set<CassetteEntry>()
+  const replay = (step: RecordedStep) => async (request: unknown): Promise<ModelReply> => {
+    const prompt = promptText(step, request)
+    const sha = promptHash(prompt)
+    const entry = queues.get(`${step}:${sha}`)?.find(e => !used.has(e))
+    if (!entry) throw new ReplayMiss(`no recorded ${step} answer for request ${sha.slice(0, 12)} (${prompt.length} chars)`)
+    used.add(entry)
+    return { text: entry.answer, stub: entry.stub === true, model: entry.model, ...(entry.usage ? { usage: entry.usage } : {}) }
+  }
+  return { attribution: replay("attribution"), checks: replay("checks"), unused: () => cassette.entries.filter(e => !used.has(e)) }
+}
+
+/**
+ * Re-keys answers recorded against older requests (DESIGN §12b item 7): the current code builds each request, and
+ * the step's recorded answers are given in their recorded order. The returned transports record the new requests.
+ * An answer list that runs out is a miss.
+ */
+export function orderedAnswers(answers: Record<RecordedStep, string[]>): { attribution: AttributionTransport; checks: ChecksTransport } {
+  const next = { attribution: 0, checks: 0 }
+  const give = (step: RecordedStep) => async (): Promise<ModelReply> => {
+    const text = answers[step][next[step]++]
+    if (text === undefined) throw new ReplayMiss(`recorded ${step} answers ran out after ${answers[step].length}`)
+    return { text, stub: false }
+  }
+  return { attribution: give("attribution"), checks: give("checks") }
+}
+
+/**
+ * Re-keys recorded attribution rounds: ingests rounds 1..n into a fresh store, giving each round its recorded
+ * answers in order, and records the requests the current code builds. Returns the cassette and, per round, the
+ * status and how many answers were used.
+ */
+export async function rekeyAttribution(stateDir: string, texts: readonly string[], answers: readonly string[][], cassette: Cassette): Promise<{ round: number; status: string; used: number; recorded: number }[]> {
+  const store = new Exp2Store(stateDir, "rekey")
+  const out: { round: number; status: string; used: number; recorded: number }[] = []
+  for (let i = 0; i < texts.length; i++) {
+    const before = cassette.entries.length
+    const t = recordingTransports({ ...orderedAnswers({ attribution: answers[i], checks: [] }) }, cassette)
+    const record = await store.ingestRound(i + 1, texts[i], t.attribution, { maxRepairs: Math.max(answers[i].length - 1, 0) })
+    out.push({ round: i + 1, status: record.status, used: cassette.entries.length - before, recorded: answers[i].length })
+    if (record.status !== "accepted") break
+  }
+  return out
+}

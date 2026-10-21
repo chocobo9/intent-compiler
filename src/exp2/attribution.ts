@@ -87,6 +87,9 @@ export class QuotaExhausted extends Error {}
 /** The provider no longer accepts the login (an invalidated OAuth token, a revoked key): the serial stops and reports. */
 export class AuthInvalid extends Error {}
 
+/** A replayed run asked something the recording does not hold: the run stops; it never falls back to a stand-in. */
+export class ReplayMiss extends Error {}
+
 export type IssueCode =
   | "unparseable" | "shape" | "unknown_block" | "not_this_round" | "hash_mismatch" | "duplicate" | "overlap" | "uncovered"
   | "object_choice" | "unknown_object" | "name_taken" | "change_shape" | "range_invalid" | "target_unknown"
@@ -110,6 +113,8 @@ export interface ModelCallRecord {
   issues: Issue[]
   usage: TokenUsage
   stub: boolean
+  /** A real call whose usage was not reported (a recording without usage): its zeros are not a measurement. */
+  usage_unknown?: boolean
   model?: string
   provider?: string
   started_at?: string
@@ -140,7 +145,9 @@ export function buildRequest(registry: Registry, round: number, previous: Attrib
     const modified = live.flatMap(b => b.modifications.flatMap(m => m.parts))
     return { id: o.id, name: o.name, version: o.version, blocks: live.map(b => b.block), ...(modified.length ? { modified } : {}) }
   })
-  return { round, sources, outline: outline(source), objects, candidates: candidates(registry, source), issues, previous_draft: previous }
+  // The model reads an issue's message, which names its blocks; the `blocks` list is for code and is not sent twice.
+  const sent = issues.map(({ blocks: _, ...i }) => i)
+  return { round, sources, outline: outline(source), objects, candidates: candidates(registry, source), issues: sent, previous_draft: previous }
 }
 
 function outline(source: RoundSource): string[] {
@@ -403,6 +410,7 @@ export async function attributeRound(registry: Registry, round: number, transpor
     const sha = createHash("sha256").update(text).digest("hex")
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
+      if (e instanceof ReplayMiss) throw e
       // Keep the record of a failed call. A spent quota stops here; anything else uses up this attempt.
       const stop = e instanceof QuotaExhausted ? "quota" as const : e instanceof AuthInvalid ? "auth" as const : null
       const failed: Issue[] = [{ code: stop ?? "transport", message: `The model call failed: ${(e as Error).message}` }]
@@ -417,6 +425,7 @@ export async function attributeRound(registry: Registry, round: number, transpor
       id: options.callId(calls.length + 1), round, stage: "understand", step: "attribution", kind, attempt,
       request, request_chars: text.length, request_sha256: sha,
       response_text: reply.text, issues: [], usage: usageOf(reply), stub: reply.stub === true,
+      ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}),
       ...(reply.model ? { model: reply.model } : {}), ...(reply.provider ? { provider: reply.provider } : {}),
       ...(reply.started_at ? { started_at: reply.started_at } : {}), ...(reply.completed_at ? { completed_at: reply.completed_at } : {}),
       ...(reply.schema_errors?.length ? { schema_errors: reply.schema_errors } : {}),

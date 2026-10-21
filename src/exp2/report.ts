@@ -10,7 +10,7 @@ import type { WorkOrder } from "./workorder.js"
  * attribution in three kinds.
  */
 
-export interface StageCost { calls: number; tokens: TokenUsage; stub_calls: number }
+export interface StageCost { calls: number; tokens: TokenUsage; stub_calls: number; /** Real calls with no reported usage: the tokens shown leave them out. */ unknown_usage_calls?: number }
 
 export interface RoundReport {
   round: number
@@ -41,8 +41,9 @@ export const addUsage = (a: TokenUsage, b: Partial<TokenUsage>): TokenUsage => (
   output_tokens: a.output_tokens + (b.output_tokens ?? 0), reasoning_tokens: a.reasoning_tokens + (b.reasoning_tokens ?? 0),
 })
 
-export function stageCost(calls: readonly { usage: TokenUsage; stub: boolean }[]): StageCost {
-  return { calls: calls.length, tokens: calls.reduce((t, c) => addUsage(t, c.usage), zeroUsage()), stub_calls: calls.filter(c => c.stub).length }
+export function stageCost(calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean }[]): StageCost {
+  const unknown = calls.filter(c => c.usage_unknown).length
+  return { calls: calls.length, tokens: calls.reduce((t, c) => addUsage(t, c.usage), zeroUsage()), stub_calls: calls.filter(c => c.stub).length, ...(unknown ? { unknown_usage_calls: unknown } : {}) }
 }
 
 export function codingCost(exec: ExecutionRecord | null, stub: boolean): StageCost {
@@ -98,7 +99,7 @@ export function buildReport(i: ReportInput): RoundReport {
 const tok = (u: TokenUsage) => `in ${u.input_tokens}, cache read ${u.cache_read_tokens}, out ${u.output_tokens}`
 
 export function renderReport(r: RoundReport): string {
-  const line = (label: string, c: StageCost) => `| ${label} | ${c.calls} | ${tok(c.tokens)} | ${c.stub_calls} |`
+  const line = (label: string, c: StageCost) => `| ${label} | ${c.calls} | ${tok(c.tokens)}${c.unknown_usage_calls ? ` (+ ${c.unknown_usage_calls} calls unknown)` : ""} | ${c.stub_calls} |`
   const count = (s: RoundReport["objects"][number]["status"]) => r.objects.filter(o => o.status === s).length
   return [
     `# Round ${r.round} report`,

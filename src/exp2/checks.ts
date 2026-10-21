@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
-import { AuthInvalid, QuotaExhausted, type ModelReply, type TokenUsage } from "./attribution.js"
+import { AuthInvalid, QuotaExhausted, ReplayMiss, type ModelReply, type TokenUsage } from "./attribution.js"
 import type { Registry } from "./registry.js"
 import { safePath, type CheckInput, type ScriptSandbox } from "./runner.js"
 import { annotate, LEVEL_RANK, parseRef, roundOf, type SourceBlock } from "./source.js"
@@ -525,6 +525,7 @@ export interface CheckCallRecord {
   issues: CheckIssue[]
   usage: TokenUsage
   stub: boolean
+  usage_unknown?: boolean
   model?: string
   error?: string
 }
@@ -542,6 +543,7 @@ export async function deriveChecks(registry: Registry, round: number, library: r
     const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "checks" as const, kind: attempt === 1 ? "attribute" as const : "repair" as const, attempt, request, request_chars: text.length, request_sha256: createHash("sha256").update(text).digest("hex") }
     let reply: ModelReply
     try { reply = await transport(request) } catch (e) {
+      if (e instanceof ReplayMiss) throw e
       // As in attribution: a spent quota stops the step; any other failure uses up this attempt.
       const stop = e instanceof QuotaExhausted ? "quota" as const : e instanceof AuthInvalid ? "auth" as const : null
       const failed: CheckIssue[] = [{ code: stop ?? "transport", message: `The model call failed: ${(e as Error).message}` }]
@@ -550,7 +552,7 @@ export async function deriveChecks(registry: Registry, round: number, library: r
       if (!issues.length) issues = failed
       continue
     }
-    const record: CheckCallRecord = { ...base, response_text: reply.text, issues: [], usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.model ? { model: reply.model } : {}) }
+    const record: CheckCallRecord = { ...base, response_text: reply.text, issues: [], usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) }
     calls.push(record)
     let parsed: unknown
     try { parsed = JSON.parse(reply.text) } catch (e) { issues = [{ code: "unparseable", message: `The reply is not JSON: ${(e as Error).message}` }]; record.issues = issues; continue }
