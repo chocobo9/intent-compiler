@@ -1,0 +1,325 @@
+{
+  "upsert": [
+    {
+      "key": "F-linear-boundary",
+      "object": "O15",
+      "blocks": ["R3.S2.P1", "R3.S2.P2", "R2.S13.P4"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["transform", "--input", "in.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"],
+        "files": [
+          {"path": "in.csv", "content": "id,temp\n1,\n2,10\n3,\n4,20\n5,\n6,\n"},
+          {"path": "recipe.json", "content": "[{\"op\": \"fill\", \"columns\": [\"temp\"], \"strategy\": \"linear\"}]\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S2.P1", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 1, "pointer": null, "column": "temp"}, "expect_json": "\"10\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S2.P2", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 3, "pointer": null, "column": "temp"}, "expect_json": "\"15\"", "tolerance": null, "source": {"kind": "derived", "block": "R2.S13.P4", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 5, "pointer": null, "column": "temp"}, "expect_json": "\"20\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S2.P2", "quote": null}},
+        {"id": "a5", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 6, "pointer": null, "column": "temp"}, "expect_json": "\"20\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S2.P2", "quote": null}},
+        {"id": "a6", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 2, "pointer": null, "column": "temp"}, "expect_json": "\"10\"", "tolerance": null, "source": {"kind": "derived", "block": "R2.S13.P1", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json\nrows=list(csv.reader(open('in.csv')))[1:]\nvals=[r[1] for r in rows]\ndef num(s):\n    try:\n        return float(s)\n    except ValueError:\n        return None\ndef fmt(x):\n    s=repr(float(x))\n    return s[:-2] if s.endswith('.0') else s\nres=[]\nfor i,v in enumerate(vals):\n    if v!='':\n        res.append(v)\n        continue\n    lo=next((j for j in range(i-1,-1,-1) if num(vals[j]) is not None),None)\n    hi=next((j for j in range(i+1,len(vals)) if num(vals[j]) is not None),None)\n    if lo is not None and hi is not None:\n        a=num(vals[lo]); b=num(vals[hi])\n        res.append(fmt(a+(b-a)*(i-lo)/(hi-lo)))\n    elif lo is not None:\n        res.append(fmt(num(vals[lo])))\n    elif hi is not None:\n        res.append(fmt(num(vals[hi])))\n    else:\n        res.append('')\nprint(json.dumps({'a1':0,'a2':res[0],'a3':res[2],'a4':res[4],'a5':res[5],'a6':res[1]}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "N-zscore-sample-stddev",
+      "object": "O26",
+      "blocks": ["R3.S3.P1", "R3.S3.P2", "R3.S3.P3", "R3.S3.P4", "R2.S11.P6", "R2.S11.P7"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["transform", "--input", "in.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"],
+        "files": [
+          {"path": "in.csv", "content": "id,x,y\n1,1,5\n2,2,5\n3,3,5\n4,,5\n5,abc,5\n"},
+          {"path": "recipe.json", "content": "[{\"op\": \"normalize\", \"column\": \"x\", \"method\": \"zscore\", \"as\": \"x_z\"}, {\"op\": \"normalize\", \"column\": \"y\", \"method\": \"zscore\", \"as\": \"y_z\"}, {\"op\": \"normalize\", \"column\": \"x\", \"method\": \"minmax\", \"as\": \"x_mm\"}]\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R2.S11.P1", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 1, "pointer": null, "column": "x_z"}, "expect_json": "-1", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S3.P2", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 3, "pointer": null, "column": "x_z"}, "expect_json": "1", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S3.P2", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 4, "pointer": null, "column": "x_z"}, "expect_json": "\"\"", "tolerance": null, "source": {"kind": "derived", "block": "R2.S11.P6", "quote": null}},
+        {"id": "a5", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 5, "pointer": null, "column": "x_z"}, "expect_json": "\"\"", "tolerance": null, "source": {"kind": "derived", "block": "R2.S11.P6", "quote": null}},
+        {"id": "a6", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 1, "pointer": null, "column": "y_z"}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S3.P3", "quote": null}},
+        {"id": "a7", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 2, "pointer": null, "column": "x_mm"}, "expect_json": "0.5", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R2.S11.P6", "quote": null}},
+        {"id": "a8", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 1, "pointer": null, "column": "x_mm"}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R2.S11.P6", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json,math\nrows=list(csv.reader(open('in.csv')))[1:]\ndef num(s):\n    try:\n        return float(s)\n    except ValueError:\n        return None\nx=[num(r[1]) for r in rows]\ny=[num(r[2]) for r in rows]\nxv=[v for v in x if v is not None]\nyv=[v for v in y if v is not None]\nmx=sum(xv)/len(xv)\nsx=math.sqrt(sum((v-mx)**2 for v in xv)/(len(xv)-1))\nmy=sum(yv)/len(yv)\nsy=math.sqrt(sum((v-my)**2 for v in yv)/(len(yv)-1)) if len(yv)>1 else 0.0\nmn=min(xv); mxx=max(xv)\nxz=[('' if v is None else (v-mx)/sx) for v in x]\nyz=[(v-my)/sy if sy!=0 else 0 for v in y]\nxm=[('' if v is None else ((v-mn)/(mxx-mn) if mxx!=mn else 0)) for v in x]\nprint(json.dumps({'a1':0,'a2':xz[0],'a3':xz[2],'a4':xz[3],'a5':xz[4],'a6':yz[0],'a7':xm[1],'a8':xm[0]}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "P-profile-p05-p95",
+      "object": "O22",
+      "blocks": ["R3.S5.P1", "R3.S5.P2", "R3.S5.P3"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["profile", "--input", "in.csv", "--output", "profile.json"],
+        "files": [
+          {"path": "in.csv", "content": "v,f\n1,1.5\n2,2.5\n3,3.5\n4,4.5\n5,5.5\n6,6.5\n7,7.5\n8,8.5\n9,9.5\n10,10.5\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S5.P1", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "json", "path": "profile.json", "line": null, "pointer": "/columns/0/p05", "column": null}, "expect_json": "1.45", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S5.P3", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "json", "path": "profile.json", "line": null, "pointer": "/columns/0/p95", "column": null}, "expect_json": "9.55", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S5.P3", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "json", "path": "profile.json", "line": null, "pointer": "/columns/1/p05", "column": null}, "expect_json": "1.95", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S5.P3", "quote": null}},
+        {"id": "a5", "role": "business", "target": {"kind": "json", "path": "profile.json", "line": null, "pointer": "/columns/1/p95", "column": null}, "expect_json": "10.05", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S5.P3", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json\nrows=list(csv.reader(open('in.csv')))[1:]\ndef pct(vals,p):\n    v=sorted(vals)\n    n=len(v)\n    idx=p/100*(n-1)\n    lo=int(idx)\n    hi=min(lo+1,n-1)\n    frac=idx-lo\n    return v[lo]+frac*(v[hi]-v[lo])\nv=[float(r[0]) for r in rows]\nf=[float(r[1]) for r in rows]\nprint(json.dumps({'a1':0,'a2':pct(v,5),'a3':pct(v,95),'a4':pct(f,5),'a5':pct(f,95)}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "PL-pipeline-drift-step",
+      "object": "O18",
+      "blocks": ["R3.S16.P1", "R3.S16.P2", "R3.S16.P3", "R3.S16.P4", "R1.S6.P2"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["pipeline", "--config", "pipe.json"],
+        "files": [
+          {"path": "pipe.json", "content": "{\"seed\": 1, \"steps\": [{\"type\": \"drift\", \"baseline\": \"base.csv\", \"current\": \"cur.csv\", \"output\": \"drift.json\", \"threshold\": 0}]}\n"},
+          {"path": "base.csv", "content": "id,v\n1,1\n2,2\n3,3\n4,4\n5,5\n6,6\n7,7\n8,8\n9,9\n10,10\n"},
+          {"path": "cur.csv", "content": "id,v\n1,2\n2,3\n3,4\n4,5\n5,6\n6,7\n7,8\n8,9\n9,10\n10,11\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S16.P4", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "stdout_line", "path": null, "line": 1, "pointer": null, "column": null}, "expect_json": "\"PIPELINE OK: 1 steps completed\"", "tolerance": null, "source": {"kind": "derived", "block": "R1.S6.P2", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/summary/total_drifts", "column": null}, "expect_json": "1", "tolerance": null, "source": {"kind": "derived", "block": "R3.S9.P1", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/column", "column": null}, "expect_json": "\"v\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P1", "quote": null}},
+        {"id": "a5", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/drift_type", "column": null}, "expect_json": "\"mean_shift\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P5", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json,math\ndef load(p):\n    return list(csv.reader(open(p)))[1:]\nb=[float(r[1]) for r in load('base.csv')]\nc=[float(r[1]) for r in load('cur.csv')]\nmb=sum(b)/len(b)\nmc=sum(c)/len(c)\nsb=math.sqrt(sum((x-mb)**2 for x in b)/len(b))\nshift=abs(mc-mb)/max(sb,1e-10)\nn=1 if shift>0.1 else 0\nprint(json.dumps({'a1':0,'a2':'PIPELINE OK: %d steps completed' % n,'a3':n,'a4':'v','a5':'mean_shift'}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "D-schema-drift",
+      "object": "O33",
+      "blocks": ["R3.S6.P1", "R3.S8.P1", "R3.S8.P2", "R3.S8.P3", "R3.S9.P1", "R3.S9.P3", "R3.S10.P1", "R3.S10.P2"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["drift", "--baseline", "baseline.csv", "--current", "current.csv", "--output", "drift.json"],
+        "files": [
+          {"path": "baseline.csv", "content": "id,a,b\n1,10,x\n2,20,y\n3,30,z\n"},
+          {"path": "current.csv", "content": "id,a,c\n1,10.5,p\n2,20.5,q\n3,30.5,r\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S6.P1", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/summary/total_drifts", "column": null}, "expect_json": "3", "tolerance": null, "source": {"kind": "derived", "block": "R3.S9.P1", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/summary/schema_drifts", "column": null}, "expect_json": "3", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P3", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/summary/distribution_drifts", "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P4", "quote": null}},
+        {"id": "a5", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/drift_type", "column": null}, "expect_json": "\"type_changed\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P3", "quote": null}},
+        {"id": "a6", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/column", "column": null}, "expect_json": "\"a\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S10.P1", "quote": null}},
+        {"id": "a7", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/detail", "column": null}, "expect_json": "\"type changed from int to float\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S9.P3", "quote": null}},
+        {"id": "a8", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/1/drift_type", "column": null}, "expect_json": "\"column_removed\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P3", "quote": null}},
+        {"id": "a9", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/1/current_value", "column": null}, "expect_json": "null", "tolerance": null, "source": {"kind": "derived", "block": "R3.S9.P3", "quote": null}},
+        {"id": "a10", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/2/drift_type", "column": null}, "expect_json": "\"column_added\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P3", "quote": null}},
+        {"id": "a11", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/2/baseline_value", "column": null}, "expect_json": "null", "tolerance": null, "source": {"kind": "derived", "block": "R3.S9.P3", "quote": null}},
+        {"id": "a12", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/2/detail", "column": null}, "expect_json": "\"new column of type string\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S9.P3", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json\ndef load(p):\n    r=list(csv.reader(open(p)))\n    return r[0],r[1:]\ndef infer(vals):\n    ne=[v for v in vals if v!='']\n    if not ne:\n        return 'string'\n    try:\n        [int(v) for v in ne]\n        return 'int'\n    except ValueError:\n        pass\n    try:\n        [float(v) for v in ne]\n        return 'float'\n    except ValueError:\n        return 'string'\nbh,br=load('baseline.csv')\nch,cr=load('current.csv')\nbt={h:infer([r[i] for r in br]) for i,h in enumerate(bh)}\nct={h:infer([r[i] for r in cr]) for i,h in enumerate(ch)}\nd=[]\nfor c in sorted(set(bt)|set(ct)):\n    if c not in bt:\n        d.append((c,'column_added',None,ct[c],'new column of type '+ct[c]))\n    elif c not in ct:\n        d.append((c,'column_removed',bt[c],None,'column of type '+bt[c]+' removed'))\n    elif bt[c]!=ct[c]:\n        d.append((c,'type_changed',bt[c],ct[c],'type changed from '+bt[c]+' to '+ct[c]))\nprint(json.dumps({'a1':0,'a2':len(d),'a3':len(d),'a4':0,'a5':d[0][1],'a6':d[0][0],'a7':d[0][4],'a8':d[1][1],'a9':None,'a10':d[2][1],'a11':None,'a12':d[2][4]}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "D-distribution-threshold",
+      "object": "O33",
+      "blocks": ["R3.S6.P1", "R3.S7.P1", "R3.S8.P1", "R3.S8.P4", "R3.S8.P5", "R3.S9.P1", "R3.S10.P2"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["drift", "--baseline", "baseline.csv", "--current", "current.csv", "--output", "drift.json", "--threshold", "0.05"],
+        "files": [
+          {"path": "baseline.csv", "content": "id,v\n1,1\n2,2\n3,3\n4,4\n5,5\n6,6\n7,7\n8,8\n9,9\n10,10\n"},
+          {"path": "current.csv", "content": "id,v\n1,1\n2,2\n3,3\n4,4\n5,5\n6,6\n7,7\n8,8\n9,9\n10,\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S6.P1", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/summary/total_drifts", "column": null}, "expect_json": "2", "tolerance": null, "source": {"kind": "derived", "block": "R3.S9.P1", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/summary/distribution_drifts", "column": null}, "expect_json": "2", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P4", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/drift_type", "column": null}, "expect_json": "\"mean_shift\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P5", "quote": null}},
+        {"id": "a5", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/baseline_value", "column": null}, "expect_json": "5.5", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S9.P3", "quote": null}},
+        {"id": "a6", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/current_value", "column": null}, "expect_json": "5", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S9.P3", "quote": null}},
+        {"id": "a7", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/1/drift_type", "column": null}, "expect_json": "\"null_rate_change\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P5", "quote": null}},
+        {"id": "a8", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/1/current_value", "column": null}, "expect_json": "0.1", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S8.P5", "quote": null}},
+        {"id": "a9", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/1/baseline_value", "column": null}, "expect_json": "0", "tolerance": 1e-9, "source": {"kind": "derived", "block": "R3.S8.P5", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json,math\ndef load(p):\n    return list(csv.reader(open(p)))[1:]\nbr=load('baseline.csv')\ncr=load('current.csv')\nth=0.05\nbv=[r[1] for r in br]\ncv=[r[1] for r in cr]\nbn=[float(v) for v in bv if v!='']\ncn=[float(v) for v in cv if v!='']\nmb=sum(bn)/len(bn)\nmc=sum(cn)/len(cn)\nsb=math.sqrt(sum((x-mb)**2 for x in bn)/len(bn))\nnrb=(len(bv)-len(bn))/len(bv)\nnrc=(len(cv)-len(cn))/len(cv)\nd=[]\nif abs(mc-mb)/max(sb,1e-10)>th:\n    d.append(('mean_shift',mb,mc))\nif abs(nrc-nrb)>th:\n    d.append(('null_rate_change',nrb,nrc))\nprint(json.dumps({'a1':0,'a2':len(d),'a3':len(d),'a4':d[0][0],'a5':d[0][1],'a6':d[0][2],'a7':d[1][0],'a8':d[1][2],'a9':d[1][1]}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "D-distribution-default-threshold",
+      "object": "O33",
+      "blocks": ["R3.S7.P1", "R3.S8.P5", "R3.S9.P1"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["drift", "--baseline", "baseline.csv", "--current", "current.csv", "--output", "drift.json"],
+        "files": [
+          {"path": "baseline.csv", "content": "id,v\n1,1\n2,2\n3,3\n4,4\n5,5\n6,6\n7,7\n8,8\n9,9\n10,10\n"},
+          {"path": "current.csv", "content": "id,v\n1,1\n2,2\n3,3\n4,4\n5,5\n6,6\n7,7\n8,8\n9,9\n10,\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S6.P1", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/summary/total_drifts", "column": null}, "expect_json": "1", "tolerance": null, "source": {"kind": "derived", "block": "R3.S7.P1", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/summary/distribution_drifts", "column": null}, "expect_json": "1", "tolerance": null, "source": {"kind": "derived", "block": "R3.S7.P1", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "json", "path": "drift.json", "line": null, "pointer": "/drifts/0/drift_type", "column": null}, "expect_json": "\"mean_shift\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S8.P5", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json,math\ndef load(p):\n    return list(csv.reader(open(p)))[1:]\nbr=load('baseline.csv')\ncr=load('current.csv')\nth=0.1\nbv=[r[1] for r in br]\ncv=[r[1] for r in cr]\nbn=[float(v) for v in bv if v!='']\ncn=[float(v) for v in cv if v!='']\nmb=sum(bn)/len(bn)\nmc=sum(cn)/len(cn)\nsb=math.sqrt(sum((x-mb)**2 for x in bn)/len(bn))\nnrb=(len(bv)-len(bn))/len(bv)\nnrc=(len(cv)-len(cn))/len(cv)\nd=[]\nif abs(mc-mb)/max(sb,1e-10)>th:\n    d.append(('mean_shift',mb,mc))\nif abs(nrc-nrb)>th:\n    d.append(('null_rate_change',nrb,nrc))\nprint(json.dumps({'a1':0,'a2':len(d),'a3':len(d),'a4':d[0][0]}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "D-missing-baseline",
+      "object": "O33",
+      "blocks": ["R3.S11.P1"],
+      "uses": ["O20"],
+      "direction": "holds",
+      "input": {
+        "args": ["drift", "--baseline", "missing.csv", "--current", "cur.csv", "--output", "drift.json"],
+        "files": [
+          {"path": "cur.csv", "content": "id,v\n1,1\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "1", "tolerance": null, "source": {"kind": "verbatim", "block": "R3.S11.P1", "quote": "Missing baseline file: exit code 1"}},
+        {"id": "a2", "role": "convention", "target": {"kind": "stderr_line", "path": null, "line": 1, "pointer": null, "column": null}, "expect_json": "\"ERROR: file not found: missing.csv\"", "tolerance": null, "source": {"kind": "verbatim", "block": "R3.S11.P1", "quote": "stderr `ERROR: file not found: <path>`"}}
+      ],
+      "reference_script": null,
+      "note": null
+    },
+    {
+      "key": "R-resample-oversample",
+      "object": "O34",
+      "blocks": ["R3.S14.P1", "R3.S14.P2", "R3.S14.P3", "R3.S14.P4", "R3.S14.P5"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["transform", "--input", "in.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"],
+        "files": [
+          {"path": "in.csv", "content": "label,v\na,1\nb,2\nb,3\nb,4\nc,5\nc,6\n"},
+          {"path": "recipe.json", "content": "[{\"op\": \"resample\", \"column\": \"label\", \"strategy\": \"oversample\", \"seed\": 42}]\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P4", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 2, "pointer": null, "column": "v"}, "expect_json": "\"1\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P5", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 3, "pointer": null, "column": "label"}, "expect_json": "\"a\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P5", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 6, "pointer": null, "column": "v"}, "expect_json": "\"4\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P5", "quote": null}},
+        {"id": "a5", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 8, "pointer": null, "column": "v"}, "expect_json": "\"6\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P5", "quote": null}},
+        {"id": "a6", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 9, "pointer": null, "column": "v"}, "expect_json": "\"5\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P5", "quote": null}},
+        {"id": "a7", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 9, "pointer": null, "column": "label"}, "expect_json": "\"c\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P5", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json\nrows=list(csv.reader(open('in.csv')))[1:]\ngroups={}\nfor l,v in rows:\n    groups.setdefault(l,[]).append(v)\ntarget=max(len(g) for g in groups.values())\nout=[]\nfor k in sorted(groups):\n    g=[(k,v) for v in groups[k]]\n    base=list(g)\n    i=0\n    while len(g)<target:\n        g.append(base[i%len(base)])\n        i+=1\n    out+=g\nprint(json.dumps({'a1':0,'a2':out[1][1],'a3':out[2][0],'a4':out[5][1],'a5':out[7][1],'a6':out[8][1],'a7':out[8][0]}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "R-resample-undersample",
+      "object": "O34",
+      "blocks": ["R3.S14.P1", "R3.S14.P2", "R3.S14.P3", "R3.S14.P6", "R3.S14.P7"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["transform", "--input", "in.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "7"],
+        "files": [
+          {"path": "in.csv", "content": "label,v\na,1\na,2\nb,3\nb,4\nb,5\nb,6\nc,7\nc,8\nc,9\n"},
+          {"path": "recipe.json", "content": "[{\"op\": \"resample\", \"column\": \"label\", \"strategy\": \"undersample\", \"seed\": 7}]\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P7", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 1, "pointer": null, "column": "label"}, "expect_json": "\"a\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P7", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 2, "pointer": null, "column": "v"}, "expect_json": "\"2\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P7", "quote": null}},
+        {"id": "a4", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 3, "pointer": null, "column": "label"}, "expect_json": "\"b\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P7", "quote": null}},
+        {"id": "a5", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 4, "pointer": null, "column": "label"}, "expect_json": "\"b\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P7", "quote": null}},
+        {"id": "a6", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 5, "pointer": null, "column": "label"}, "expect_json": "\"c\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P7", "quote": null}},
+        {"id": "a7", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 6, "pointer": null, "column": "label"}, "expect_json": "\"c\"", "tolerance": null, "source": {"kind": "derived", "block": "R3.S14.P7", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,json\nrows=list(csv.reader(open('in.csv')))[1:]\ngroups={}\nfor l,v in rows:\n    groups.setdefault(l,[]).append(v)\nt=min(len(g) for g in groups.values())\nlabels=[]\nfor k in sorted(groups):\n    labels+=[k]*t\nprint(json.dumps({'a1':0,'a2':labels[0],'a3':groups['a'][1],'a4':labels[2],'a5':labels[3],'a6':labels[4],'a7':labels[5]}))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "W-watermark-hmac",
+      "object": "O35",
+      "blocks": ["R3.S15.P1", "R3.S15.P2", "R3.S15.P3", "R3.S15.P5"],
+      "uses": [],
+      "direction": "holds",
+      "input": {
+        "args": ["transform", "--input", "in.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"],
+        "files": [
+          {"path": "in.csv", "content": "id,name\n1,Alice\n2,Bob\n"},
+          {"path": "recipe.json", "content": "[{\"op\": \"watermark\", \"columns\": [\"id\", \"name\"], \"key\": \"secret123\", \"as\": \"wmark\"}]\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "0", "tolerance": null, "source": {"kind": "derived", "block": "R3.S15.P1", "quote": null}},
+        {"id": "a2", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 1, "pointer": null, "column": "wmark"}, "expect_json": "null", "tolerance": null, "source": {"kind": "computed", "block": "R3.S15.P5", "quote": null}},
+        {"id": "a3", "role": "business", "target": {"kind": "csv_cell", "path": "out.csv", "line": 2, "pointer": null, "column": "wmark"}, "expect_json": "null", "tolerance": null, "source": {"kind": "computed", "block": "R3.S15.P5", "quote": null}}
+      ],
+      "reference_script": {
+        "language": "python",
+        "code": "import csv,hmac,hashlib,json\nrows=list(csv.reader(open('in.csv')))[1:]\nout={'a1':0}\nfor i,r in enumerate(rows):\n    msg=(r[0]+'\\x00'+r[1]).encode()\n    out['a%d' % (i+2)]=hmac.new(b'secret123',msg,hashlib.sha256).digest()[:8].hex()\nprint(json.dumps(out))\n"
+      },
+      "note": null
+    },
+    {
+      "key": "W-missing-column",
+      "object": "O35",
+      "blocks": ["R3.S15.P3", "R3.S15.P6"],
+      "uses": ["O20"],
+      "direction": "holds",
+      "input": {
+        "args": ["transform", "--input", "in.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"],
+        "files": [
+          {"path": "in.csv", "content": "id,name\n1,Alice\n2,Bob\n"},
+          {"path": "recipe.json", "content": "[{\"op\": \"watermark\", \"columns\": [\"nope\"], \"key\": \"secret123\", \"as\": \"wmark\"}]\n"}
+        ]
+      },
+      "assertions": [
+        {"id": "a1", "role": "business", "target": {"kind": "exit_code", "path": null, "line": null, "pointer": null, "column": null}, "expect_json": "1", "tolerance": null, "source": {"kind": "derived", "block": "R3.S15.P6", "quote": null}},
+        {"id": "a2", "role": "convention", "target": {"kind": "stderr_line", "path": null, "line": 1, "pointer": null, "column": null}, "expect_json": "\"ERROR: invalid recipe: column nope not found\"", "tolerance": null, "source": {"kind": "verbatim", "block": "R3.S15.P6", "quote": "`ERROR: invalid recipe: column <name> not found`"}}
+      ],
+      "reference_script": null,
+      "note": null
+    }
+  ],
+  "remove": [],
+  "retire_add": [
+    {"check": "K27", "reason": "R3.S2.P2 revised fill linear: cells with only one anchor are now extrapolated from the nearest anchor, not left empty"},
+    {"check": "K35", "reason": "R3.S3.P1 and R3.S3.P2 revised normalize zscore to sample stddev (n-1); the population-stddev text in R2.S11.P5 no longer holds"}
+  ],
+  "retire_remove": []
+}
