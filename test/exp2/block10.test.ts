@@ -41,7 +41,7 @@ describe("exp2 block 10: probes are written for every rule unit, checked by code
     assert.match(msgs({ ...base, probes: [{ ...ok, covers: five }, base.probes[1]] }).join(), /serves 5 units; at most 4/u)
     assert.match(msgs({ ...base, probes: [{ ...ok, files: [{ path: "recipe.json", content: "[{" }, ok.files[0]] }, base.probes[1]] }).join(), /recipe\.json is not valid JSON/u)
     assert.match(msgs({ ...base, probes: [{ ...ok, files: [ok.files[1]] }, base.probes[1]] }).join(), /argument data\.csv names a file the probe does not give/u)
-    assert.match(msgs({ ...base, probes: [{ ...ok, files: [{ path: "data.csv", content: "id,value\n1,2,3\n" }, ok.files[1]] }, base.probes[1]] }).join(), /data\.csv row 1 has 3 fields, the header has 2/u)
+    assert.match(msgs({ ...base, probes: [{ ...ok, files: [{ path: "data.csv", content: "id,value\n1,2,3\n" }, ok.files[1]] }, base.probes[1]] }).join(), /data\.csv line 2 has 3 fields, the first line has 2/u)
     assert.match(msgs({ ...base, probes: [{ ...ok, covers: [{ unit: "R9.S1", trigger_values: ["20"], wrong_would: "" }] }, base.probes[1]] }).join(), /unit "R9\.S1" is not in this group/u)
     // A deliberately missing input is not a problem; the output file named after --output is not an input.
     assert.deepEqual(msgs({ ...base, probes: [{ ...ok, files: [], invalid_on_purpose: true, covers: [{ unit: "R1.S3.P2.s4", trigger_values: ["data.csv"], wrong_would: "" }] }, base.probes[1]] }), [])
@@ -245,8 +245,8 @@ describe("exp2 block 10: the serial with probes and judge (stand-ins), checks of
     assert.ok(r2.open.some(k => profile.has(k.split("/")[1])))
     const sortUnit = s.probes.find(p => p.key.endsWith("sort-asc"))!.covers[0].unit
     assert.ok(r2.open.some(k => k.endsWith(`/${sortUnit}`)))
-    assert.match(first[2], /## Corrections left open by earlier rounds[\s\S]*not ascending/u)
-    assert.match(first[3], /## Corrections left open by earlier rounds[\s\S]*profile prints nothing the text requires/u)
+    assert.match(first[2], /## Corrections still open from earlier rounds[\s\S]*not ascending/u)
+    assert.match(first[3], /## Corrections still open from earlier rounds[\s\S]*profile prints nothing the text requires/u)
     const r3 = s.reports.find(r => r.round === 3)!
     const pid = store.registry().objectByName("profile")!.id
     assert.ok(r3.objects.find(o => o.object === pid)!.status === "not_landed")

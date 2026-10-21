@@ -239,7 +239,7 @@ export class Serial {
       const old = this.activeProbes().filter(p => p.round < round)
       if (old.length && baseline.kind !== "null") {
         const r = await this.probe(round, old, baseline, new Set(), new Map())
-        carried = { findings: r.findings, text: r.items.length ? `\n## Corrections left open by earlier rounds\n\nProbes of earlier rounds, run on the program as it stands now, still show these deviations from the requirements. Fix them along with this round's work; the requirements are the authority.\n${renderCorrections(r.items, programName(baseline))}\n` : "" }
+        carried = { findings: r.findings, text: r.items.length ? `\n${CARRIED_HEADER}\n${renderCorrections(r.items, programName(baseline))}\n` : "" }
       }
     }
 
@@ -335,6 +335,9 @@ export class Serial {
     return nullBaseline(join(this.c.checkpoints, "null-baseline"))
   }
 }
+
+/** The section the work order gets for what earlier rounds' probes still find wrong (BLOCK10 §1.6). */
+export const CARRIED_HEADER = "## Corrections still open from earlier rounds\n\nProbes of earlier rounds, run on the program as it stands now, still show these deviations from the requirements. Fix them along with this round's work; the requirements are the authority."
 
 /** The name a correction list calls the program by: the built file, without a Windows extension. */
 export function programName(program: ProgramRef): string {

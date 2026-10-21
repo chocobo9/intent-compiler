@@ -129,7 +129,7 @@ describe("exp2 block 9: one session per round, checks drive the repairs", () => 
     ], { callTimeoutMs: 1500 })
     assert.deepEqual(record.sessions.map(s => s.closed), ["broken", "normally"])
     assert.equal(executor.log.sessions[1].resume!.evidence.includes("missing_name"), true)
-    assert.match(executor.log.messages[2].text, /A previous session stopped\. The work tree is at the last checkpoint/u)
+    assert.match(executor.log.messages[2].text, /A previous session stopped\. The work tree is at the last commit the controller made/u)
     assert.deepEqual(record.cycles.map(c => c.message), ["work", "resume"])
     assert.equal(record.status, "done")
   })

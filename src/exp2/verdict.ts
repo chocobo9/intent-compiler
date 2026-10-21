@@ -197,7 +197,7 @@ export function classify(check: CheckRecord, results: AssertionResult[], out: Ru
   if (other.length) return { class: "not_landed", reason: "refused", detail: `the program refused the input: ${JSON.stringify(other[0].line)} (rule \`${other[0].rule}\`); ${failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; ")}`, roles }
   const exitExpected = check.assertions.find(a => a.target.kind === "exit_code")?.expect
   if (exitExpected === 0 && out.exit_code !== 0) {
-    return { class: "not_landed", reason: "refused", detail: `the call exited ${out.exit_code} (${out.stderr.trim().slice(0, 160) || "no stderr"}) where success was expected; ${failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; ")}`, roles }
+    return { class: "not_landed", reason: "refused", detail: `the call exited ${out.exit_code} (${out.stderr.trim().slice(0, 160) || "no stderr"}) where a successful exit was expected; ${failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; ")}`, roles }
   }
   return { class: "not_landed", reason: "value_mismatch", detail: failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; "), roles }
 }
@@ -243,8 +243,8 @@ export function strength(check: CheckRecord, baselineRun: CheckRun, baseline: Pr
   const satisfied = baselineRun.assertions.every(a => a.ok)
   const baselineOk = check.direction === "holds" ? !satisfied : satisfied
   const strong = baselineOk && data.length > 0
-  const reason = strong ? "fails on the baseline and asserts data" : !baselineOk
-    ? (check.direction === "holds" ? "passes on the baseline, so it does not tell the requirement apart" : "the baseline does not show the removed behaviour")
+  const reason = strong ? "fails on the previous program and asserts data" : !baselineOk
+    ? (check.direction === "holds" ? "passes on the previous program, so it does not tell the requirement apart" : "the previous program does not show the removed behaviour")
     : "no assertion about data (only exit code, existence or help)"
   return { strong, baseline: baseline.id, baseline_ok: baselineOk, data_assertions: data, reason }
 }

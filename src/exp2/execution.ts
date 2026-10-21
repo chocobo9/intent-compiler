@@ -206,6 +206,9 @@ export function renderEvidence(runs: readonly CheckRun[], failing: readonly stri
   return out.join("\n")
 }
 
+/** What a new session is told after a broken one, before the evidence of the last commit. */
+export const RESUME_NOTE = "A previous session stopped. The work tree is at the last commit the controller made, where the checks and probes said:"
+
 export function repairMessage(evidence: string, build: { ok: boolean; output: string }, corrections = ""): string {
   if (!build.ok) return `The program does not build:\n${clip(build.output.trim(), 3000)}\nFix it, and finish what the work order still needs.`
   return [
@@ -252,7 +255,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
       if (sessionsLeft-- <= 0) { record.status = "sessions_spent"; break }
       session = await executor.open({ round, workdir, workorder, text, resume: evidence ? { evidence } : null })
       record.sessions.push({ id: session.id, opened_for: `C${round}.${n}`, closed: "normally" })
-      message = evidence ? `${text}\nA previous session stopped. The work tree is at the last checkpoint, where the checks said:\n${evidence}` : text
+      message = evidence ? `${text}\n${RESUME_NOTE}\n${evidence}` : text
       kind = "resume"
       n--
       continue

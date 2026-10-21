@@ -98,9 +98,9 @@ export const PROBES_SCHEMA = {
       items: {
         type: "object", additionalProperties: false, required: ["id", "args", "files", "covers", "invalid_on_purpose"],
         properties: {
-          id: { type: "string", description: "A short name for the probe, unique in this answer." },
+          id: { type: "string", description: "A short name for the probe, used once in this answer." },
           args: { type: "array", items: { type: "string" }, description: "The program's arguments (without the program name)." },
-          invalid_on_purpose: { type: "boolean", description: "true when the probe deliberately gives a missing or malformed input to exercise an error rule" },
+          invalid_on_purpose: { type: "boolean", description: "true when the probe deliberately gives an absent or malformed input to exercise an error rule" },
           files: { type: "array", items: { type: "object", additionalProperties: false, required: ["path", "content"], properties: { path: { type: "string" }, content: { type: "string" } } } },
           covers: {
             type: "array",
@@ -122,12 +122,13 @@ export const PROBES_SCHEMA = {
 
 export const PROBES_SYSTEM_PROMPT = [
   "You write probes for a command-line program from its requirements. A probe is one call: the program with `args`, in an empty directory holding the files you list. `sources` holds the requirements, annotated with block ids; newer text overrides older text.",
-  "You get a group of rule units (exact text). For every unit, give the probe that exercises it and fill three fields:",
-  "- trigger_values: the exact strings in that probe's args or file contents that make the rule apply (for example a value 0 for a rule about non-positive input, a column name that does not exist for an error rule). Each must appear literally in the probe.",
-  "- wrong_would: what a plausible wrong program would output for this input instead (so that the input tells right from wrong; choose data where they differ, such as multi-digit numbers, ties, empty values, boundary values).",
-  "A rule with a condition or an exception (\"for non-positive input\", \"when no value is numeric\", \"if the column does not exist\") is exercised only by a value that meets the condition.",
-  `A probe may serve at most ${MAX_UNITS} units. Do not write expected outputs. If a unit cannot be shown by running the program, mark it uncheckable with a reason.`,
-  "Example (another program): unit 'round(x) rounds halves away from zero' -> probe args [\"calc\",\"--expr\",\"round(-2.5)\"], trigger_values [\"-2.5\"], wrong_would \"-2 (banker's rounding) where -3 is right\".",
+  "You get a group of rule units (exact text, with ids). A unit may list `cases`: parts of its text that are separate cases (alternatives the text lists, and its clauses). Each case needs its own cover: a probe whose input reaches that case, with `case` set to the case id. A unit without cases needs one cover with `case` null.",
+  "For every cover give:",
+  "- trigger_values: the exact strings in that probe's args or file contents that make the rule (or the case) apply. Each must appear literally in the probe. A case that is one of listed alternatives has that alternative among them; a case that compares with a number has that number among them.",
+  "- wrong_would: what a plausible wrong program would output for this input instead.",
+  "Choose inputs for which a program that gets the rule wrong gives a different output from one that follows it. A rule that applies only in some cases is exercised only by input for which it applies.",
+  `A probe may serve at most ${MAX_UNITS} units. Do not write expected outputs. If a unit or a case cannot be shown by running the program, mark it uncheckable with a reason.`,
+  "Example (another program): unit U7 'prints the greeting in the language `--lang` names: `en` or `fr`', cases U7#1 `en` and U7#2 `fr` -> probe args [\"greet\",\"--lang\",\"fr\"] covers {unit U7, case U7#2, trigger_values [\"fr\"], wrong_would \"prints the English greeting\"}, and a second probe with `en` for U7#1.",
 ].join("\n")
 
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
@@ -181,7 +182,7 @@ export function probeProblems(answer: unknown, group: readonly { id: string }[])
       if (f.path.endsWith(".csv") && !f.content.includes("\"")) {
         const rows = f.content.replace(/\r?\n$/u, "").split(/\r?\n/u), n = rows[0].split(",").length
         const bad = rows.findIndex(r => r.split(",").length !== n)
-        if (bad > 0) add(`${f.path} row ${bad} has ${rows[bad].split(",").length} fields, the header has ${n}`)
+        if (bad > 0) add(`${f.path} line ${bad + 1} has ${rows[bad].split(",").length} fields, the first line has ${n}`)
       }
     }
   }

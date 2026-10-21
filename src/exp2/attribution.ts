@@ -251,7 +251,7 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
       else if (!newNames.has(nameKey(a.new_object))) newNames.set(nameKey(a.new_object), a.new_object.trim())
     }
     const targets = a.replaces.length + a.overrides.length
-    if (a.change === "add" && targets) add("change_shape", `${where}: change "add" replaces nothing; use revise, withdraw or partial, or drop the targets`, id)
+    if (a.change === "add" && targets) add("change_shape", `${where}: change "add" replaces nothing; use revise, withdraw or partial, or remove the targets`, id)
     if ((a.change === "revise" || a.change === "withdraw") && !targets) add("change_shape", `${where}: change "${a.change}" must name the earlier units it replaces`, id)
     if (a.change === "partial" && !a.overrides.length) add("change_shape", `${where}: change "partial" must give overrides (old units → new units)`, id)
     const replaces = a.replaces.flatMap(r => resolve(r, `${where} replaces`) ?? [])
@@ -306,7 +306,7 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
     const owner = (id: string) => { const a = byBlock.get(id)!; return a.change === "none" ? "none" : a.object_id ?? a.new_object! }
     const owners = [...new Set(ids.map(owner))]
     const rest = partsLeft(outer)
-    add("overlap", `${outer} replaces or overrides earlier text, so it cannot be split around the ${ids.length === 1 ? "block" : `${ids.length} blocks`} inside it given to ${owners.length > 4 ? `${owners.slice(0, 4).join(", ")} and ${owners.length - 4} more` : owners.join(", ")} (${ids.join(", ")}). Either give its targets to the parts that hold them and assign its own parts ${rest.join(", ")} instead of ${outer}, or drop ${ids.length === 1 ? "that block" : "those"} so ${outer} covers ${ids.length === 1 ? "it" : "them"}`, outer)
+    add("overlap", `${outer} replaces or overrides earlier text, so it cannot be divided around the ${ids.length === 1 ? "block" : `${ids.length} blocks`} inside it given to ${owners.length > 4 ? `${owners.slice(0, 4).join(", ")} and ${owners.length - 4} more` : owners.join(", ")} (${ids.join(", ")}). Either give its targets to the parts that hold them and assign its own parts ${rest.join(", ")} instead of ${outer}, or drop ${ids.length === 1 ? "that block" : "those"} so ${outer} covers ${ids.length === 1 ? "it" : "them"}`, outer)
     issues[issues.length - 1].blocks = [outer, ...ids]
   }
   // A heading unit needs no owner of its own when its section has other content.
@@ -361,7 +361,7 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   // Ids that do not exist are one root however many places use them (BLOCK9 §2.7): one issue.
   if (unknownUses.size) {
     const ids = [...unknownUses.keys()]
-    add("unknown_object", `${ids.map(id => `${id} is used by ${unknownUses.get(id)!.join(", ")}`).join("; ")}. There ${ids.length === 1 ? `is no object ${ids[0]}` : `are no objects ${ids.join(", ")}`} yet (objects so far: O1–O${registry.allocatedCount}): a new object has no id until this answer is accepted. Wherever you mean a new object, give its name, as new_object in an assignment or as the \`to\` of an edge${created.length ? `; this answer creates ${created.join(", ")}` : ""}`)
+    add("unknown_object", `${ids.map(id => `${id} is used by ${unknownUses.get(id)!.join(", ")}`).join("; ")}. There ${ids.length === 1 ? `is no object ${ids[0]}` : `are no objects ${ids.join(", ")}`} yet (objects so far: O1–O${registry.allocatedCount}): a new object has no id until this answer is accepted. Wherever you refer to a new object, give its name, as new_object in an assignment or as the \`to\` of an edge${created.length ? `; this answer creates ${created.join(", ")}` : ""}`)
   }
 
   if (issues.length) return { issues: byCause(issues) }
@@ -578,7 +578,7 @@ const edgeSchema = {
   type: "object",
   additionalProperties: false,
   required: ["from", "to", "kind"],
-  description: "Only for an object the block's own wording names; to = a block or an object id. refers_to: this block depends on that text or object, so its checks are derived again when that changes; the target gets no change. applies_to: this block changes that object's behaviour, so that object gets a change record and is worked on this round. The block keeps its one owner.",
+  description: "Only for an object the block's own wording names; to = a block or an object id. refers_to: this block depends on that text or object, so its checks are derived again when that changes; the object referred to gets no change. applies_to: this block changes that object's behaviour, so that object gets a change record and is worked on this round. The block keeps its one owner.",
   properties: { from: { type: "string" }, to: { type: "string" }, kind: { type: "string", enum: ["refers_to", "applies_to"] } },
 }
 
@@ -598,9 +598,9 @@ export const ATTRIBUTION_SCHEMA = {
 
 export const ATTRIBUTION_SYSTEM_PROMPT = [
   "You register requirement text into objects. The request holds every round of the original requirements so far (`sources`, the new round last); the original text is the only authority, and newer text overrides older text.",
-  "Block ids: ⟦R3.S2⟧ marks a section (a heading and everything under it, subsections included), ⟦R3.S2.P1⟧ a paragraph, ‹s2› a unit inside the paragraph (a sentence, a list item, a code block or a table) and ‹s2.c1› a clause of a sentence or list item; the full id of a unit is R3.S2.P1.s2, of a clause R3.S2.P1.s2.c1. Ids may carry the shown hash (R3.S2.P1#ab12cd34). Units are marked only where a paragraph has more than one, clauses only where a unit has more than one.",
-  "An object is a unit of requirement that the text names with a stable name and whose parts are revised together: a command, an operation, a pipeline step, a shared convention. Parameters, fields and options are never objects; a change to them is a change to their object.",
-  "A section's heading line alone, without anything under it, is the unit R3.S2.H (no marker of its own); give it an owner only when the heading itself needs one apart from its content (for example none for a heading over subsections that belong elsewhere). For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round has one owner: a block assigned inside an assigned block takes its own owner, and the outer block keeps the rest of its text (the most specific assignment wins). A new object has no id until the answer is accepted: refer to it by the same new_object name wherever you mean it, and by that name as the `to` of an edge. Clauses serve to say which part of earlier text a partial revision changes.",
+  "Block ids: ⟦R3.S2⟧ marks a section (a heading and everything under it, subsections included), ⟦R3.S2.P1⟧ a paragraph, ‹s2› a unit inside the paragraph (a sentence, a list item, a code block or a table) and ‹s2.c1› a clause of a sentence or list item; the full id of a unit is R3.S2.P1.s2, of a clause R3.S2.P1.s2.c1. Ids may carry the shown suffix (R3.S2.P1#ab12cd34). Units are marked only where a paragraph has more than one, clauses only where a unit has more than one.",
+  "An object is a unit of requirement that the text names with a stable name and whose parts are revised together: a command, an operation, a stage of processing, a shared convention. Parameters, fields and options are never objects; a change to them is a change to their object.",
+  "A section's heading line alone, without anything under it, is the unit R3.S2.H (no marker of its own); give it an owner only when the heading itself needs one apart from its content (for example none for a heading over subsections that belong elsewhere). For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round has one owner: a block assigned inside an assigned block takes its own owner, and the outer block keeps the rest of its text (the most specific assignment wins). A new object has no id until the answer is accepted: refer to it by the same new_object name wherever you refer to it, and by that name as the `to` of an edge. Clauses serve to say which part of earlier text a partial revision changes.",
   "The change field's values are defined by their effect on earlier text, as its description says. Cite ids only; never copy text. Earlier units may belong to another object; cite them anyway. Ranges like R2.S9.P4.s2..s4 are allowed. Cite only text still in force: what a later round replaced is cited through its replacement.",
   "Edges: when a block's own wording names another object, add an edge. refers_to: this block depends on that text or object (so its checks are derived again when that changes). applies_to: this block changes that object's behaviour (so that object gets a change record and is worked on this round). Either may point at a block or at an object's id. `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself names it, not whether it ought to. Never infer edges from patterns across rounds.",
   "interpretations: only when two blocks of the same round disagree, or the extent of a partial revision is unclear, write a short reading citing the blocks; it is marked as interpretation, not source.",

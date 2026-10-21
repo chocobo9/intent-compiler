@@ -434,8 +434,8 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
     if (keys.has(k.key)) { add("duplicate_key", `${w}: the key is used twice`, k.key); continue }
     keys.add(k.key)
     if (!registry.objects.has(k.object)) { add("unknown_object", `${w}: object ${k.object} does not exist`, k.key); continue }
-    if (!scope.has(k.object)) { add("object_not_in_scope", `${w}: ${k.object} (${name(k.object)}) did not change in round ${round} and has no stale check; derive checks only for this round's objects and for stale checks`, k.key); continue }
-    for (const u of k.uses) if (!registry.objects.has(u)) add("unknown_object", `${w}: uses ${u}, which does not exist`, k.key)
+    if (!scope.has(k.object)) { add("object_not_in_scope", `${w}: ${k.object} (${name(k.object)}) did not change in round ${round} and has no stale check; write checks only for this round's objects and for stale checks`, k.key); continue }
+    for (const u of k.uses) if (!registry.objects.has(u)) add("unknown_object", `${w}: uses ${u}, which is not an object id`, k.key)
     // Basis: the cited blocks exist, and at least one is the object's own text or text that applies to it.
     const blocks = k.blocks.map(b => parseRef(b).id)
     const missing = blocks.filter(b => !registry.block(b) || roundOf(b) > round)
@@ -492,7 +492,7 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
     }
     if (!k.assertions.length) add("shape", `${w}: a check needs at least one assertion`, k.key)
     if (!k.assertions.some(a => a.target.kind === "exit_code")) add("exit_missing", `${w}: state the expected exit code (an exit_code assertion)`, k.key)
-    if (derived && !k.reference_script) add("script_missing", `${w}: derived and computed values, and {{computed:NAME}} inputs, need a reference_script (method B)`, k.key)
+    if (derived && !k.reference_script) add("script_missing", `${w}: derived and computed values, and {{computed:NAME}} inputs, need a reference_script`, k.key)
   }
   // A retire proposal must name a check that exists and is not retired yet; whether it is accepted is the code's call later.
   const retired = new Set(events.filter(e => e.status === "retired").map(e => e.check))
@@ -810,18 +810,18 @@ const checkSchema = {
             properties: {
               kind: { type: "string", enum: ["exit_code", "stdout", "stdout_line", "stderr", "stderr_line", "file", "file_line", "file_exists", "json", "csv_cell"] },
               path: { ...nullableString, description: "Output file path; \"-\" means stdout (json only)." },
-              line: { type: ["integer", "null"], description: "1-based line; for csv_cell the data row after the header." },
+              line: { type: ["integer", "null"], description: "1-based line; for csv_cell the 1-based record after the first line." },
               pointer: { ...nullableString, description: "json: JSON pointer, \"\" for the whole document." },
-              column: { ...nullableString, description: "csv_cell: header name." },
+              column: { ...nullableString, description: "csv_cell: the name in the first line." },
             },
           },
           expect_json: { type: "string", description: "The expected value, JSON-encoded (\"\\\"some text\\\"\", \"1\", \"0.5\", \"[\\\"a\\\"]\")." },
           tolerance: { type: ["number", "null"], description: "Allowed relative numeric difference; null for the default." },
-          reading: { ...nullableString, description: "When the expected value rests on a reading the text does not state (say, whether row numbers count data rows from 1), that reading in one sentence; null when the text states it." },
+          reading: { ...nullableString, description: "When the expected value rests on a reading the text does not state (say, whether numbering starts at 0 or 1), that reading in one sentence; null when the text states it." },
           source: {
             type: "object", additionalProperties: false, required: ["kind", "block"],
             properties: {
-              kind: { type: "string", enum: ["verbatim", "derived", "computed"], description: "verbatim: the text states the value (<placeholders> may be filled from the input); the code finds it at `block`. derived: you worked it out; the reference script must work it out too. computed: it takes computing (a digest, a hash, a checksum): do not write it (expect_json \"null\"); only the reference script gives it." },
+              kind: { type: "string", enum: ["verbatim", "derived", "computed"], description: "verbatim: the text states the value (<placeholders> may be filled from the input); the code finds it at `block`. derived: you worked it out; the reference script must work it out too. computed: it takes computing (for example a cryptographic digest): do not write it (expect_json \"null\"); only the reference script gives it." },
               block: { ...nullableString, description: "The id of the block, sentence or clause the value rests on (required for verbatim). Do not copy its text." },
             },
           },
@@ -830,7 +830,7 @@ const checkSchema = {
     },
     reference_script: {
       type: ["object", "null"], additionalProperties: false, required: ["language", "code"],
-      description: "Method B: a script run in a directory holding only the input files (placeholders unfilled); it prints one JSON object mapping each derived or computed assertion's id, and each {{computed:NAME}} placeholder's NAME, to its value. It must not run the program under test.",
+      description: "A script run in a directory holding only the input files (placeholders unfilled); it prints one JSON object mapping each derived or computed assertion's id, and each {{computed:NAME}} placeholder's NAME, to its value. It must not run the program under test.",
       properties: { language: { type: "string", enum: ["python", "node"] }, code: { type: "string" } },
     },
     note: nullableString,
@@ -853,10 +853,10 @@ export const CHECKS_SCHEMA = {
 export const CHECKS_SYSTEM_PROMPT = [
   "You write acceptance checks for a command-line program from its requirements. `sources` holds every round so far, annotated with block ids; the original text is the only authority and newer text overrides older text.",
   "Write checks for the objects in `scope` (they changed this round), and to replace the checks in `stale` (whose source, a block they refer to, or a convention they use changed); for no other object. A check runs the program once: `input.files` are written into an empty directory, the program is called with `input.args`, and each assertion reads one fact of the result. Command names, options and JSON keys must be those the requirements' code fragments show.",
-  "Every expected value needs a source: verbatim when the requirement states it (give the id of the block, sentence or clause that states it; do not copy the text), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept. Never compute a digest, hash or checksum yourself: an expected one is source computed, and one an input file needs is written as {{computed:NAME}} in the file, with the reference script printing NAME's value; the code fills it in before the program runs.",
+  "Every expected value needs a source: verbatim when the requirement states it (give the id of the block, sentence or clause that states it; do not copy the text), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept. Never compute a cryptographic digest yourself: an expected one is source computed, and one an input file needs is written as {{computed:NAME}} in the file, with the reference script printing NAME's value; the code fills it in before the program runs.",
   "One assertion reads one fact. A fact that rests on a reading the text does not state goes in its own assertion, apart from the facts that do not, and names that reading in `reading`; a failure of such an assertion is reported, not counted against the program.",
   "Keep convention facts (a shared error format, an output-formatting rule) in their own assertions with role convention, and list those conventions in `uses`; business facts are the object's own behaviour.",
-  "Every check states its expected exit code. Prefer checks whose expected output depends on the input data; a check of the exit code alone shows little. `checks` lists the library's checks for these objects and `stale` those whose source text changed this round: derive their replacements where the text still says something checkable. You may propose retiring a check whose expectation rests on replaced text; the code verifies the proposal.",
-  "Cover the text: every sentence, list item or clause of this round's changed blocks that states a specific value, limit, edge case or error needs a check resting on it (by `blocks` or by an assertion's `block`, at that unit or finer). An `uncovered` issue lists the units no check rests on yet; cover them, or list in `uncheckable_add` those that state nothing a run can check. A check with a problem left is dropped on its own; the others enter.",
+  "Every check states its expected exit code. Prefer checks whose expected output depends on the input data; a check of the exit code alone shows little. `checks` lists the library's checks for these objects and `stale` those whose source text changed this round: write their replacements where the text still says something checkable. You may propose retiring a check whose expectation rests on replaced text; the code verifies the proposal.",
+  "Cover the text: every sentence, list item or clause of this round's changed blocks that states a specific value, limit, edge case or error needs a check resting on it (by `blocks` or by an assertion's `block`, at that unit or finer). An `uncovered` issue lists the units no check rests on yet; cover them, or list in `uncheckable_add` those that state nothing a run can check. A check whose problems remain is dropped on its own; the others enter.",
   "Answer as a patch on `previous_draft` (empty on the first call). When `issues` is not empty, fix exactly those problems and leave the rest as it is.",
 ].join("\n")

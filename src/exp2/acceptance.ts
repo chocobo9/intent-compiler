@@ -71,6 +71,9 @@ export function compareCases(before: Map<string, boolean>, after: Map<string, bo
   }
 }
 
+/** The first line of a repair harness session: what the session is given. */
+export const REPAIR_INTRO = "The Go program in this directory was built from the requirements below. An independent check ran the program and compared what it did with the requirements; the correction list after the requirements is what it found."
+
 // ---------------------------------------------------------------- the two harnesses, with their dependencies passed in
 
 export interface HarnessDeps {
@@ -155,7 +158,7 @@ export async function repairProducts(deps: HarnessDeps & { executor: () => Execu
     if (!start.items.length) { out.push({ product: p, base, record: null, items_before: [], open_after: [], ...(official_before ? { official_before } : {}) }); continue }
     const requirements = [...registry.sources.values()].filter(x => x.round <= p.round).map(x => deps.text(x.round)).join("\n\n")
     const text = [
-      "The Go program in this directory was built from the requirements below. An independent check ran the program and compared what it did with the requirements; the correction list after the requirements is what it found.",
+      REPAIR_INTRO,
       "", "# Requirements", "", requirements, "", "# Correction list", "",
       repairMessage("", { ok: true, output: "" }, renderCorrections(start.items, deps.binary)),
     ].join("\n")

@@ -80,7 +80,7 @@ export const JUDGE_SYSTEM_PROMPT = [
   "- ok: the output follows the unit as far as this run shows;",
   "- wrong: the output contradicts what the unit's text requires; say what the text requires and what happened;",
   "- cannot_tell: this run does not show whether the unit is followed;",
-  "- ambiguous: the text can be read in more than one way and under one of the readings this output is right (for example whether a message must carry a prefix, whether -0 counts as 0, whether an empty file counts). Name both readings. Do not answer wrong when the text leaves it open.",
+  "- ambiguous: the text can be read in more than one way, and under one of those readings this output follows it. Name the readings. Do not answer wrong when the text leaves the point open.",
   "Judge only against the text. Do not assume behaviour the text does not state. An item may carry `contest`: the coding agent's objection to an earlier verdict on this run; weigh it against the text.",
 ].join("\n")
 
