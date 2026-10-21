@@ -6,6 +6,7 @@ import assert from "node:assert/strict"
 import { CHECKS_SCHEMA, CHECKS_SYSTEM_PROMPT, buildCheckRequest, checkChecks, type CheckDraft, type CheckRecord, type CheckRequest } from "../../src/exp2/checks.js"
 import { LocalProcessRunner, LocalScriptSandbox, nullBaseline, type ProgramRef } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
+import type { AdjudicationTransport } from "../../src/exp2/adjudication.js"
 import type { CheckRun, ObjectStatus } from "../../src/exp2/verdict.js"
 import { requestJson, strictSchemaProblems } from "../../src/model/opencode-transport.js"
 import { checkStubTransport } from "./check-stubs.js"
@@ -27,9 +28,11 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
   const status = (key: string, name: string) => statuses.get(key)!.find(s => s.object === named(name))!
   const check = (key: string): CheckRecord => store.inspect().checks.find(c => c.key === key)!
   const runOf = (key: string, checkKey: string) => runs.get(key)!.find(r => r.check === check(checkKey).id)!
+  const adjudicator: AdjudicationTransport = async request => ({ stub: true, text: JSON.stringify({ verdict: request.dispute.kind === "input_incomplete" ? "check_wrong" : "check_right", basis: [request.check.blocks[0]], reason: "stand-in ruling" }) })
   /** The first program of each round is that round's verdict run; the others are probes on other versions. */
   const runOn = async (round: number, program: string, verdict = false) => {
-    const r = await store.runRoundChecks(round, programs[program], runner, { verdict })
+    // From R2 on, disputed checks are ruled on (a stand-in ruling: a check that leaves out an input it names is wrong).
+    const r = await store.runRoundChecks(round, programs[program], runner, { verdict, ...(verdict && round >= 2 ? { adjudicate: adjudicator } : {}) })
     statuses.set(`${round}:${program}`, r.statuses)
     runs.set(`${round}:${program}`, r.runs)
   }
@@ -95,15 +98,15 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.equal(check("filter-gt").strength!.strong, true, "fails on the null baseline and reads the output")
   })
 
-  it("on the correct R1 program, filter and the error convention land; the badly built verify input is unknown and does not block landed", () => {
+  it("on the correct R1 program, filter and the error convention land; the badly built verify input is disputed and does not block landed", () => {
     assert.equal(status("1:r1", "filter").status, "landed")
     assert.equal(status("1:r1", "error handling").status, "landed", "the convention lands through the check that uses it")
     assert.equal(status("1:r1", "transform").status, "unknown", "its only own check is weak")
     const bad = runOf("1:r1", "verify-match-2")
     assert.equal(bad.outcome, "fail")
-    assert.equal(bad.failure!.class, "unknown")
-    assert.equal(bad.failure!.reason, "other_error_rule")
-    assert.match(bad.failure!.detail, /ERROR: file not found: other\.sha256/u)
+    assert.equal(bad.failure!.class, "disputed")
+    assert.equal(bad.failure!.reason, "input_incomplete")
+    assert.match(bad.failure!.detail, /the program reports other\.sha256, which the check names but does not give/u)
     const verify = status("1:r1", "verify")
     assert.equal(verify.status, "landed", "the suspect failure is shown but takes no part in the verdict")
     assert.deepEqual(verify.unknown, [check("verify-match-2").id])
@@ -120,11 +123,16 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.equal(status("1:badDigest", "verify").status, "not_landed")
   })
 
-  it("a check judged input-suspect in two consecutive verdict runs is retired by the code", () => {
-    const e = store.inspect().check_events.find(x => x.check === check("verify-match-2").id)!
-    assert.deepEqual([e.status, e.by, e.round], ["retired", "code", 2])
-    assert.match(e.reason, /input suspect in rounds 1 and 2/u)
+  it("a disputed check is ruled on once against the text; ruled wrong, it is retired and its object derived again", () => {
+    const s = store.inspect()
+    const e = s.check_events.find(x => x.check === check("verify-match-2").id)!
+    assert.deepEqual([e.status, e.by, e.round, e.cause], ["retired", "model", 2, { kind: "adjudicated", source: "input_incomplete" }])
+    assert.deepEqual(s.rulings.map(r => [r.check, r.kind, r.verdict]), [[e.check, "input_incomplete", "check_wrong"]])
+    assert.equal(s.adjudication_calls.length, 1, "one call, not one per run")
     assert.ok(!runs.get("3:r3")!.some(r => r.check === e.check))
+    // The object is derived again in the next derivation: verify's retired check is listed as one to replace.
+    const r3 = requests.find(q => q.round === 3)!
+    assert.ok(r3.stale.some(x => x.id === e.check))
   })
 
   it("R2 first answer: a check without an expected exit code is sent back", () => {
@@ -175,7 +183,8 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.ok(!runs.get("3:r3")!.some(r => r.check === old.id || r.check === minmax.id), "stale checks are not run")
     // The stale checks were listed to the model, which derived min-max again on its item.
     const req = requests.filter(q => q.round === 3)[0]
-    assert.deepEqual(req.stale.map(x => x.id).sort(), [old.id, minmax.id].sort())
+    // Also the verify check the R2 ruling found wrong (derived again at the next derivation).
+    assert.deepEqual(req.stale.map(x => x.id).sort(), [old.id, minmax.id, check("verify-match-2").id].sort())
     assert.equal(runOf("3:r3", "minmax-again").outcome, "pass")
   })
 

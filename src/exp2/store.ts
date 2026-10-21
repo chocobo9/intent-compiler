@@ -7,7 +7,8 @@ import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis,
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import type { ExecutionRecord } from "./execution.js"
 import type { RoundReport } from "./report.js"
-import { objectStatuses, runCheck, strength, type CheckRun, type ObjectStatus } from "./verdict.js"
+import { objectStatuses, runCheck, strength, type CheckRun, type DisputeKind, type ObjectStatus } from "./verdict.js"
+import { adjudicate, type AdjudicationCallRecord, type AdjudicationTransport, type Ruling } from "./adjudication.js"
 
 /**
  * Exp2 external state (DESIGN §5): one JSON file kept by code, append-only, changed only inside a locked
@@ -44,7 +45,13 @@ export interface Exp2State {
   /** Each round's execution record and report (DESIGN §7, §14). */
   executions: ExecutionRecord[]
   reports: RoundReport[]
+  /** Rulings on disputed checks and their calls (BLOCK9 §2.3). */
+  rulings: Ruling[]
+  adjudication_calls: AdjudicationCallRecord[]
 }
+
+/** A dispute to settle: a failed run of a check, the kind, and what code saw or the executor claimed. */
+export interface Dispute { check: string; run: CheckRun; kind: DisputeKind; detail: string }
 
 export interface CheckRoundRecord {
   round: number
@@ -181,27 +188,52 @@ export class Exp2Store {
   }
 
   /** Reruns the whole active library on `program` (the regression), records the runs, and returns the statuses. */
-  async runRoundChecks(round: number, program: ProgramRef, runner: CheckRunner, options: { verdict?: boolean; timeoutMs?: number } = {}): Promise<{ runs: CheckRun[]; statuses: ObjectStatus[] }> {
+  async runRoundChecks(round: number, program: ProgramRef, runner: CheckRunner, options: { verdict?: boolean; timeoutMs?: number; adjudicate?: AdjudicationTransport } = {}): Promise<{ runs: CheckRun[]; statuses: ObjectStatus[] }> {
     const verdict = options.verdict ?? true, timeoutMs = options.timeoutMs ?? 10_000
     return this.transaction(async s => {
       const registry = this.registry(s)
       s.check_events.push(...staleChecks(registry, s.checks.filter(c => c.round <= round), s.check_events, round))
       const facts = codeFacts(registry, round)
-      const runs: CheckRun[] = []
+      let runs: CheckRun[] = []
       const library = activeChecks(s.checks.filter(c => c.round <= round), s.check_events.filter(e => e.round <= round))
-      for (const check of library) runs.push({ ...await runCheck(check, program, runner, round, registry, facts, timeoutMs), verdict })
-      s.check_runs.push(...runs)
-      // A check judged input-suspect in two consecutive rounds' verdict runs is retired (block 2 review item 2).
-      if (verdict) for (const run of runs) {
-        // A timeout or a contested reading says nothing against the check's input.
-        if (run.failure?.class !== "unknown" || run.failure.reason === "timeout" || run.failure.reason === "reading") continue
-        const before = s.check_runs.filter(r => r.check === run.check && r.verdict && r.round === round - 1).at(-1)
-        if (before?.failure?.class === "unknown" && before.failure.reason !== "timeout" && before.failure.reason !== "reading") {
-          s.check_events.push({ check: run.check, round, status: "retired", by: "code", cause: { kind: "suspect", source: run.check }, reason: `input suspect in rounds ${round - 1} and ${round} (${run.failure.reason})` })
-        }
+      for (const check of library) runs.push({ ...await runCheck(check, program, runner, round, registry, facts, timeoutMs, upheldKinds(s, check.id)), verdict })
+      // Disputed failures are ruled on against the text (BLOCK9 §2.3): a wrong check leaves, a right one is run again.
+      if (options.adjudicate) {
+        const disputes = runs.filter(r => r.failure?.class === "disputed").map(r => ({ check: r.check, run: r, kind: r.failure!.reason as DisputeKind, detail: r.failure!.detail }))
+        const settled = await this.settleIn(s, registry, round, disputes, options.adjudicate)
+        runs = await Promise.all(runs.map(async r => {
+          if (settled.wrong.has(r.check)) return null
+          if (!settled.right.has(r.check)) return r
+          return { ...await runCheck(library.find(c => c.id === r.check)!, program, runner, round, registry, facts, timeoutMs, upheldKinds(s, r.check)), verdict }
+        })).then(x => x.filter((r): r is CheckRun => !!r))
       }
+      s.check_runs.push(...runs)
       return { runs, statuses: objectStatuses(registry, s.checks, s.check_events, runs, round) }
     })
+  }
+
+  /** Rules on disputes (a contest from the executor, or evidence code saw), each check and kind once. */
+  async settle(round: number, disputes: readonly Dispute[], transport: AdjudicationTransport): Promise<{ wrong: Set<string>; right: Set<string> }> {
+    return this.transaction(async s => this.settleIn(s, this.registry(s), round, disputes, transport))
+  }
+
+  private async settleIn(s: Exp2State, registry: Registry, round: number, disputes: readonly Dispute[], transport: AdjudicationTransport): Promise<{ wrong: Set<string>; right: Set<string> }> {
+    const wrong = new Set<string>(), right = new Set<string>()
+    for (const d of disputes) {
+      const prior = s.rulings.find(r => r.check === d.check && r.kind === d.kind)
+      if (prior) { (prior.verdict === "check_wrong" ? wrong : right).add(d.check); continue }
+      const check = s.checks.find(c => c.id === d.check)!
+      const nextCall = () => s.calls.length + s.check_calls.length + s.adjudication_calls.length
+      const out = await adjudicate(registry, round, check, d.run, d.kind, d.detail, transport, n => `M${nextCall() + n}`)
+      s.adjudication_calls.push(...out.calls)
+      if (!out.ruling) continue
+      s.rulings.push({ ...out.ruling, call: out.calls.at(-1)!.id })
+      if (out.ruling.verdict === "check_wrong") {
+        wrong.add(d.check)
+        s.check_events.push({ check: d.check, round, status: "retired", by: "model", cause: { kind: "adjudicated", source: d.kind }, reason: `ruled wrong (${d.kind}): ${out.ruling.reason} [${out.ruling.basis.join(", ")}]` })
+      } else right.add(d.check)
+    }
+    return { wrong, right }
   }
 
   /** Statuses from the recorded runs of one round on one program; nothing is carried over from earlier rounds. */
@@ -269,14 +301,19 @@ export class Exp2Store {
   }
 }
 
+/** The kinds of dispute a ruling has upheld the check against: its failures of that kind count against the program. */
+export function upheldKinds(s: Pick<Exp2State, "rulings">, check: string): Set<DisputeKind> {
+  return new Set((s.rulings ?? []).filter(r => r.check === check && r.verdict === "check_right").map(r => r.kind))
+}
+
 function emptyChecks() {
-  return { checks: [] as CheckRecord[], check_events: [] as CheckEvent[], check_runs: [] as CheckRun[], check_calls: [] as CheckCallRecord[], check_rounds: [] as CheckRoundRecord[], executions: [] as ExecutionRecord[], reports: [] as RoundReport[] }
+  return { checks: [] as CheckRecord[], check_events: [] as CheckEvent[], check_runs: [] as CheckRun[], check_calls: [] as CheckCallRecord[], check_rounds: [] as CheckRoundRecord[], executions: [] as ExecutionRecord[], reports: [] as RoundReport[], rulings: [] as Ruling[], adjudication_calls: [] as AdjudicationCallRecord[] }
 }
 
 /** Every list in the state may only grow; existing entries must stay byte-identical. */
 export function appendOnly(before: Exp2State, after: Exp2State): void {
-  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports"] as const) {
-    const a = before[key] as unknown[], b = after[key] as unknown[]
+  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports", "rulings", "adjudication_calls"] as const) {
+    const a = (before[key] ?? []) as unknown[], b = (after[key] ?? []) as unknown[]
     if (b.length < a.length || a.some((x, i) => JSON.stringify(x) !== JSON.stringify(b[i]))) throw new Error(`Exp2 state ${key} is append-only`)
   }
   if (before.profile !== after.profile || before.run_id !== after.run_id) throw new Error("Exp2 state identity changed")

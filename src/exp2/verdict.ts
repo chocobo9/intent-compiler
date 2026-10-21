@@ -3,16 +3,25 @@ import type { Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef, RunOutput } from "./runner.js"
 
 /**
- * Exp2 check library, run and verdict (DESIGN §8). A check is run on a program in a fresh directory, every
- * assertion compared on its own (JSON parsed first, numbers within a tolerance). A failure gets a cause before it
- * counts: a wrong value or a missing command/option means not landed; a rejected call or another error rule's output
- * means the input is suspect, which is unknown. Object status is recomputed from the runs every round.
+ * Exp2 check library, run and verdict (DESIGN §8, BLOCK9 §2.3). A check is run on a program in a fresh directory,
+ * every assertion compared on its own (JSON parsed first, numbers within a tolerance). A failure gets a cause before
+ * it counts. Not landed: a crash, a missing command or option, a wrong value, a refused input the check holds valid.
+ * Disputed: code sees evidence against the check itself (the expected value appears elsewhere in the output; the
+ * program names a missing input the check did not give), or the executor contests it; a model call settles it
+ * against the text. Unknown: a timeout, an unstated reading. Object status is recomputed from the runs every round.
  */
 
 export interface AssertionResult { id: string; ok: boolean; actual: unknown; role: Assertion["role"] }
 
-export type FailureClass = "not_landed" | "unknown"
-export type FailureReason = "value_mismatch" | "missing_name" | "still_present" | "rejected" | "other_error_rule" | "timeout" | "reading"
+export type FailureClass = "not_landed" | "unknown" | "disputed"
+export type FailureReason =
+  | "value_mismatch" | "missing_name" | "still_present" | "crash" | "refused" | "timeout" | "reading"
+  | "position" | "input_incomplete" | "contested"
+  /** Kept for runs recorded before block 9. */
+  | "rejected" | "other_error_rule"
+
+/** The kinds of dispute: evidence code sees against a check, or the executor's contest. */
+export type DisputeKind = "position" | "input_incomplete" | "contested"
 
 export interface Failure {
   class: FailureClass
@@ -31,6 +40,7 @@ export interface CheckRun {
   assertions: AssertionResult[]
   exit_code: number | null
   stderr_head: string
+  stdout_head?: string
   failure: Failure | null
   /** The round's verdict run (on the round's final program), as against a probe on another program. */
   verdict?: boolean
@@ -124,11 +134,26 @@ function hasLiteral(literals: Set<string>, name: string): boolean {
   return literals.has(name) || literals.has(bare) || [...literals].some(l => l.split(/[^A-Za-z0-9_-]+/u).includes(name) || l.split(/[^A-Za-z0-9_-]+/u).includes(bare))
 }
 
-/** Why a check failed, in this order: timeout; a name not in the program at all; a rejected call; a wrong value. */
-export function classify(check: CheckRecord, results: AssertionResult[], out: RunOutput, literals: Set<string>, registry: Registry, facts: CodeFacts): Failure {
+/** A Go panic or runtime error with its goroutine trace, or a run ended by a signal: the program broke. */
+export function crashed(out: RunOutput): string | null {
+  const text = `${out.stderr}\n${out.stdout}`
+  const m = /^(panic: .*|fatal error: .*)$/mu.exec(text)
+  if (m && /goroutine \d+ \[/u.test(text)) return m[1].slice(0, 200)
+  if (out.exit_code === null && !out.timed_out) return "the program was ended by a signal"
+  return null
+}
+
+/**
+ * Why a check failed (BLOCK9 §2.3), in this order: timeout; a crash; a removed behaviour still there; a name not in
+ * the program; an unstated reading; evidence against the check (disputed, unless a ruling upheld the check against
+ * that kind of dispute); a refused input; a wrong value.
+ */
+export function classify(check: CheckRecord, results: AssertionResult[], out: RunOutput, literals: Set<string>, registry: Registry, facts: CodeFacts, upheld: ReadonlySet<DisputeKind> = new Set()): Failure {
   const failed = results.filter(r => !r.ok)
   const roles = [...new Set(failed.map(r => r.role))]
   if (out.timed_out) return { class: "unknown", reason: "timeout", detail: "the program did not finish in time", roles }
+  const crash = crashed(out)
+  if (crash) return { class: "not_landed", reason: "crash", detail: `the program crashed: ${crash}`, roles: ["business"] }
   if (check.direction === "withdrawn") return { class: "not_landed", reason: "still_present", detail: "the removed behaviour still happens", roles: [...new Set(results.map(r => r.role))] }
   const missing = invokedNames(check, registry).filter(n => !hasLiteral(literals, n))
   if (missing.length) return { class: "not_landed", reason: "missing_name", detail: `no string literal in the program names ${missing.join(", ")}`, roles: ["business"] }
@@ -145,24 +170,47 @@ export function classify(check: CheckRecord, results: AssertionResult[], out: Ru
     const own = outputLines.flatMap(l => facts.templates.filter(t => t.regex.test(l) && t.owners.includes(check.object) && !expected.some(e => t.regex.test(e))).map(t => ({ line: l, rule: t.text })))
     if (own.length) return { class: "not_landed", reason: "value_mismatch", detail: `on inputs the code computed, the program reported its own rule \`${own[0].rule}\`: ${JSON.stringify(own[0].line)}`, roles: ["business"] }
   }
-  // Output matching an error rule the check did not expect: the program refused this input.
+  // Evidence against the check: every failed line or stream assertion's expected text is in the output, elsewhere.
+  if (!upheld.has("position")) {
+    const where = (id: string) => check.assertions.find(a => a.id === id)!
+    const streamed = failed.filter(r => ["stdout", "stdout_line", "stderr", "stderr_line"].includes(where(r.id).target.kind))
+    const elsewhere = (r: AssertionResult) => {
+      const e = where(r.id).expect
+      if (typeof e !== "string" || !e.trim()) return false
+      const want = e.trim()
+      return [...lines(out.stdout), ...lines(out.stderr)].some(l => l.trim() === want) || (e.includes("\n") && (out.stdout.includes(e) || out.stderr.includes(e)))
+    }
+    if (failed.length && streamed.length === failed.length && streamed.every(elsewhere)) {
+      return { class: "disputed", reason: "position", detail: `the expected text is in the output but not where the check reads it: ${streamed.map(r => `${r.id} (${where(r.id).target.kind}${where(r.id).target.line ? ` line ${where(r.id).target.line}` : ""})`).join(", ")}`, roles }
+    }
+  }
+  // Evidence against the check: the program names an input file the check did not give.
+  if (!upheld.has("input_incomplete")) {
+    const given = new Set(check.input.files.map(f => f.path))
+    const named = check.input.args.filter(a => !a.startsWith("-") && /[./]/u.test(a) && !given.has(a))
+    const missing = named.filter(a => outputLines.some(l => l.includes(a) && facts.templates.some(t => t.regex.test(l) && !expected.some(e => t.regex.test(e)))))
+    if (missing.length) return { class: "disputed", reason: "input_incomplete", detail: `the program reports ${missing.join(", ")}, which the check names but does not give`, roles }
+  }
+  // The program refused the input. The check expects success, which is its derivation's reading of the text; the
+  // executor may contest that reading, and a ruling settles it.
   const other = outputLines.flatMap(l => facts.templates.filter(t => t.regex.test(l) && !expected.some(e => t.regex.test(e))).map(t => ({ line: l, rule: t.text })))
-  if (other.length) return { class: "unknown", reason: "other_error_rule", detail: `the output ${JSON.stringify(other[0].line)} matches another rule, \`${other[0].rule}\`; the input is suspect`, roles }
+  if (other.length) return { class: "not_landed", reason: "refused", detail: `the program refused the input: ${JSON.stringify(other[0].line)} (rule \`${other[0].rule}\`); ${failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; ")}`, roles }
   const exitExpected = check.assertions.find(a => a.target.kind === "exit_code")?.expect
   if (exitExpected === 0 && out.exit_code !== 0) {
-    return { class: "unknown", reason: "rejected", detail: `the call exited ${out.exit_code} (${out.stderr.trim().slice(0, 160) || "no stderr"}) where success was expected; the input is suspect`, roles }
+    return { class: "not_landed", reason: "refused", detail: `the call exited ${out.exit_code} (${out.stderr.trim().slice(0, 160) || "no stderr"}) where success was expected; ${failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; ")}`, roles }
   }
   return { class: "not_landed", reason: "value_mismatch", detail: failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; "), roles }
 }
 
-export async function runCheck(check: CheckRecord, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, timeoutMs: number): Promise<CheckRun> {
+export async function runCheck(check: CheckRecord, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, timeoutMs: number, upheld: ReadonlySet<DisputeKind> = new Set()): Promise<CheckRun> {
   const out = await runner.run(program, check.input, timeoutMs)
   const assertions = compare(check.assertions, out)
   const satisfied = assertions.every(a => a.ok)
   const pass = check.direction === "holds" ? satisfied : !satisfied
   return {
     check: check.id, round, program: program.id, outcome: pass ? "pass" : "fail", assertions, exit_code: out.exit_code, stderr_head: out.stderr.slice(0, 300),
-    failure: pass ? null : classify(check, assertions, out, runner.literals(program), registry, facts),
+    ...(pass ? {} : { stdout_head: out.stdout.slice(0, 600) }),
+    failure: pass ? null : classify(check, assertions, out, runner.literals(program), registry, facts, upheld),
   }
 }
 
@@ -204,7 +252,7 @@ export function strength(check: CheckRecord, baselineRun: CheckRun, baseline: Pr
 // ---------------------------------------------------------------- status
 
 export type Status = "landed" | "not_landed" | "unknown"
-export type UnknownReason = "no_checks" | "only_weak" | "suspect_input" | "timeout" | "derived_disagreement" | "not_run"
+export type UnknownReason = "no_checks" | "only_weak" | "suspect_input" | "timeout" | "derived_disagreement" | "not_run" | "reading" | "disputed_check"
 
 export interface ObjectStatus {
   object: string
@@ -250,7 +298,7 @@ export function objectStatuses(registry: Registry, library: readonly CheckRecord
       : speaksFor
     for (const t of targets) {
       if (f.class === "not_landed") t!.not.push(check.id)
-      else { t!.unk.push(check.id); t!.reasons.add(f.reason === "timeout" ? "timeout" : "suspect_input") }
+      else { t!.unk.push(check.id); t!.reasons.add(f.class === "disputed" ? "disputed_check" : f.reason === "timeout" ? "timeout" : f.reason === "reading" ? "reading" : "suspect_input") }
     }
   }
   for (const c of library) if (c.round <= round && c.admission === "unknown") at(c.object)?.reasons.add("derived_disagreement")

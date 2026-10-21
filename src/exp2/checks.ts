@@ -153,7 +153,7 @@ export interface CheckEvent {
    */
   by: "model" | "code"
   /** What set it off (DESIGN §4.3–4.5): the check's own basis, a block it refers to, a convention it uses, … */
-  cause?: { kind: "basis" | "refers_to" | "convention" | "suspect" | "proposal"; source: string }
+  cause?: { kind: "basis" | "refers_to" | "convention" | "suspect" | "proposal" | "adjudicated"; source: string }
 }
 
 // ---------------------------------------------------------------- staleness (DESIGN §8, block 2 review item 3)
@@ -394,7 +394,7 @@ export function buildCheckRequest(registry: Registry, round: number, library: re
   const inScope = new Set(scope.map(s => s.id))
   const checks = activeChecks(library, events).filter(k => inScope.has(k.object)).map(k => ({ id: k.id, object: k.object, blocks: k.blocks, uses: k.uses, assertions: k.assertions.length }))
   // Every check that went stale this round, whatever its object: those checks, and only those, are to be derived again.
-  const stale = events.filter(e => e.status === "stale" && e.round === round).map(e => {
+  const stale = deriveAgain(events, round).map(e => {
     const k = library.find(c => c.id === e.check)!
     return { id: k.id, object: k.object, blocks: k.blocks, reason: e.reason }
   })
@@ -404,6 +404,14 @@ export function buildCheckRequest(registry: Registry, round: number, library: re
     // The message names the units; the `blocks` list is for code.
     issues: issues.map(({ blocks: _, ...i }) => i), previous_draft: previous,
   }
+}
+
+/**
+ * Checks to derive again in `round`: those that went stale this round, and those a ruling found wrong since the last
+ * derivation (in the previous round's execution or verdict, or this round before deriving).
+ */
+export function deriveAgain(events: readonly CheckEvent[], round: number): CheckEvent[] {
+  return events.filter(e => (e.status === "stale" && e.round === round) || (e.status === "retired" && e.cause?.kind === "adjudicated" && (e.round === round || e.round === round - 1)))
 }
 
 export function activeChecks(library: readonly CheckRecord[], events: readonly CheckEvent[]): CheckRecord[] {
@@ -417,7 +425,7 @@ export function activeChecks(library: readonly CheckRecord[], events: readonly C
 export function checkChecks(registry: Registry, round: number, draft: ChecksDraft, library: readonly CheckRecord[], events: readonly CheckEvent[], facts: CodeFacts = codeFacts(registry, round)): CheckIssue[] {
   const issues: CheckIssue[] = []
   // Checks may be written for this round's objects, and again for the objects of checks that went stale this round.
-  const scope = new Set([...registry.roundScope(round).map(c => c.object), ...events.filter(e => e.status === "stale" && e.round === round).map(e => library.find(c => c.id === e.check)?.object).filter((x): x is string => !!x)])
+  const scope = new Set([...registry.roundScope(round).map(c => c.object), ...deriveAgain(events, round).map(e => library.find(c => c.id === e.check)?.object).filter((x): x is string => !!x)])
   const add = (code: CheckIssueCode, message: string, check?: string) => issues.push({ code, message, ...(check ? { check } : {}) })
   const name = (id: string) => registry.objects.get(id)?.name ?? id
   const keys = new Set<string>()
