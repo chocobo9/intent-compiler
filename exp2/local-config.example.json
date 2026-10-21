@@ -32,7 +32,8 @@
       "repairCycles": 3,
       "maxSessions": 3,
       "callTimeoutMs": 2400000
-    }
+    },
+    "probe_repairs": 2
   },
   "runner": {
     "kind": "docker",
@@ -63,5 +64,18 @@
   "recording": {
     "cassette": "C:/exp2/run1/recording/cassette.json",
     "label": "gpt-5.6-luna-fast medium (real)"
+  },
+  "roles": {
+    "probes": {
+      "model": "gpt-6-sol-fast",
+      "variant": "low"
+    },
+    "judge": {
+      "model": "gpt-5.6-luna-fast",
+      "variant": "medium"
+    }
+  },
+  "ablation": {
+    "checks": false
   }
 }

@@ -5,6 +5,8 @@ import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, ReplayMiss, type Attribu
 import { CHECKS_SCHEMA, CHECKS_SYSTEM_PROMPT, type CheckRequest, type ChecksTransport } from "./checks.js"
 import { Exp2Store } from "./store.js"
 import { ADJUDICATION_SCHEMA, ADJUDICATION_SYSTEM_PROMPT, type AdjudicationRequest, type AdjudicationTransport } from "./adjudication.js"
+import { PROBES_SCHEMA, PROBES_SYSTEM_PROMPT, type ProbeRequest, type ProbeTransport } from "./probes.js"
+import { JUDGE_SCHEMA, JUDGE_SYSTEM_PROMPT, type JudgeRequest, type JudgeTransport } from "./judge.js"
 
 /**
  * Recording and replay of management calls (DESIGN §12b item 7). A recording keeps each call's request, answer and
@@ -12,7 +14,7 @@ import { ADJUDICATION_SCHEMA, ADJUDICATION_SYSTEM_PROMPT, type AdjudicationReque
  * is asked; a request the recording does not hold is an error (ReplayMiss), never a stand-in answer.
  */
 
-export type RecordedStep = "attribution" | "checks" | "adjudication"
+export type RecordedStep = "attribution" | "checks" | "adjudication" | "probes" | "judge"
 
 export interface CassetteEntry {
   step: RecordedStep
@@ -44,6 +46,8 @@ const STEPS = {
   attribution: { system: ATTRIBUTION_SYSTEM_PROMPT, schema: ATTRIBUTION_SCHEMA },
   checks: { system: CHECKS_SYSTEM_PROMPT, schema: CHECKS_SCHEMA },
   adjudication: { system: ADJUDICATION_SYSTEM_PROMPT, schema: ADJUDICATION_SCHEMA },
+  probes: { system: PROBES_SYSTEM_PROMPT, schema: PROBES_SCHEMA },
+  judge: { system: JUDGE_SYSTEM_PROMPT, schema: JUDGE_SCHEMA },
 } as const
 
 /** The call's full text, in the format of the reference recordings' prompt files. */
@@ -82,11 +86,13 @@ function recorder<R>(step: RecordedStep, inner: (r: R) => Promise<ModelReply>, c
 }
 
 /** Wraps real transports; every answered call is appended to the cassette (and saved, when a file is given). */
-export function recordingTransports(t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport }, cassette: Cassette, file?: string): { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport } {
+export function recordingTransports(t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport }, cassette: Cassette, file?: string): { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport } {
   const save = file ? () => saveCassette(file, cassette) : undefined
   return {
     attribution: recorder<ModelRequest>("attribution", t.attribution, cassette, save), checks: recorder<CheckRequest>("checks", t.checks, cassette, save),
     ...(t.adjudicate ? { adjudicate: recorder<AdjudicationRequest>("adjudication", t.adjudicate, cassette, save) } : {}),
+    ...(t.probes ? { probes: recorder<ProbeRequest>("probes", t.probes, cassette, save) } : {}),
+    ...(t.judge ? { judge: recorder<JudgeRequest>("judge", t.judge, cassette, save) } : {}),
   }
 }
 
@@ -94,6 +100,8 @@ export interface Replay {
   attribution: AttributionTransport
   checks: ChecksTransport
   adjudicate: AdjudicationTransport
+  probes: ProbeTransport
+  judge: JudgeTransport
   /** Entries never asked for, in recording order. */
   unused(): CassetteEntry[]
 }
@@ -117,7 +125,7 @@ export function replayTransports(cassette: Cassette): Replay {
     used.add(entry)
     return { text: entry.answer, stub: entry.stub === true, model: entry.model, ...(entry.usage ? { usage: entry.usage } : {}) }
   }
-  return { attribution: replay("attribution"), checks: replay("checks"), adjudicate: replay("adjudication"), unused: () => cassette.entries.filter(e => !used.has(e)) }
+  return { attribution: replay("attribution"), checks: replay("checks"), adjudicate: replay("adjudication"), probes: replay("probes"), judge: replay("judge"), unused: () => cassette.entries.filter(e => !used.has(e)) }
 }
 
 /**
@@ -126,7 +134,7 @@ export function replayTransports(cassette: Cassette): Replay {
  * An answer list that runs out is a miss.
  */
 export function orderedAnswers(answers: Record<RecordedStep, string[]>): { attribution: AttributionTransport; checks: ChecksTransport } {
-  const next = { attribution: 0, checks: 0, adjudication: 0 }
+  const next = { attribution: 0, checks: 0, adjudication: 0, probes: 0, judge: 0 }
   const give = (step: RecordedStep) => async (): Promise<ModelReply> => {
     const text = answers[step][next[step]++]
     if (text === undefined) throw new ReplayMiss(`recorded ${step} answers ran out after ${answers[step].length}`)
@@ -145,6 +153,8 @@ export interface RoundReplay {
   attribution: AttributionTransport
   checks: ChecksTransport
   adjudicate: AdjudicationTransport
+  probes: ProbeTransport
+  judge: JudgeTransport
   /** Recorded answers not asked for, by step and round, with their position in that round's list (1-based). */
   unused(): { step: RecordedStep; round: number; answer: number }[]
 }
@@ -171,6 +181,7 @@ export function replayByRound(cassette: Cassette): RoundReplay {
   }
   return {
     attribution: give("attribution") as AttributionTransport, checks: give("checks") as ChecksTransport, adjudicate: give("adjudication") as AdjudicationTransport,
+    probes: give("probes") as ProbeTransport, judge: give("judge") as JudgeTransport,
     unused: () => [...lists.entries()].flatMap(([key, list]) => {
       const [step, round] = key.split(":")
       return list.slice(used.get(key) ?? 0).map((_, k) => ({ step: step as RecordedStep, round: Number(round), answer: (used.get(key) ?? 0) + k + 1 }))
@@ -188,7 +199,7 @@ export async function rekeyAttribution(stateDir: string, texts: readonly string[
   const out: { round: number; status: string; used: number; recorded: number }[] = []
   for (let i = 0; i < texts.length; i++) {
     const before = cassette.entries.length
-    const t = recordingTransports({ ...orderedAnswers({ attribution: answers[i], checks: [], adjudication: [] }) }, cassette)
+    const t = recordingTransports({ ...orderedAnswers({ attribution: answers[i], checks: [], adjudication: [], probes: [], judge: [] }) }, cassette)
     const record = await store.ingestRound(i + 1, texts[i], t.attribution, { maxRepairs: Math.max(answers[i].length - 1, 0) })
     out.push({ round: i + 1, status: record.status, used: cassette.entries.length - before, recorded: answers[i].length })
     if (record.status !== "accepted") break

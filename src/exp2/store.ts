@@ -9,6 +9,8 @@ import type { ExecutionRecord } from "./execution.js"
 import type { RoundReport } from "./report.js"
 import { objectStatuses, runCheck, strength, type CheckRun, type DisputeKind, type ObjectStatus } from "./verdict.js"
 import { adjudicate, type AdjudicationCallRecord, type AdjudicationTransport, type Ruling } from "./adjudication.js"
+import { activeProbes, deriveProbes, probeUnits, staleProbes, type ProbeCallRecord, type ProbeEvent, type ProbeRecord, type ProbeRoundRecord, type ProbeRun, type ProbeTransport } from "./probes.js"
+import { judgeRuns, type Finding, type JudgeCallRecord, type Judgment, type JudgeTransport } from "./judge.js"
 
 /**
  * Exp2 external state (DESIGN §5): one JSON file kept by code, append-only, changed only inside a locked
@@ -48,6 +50,14 @@ export interface Exp2State {
   /** Rulings on disputed checks and their calls (BLOCK9 §2.3). */
   rulings: Ruling[]
   adjudication_calls: AdjudicationCallRecord[]
+  /** Probes (P1, P2, … never reused), their stale events, the writer's calls and each round's outcome (BLOCK10 §1.2–1.3). */
+  probes: ProbeRecord[]
+  probe_events: ProbeEvent[]
+  probe_calls: ProbeCallRecord[]
+  probe_rounds: ProbeRoundRecord[]
+  /** Verdicts kept by (probe, unit, unit text, output), and the judge's calls (BLOCK10 §1.4). */
+  judgments: Judgment[]
+  judge_calls: JudgeCallRecord[]
 }
 
 /** A dispute to settle: a failed run of a check, the kind, and what code saw or the executor claimed. */
@@ -213,6 +223,41 @@ export class Exp2Store {
   }
 
   /** Rules on disputes (a contest from the executor, or evidence code saw), each check and kind once. */
+  /**
+   * Marks probes whose text changed stale, then writes probes for this round's changed units and for the live units
+   * of the probes that just went stale. Each admitted probe gets the next P id.
+   */
+  async deriveRoundProbes(round: number, transport: ProbeTransport, options: { maxRepairs?: number } = {}): Promise<ProbeRoundRecord> {
+    return this.transaction(async s => {
+      const registry = this.registry(s)
+      if (s.probe_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Probes of round ${round} are already written`)
+      const stale = staleProbes(registry, s.probes, s.probe_events, round)
+      s.probe_events.push(...stale)
+      const units = probeUnits(registry, round, s.probes.filter(p => stale.some(e => e.probe === p.id)))
+      const out = await deriveProbes(registry, round, units, transport, { maxRepairs: options.maxRepairs ?? 2, callId: n => `W${s.probe_calls.length + n}` })
+      s.probe_calls.push(...out.calls)
+      const entered: string[] = []
+      if (out.status === "accepted") for (const p of out.probes) { const id = `P${s.probes.length + 1}`; s.probes.push({ id, ...p }); entered.push(id) }
+      const record: ProbeRoundRecord = {
+        round, status: out.status, calls: out.calls.map(c => c.id), entered, stale: stale.map(e => e.probe), units,
+        covered: out.covered, uncheckable: out.uncheckable, uncovered: out.uncovered, dropped: out.dropped, ...(out.issues ? { issues: out.issues } : {}),
+      }
+      s.probe_rounds.push(record)
+      return record
+    })
+  }
+
+  /** Judges one program's runs of active probes; verdicts already kept for the same output are reused. */
+  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number } = {}): Promise<Finding[]> {
+    return this.transaction(async s => {
+      const registry = this.registry(s)
+      const out = await judgeRuns(registry, round, activeProbes(s.probes, s.probe_events), runs, s.judgments, transport, { callId: n => `J${s.judge_calls.length + n}`, ...options })
+      s.judge_calls.push(...out.calls)
+      s.judgments.push(...out.judgments)
+      return out.findings
+    })
+  }
+
   async settle(round: number, disputes: readonly Dispute[], transport: AdjudicationTransport): Promise<{ wrong: Set<string>; right: Set<string> }> {
     return this.transaction(async s => this.settleIn(s, this.registry(s), round, disputes, transport))
   }
@@ -307,12 +352,13 @@ export function upheldKinds(s: Pick<Exp2State, "rulings">, check: string): Set<D
 }
 
 function emptyChecks() {
-  return { checks: [] as CheckRecord[], check_events: [] as CheckEvent[], check_runs: [] as CheckRun[], check_calls: [] as CheckCallRecord[], check_rounds: [] as CheckRoundRecord[], executions: [] as ExecutionRecord[], reports: [] as RoundReport[], rulings: [] as Ruling[], adjudication_calls: [] as AdjudicationCallRecord[] }
+  return { checks: [] as CheckRecord[], check_events: [] as CheckEvent[], check_runs: [] as CheckRun[], check_calls: [] as CheckCallRecord[], check_rounds: [] as CheckRoundRecord[], executions: [] as ExecutionRecord[], reports: [] as RoundReport[], rulings: [] as Ruling[], adjudication_calls: [] as AdjudicationCallRecord[],
+    probes: [] as ProbeRecord[], probe_events: [] as ProbeEvent[], probe_calls: [] as ProbeCallRecord[], probe_rounds: [] as ProbeRoundRecord[], judgments: [] as Judgment[], judge_calls: [] as JudgeCallRecord[] }
 }
 
 /** Every list in the state may only grow; existing entries must stay byte-identical. */
 export function appendOnly(before: Exp2State, after: Exp2State): void {
-  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports", "rulings", "adjudication_calls"] as const) {
+  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports", "rulings", "adjudication_calls", "probes", "probe_events", "probe_calls", "probe_rounds", "judgments", "judge_calls"] as const) {
     const a = (before[key] ?? []) as unknown[], b = (after[key] ?? []) as unknown[]
     if (b.length < a.length || a.some((x, i) => JSON.stringify(x) !== JSON.stringify(b[i]))) throw new Error(`Exp2 state ${key} is append-only`)
   }

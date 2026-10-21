@@ -6,6 +6,7 @@ import type { Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef } from "./runner.js"
 import { runCheck, type CheckRun, type DisputeKind } from "./verdict.js"
 import type { AnchorLink, WorkOrder } from "./workorder.js"
+import { pairKey, renderCorrections, type CorrectionItem, type Finding } from "./judge.js"
 
 /**
  * The execution layer (DESIGN §7 as changed by BLOCK9 §2.4). One session gets the round's work order and does it.
@@ -68,6 +69,18 @@ export interface ExecutionDeps {
   upheld?: (check: string) => ReadonlySet<DisputeKind>
   /** Rules on disputes (evidence code saw, or a contest); absent offline, disputed checks then just do not count. */
   settle?: (disputes: { check: string; run: CheckRun; kind: DisputeKind; detail: string }[]) => Promise<{ wrong: Set<string>; right: Set<string> }>
+  /**
+   * Probes and judge (BLOCK10 §1.5): runs every active probe on the cycle's program, judges what changed, and returns
+   * the correction items (wrong only) and all findings. `before` holds the probe/unit pairs judged ok earlier, so an
+   * item that broke is marked; `contests` the executor's objections.
+   */
+  detect?: {
+    run(program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>): Promise<{ items: CorrectionItem[]; findings: Finding[] }>
+    /** Pairs judged ok on the program at the start of the round. */
+    passed: ReadonlySet<string>
+    /** The program's name, for the calls in the correction list. */
+    program: string
+  }
   /** Called after every cycle with the record so far (for the record of an interrupted round). */
   onProgress?: (record: ExecutionRecord) => void
   checkTimeoutMs?: number
@@ -84,6 +97,11 @@ export interface CycleRecord {
   /** Checks against the round's work: not landed on a task object, or a regression of one that passed at the start. */
   failing: string[]
   contests: { check: string; claim: string; verdict: "check_wrong" | "check_right" | "unsettled" }[]
+  /** Correction items (probe/unit) the judge found wrong on this cycle's program, and pairs it found ambiguous. */
+  corrections: string[]
+  ambiguous: string[]
+  /** Items wrong now that were judged ok earlier: a change broke them. */
+  broke: string[]
   anchors: string[]
   note: string
   usage: TokenUsage
@@ -102,6 +120,8 @@ export interface ExecutionRecord {
   kept: string | null
   /** Task objects still not landed (or never built): the next round's task zone carries them. */
   carried: string[]
+  /** Correction items still open on the kept cycle; the next round re-runs their probes and carries what stays wrong. */
+  open: string[]
   links: AnchorLink[]
   usage: TokenUsage
 }
@@ -163,7 +183,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 /** `CONTEST <check id>: <ids and why>` lines of a reply: the executor's objection to a check (BLOCK9 §2.4). */
 export function contestsIn(note: string): { check: string; claim: string }[] {
-  return [...note.matchAll(/^\s*CONTEST\s+(K\d+)\s*:\s*(.+)$/gmu)].map(m => ({ check: m[1], claim: m[2].trim() }))
+  return [...note.matchAll(/^\s*CONTEST\s+(K\d+|P\d+\/[A-Za-z0-9.]+)\s*:\s*(.+)$/gmu)].map(m => ({ check: m[1], claim: m[2].trim() }))
 }
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
@@ -186,12 +206,16 @@ export function renderEvidence(runs: readonly CheckRun[], failing: readonly stri
   return out.join("\n")
 }
 
-export function repairMessage(evidence: string, build: { ok: boolean; output: string }): string {
+export function repairMessage(evidence: string, build: { ok: boolean; output: string }, corrections = ""): string {
   if (!build.ok) return `The program does not build:\n${clip(build.output.trim(), 3000)}\nFix it, and finish what the work order still needs.`
   return [
-    "The program was built and the acceptance checks were run against the requirements. These checks fail:",
-    evidence,
-    "Make the program meet the requirements these checks test. If you are sure a check contradicts the requirements, do not change the code for it: write a line `CONTEST <check id>: <block ids> <why>` in your reply.",
+    ...(evidence ? ["The program was built and the acceptance checks were run against the requirements. These checks fail:", evidence] : []),
+    ...(corrections ? [
+      "The program was built and run on probes, and an independent check compared what it did with the requirements. This is the correction list: each item gives the rule (quoted, with its id), the call, its input files, what the program actually did, and what the checker concluded.",
+      corrections,
+    ] : []),
+    "Fix the code so that the program follows the requirements. The requirements are the authority: if an item seems to contradict them, follow the requirements. Do not change behaviour the items do not concern.",
+    "If you are sure an item contradicts the requirements, do not change the code for it: write a line `CONTEST <id>: <block ids> <why>` in your reply (the id is the check id, or the item's id such as P12/R1.S3.P5.s8).",
   ].join("\n")
 }
 
@@ -199,7 +223,9 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
   const round = workorder.round
   const task = workorder.task.map(t => t.object)
   const taskSet = new Set(task)
-  const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", task, sessions: [], cycles: [], kept: null, carried: [], links: [], usage: zero() }
+  const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", task, sessions: [], cycles: [], kept: null, carried: [], open: [], links: [], usage: zero() }
+  const okSoFar = new Set(deps.detect?.passed ?? [])
+  const itemsOf = new Map<string, CorrectionItem[]>()
   const links = [...deps.links]
   const passing = new Set(deps.passing ?? [])
   const retired = new Set<string>()
@@ -237,7 +263,9 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     const changed = touched(diffAnchors(before, deps.anchors.extract(workdir)))
     let runs = build.ok ? await runAll(build.program!) : []
     // Disputes: evidence code saw against a check, and the session's contests. Settled once each, against the text.
-    const contests = contestsIn(reply.note).filter(c => runs.some(r => r.check === c.check && r.outcome === "fail"))
+    const claimed = contestsIn(reply.note)
+    const contests = claimed.filter(c => runs.some(r => r.check === c.check && r.outcome === "fail"))
+    const probeContests = new Map(claimed.filter(c => c.check.startsWith("P")).map(c => [c.check, c.claim]))
     const disputes = [
       ...runs.filter(r => r.failure?.class === "disputed").map(r => ({ check: r.check, run: r, kind: r.failure!.reason as DisputeKind, detail: r.failure!.detail })),
       ...contests.map(c => ({ check: c.check, run: runs.find(r => r.check === c.check)!, kind: "contested" as const, detail: c.claim })),
@@ -253,12 +281,17 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     const unsettled = new Set(contests.filter(c => !settled.wrong.has(c.check) && !settled.right.has(c.check)).map(c => c.check))
     const failing = runs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed" && !unsettled.has(r.check)
       && (regressions.has(r.check) || taskSet.has(objectOf(r.check).object) || objectOf(r.check).uses.some(u => taskSet.has(u)))).map(r => r.check)
+    // Probes on this cycle's program, judged; what is wrong goes to the correction list.
+    const detected = build.ok && deps.detect ? await deps.detect.run(build.program!, okSoFar, probeContests) : { items: [] as CorrectionItem[], findings: [] as Finding[] }
+    for (const f of detected.findings) if (f.verdict === "ok") okSoFar.add(pairKey(f.probe, f.unit))
+    const corrections = detected.items
     const trailers: [string, string][] = [
       ["IC-Round", String(round)], ["IC-Cycle", id], ["IC-Session", session.id],
       ...task.map(o => ["IC-Object", `${o}@v${deps.registry.objects.get(o)!.version}`] as [string, string]),
       ...(changed.length ? [["IC-Anchors", changed.join(", ")] as [string, string]] : []),
       ["IC-Build", build.ok ? "ok" : "failed"],
       ...(failing.length ? [["IC-Failing", failing.join(", ")] as [string, string]] : []),
+      ...(corrections.length ? [["IC-Corrections", corrections.map(c => c.key).join(", ")] as [string, string]] : []),
     ]
     const commit = commitStep(workdir, `${id} ${kind}`, trailers)
     lastCommit = commit
@@ -269,22 +302,29 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
       runs: runs.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null })),
       failing, contests: contests.map(c => ({ check: c.check, claim: c.claim, verdict: settled.wrong.has(c.check) ? "check_wrong" : settled.right.has(c.check) ? "check_right" : "unsettled" })),
       anchors: changed, note: clip(reply.note, 4000), usage: reply.usage,
+      corrections: corrections.map(c => c.key), ambiguous: detected.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: corrections.filter(c => c.passed_before).map(c => c.key),
     })
+    itemsOf.set(id, corrections)
     deps.onProgress?.(record)
-    if (build.ok && !failing.length) break
+    if (build.ok && !failing.length && !corrections.length) break
     if (n === limits.repairCycles + 1) { record.status = "cycles_spent"; break }
-    evidence = build.ok ? renderEvidence(runs, failing, library, deps.registry, regressions) : ""
-    message = repairMessage(evidence, build)
+    const checkEvidence = build.ok && failing.length ? renderEvidence(runs, failing, library, deps.registry, regressions) : ""
+    const list = build.ok && corrections.length ? renderCorrections(corrections, deps.detect!.program) : ""
+    evidence = [checkEvidence, list].filter(Boolean).join("\n")
+    message = repairMessage(checkEvidence, build, list)
     kind = "repair"
   }
   await session.close()
   // The round ends on the cycle with the fewest failures among those that built (the latest on a tie).
   const built = record.cycles.filter(c => c.build.ok)
-  const best = built.reduce<CycleRecord | null>((b, c) => !b || c.failing.length <= b.failing.length ? c : b, null)
+  const errors = (c: CycleRecord) => c.failing.length + c.corrections.length
+  const best = built.reduce<CycleRecord | null>((b, c) => !b || errors(c) <= errors(b) ? c : b, null)
   if (best) {
     record.kept = best.id
     if (best.commit !== head(workdir)) resetTo(workdir, best.commit)
     const failingObjects = new Set(best.failing.flatMap(k => { const c = deps.library.find(x => x.id === k)!; return [c.object, ...c.uses] }))
+    for (const it of itemsOf.get(best.id) ?? []) { const owner = deps.registry.coverOf(it.rule.id)?.owner; if (owner && owner !== "none") failingObjects.add(owner) }
+    record.open = best.corrections
     record.carried = task.filter(o => failingObjects.has(o))
   } else record.carried = task
   record.links = links.slice(deps.links.length)

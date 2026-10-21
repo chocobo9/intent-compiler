@@ -14,6 +14,9 @@ import type { Exp2State, Exp2Store } from "./store.js"
 import { buildWorkOrder, nameLinks, renderWorkOrder, type PreviousStep, type WorkOrder } from "./workorder.js"
 import type { AdjudicationTransport } from "./adjudication.js"
 import { upheldKinds } from "./store.js"
+import { activeProbes, runProbes, type ProbeRecord, type ProbeTransport } from "./probes.js"
+import { correctionItems, pairKey, probeStatuses, renderCorrections, type Finding, type JudgeTransport } from "./judge.js"
+import type { ObjectStatus } from "./verdict.js"
 
 /**
  * The end-to-end serial (DESIGN §9, §14). Each round, from the previous round's checkpoint:
@@ -33,6 +36,8 @@ export interface SerialLimits {
   /** Watchdog on one management call; a stopped call uses up one attempt. */
   managementTimeoutMs: number
   checkTimeoutMs: number
+  /** Repairs of one group's probes (default 2). */
+  probeRepairs?: number
   execution: ExecutionLimits
 }
 
@@ -53,6 +58,11 @@ export interface SerialConfig {
   limits: SerialLimits
   /** Rulings on disputed checks (BLOCK9 §2.3), the same model as the rest; absent, disputed checks just do not count. */
   adjudicate?: AdjudicationTransport
+  /** The program's name as the requirements call it (for the calls in correction lists). */
+  binary?: string
+  /** Probe writer and judge (BLOCK10): with both, probes are written every round and drive the repairs. */
+  probes?: ProbeTransport
+  judge?: JudgeTransport
   /**
    * Post-round scoring (the official verifier, locally). Its result is written into that round's checkpoint report
    * only, after the round is complete; nothing in the serial ever reads it back.
@@ -77,6 +87,8 @@ export interface InterruptedAttempt {
   /** Calls the attempt made (they are spent, though the checkpoint is restored without them). */
   calls: Exp2State["calls"]
   check_calls: Exp2State["check_calls"]
+  probe_calls?: Exp2State["probe_calls"]
+  judge_calls?: Exp2State["judge_calls"]
   execution: ExecutionRecord | null
 }
 
@@ -149,9 +161,10 @@ export class Serial {
     const cp = JSON.parse(this.checkpoint(round - 1).state) as Exp2State
     const now = JSON.parse(this.c.store.exportState()) as Exp2State
     const calls = (now.calls ?? []).slice(cp.calls.length), checkCalls = (now.check_calls ?? []).slice((cp.check_calls ?? []).length)
-    if (!calls.length && !checkCalls.length && !this.progress) return
+    const probeCalls = (now.probe_calls ?? []).slice((cp.probe_calls ?? []).length), judgeCalls = (now.judge_calls ?? []).slice((cp.judge_calls ?? []).length)
+    if (!calls.length && !checkCalls.length && !probeCalls.length && !judgeCalls.length && !this.progress) return
     const n = readdirSync(join(this.c.checkpoints, "interrupted")).filter(f => f.startsWith(`round-${pad(round)}-`)).length + 1
-    const attempt: InterruptedAttempt = { round, reason, calls, check_calls: checkCalls, execution: this.progress }
+    const attempt: InterruptedAttempt = { round, reason, calls, check_calls: checkCalls, probe_calls: probeCalls, judge_calls: judgeCalls, execution: this.progress }
     writeFileSync(join(this.c.checkpoints, "interrupted", `round-${pad(round)}-${n}.json`), JSON.stringify(attempt, null, 2) + "\n", "utf8")
     this.progress = null
   }
@@ -217,6 +230,19 @@ export class Serial {
     }
     const start = await store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate })
 
+    // 2b. Probes for this round's text; earlier probes run on the baseline, so what is still wrong is carried.
+    const probing = this.c.probes && this.c.judge
+    let carried: { findings: Finding[]; text: string } = { findings: [], text: "" }
+    if (probing) {
+      const written = await store.deriveRoundProbes(round, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 })
+      if (written.status === "interrupted") throw stopping(written.issues ?? [], `probes, round ${round}`)
+      const old = this.activeProbes().filter(p => p.round < round)
+      if (old.length && baseline.kind !== "null") {
+        const r = await this.probe(round, old, baseline, new Set(), new Map())
+        carried = { findings: r.findings, text: r.items.length ? `\n## Corrections left open by earlier rounds\n\nProbes of earlier rounds, run on the program as it stands now, still show these deviations from the requirements. Fix them along with this round's work; the requirements are the authority.\n${renderCorrections(r.items, programName(baseline))}\n` : "" }
+      }
+    }
+
     // 3. The work order.
     let state = store.inspect()
     const registry = store.registry(state)
@@ -226,30 +252,37 @@ export class Serial {
     const steps: PreviousStep[] = state.executions.flatMap(e => e.cycles.filter(c => c.id === e.kept).map(c => ({ id: c.id, round: c.round, status: "committed", objects: e.task.filter(o => !e.carried.includes(o)).map(object => ({ object, coverage: "full" as const })), anchors: c.anchors })))
     const previous = state.reports.find(r => r.round === round - 1)
     const workorder: WorkOrder = buildWorkOrder({
-      registry, round, library: state.checks, events: state.check_events, statuses: start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
+      registry, round, library: state.checks, events: state.check_events, statuses: probing ? mergeStatuses(start.statuses, probeStatuses(registry, carried.findings)) : start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
       previous_task: previous ? state.executions.find(x => x.round === round - 1)?.task ?? [] : [],
       zoning: store.ablation.zoning,
     })
     // 4. Execution.
     const passing = start.runs.filter(r => r.outcome === "pass").map(r => r.check)
-    const execution = await executeRound(workdir, workorder, renderWorkOrder(workorder), this.c.executor(round), {
+    const passed = new Set(carried.findings.filter(f => f.verdict === "ok").map(f => pairKey(f.probe, f.unit)))
+    const execution = await executeRound(workdir, workorder, renderWorkOrder(workorder) + carried.text, this.c.executor(round), {
       registry, library: state.checks, events: state.check_events, links, anchors: this.c.anchors, build: this.c.build, runner: this.c.runner,
       facts: codeFacts(registry, round), passing, checkTimeoutMs: limits.checkTimeoutMs, onProgress: r => { this.progress = r },
       upheld: check => upheldKinds(store.inspect(), check),
+      ...(probing ? { detect: { passed, program: programName(baseline.kind === "null" ? { command: [this.c.binary ?? "program"] } as ProgramRef : baseline), run: (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => this.probe(round, this.activeProbes(), program, before, contests).then(r => ({ items: r.items, findings: r.findings })) } } : {}),
       ...(this.c.adjudicate ? { settle: (disputes: Parameters<Exp2Store["settle"]>[1]) => store.settle(round, disputes, this.c.adjudicate!) } : {}),
     }, limits.execution)
 
     // 5. Verdict on the final program, report, checkpoint.
     const final = this.program(`R${round}-final`)
     const verdict = await store.runRoundChecks(round, final, this.c.runner, { verdict: true, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate })
+    const finalProbes = probing && final.kind !== "null" ? await this.probe(round, this.activeProbes(), final, passed, new Map()) : null
     state = store.inspect()
     const interrupted = this.interruptedAttempts(round)
     const events = state.check_events.filter(e => e.round === round)
     const report = buildReport({
-      round, registry, workorder, execution, executorIsStub: this.c.executorIsStub, statuses: verdict.statuses,
+      round, registry, workorder, execution, executorIsStub: this.c.executorIsStub, statuses: finalProbes ? mergeStatuses(verdict.statuses, probeStatuses(registry, finalProbes.findings)) : verdict.statuses,
+      probes: probing ? {
+        calls: state.probe_calls.filter(c => c.round === round), judge_calls: state.judge_calls.filter(c => c.round === round), record: state.probe_rounds.find(r => r.round === round && r.status === "accepted") ?? null,
+        active: this.activeProbes().length, findings: finalProbes?.findings ?? [], carried_in: carried.findings.filter(f => f.verdict === "wrong").length,
+      } : null,
       understand: state.calls.filter(c => c.round === round), acceptance: state.check_calls.filter(c => c.round === round),
       interrupted: {
-        attempts: interrupted.length, understand: interrupted.flatMap(a => a.calls), acceptance: interrupted.flatMap(a => a.check_calls),
+        attempts: interrupted.length, understand: interrupted.flatMap(a => a.calls), acceptance: interrupted.flatMap(a => [...a.check_calls, ...(a.probe_calls ?? []), ...(a.judge_calls ?? [])]),
         coding: interrupted.reduce((t: StageCost, a) => { const c = codingCost(a.execution, this.c.executorIsStub); return { calls: t.calls + c.calls, tokens: sumUsage(t.tokens, c.tokens), stub_calls: t.stub_calls + c.stub_calls } }, codingCost(null, false)),
       },
       checks: {
@@ -281,6 +314,18 @@ export class Serial {
     writeFileSync(join(this.c.checkpoints, "scores.jsonl"), JSON.stringify({ round, commit, ...score, prediction_sha256: frozen.sha256 }) + "\n", { encoding: "utf8", flag: "a" })
   }
 
+  private activeProbes(): ProbeRecord[] {
+    const s = this.c.store.inspect()
+    return activeProbes(s.probes, s.probe_events)
+  }
+
+  /** Runs probes on a program and judges the runs (kept verdicts reused): the findings and the correction items. */
+  private async probe(round: number, probes: readonly ProbeRecord[], program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) {
+    const runs = await runProbes(probes, program, this.c.runner, this.c.limits.checkTimeoutMs)
+    const findings = (await this.c.store.judge(round, runs, withWatchdog(this.c.judge!, this.c.limits.managementTimeoutMs), { contests })).filter(f => probes.some(p => p.id === f.probe))
+    return { findings, items: correctionItems(this.c.store.registry(), probes, runs, findings, before) }
+  }
+
   /** The program at the work tree's current commit, built; the null program when there is nothing to build. */
   private program(label: string | null): ProgramRef {
     if (label) {
@@ -289,6 +334,24 @@ export class Serial {
     }
     return nullBaseline(join(this.c.checkpoints, "null-baseline"))
   }
+}
+
+/** The name a correction list calls the program by: the built file, without a Windows extension. */
+export function programName(program: ProgramRef): string {
+  return (program.command.at(-1) ?? "program").split(/[\\/]/u).pop()!.replace(/\.exe$/iu, "")
+}
+
+/** Check statuses and probe statuses together: not landed by either is not landed; otherwise a known one wins. */
+export function mergeStatuses(checks: readonly ObjectStatus[], probes: readonly ObjectStatus[]): ObjectStatus[] {
+  const byProbe = new Map(probes.map(p => [p.object, p]))
+  const out = checks.map(c => {
+    const p = byProbe.get(c.object)
+    if (!p || p.status === "unknown" || c.status === "not_landed") return c
+    if (p.status === "not_landed" || c.status === "unknown") return { ...p, passing_strong: [...c.passing_strong, ...p.passing_strong], not_landed: [...c.not_landed, ...p.not_landed], unknown: [...c.unknown, ...p.unknown] }
+    return c
+  })
+  for (const p of probes) if (!checks.some(c => c.object === p.object)) out.push(p)
+  return out
 }
 
 /** The error a stopped management step stands for: a spent quota, or an invalid login. */

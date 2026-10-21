@@ -17,7 +17,9 @@ import type { AttributionTransport } from "./attribution.js"
 import type { ChecksTransport } from "./checks.js"
 import type { AdjudicationTransport } from "./adjudication.js"
 import { emptyCassette, loadCassette, recordingTransports } from "./recording.js"
-import { createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
+import type { ProbeTransport } from "./probes.js"
+import type { JudgeTransport } from "./judge.js"
+import { createOpenCodeJudgeTransport, createOpenCodeProbesTransport, createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
 
 /**
  * The local run's configuration file and its assembly into a Serial (READY-FOR-LOCAL §0). Paths are resolved
@@ -51,6 +53,7 @@ export interface LocalConfig {
     check_repairs?: number
     management_timeout_ms?: number
     check_timeout_ms?: number
+    probe_repairs?: number
     execution?: Partial<ExecutionLimits>
   }
   runner: { kind: "local" } | ({ kind: "docker"; docker?: string[] } & Omit<DockerOptions, "docker">)
@@ -63,6 +66,11 @@ export interface LocalConfig {
    * resumed with the same file appends to it. Labelled with the model.
    */
   recording?: { cassette: string; label: string }
+  /**
+   * Probe writer and judge (BLOCK10 §1.2, §1.4) on the management server, each call a new session. Defaults:
+   * gpt-6-sol-fast low and gpt-5.6-luna-fast medium, with the management server's provider. null switches them off.
+   */
+  roles?: null | { probes?: RoleConfig; judge?: RoleConfig }
   /** Ablation switches (DESIGN §12b item 14); all default true. Kept in the state: an ablation run needs its own state. */
   ablation?: { zoning?: boolean; checks?: boolean; clauses?: boolean }
   /**
@@ -71,6 +79,10 @@ export interface LocalConfig {
    */
   scoring?: { command: string[] } | null
 }
+
+export interface RoleConfig { provider?: string; model?: string; variant?: string }
+
+export const DEFAULT_ROLES = { probes: { model: "gpt-6-sol-fast", variant: "low" }, judge: { model: "gpt-5.6-luna-fast", variant: "medium" } } as const
 
 /** Absolute on either platform: the file is written for the Windows machine and checked anywhere. */
 const absolute = (p: string) => win32.isAbsolute(p) || posix.isAbsolute(p)
@@ -191,7 +203,11 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       if (!existsSync(file)) throw new Error(`No requirement text for round ${round}: ${file}`)
       return readFileSync(file, "utf8")
     },
-    ...recorded(c, at, { attribution: createOpenCodeAttributionTransport(management, rateLimit), checks: createOpenCodeChecksTransport(management, rateLimit), adjudicate: createOpenCodeAdjudicationTransport(management, rateLimit) }),
+    ...recorded(c, at, {
+      attribution: createOpenCodeAttributionTransport(management, rateLimit), checks: createOpenCodeChecksTransport(management, rateLimit), adjudicate: createOpenCodeAdjudicationTransport(management, rateLimit),
+      ...(c.roles === null ? {} : { probes: createOpenCodeProbesTransport(roleOptions(management, c, "probes"), rateLimit), judge: createOpenCodeJudgeTransport(roleOptions(management, c, "judge"), rateLimit) }),
+    }),
+    binary,
     executor: () => new OpenCodeExecutor({ client: coding, providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant, agent: c.coding.agent, rateLimit }),
     executorIsStub: false,
     anchors: new GoAnchorExtractor(undefined, platform),
@@ -203,6 +219,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       checkRepairs: c.limits?.check_repairs ?? 2,
       managementTimeoutMs: c.limits?.management_timeout_ms ?? 30 * 60_000,
       checkTimeoutMs: c.limits?.check_timeout_ms ?? 60_000,
+      probeRepairs: c.limits?.probe_repairs ?? 2,
       execution: { ...DEFAULT_LIMITS, ...c.limits?.execution },
     },
     ...(c.scoring ? { score: scoringHook(c.scoring.command, at(c.repo_dir)) } : {}),
@@ -210,12 +227,18 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   return { serial: new Serial(config), config }
 }
 
-function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate: AdjudicationTransport }) {
+function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport }) {
   if (!c.recording) return t
   const file = at(c.recording.cassette)
   const cassette = existsSync(file) ? loadCassette(file) : emptyCassette(c.recording.label)
   const r = recordingTransports(t, cassette, file)
-  return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate! }
+  return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate!, ...(r.probes ? { probes: r.probes, judge: r.judge! } : {}) }
+}
+
+/** The management transport options with a role's model. */
+export function roleOptions<T extends { providerId: string; modelId: string; variant?: string }>(management: T, c: LocalConfig, role: "probes" | "judge"): T {
+  const r = { ...DEFAULT_ROLES[role], ...(c.roles?.[role] ?? {}) } as RoleConfig
+  return { ...management, providerId: r.provider ?? management.providerId, modelId: r.model!, variant: r.variant }
 }
 
 /** Runs the scoring command for a round; its stdout must be {"passed": n, "total": m}. */

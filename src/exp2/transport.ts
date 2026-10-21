@@ -2,6 +2,8 @@ import { createOpenCodeStructuredTransport, type OpenCodeModelTransportV2Options
 import { ATTRIBUTION_SCHEMA, ATTRIBUTION_SYSTEM_PROMPT, type AttributionTransport, type ModelRequest } from "./attribution.js"
 import { CHECKS_SCHEMA, CHECKS_SYSTEM_PROMPT, type CheckRequest, type ChecksTransport } from "./checks.js"
 import { withProviderErrors, type RateLimitPolicy } from "./provider-errors.js"
+import { PROBES_SCHEMA, PROBES_SYSTEM_PROMPT, type ProbeRequest, type ProbeTransport } from "./probes.js"
+import { JUDGE_SCHEMA, JUDGE_SYSTEM_PROMPT, type JudgeRequest, type JudgeTransport } from "./judge.js"
 import { ADJUDICATION_SCHEMA, ADJUDICATION_SYSTEM_PROMPT, type AdjudicationRequest, type AdjudicationTransport } from "./adjudication.js"
 
 /**
@@ -48,6 +50,24 @@ export function createOpenCodeChecksTransport(options: OpenCodeModelTransportV2O
 /** Rulings on disputed checks (BLOCK9 §2.3) over OpenCode structured output, the same model as the other management calls. */
 export function createOpenCodeAdjudicationTransport(options: OpenCodeModelTransportV2Options, rateLimit?: RateLimitPolicy): AdjudicationTransport {
   const transport = withProviderErrors(createOpenCodeStructuredTransport<AdjudicationRequest>(options, ADJUDICATION_SYSTEM_PROMPT, ADJUDICATION_SCHEMA), rateLimit)
+  return async request => {
+    const call = await transport(request)
+    return { text: call.text, usage: call.usage, stub: false, ...(call.model ? { model: call.model } : {}), ...(call.provider ? { provider: call.provider } : {}) }
+  }
+}
+
+/** The probe writer (BLOCK10 §1.2), by default gpt-6-sol-fast low on the management server; a new session per call. */
+export function createOpenCodeProbesTransport(options: OpenCodeModelTransportV2Options, rateLimit?: RateLimitPolicy): ProbeTransport {
+  const transport = withProviderErrors(createOpenCodeStructuredTransport<ProbeRequest>(options, PROBES_SYSTEM_PROMPT, PROBES_SCHEMA), rateLimit)
+  return async request => {
+    const call = await transport(request)
+    return { text: call.text, usage: call.usage, stub: false, ...(call.model ? { model: call.model } : {}), ...(call.provider ? { provider: call.provider } : {}) }
+  }
+}
+
+/** The judge (BLOCK10 §1.4), by default gpt-5.6-luna-fast medium on the management server; a new session per call. */
+export function createOpenCodeJudgeTransport(options: OpenCodeModelTransportV2Options, rateLimit?: RateLimitPolicy): JudgeTransport {
+  const transport = withProviderErrors(createOpenCodeStructuredTransport<JudgeRequest>(options, JUDGE_SYSTEM_PROMPT, JUDGE_SCHEMA), rateLimit)
   return async request => {
     const call = await transport(request)
     return { text: call.text, usage: call.usage, stub: false, ...(call.model ? { model: call.model } : {}), ...(call.provider ? { provider: call.provider } : {}) }

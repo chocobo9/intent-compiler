@@ -3,6 +3,8 @@ import type { ExecutionRecord } from "./execution.js"
 import type { Registry } from "./registry.js"
 import type { ObjectStatus } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
+import type { ProbeRoundRecord } from "./probes.js"
+import { pairKey, type Finding } from "./judge.js"
 
 /**
  * The round report (DESIGN §14), built by code from the round's records: official score (filled in locally only,
@@ -24,6 +26,16 @@ export interface RoundReport {
   zones: { task: number; protect: number; status: number; source_blocks: number; anchors: number }
   execution: { status: ExecutionRecord["status"]; cycles: number; repairs: number; kept: string | null; failing_at_end: number; contests: number; carried_objects: string[]; sessions: number; broken_sessions: number }
   checks: { entered: number; stale: number; retired: number; run: number; passed: number; failed: number }
+  /**
+   * Probes and judge (BLOCK10), null when off. share: their tokens over the round's coding tokens, all tokens
+   * (input, cache, output) and without cache reads. Models as the calls report them.
+   */
+  probes: null | {
+    writer: StageCost; judge: StageCost; models: { writer: string[]; judge: string[] }
+    share: { all: number | null; uncached: number | null }
+    active: number; written: number; stale: number; units: number; uncovered: string[]; dropped: number
+    carried_in: number; open_at_end: string[]; ambiguous_at_end: string[]; broke: string[]
+  }
   objects: { object: string; name: string; status: ObjectStatus["status"]; reasons: string[]; passing_strong: string[]; not_landed: string[]; unknown: string[] }[]
   /**
    * Where a not-landed or unknown object falls. boundary: the text gives no checkable expectation (no checks, only
@@ -64,7 +76,19 @@ export interface ReportInput {
   workorder: WorkOrder
   statuses: readonly ObjectStatus[]
   checks: RoundReport["checks"]
+  probes?: null | {
+    calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
+    judge_calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
+    record: ProbeRoundRecord | null
+    active: number
+    findings: readonly Finding[]
+    carried_in: number
+  }
 }
+
+const allTokens = (u: TokenUsage) => u.input_tokens + u.cache_read_tokens + u.cache_write_tokens + u.output_tokens
+const uncached = (u: TokenUsage) => u.input_tokens + u.cache_write_tokens + u.output_tokens
+const ratio = (a: number, b: number) => b > 0 ? Math.round(a / b * 1000) / 1000 : null
 
 export function buildReport(i: ReportInput): RoundReport {
   const name = (id: string) => i.registry.objects.get(id)?.name ?? id
@@ -91,6 +115,17 @@ export function buildReport(i: ReportInput): RoundReport {
       carried_objects: e.carried, sessions: e.sessions.length, broken_sessions: e.sessions.filter(s => s.closed === "broken").length,
     },
     checks: i.checks,
+    probes: i.probes ? (() => {
+      const p = i.probes!, writer = stageCost(p.calls), judge = stageCost(p.judge_calls), coding = codingCost(e, i.executorIsStub).tokens
+      const kept = e.cycles.find(c => c.id === e.kept)
+      return {
+        writer, judge, models: { writer: [...new Set(p.calls.flatMap(c => c.model ? [c.model] : []))], judge: [...new Set(p.judge_calls.flatMap(c => c.model ? [c.model] : []))] },
+        share: { all: ratio(allTokens(writer.tokens) + allTokens(judge.tokens), allTokens(coding)), uncached: ratio(uncached(writer.tokens) + uncached(judge.tokens), uncached(coding)) },
+        active: p.active, written: p.record?.entered.length ?? 0, stale: p.record?.stale.length ?? 0, units: p.record?.units.length ?? 0, uncovered: p.record?.uncovered ?? [], dropped: p.record?.dropped.length ?? 0,
+        carried_in: p.carried_in, open_at_end: p.findings.filter(f => f.verdict === "wrong").map(f => pairKey(f.probe, f.unit)),
+        ambiguous_at_end: p.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: kept?.broke ?? [],
+      }
+    })() : null,
     objects: i.statuses.map(s => ({ object: s.object, name: name(s.object), status: s.status, reasons: s.reasons, passing_strong: s.passing_strong, not_landed: s.not_landed, unknown: s.unknown })),
     loss,
     management_calls: i.understand.length + i.acceptance.length,
@@ -118,6 +153,10 @@ export function renderReport(r: RoundReport): string {
     "",
     `Scope: ${r.scope.length} objects. Zones: task ${r.zones.task}, protection ${r.zones.protect}, status ${r.zones.status}, source blocks ${r.zones.source_blocks}, anchors ${r.zones.anchors}.`,
     `Execution: ${r.execution.status}; ${r.execution.cycles} cycles (${r.execution.repairs} repairs), kept ${r.execution.kept ?? "none"} with ${r.execution.failing_at_end} failing; ${r.execution.contests} contests; carried ${r.execution.carried_objects.length}; sessions ${r.execution.sessions} (${r.execution.broken_sessions} broken).`,
+    ...(r.probes ? [
+      `Probes: ${r.probes.written} written for ${r.probes.units} units (${r.probes.uncovered.length} not exercised, ${r.probes.dropped} dropped), ${r.probes.stale} stale, ${r.probes.active} active. Carried in ${r.probes.carried_in}; open at the end ${r.probes.open_at_end.length}; ambiguous ${r.probes.ambiguous_at_end.length}; broke ${r.probes.broke.length}.`,
+      `Probe writer (${r.probes.models.writer.join(", ") || "?"}): ${r.probes.writer.calls} calls, ${tok(r.probes.writer.tokens)}. Judge (${r.probes.models.judge.join(", ") || "?"}): ${r.probes.judge.calls} calls, ${tok(r.probes.judge.tokens)}. Share of coding tokens: ${r.probes.share.all ?? "n/a"} (uncached ${r.probes.share.uncached ?? "n/a"}).`,
+    ] : []),
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,
     "",
