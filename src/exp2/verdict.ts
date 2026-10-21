@@ -12,7 +12,7 @@ import type { CheckRunner, ProgramRef, RunOutput } from "./runner.js"
 export interface AssertionResult { id: string; ok: boolean; actual: unknown; role: Assertion["role"] }
 
 export type FailureClass = "not_landed" | "unknown"
-export type FailureReason = "value_mismatch" | "missing_name" | "still_present" | "rejected" | "other_error_rule" | "timeout"
+export type FailureReason = "value_mismatch" | "missing_name" | "still_present" | "rejected" | "other_error_rule" | "timeout" | "reading"
 
 export interface Failure {
   class: FailureClass
@@ -132,6 +132,11 @@ export function classify(check: CheckRecord, results: AssertionResult[], out: Ru
   if (check.direction === "withdrawn") return { class: "not_landed", reason: "still_present", detail: "the removed behaviour still happens", roles: [...new Set(results.map(r => r.role))] }
   const missing = invokedNames(check, registry).filter(n => !hasLiteral(literals, n))
   if (missing.length) return { class: "not_landed", reason: "missing_name", detail: `no string literal in the program names ${missing.join(", ")}`, roles: ["business"] }
+  // Only assertions resting on an unstated reading failed (DESIGN §12d item 10): the reading may be wrong, not the program.
+  const readingOf = (id: string) => check.assertions.find(a => a.id === id)?.reading
+  if (failed.length && failed.every(r => readingOf(r.id))) {
+    return { class: "unknown", reason: "reading", detail: failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}; rests on the reading "${readingOf(r.id)}"`).join("; "), roles }
+  }
   const expected = check.assertions.flatMap(a => typeof a.expect === "string" ? [a.expect] : [])
   const outputLines = [...lines(out.stderr), ...lines(out.stdout)].map(l => l.trim()).filter(Boolean)
   // Inputs the code computed are right by construction (DESIGN §12b item 2): the program reporting one of its own

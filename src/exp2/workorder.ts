@@ -25,7 +25,7 @@ export interface TaskEntry {
   /** This round's change record, when changed. */
   change: string | null
   /** Failing checks judged not landed: the input and what the program did, against what was expected. */
-  evidence: { check: string; reason: string; args: string[]; files: string[]; mismatches: { assertion: string; expected: unknown; actual: unknown }[] }[]
+  evidence: { check: string; reason: string; args: string[]; files: string[]; mismatches: { assertion: string; expected: unknown; actual: unknown; reading?: string }[] }[]
   /** The step of a previous round that did not finish this object. */
   carried_from: string | null
   /** "Affected by a convention revision" (DESIGN §4.5): the revised conventions and this object's checks they staled. */
@@ -36,7 +36,8 @@ export interface WorkOrder {
   round: number
   task: TaskEntry[]
   protect: { object: string; name: string; checks: string[]; shared_anchors: string[] }[]
-  status: { object: string; name: string; reasons: string[]; unknown_checks: string[] }[]
+  /** readings: failures resting on a reading the text does not state, with that reading (DESIGN §12d item 10). */
+  status: { object: string; name: string; reasons: string[]; unknown_checks: string[]; readings?: { check: string; assertion: string; reading: string; expected: unknown; actual: unknown }[] }[]
   /** The whole source, each assigned block once, grouped by object (null: text that is no requirement). */
   source: { object: string | null; name: string; blocks: { id: string; state: string; heading_path: string[]; text: string }[] }[]
   anchors: { object: string; anchors: { id: string; file: string; lines: string }[]; last_steps: { step: string; round: number; status: string; anchors: string[] }[] }[]
@@ -106,7 +107,7 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
       if (!run || !k) continue
       t.evidence.push({
         check: id, reason: run.failure!.reason, args: k.input.args, files: k.input.files.map(f => f.path),
-        mismatches: run.assertions.filter(a => !a.ok).map(a => ({ assertion: a.id, expected: k.assertions.find(x => x.id === a.id)?.expect, actual: a.actual })),
+        mismatches: run.assertions.filter(a => !a.ok).map(a => { const x = k.assertions.find(y => y.id === a.id); return { assertion: a.id, expected: x?.expect, actual: a.actual, ...(x?.reading ? { reading: x.reading } : {}) } }),
       })
     }
   }
@@ -129,6 +130,16 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
     t.carried_from = input.steps.filter(s => s.round === round - 1 && s.objects.some(o => o.object === object)).at(-1)?.id ?? `R${round - 1} task zone`
   }
   if (input.zoning === false) for (const o of registry.objects.values()) if (o.blocks.some(b => LIVE_STATES.has(b.state))) entry(o.id)
+  // Failures that rest on an unstated reading go next to the evidence of objects that are tasks anyway, marked as
+  // such; they make nothing a task (DESIGN §12d item 10).
+  for (const run of input.runs.filter(r => r.failure?.reason === "reading")) {
+    const k = checks.get(run.check), t = k && tasks.get(k.object)
+    if (!k || !t) continue
+    t.evidence.push({
+      check: run.check, reason: "reading", args: k.input.args, files: k.input.files.map(f => f.path),
+      mismatches: run.assertions.filter(a => !a.ok).map(a => { const x = k.assertions.find(y => y.id === a.id); return { assertion: a.id, expected: x?.expect, actual: a.actual, ...(x?.reading ? { reading: x.reading } : {}) } }),
+    })
+  }
   const task = [...tasks.values()].sort((a, b) => Number(a.object.slice(1)) - Number(b.object.slice(1)))
   const inTask = new Set(task.map(t => t.object))
 
@@ -143,7 +154,13 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   })
 
   const statusZone = input.statuses.filter(s => s.status === "unknown" && !inTask.has(s.object) && registry.objects.has(s.object))
-    .map(s => ({ object: s.object, name: name(s.object), reasons: s.reasons, unknown_checks: s.unknown }))
+    .map(s => {
+      const readings = s.unknown.flatMap(id => {
+        const run = input.runs.find(r => r.check === id && r.failure?.reason === "reading"), k = checks.get(id)
+        return run && k ? run.assertions.filter(a => !a.ok).map(a => { const x = k.assertions.find(y => y.id === a.id)!; return { check: id, assertion: a.id, reading: x.reading ?? "", expected: x.expect, actual: a.actual } }) : []
+      })
+      return { object: s.object, name: name(s.object), reasons: s.reasons, unknown_checks: s.unknown, ...(readings.length ? { readings } : {}) }
+    })
 
   // Source zone: every assigned block once, in its object's group, in round and document order.
   const groups = new Map<string | null, { id: string; state: string; heading_path: string[]; text: string }[]>()
@@ -207,12 +224,15 @@ export function renderWorkOrder(w: WorkOrder): string {
   for (const t of w.task) {
     out.push(`- ${t.object} ${t.name} @v${t.version}: ${t.why.join(", ")}${t.change ? ` (${t.change})` : ""}${t.carried_from ? ` (left undone by ${t.carried_from})` : ""}`)
     for (const c of t.conventions) out.push(`  - affected by the revision of convention ${c.convention} (checks ${c.checks.join(", ")} to be derived again)`)
-    for (const e of t.evidence) out.push(`  - failing ${e.check} (${e.reason}): args ${JSON.stringify(e.args)}; ${e.mismatches.map(m => `${m.assertion} expected ${JSON.stringify(m.expected)}, got ${JSON.stringify(m.actual)}`).join("; ")}`)
+    for (const e of t.evidence) out.push(`  - ${e.reason === "reading" ? "failing, not counted against the program" : "failing"} ${e.check} (${e.reason}): args ${JSON.stringify(e.args)}; ${e.mismatches.map(m => `${m.assertion} expected ${JSON.stringify(m.expected)}, got ${JSON.stringify(m.actual)}${m.reading ? ` (this expectation rests on a reading the text does not state: ${m.reading})` : ""}`).join("; ")}`)
   }
   out.push("", "## Protection zone (must not break; these checks are rerun)", "")
   for (const p of w.protect) out.push(`- ${p.object} ${p.name}: checks ${p.checks.join(", ") || "(none)"}; shared anchors ${p.shared_anchors.join(", ")}`)
   out.push("", "## Status zone (for information, not tasks)", "")
-  for (const s of w.status) out.push(`- ${s.object} ${s.name}: unknown (${s.reasons.join(", ") || "no reason recorded"})`)
+  for (const s of w.status) {
+    out.push(`- ${s.object} ${s.name}: unknown (${s.reasons.join(", ") || "no reason recorded"})`)
+    for (const r of s.readings ?? []) out.push(`  - ${r.check} ${r.assertion} expected ${JSON.stringify(r.expected)}, got ${JSON.stringify(r.actual)}; the expectation rests on a reading the text does not state: ${r.reading}`)
+  }
   out.push("", "## Anchor zone", "")
   for (const a of w.anchors) out.push(`- ${a.object}: ${a.anchors.map(x => `${x.id} (${x.file}:${x.lines})`).join(", ") || "(no anchors yet)"}${a.last_steps.length ? `; last steps ${a.last_steps.map(s => `${s.step} ${s.status}`).join(", ")}` : ""}`)
   if (w.edges.length) out.push("", "Edges (reference only): " + w.edges.map(e => `${e.from} ${e.kind} ${e.to}`).join("; "))

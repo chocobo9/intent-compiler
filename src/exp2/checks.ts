@@ -50,6 +50,11 @@ export interface AssertionDraft {
   /** Allowed numeric difference (relative to max(1, |value|)); null for the default. */
   tolerance: number | null
   source: ExpectSource
+  /**
+   * The reading of the text this fact rests on where the text does not state it, in one sentence (DESIGN §12d
+   * item 10); null when the text states it. A failure of such an assertion is unknown, never not landed.
+   */
+  reading?: string | null
 }
 
 export interface CheckDraft {
@@ -216,6 +221,12 @@ export function staleChecks(registry: Registry, library: readonly CheckRecord[],
     for (const e of refs) {
       const hit = replacedBasis(registry, registry.referredText(e), c.round, round)
       if (hit.length) return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "refers_to", source: e.to }, reason: `${e.from} refers to ${e.to}, ${verb(hit[0].kind)} in round ${hit[0].round} by ${hit[0].by.join(", ")}` }]
+    }
+    // A check resting on an unstated reading: later text that names its basis or its object may state it (§12d item 10).
+    const readings = c.assertions.filter(a => a.reading)
+    if (readings.length) {
+      const later = registry.references.find(e => e.round > c.round && e.round <= round && (e.to === c.object || basis.some(u => within(registry, e.to, u) || within(registry, u, e.to))))
+      if (later) return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "refers_to", source: later.from }, reason: `${later.from} (round ${later.round}) ${later.kind} ${later.to}, which this check reads as: ${readings.map(a => a.reading).join("; ")}` }]
     }
     for (const u of c.uses) {
       const change = registry.changes.find(ch => ch.object === u && ch.round > c.round && ch.round <= round)
@@ -489,7 +500,7 @@ export function checksShapeProblems(value: unknown): string[] {
     if (!strs(k.blocks) || !strs(k.uses)) p.push(`${at}: blocks and uses must be string arrays`)
     if (k.direction !== "holds" && k.direction !== "withdrawn") p.push(`${at}.direction: holds or withdrawn`)
     if (!obj(k.input) || !strs(k.input.args) || !Array.isArray(k.input.files) || !k.input.files.every(f => obj(f) && typeof f.path === "string" && typeof f.content === "string")) p.push(`${at}.input: {args: string[], files: {path, content}[]}`)
-    if (!Array.isArray(k.assertions) || !k.assertions.every(a => obj(a) && typeof a.id === "string" && (a.role === "convention" || a.role === "business") && obj(a.target) && typeof a.target.kind === "string" && typeof a.expect_json === "string" && obj(a.source) && (a.source.kind === "verbatim" || a.source.kind === "derived" || a.source.kind === "computed"))) p.push(`${at}.assertions: malformed`)
+    if (!Array.isArray(k.assertions) || !k.assertions.every(a => obj(a) && typeof a.id === "string" && (a.role === "convention" || a.role === "business") && obj(a.target) && typeof a.target.kind === "string" && typeof a.expect_json === "string" && obj(a.source) && (a.source.kind === "verbatim" || a.source.kind === "derived" || a.source.kind === "computed") && (a.reading === undefined || a.reading === null || typeof a.reading === "string"))) p.push(`${at}.assertions: malformed`)
     if (k.reference_script !== null && !(obj(k.reference_script) && (k.reference_script.language === "python" || k.reference_script.language === "node") && typeof k.reference_script.code === "string")) p.push(`${at}.reference_script: {language, code} or null`)
   })
   if (!strs(value.remove) || !strs(value.retire_remove)) p.push("remove and retire_remove must be string arrays")
@@ -663,7 +674,7 @@ const checkSchema = {
       type: "array",
       description: "Each assertion states one fact: an exit code, one line of stdout, one cell, one JSON field.",
       items: {
-        type: "object", additionalProperties: false, required: ["id", "role", "target", "expect_json", "tolerance", "source"],
+        type: "object", additionalProperties: false, required: ["id", "role", "target", "expect_json", "tolerance", "source", "reading"],
         properties: {
           id: { type: "string" },
           role: { type: "string", enum: ["convention", "business"], description: "convention: the fact comes from a convention in uses; business: from the object's own requirement. Keep them in separate assertions." },
@@ -679,6 +690,7 @@ const checkSchema = {
           },
           expect_json: { type: "string", description: "The expected value, JSON-encoded (\"\\\"some text\\\"\", \"1\", \"0.5\", \"[\\\"a\\\"]\")." },
           tolerance: { type: ["number", "null"], description: "Allowed relative numeric difference; null for the default." },
+          reading: { ...nullableString, description: "When the expected value rests on a reading the text does not state (say, whether row numbers count data rows from 1), that reading in one sentence; null when the text states it." },
           source: {
             type: "object", additionalProperties: false, required: ["kind", "block", "quote"],
             properties: {
@@ -715,6 +727,7 @@ export const CHECKS_SYSTEM_PROMPT = [
   "You write acceptance checks for a command-line program from its requirements. `sources` holds every round so far, annotated with block ids; the original text is the only authority and newer text overrides older text.",
   "Write checks for the objects in `scope` (they changed this round), and to replace the checks in `stale` (whose source, a block they refer to, or a convention they use changed); for no other object. A check runs the program once: `input.files` are written into an empty directory, the program is called with `input.args`, and each assertion reads one fact of the result. Command names, options and JSON keys must be those the requirements' code fragments show.",
   "Every expected value needs a source: verbatim when the requirement states it (quote the block's text exactly), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept. Never compute a digest, hash or checksum yourself: an expected one is source computed, and one an input file needs is written as {{computed:NAME}} in the file, with the reference script printing NAME's value; the code fills it in before the program runs.",
+  "One assertion reads one fact. A fact that rests on a reading the text does not state goes in its own assertion, apart from the facts that do not, and names that reading in `reading`; a failure of such an assertion is reported, not counted against the program.",
   "Keep convention facts (a shared error format, an output-formatting rule) in their own assertions with role convention, and list those conventions in `uses`; business facts are the object's own behaviour.",
   "Every check states its expected exit code. Prefer checks whose expected output depends on the input data; a check of the exit code alone shows little. `checks` lists the library's checks for these objects and `stale` those whose source text changed this round: derive their replacements where the text still says something checkable. You may propose retiring a check whose expectation rests on replaced text; the code verifies the proposal.",
   "Answer as a patch on `previous_draft` (empty on the first call). When `issues` is not empty, fix exactly those problems and leave the rest as it is.",

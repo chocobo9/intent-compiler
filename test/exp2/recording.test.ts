@@ -6,11 +6,12 @@ import assert from "node:assert/strict"
 import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { EMPTY_DRAFT, ReplayMiss, applyPatch, buildRequest, byCause, checkAnswer, type AnswerPatch } from "../../src/exp2/attribution.js"
 import { goBuilder } from "../../src/exp2/build.js"
-import { checkIssuesByCause, staleChecks, type CheckRecord } from "../../src/exp2/checks.js"
+import { checkIssuesByCause, codeFacts, staleChecks, type AssertionDraft, type CheckRecord, type ChecksPatch } from "../../src/exp2/checks.js"
 import { DEFAULT_LIMITS } from "../../src/exp2/execution.js"
 import { materialize } from "../../src/exp2/registry.js"
-import { emptyCassette, loadCassette, recordingTransports, replayByRound, replayTransports } from "../../src/exp2/recording.js"
-import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
+import { emptyCassette, entryRound, loadCassette, recordingTransports, replayByRound, replayTransports } from "../../src/exp2/recording.js"
+import { LocalProcessRunner, LocalScriptSandbox, type CheckRunner } from "../../src/exp2/runner.js"
+import { objectStatuses, runCheck } from "../../src/exp2/verdict.js"
 import { Serial } from "../../src/exp2/serial.js"
 import { splitRound } from "../../src/exp2/source.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
@@ -172,5 +173,69 @@ describe("exp2 issues by root cause (§12d items 3, 4)", () => {
     assert.match(merged[0].message, /^check fill, 2 problems of one kind \(verbatim_mismatch\): assertion a1: .*; assertion a2: /u)
     const recorded = CHECK_SUMMARY.first_r1 as string[] | undefined
     if (recorded) assert.ok(recorded.some(m => /make the source derived and have the reference script compute it/u.test(m)))
+  })
+})
+
+describe("exp2 readings the text does not state (§12d item 10), on the real R4 validate check", () => {
+  const cassette = loadCassette(join(BATCH2, "cassette.json"))
+  const r4 = cassette.entries.filter(e => e.step === "checks" && entryRound(e) === 4)[0]
+  const draft = (JSON.parse(r4.answer) as ChecksPatch).upsert.find(k => k.key === "validate_violation_report")!
+  const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-reading-")), "reading")
+  const record = (assertions: AssertionDraft[]): CheckRecord => ({
+    id: "K99", round: 4, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses, direction: "holds", input: draft.input,
+    assertions: assertions.map(({ expect_json, ...a }) => ({ ...a, expect: JSON.parse(expect_json) })), unknown: [], reference_script: null,
+    admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
+  })
+  // The report as the check expects it, and as a program numbering violation rows from 0 would write it.
+  const report = (shift: number, message?: string) => {
+    const at = (id: string) => JSON.parse(draft.assertions.find(a => a.id === id)!.expect_json)
+    const violations = draft.assertions.filter(a => /^v\d+$/u.test(a.id)).map(a => { const v = JSON.parse(a.expect_json); return { ...v, row: typeof v.row === "number" ? v.row + shift : v.row, ...(message ? { message } : {}) } })
+    return JSON.stringify({ valid: at("valid"), summary: { total_violations: at("total"), columns_checked: at("cols"), rows_checked: at("rows") }, violations })
+  }
+  const runner = (content: string): CheckRunner => ({ run: async (_program, input) => ({ exit_code: 0, stdout: "", stderr: "", timed_out: false, files: { ...Object.fromEntries(input.files.map(f => [f.path, f.content])), "report.json": content } }), literals: () => new Set(["validate", "--input", "--schema", "--output"]) })
+  const program = { id: "p", label: "", command: ["validate-stub"], source_dir: null }
+  const rowReading = "Violation rows count data rows from 1, the header not counted."
+
+  it("the bundled v0..v5 (row, rule, value, message in one object) fail on a 0-based program: not landed without a reading, unknown with one", async () => {
+    const r = replayByRound(cassette)
+    for (let round = 1; round <= 4; round++) assert.equal((await store.ingestRound(round, roundText(round), r.attribution)).status, "accepted")
+    assert.ok(draft.assertions.filter(a => /^v\d+$/u.test(a.id)).length >= 6, "the recorded check bundles each violation into one JSON assertion")
+    const registry = store.registry(), facts = codeFacts(registry, 4)
+    assert.equal((await runCheck(record(draft.assertions), program, runner(report(0)), 4, registry, facts, 1000)).outcome, "pass", "the check's own reading passes")
+    const plain = await runCheck(record(draft.assertions), program, runner(report(-1)), 4, registry, facts, 1000)
+    assert.deepEqual([plain.failure!.class, plain.failure!.reason], ["not_landed", "value_mismatch"])
+    const read = await runCheck(record(draft.assertions.map(a => /^v\d+$/u.test(a.id) ? { ...a, reading: rowReading } : a)), program, runner(report(-1)), 4, registry, facts, 1000)
+    assert.deepEqual([read.failure!.class, read.failure!.reason], ["unknown", "reading"])
+    assert.match(read.failure!.detail, /rests on the reading "Violation rows count data rows from 1/u)
+  })
+
+  it("split one fact per assertion: the row with its reading apart; a wrong message is still not landed, a 0-based row only unknown", async () => {
+    const registry = store.registry(), facts = codeFacts(registry, 4)
+    const split = draft.assertions.flatMap((a): AssertionDraft[] => {
+      if (!/^v\d+$/u.test(a.id)) return [a]
+      const v = JSON.parse(a.expect_json) as Record<string, unknown>
+      return Object.entries(v).map(([field, value]) => ({ ...a, id: `${a.id}.${field}`, target: { ...a.target, pointer: `${a.target.pointer}/${field}` }, expect_json: JSON.stringify(value), reading: field === "row" && typeof value === "number" ? rowReading : null }))
+    })
+    const k = record(split)
+    const shifted = await runCheck(k, program, runner(report(-1)), 4, registry, facts, 1000)
+    assert.deepEqual([shifted.failure!.class, shifted.failure!.reason], ["unknown", "reading"])
+    assert.ok(shifted.assertions.filter(a => !a.ok).every(a => a.id.endsWith(".row")), "only the row facts fail")
+    const wrong = await runCheck(k, program, runner(report(0, "bad")), 4, registry, facts, 1000)
+    assert.deepEqual([wrong.failure!.class, wrong.failure!.reason], ["not_landed", "value_mismatch"])
+    // The work order shows the reading next to the failure, in the status zone (unknown never becomes a task).
+    const status = objectStatuses(registry, [{ ...k, strength: { strong: true, baseline: "b", baseline_ok: true, data_assertions: ["total"], reason: "" } }], [], [{ ...shifted, verdict: true }], 4).find(s => s.object === k.object)!
+    assert.equal(status.status, "unknown")
+    const wo = renderWorkOrder(buildWorkOrder({ registry, round: 4, library: [k], events: [], statuses: [status], runs: [shifted], anchors: [], links: [], steps: [], previous_task: [] }))
+    // validate is a task this round (it changed): the reading stands next to the evidence, marked as not counted.
+    assert.match(wo, /failing, not counted against the program K99 \(reading\): .*v0\.row expected 2, got 1 \(this expectation rests on a reading the text does not state: Violation rows count data rows from 1/u)
+    // An object that is no task shows it in the status zone, and the reading still makes it no task.
+    const quiet = buildWorkOrder({ registry, round: 5, library: [k], events: [], statuses: [status], runs: [shifted], anchors: [], links: [], steps: [], previous_task: [] })
+    assert.ok(!quiet.task.some(t => t.object === k.object))
+    assert.match(renderWorkOrder(quiet), /K99 v0\.row expected 2, got 1; the expectation rests on a reading the text does not state: Violation rows count/u)
+    // Later text that names the check's basis may state the reading: the check goes stale.
+    const later = materialize(store.inspect().sources, store.inspect().rounds.map(x => x.acceptance!))
+    later.references.push({ from: "R5.S1.P1", to: "R4.S3.P1", kind: "refers_to", round: 5 })
+    assert.deepEqual(staleChecks(later, [k], [], 5).map(e => e.cause), [{ kind: "refers_to", source: "R5.S1.P1" }])
+    assert.deepEqual(staleChecks(later, [record(draft.assertions)], [], 5), [], "a check without a reading is not staled by a mere mention")
   })
 })

@@ -189,9 +189,10 @@ export class Exp2Store {
       s.check_runs.push(...runs)
       // A check judged input-suspect in two consecutive rounds' verdict runs is retired (block 2 review item 2).
       if (verdict) for (const run of runs) {
-        if (run.failure?.class !== "unknown" || run.failure.reason === "timeout") continue
+        // A timeout or a contested reading says nothing against the check's input.
+        if (run.failure?.class !== "unknown" || run.failure.reason === "timeout" || run.failure.reason === "reading") continue
         const before = s.check_runs.filter(r => r.check === run.check && r.verdict && r.round === round - 1).at(-1)
-        if (before?.failure?.class === "unknown" && before.failure.reason !== "timeout") {
+        if (before?.failure?.class === "unknown" && before.failure.reason !== "timeout" && before.failure.reason !== "reading") {
           s.check_events.push({ check: run.check, round, status: "retired", by: "code", cause: { kind: "suspect", source: run.check }, reason: `input suspect in rounds ${round - 1} and ${round} (${run.failure.reason})` })
         }
       }
