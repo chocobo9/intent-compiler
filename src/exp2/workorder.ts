@@ -55,6 +55,11 @@ export interface WorkOrderInput {
   steps: readonly PreviousStep[]
   /** Objects in the previous round's task zone. */
   previous_task: readonly string[]
+  /**
+   * Ablation switch for zoning (DESIGN §12b item 14, §6): false puts every live object in the task zone, so nothing
+   * is protection or status. Default true.
+   */
+  zoning?: boolean
 }
 
 /** An object's anchors now: dispatch points named like the object, and anchors that verified steps changed for it. */
@@ -114,6 +119,7 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
     if (!t.why.includes("carried")) t.why.push("carried")
     t.carried_from = input.steps.filter(s => s.round === round - 1 && s.objects.some(o => o.object === object)).at(-1)?.id ?? `R${round - 1} task zone`
   }
+  if (input.zoning === false) for (const o of registry.objects.values()) if (o.blocks.some(b => b.state === "active" || b.state === "partially_modified")) entry(o.id)
   const task = [...tasks.values()].sort((a, b) => Number(a.object.slice(1)) - Number(b.object.slice(1)))
   const inTask = new Set(task.map(t => t.object))
 

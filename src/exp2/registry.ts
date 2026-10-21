@@ -1,4 +1,4 @@
-import { LEVEL_RANK, splitRound, type Level, type RoundSource, type SourceBlock } from "./source.js"
+import { LEVEL_RANK, splitRound, type Level, type RoundSource, type SourceBlock, type SplitOptions } from "./source.js"
 
 /**
  * Exp2 object registry (DESIGN §4.4, §5). The model decides which object each block belongs to and what kind of
@@ -261,10 +261,10 @@ export function isWithin(registry: Registry, inner: string, outer: string): bool
 export function finer(a: Level, b: Level): boolean { return LEVEL_RANK[a] > LEVEL_RANK[b] }
 
 /** Rebuilds the registry from the source log and the accepted rounds, in round order. */
-export function materialize(sources: readonly { round: number; text: string; hash: string }[], accepted: readonly RoundAcceptance[]): Registry {
+export function materialize(sources: readonly { round: number; text: string; hash: string }[], accepted: readonly RoundAcceptance[], options: SplitOptions = {}): Registry {
   const registry = new Registry()
   for (const s of [...sources].sort((a, b) => a.round - b.round)) {
-    const split = splitRound(s.round, s.text)
+    const split = splitRound(s.round, s.text, options)
     if (split.hash !== s.hash) throw new Error(`Round ${s.round} source hash mismatch`)
     registry.addSource(split)
   }

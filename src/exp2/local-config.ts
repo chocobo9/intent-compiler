@@ -52,6 +52,8 @@ export interface LocalConfig {
   resume?: { wait_ms?: number; max_resumes?: number }
   /** Waits before retrying a rate-limited call; when they run out the call counts as a spent quota. */
   rate_limit?: { delays_ms: number[] }
+  /** Ablation switches (DESIGN §12b item 14); all default true. Use a new run_id and state for an ablation run. */
+  ablation?: { zoning?: boolean; checks?: boolean; clauses?: boolean }
   /**
    * Post-round scoring: a command (with {round}, {commit}, {repo} filled in) that prints {"passed": n, "total": m}.
    * Its result goes into the checkpoint report only; the system never reads it.
@@ -147,7 +149,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   const texts = Array.from({ length: c.rounds }, (_, i) => join(at(c.inputs_dir), `round-${pad(i + 1)}.md`)).filter(existsSync).map(f => readFileSync(f, "utf8"))
   const binary = binaryFromSource(texts) ?? "app"
   const config: SerialConfig = {
-    store: new Exp2Store(at(c.state_dir), c.run_id),
+    store: new Exp2Store(at(c.state_dir), c.run_id, { clauses: c.ablation?.clauses }),
     workdir: at(c.repo_dir),
     checkpoints: at(c.checkpoints_dir),
     text: round => {
@@ -171,6 +173,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       execution: { ...DEFAULT_LIMITS, ...c.limits?.execution },
     },
     ...(c.scoring ? { score: scoringHook(c.scoring.command, at(c.repo_dir)) } : {}),
+    ...(c.ablation ? { ablation: { zoning: c.ablation.zoning, checks: c.ablation.checks } } : {}),
   }
   return { serial: new Serial(config), config }
 }

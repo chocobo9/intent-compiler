@@ -80,7 +80,13 @@ function fenced(lines: Line[]): boolean[] {
   return inside
 }
 
-export function splitRound(round: number, text: string): RoundSource {
+/**
+ * clauses: false is the ablation switch for clause-level partial revision (DESIGN §12b item 14, §4): sentences and
+ * list items are not cut into clauses, so the finest unit a revision can name is the sentence.
+ */
+export interface SplitOptions { clauses?: boolean }
+
+export function splitRound(round: number, text: string, options: SplitOptions = {}): RoundSource {
   if (!Number.isSafeInteger(round) || round < 1) throw new Error(`Invalid round ${round}`)
   const blocks: SourceBlock[] = []
   const lines = linesOf(text, 0, text.length)
@@ -208,6 +214,7 @@ export function splitRound(round: number, text: string): RoundSource {
   }
 
   function clauses(s: SourceBlock): void {
+    if (options.clauses === false) return
     const cuts = boundaries(s.start, s.end, (i, depth) => {
       const ch = text[i]
       if (depth === 0 && (ch === "," || ch === ";") && /\s/u.test(text[i + 1] ?? "")) {

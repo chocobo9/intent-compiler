@@ -2,7 +2,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, renameSync, u
 import { resolve } from "node:path"
 import { attributeRound, type AttributionTransport, type Issue, type ModelCallRecord } from "./attribution.js"
 import { materialize, type Registry, type RoundAcceptance, type Signal } from "./registry.js"
-import { contentHash } from "./source.js"
+import { contentHash, type SplitOptions } from "./source.js"
 import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport } from "./checks.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import type { ExecutionRecord } from "./execution.js"
@@ -28,6 +28,8 @@ export interface RoundRecord {
 export interface Exp2State {
   profile: typeof EXP2_PROFILE
   run_id: string
+  /** How the sources are split; set only for the clause-level ablation (no clauses). */
+  split?: SplitOptions
   sources: { round: number; text: string; hash: string }[]
   calls: ModelCallRecord[]
   rounds: RoundRecord[]
@@ -70,21 +72,23 @@ export interface IngestOptions { maxRepairs?: number }
 export class Exp2Store {
   readonly directory: string
   private readonly file: string
-  constructor(directory: string, readonly runId: string) {
+  constructor(directory: string, readonly runId: string, private readonly split: SplitOptions = {}) {
     this.directory = resolve(directory)
     mkdirSync(this.directory, { recursive: true })
     this.file = resolve(this.directory, "exp2-state.json")
   }
 
   inspect(): Exp2State {
-    if (!existsSync(this.file)) return { profile: EXP2_PROFILE, run_id: this.runId, sources: [], calls: [], rounds: [], signals: [], ...emptyChecks() }
+    const split = this.split.clauses === false ? { split: { clauses: false } } : {}
+    if (!existsSync(this.file)) return { profile: EXP2_PROFILE, run_id: this.runId, ...split, sources: [], calls: [], rounds: [], signals: [], ...emptyChecks() }
     const s = JSON.parse(readFileSync(this.file, "utf8")) as Exp2State
     if (s.profile !== EXP2_PROFILE || s.run_id !== this.runId) throw new Error("Store profile/run mismatch")
+    if ((s.split?.clauses === false) !== (this.split.clauses === false)) throw new Error("Store split mismatch: the state was written with another clause setting")
     return { ...emptyChecks(), ...s }
   }
 
   registry(state: Exp2State = this.inspect()): Registry {
-    return materialize(state.sources, state.rounds.filter(r => r.status === "accepted").map(r => r.acceptance!))
+    return materialize(state.sources, state.rounds.filter(r => r.status === "accepted").map(r => r.acceptance!), state.split)
   }
 
   /** Logs round `round`'s text, runs attribution, and records the outcome; a failed round can be ingested again. */
