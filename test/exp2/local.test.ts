@@ -12,6 +12,7 @@ import { assembleSerial, localConfigProblems, loadLocalConfig, preflight, scorin
 import { OpenCodeExecutor } from "../../src/exp2/opencode-executor.js"
 import { classifyProviderError, withRateLimitRetry } from "../../src/exp2/provider-errors.js"
 import { EnvironmentBlocked, isEnvironmentBlock } from "../../src/exp2/platform.js"
+import { predictionIntact } from "../../src/exp2/prediction.js"
 import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
 import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store } from "../../src/exp2/store.js"
@@ -126,6 +127,10 @@ describe("exp2 local: provider errors", () => {
     assert.equal(store.inspect().reports[0].official_score, null)
     assert.match(readFileSync(join(dir, "checkpoints", "round-01", "report.md"), "utf8"), /Official score: 201\/219/u)
     assert.match(readFileSync(join(dir, "checkpoints", "scores.jsonl"), "utf8"), /"round":1/u)
+    // The statuses were frozen before scoring, and the score line names the frozen hash.
+    const frozen = JSON.parse(readFileSync(join(dir, "checkpoints", "round-01", "prediction.json"), "utf8"))
+    assert.ok(predictionIntact(frozen))
+    assert.equal(JSON.parse(readFileSync(join(dir, "checkpoints", "scores.jsonl"), "utf8").trim()).prediction_sha256, frozen.sha256)
   })
 })
 

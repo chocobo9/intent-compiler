@@ -8,6 +8,7 @@ import { executeRound, type BuildResult, type ExecutionLimits, type ExecutionRec
 import { head, initRepo, resetTo } from "./git.js"
 import { buildReport, codingCost, renderReport, type RoundReport, type StageCost } from "./report.js"
 import { EnvironmentBlocked } from "./platform.js"
+import { freezePrediction } from "./prediction.js"
 import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import type { Exp2State, Exp2Store } from "./store.js"
 import { buildWorkOrder, nameLinks, renderWorkOrder, type PreviousStep, type WorkOrder } from "./workorder.js"
@@ -116,6 +117,10 @@ export class Serial {
     if (report) {
       writeFileSync(join(d, "report.json"), JSON.stringify(report, null, 2) + "\n", "utf8")
       writeFileSync(join(d, "report.md"), renderReport(report), "utf8")
+      // The system's call on each object, frozen with its hash before the round is scored (DESIGN §12b item 10).
+      const prediction = freezePrediction(round, commit, report.objects)
+      writeFileSync(join(d, "prediction.json"), JSON.stringify(prediction, null, 2) + "\n", "utf8")
+      writeFileSync(join(this.c.checkpoints, "predictions.jsonl"), JSON.stringify({ round, commit, sha256: prediction.sha256 }) + "\n", { encoding: "utf8", flag: "a" })
     }
     // meta.json last: a checkpoint without it is incomplete and is not used.
     writeFileSync(join(d, "meta.json"), JSON.stringify({ round, head: commit, state_sha256: sha(state) }, null, 2) + "\n", "utf8")
@@ -261,7 +266,8 @@ export class Serial {
     const scored: RoundReport = { ...report, official_score: score }
     writeFileSync(join(this.dir(round), "report.json"), JSON.stringify(scored, null, 2) + "\n", "utf8")
     writeFileSync(join(this.dir(round), "report.md"), renderReport(scored), "utf8")
-    writeFileSync(join(this.c.checkpoints, "scores.jsonl"), JSON.stringify({ round, commit, ...score }) + "\n", { encoding: "utf8", flag: "a" })
+    const frozen = JSON.parse(readFileSync(join(this.dir(round), "prediction.json"), "utf8")) as { sha256: string }
+    writeFileSync(join(this.c.checkpoints, "scores.jsonl"), JSON.stringify({ round, commit, ...score, prediction_sha256: frozen.sha256 }) + "\n", { encoding: "utf8", flag: "a" })
   }
 
   /** The program at the work tree's current commit, built; the null program when there is nothing to build. */
