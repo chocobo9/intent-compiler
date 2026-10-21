@@ -43,7 +43,7 @@ function serialIn(dir: string, faults: Faults = {}, fired = new Set<string>()) {
     store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText,
     attribution: faultyAttribution, checks, executor: serialExecutor(faults.coding ?? [], fired), executorIsStub: true,
     anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds")),
-    limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 1500, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, maxAttemptsPerStep: 2, stepTimeoutMs: 1500 } },
+    limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 1500, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1, callTimeoutMs: 1500 } },
   })
   return { serial, store }
 }
@@ -108,7 +108,7 @@ describe("exp2 block 5: the serial R1–R15 with stand-in model and executor", (
 
   it("interrupted by spent quotas and a crash, the serial resumes from its checkpoints and ends where the uninterrupted one does", async () => {
     const fired = new Set<string>()
-    const faults: Faults = { attribution: [{ round: 6, kind: "quota" }], coding: [{ round: 9, step: "generic-1", action: "quota" }, { round: 12, step: "generic-1", action: "crash" }] }
+    const faults: Faults = { attribution: [{ round: 6, kind: "quota" }], coding: [{ round: 9, message: 2, action: "quota" }, { round: 12, message: 1, action: "crash" }] }
     const waits: number[] = []
     const first = serialIn(b, faults, fired)
     await assert.rejects(first.serial.run({ to: 15, wait: async ms => { waits.push(ms) } }), ProcessCrash)
@@ -150,7 +150,7 @@ describe("exp2 block 5: the serial R1–R15 with stand-in model and executor", (
   it("hung calls and broken sessions recover inside the round, with the same result as without them", async () => {
     const faults: Faults = {
       attribution: [{ round: 2, kind: "hang" }],
-      coding: [{ round: 1, step: "verify", action: "hang" }, { round: 3, step: "transform-1", action: "break" }],
+      coding: [{ round: 1, message: 1, action: "hang" }, { round: 3, message: 1, action: "break" }],
     }
     const { serial, store } = serialIn(c, faults)
     assert.equal((await serial.run({ to: 3 })).status, "done")

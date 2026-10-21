@@ -12,6 +12,8 @@ import { freezePrediction } from "./prediction.js"
 import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import type { Exp2State, Exp2Store } from "./store.js"
 import { buildWorkOrder, nameLinks, renderWorkOrder, type PreviousStep, type WorkOrder } from "./workorder.js"
+import type { AdjudicationTransport } from "./adjudication.js"
+import { upheldKinds } from "./store.js"
 
 /**
  * The end-to-end serial (DESIGN §9, §14). Each round, from the previous round's checkpoint:
@@ -49,6 +51,8 @@ export interface SerialConfig {
   sandbox: ScriptSandbox
   build: (workdir: string, label: string) => BuildResult
   limits: SerialLimits
+  /** Rulings on disputed checks (BLOCK9 §2.3), the same model as the rest; absent, disputed checks just do not count. */
+  adjudicate?: AdjudicationTransport
   /**
    * Post-round scoring (the official verifier, locally). Its result is written into that round's checkpoint report
    * only, after the round is complete; nothing in the serial ever reads it back.
@@ -211,14 +215,15 @@ export class Serial {
       const derived = await store.deriveRoundChecks(round, withWatchdog(this.c.checks, limits.managementTimeoutMs), { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs })
       if (derived.status === "interrupted") throw stopping(derived.issues ?? [], `checks, round ${round}`)
     }
-    const start = await store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs })
+    const start = await store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate })
 
     // 3. The work order.
     let state = store.inspect()
     const registry = store.registry(state)
     const anchorsNow = this.c.anchors.extract(workdir)
     const links = [...state.executions.flatMap(e => e.links), ...nameLinks(registry, anchorsNow, round)]
-    const steps: PreviousStep[] = state.executions.flatMap(e => e.steps.map(s => ({ id: s.id, round: s.round, status: s.status, objects: s.objects, anchors: s.anchors })))
+    // The kept cycle of each earlier round, as the work order reads it: what it finished, and the anchors it changed.
+    const steps: PreviousStep[] = state.executions.flatMap(e => e.cycles.filter(c => c.id === e.kept).map(c => ({ id: c.id, round: c.round, status: "committed", objects: e.task.filter(o => !e.carried.includes(o)).map(object => ({ object, coverage: "full" as const })), anchors: c.anchors })))
     const previous = state.reports.find(r => r.round === round - 1)
     const workorder: WorkOrder = buildWorkOrder({
       registry, round, library: state.checks, events: state.check_events, statuses: start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
@@ -230,11 +235,13 @@ export class Serial {
     const execution = await executeRound(workdir, workorder, renderWorkOrder(workorder), this.c.executor(round), {
       registry, library: state.checks, events: state.check_events, links, anchors: this.c.anchors, build: this.c.build, runner: this.c.runner,
       facts: codeFacts(registry, round), passing, checkTimeoutMs: limits.checkTimeoutMs, onProgress: r => { this.progress = r },
+      upheld: check => upheldKinds(store.inspect(), check),
+      ...(this.c.adjudicate ? { settle: (disputes: Parameters<Exp2Store["settle"]>[1]) => store.settle(round, disputes, this.c.adjudicate!) } : {}),
     }, limits.execution)
 
     // 5. Verdict on the final program, report, checkpoint.
     const final = this.program(`R${round}-final`)
-    const verdict = await store.runRoundChecks(round, final, this.c.runner, { verdict: true, timeoutMs: limits.checkTimeoutMs })
+    const verdict = await store.runRoundChecks(round, final, this.c.runner, { verdict: true, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate })
     state = store.inspect()
     const interrupted = this.interruptedAttempts(round)
     const events = state.check_events.filter(e => e.round === round)

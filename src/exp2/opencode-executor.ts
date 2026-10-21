@@ -1,5 +1,5 @@
 import type { TokenUsage } from "./attribution.js"
-import type { ApprovedStep, Executor, ExecutorContext, ExecutorSession, StepProposal } from "./execution.js"
+import type { Executor, ExecutorContext, ExecutorSession } from "./execution.js"
 import { SessionBroken } from "./execution.js"
 import { classifyProviderError, asProviderError, withRateLimitRetry, type RateLimitPolicy } from "./provider-errors.js"
 import { QuotaExhausted } from "./attribution.js"
@@ -12,10 +12,10 @@ function broken(what: string, e: unknown): Error {
 }
 
 /**
- * The coding executor over OpenCode sessions (DESIGN §7), for the local run. One OpenCode session per executor
- * session: the plan is asked for with structured output, each step as a prompt with the editing tools on. A failed or
- * hung call raises SessionBroken, so the execution layer resets to the last checkpoint and opens a new session with
- * the steps left. Written against the OpenCode SDK's session API; not run in the cloud session.
+ * The coding executor over OpenCode sessions (BLOCK9 §2.4–2.5), for the local run. One OpenCode session per
+ * executor session, each message a plain prompt with the editing tools on (no structured output: a session that
+ * used json_schema cannot list its messages, and the token count needs that list). Tokens are the sum over all
+ * assistant messages of the session, taken after each prompt; a reply alone carries only its last message.
  */
 
 export interface OpenCodeCodingClient {
@@ -29,10 +29,11 @@ export interface OpenCodeCodingClient {
         variant?: string
         agent: string
         system?: string
-        format?: { type: "json_schema"; schema: unknown; retryCount?: number }
         parts: { type: "text"; text: string }[]
       }
     }): Promise<unknown>
+    /** The session's messages ({info, parts}[]), for the token count. */
+    messages?(request: { path: { id: string }; query: { directory: string } }): Promise<unknown>
     abort?(request: { path: { id: string }; query: { directory: string } }): Promise<unknown>
   }
 }
@@ -47,42 +48,12 @@ export interface OpenCodeExecutorOptions {
   rateLimit?: RateLimitPolicy
 }
 
-export const PLAN_SCHEMA = {
-  type: "object", additionalProperties: false, required: ["steps"],
-  properties: {
-    steps: {
-      type: "array",
-      items: {
-        type: "object", additionalProperties: false, required: ["label", "objects", "summary"],
-        properties: {
-          label: { type: "string" },
-          summary: { type: "string" },
-          objects: { type: "array", items: { type: "object", additionalProperties: false, required: ["object", "coverage"], properties: { object: { type: "string" }, coverage: { type: "string", enum: ["full", "partial"] } } } },
-        },
-      },
-    },
-  },
-}
-
-/** The step report (DESIGN §12d item 9): what was done, and per object the functions, types or dispatch names changed for it. */
-export const STEP_REPORT_SCHEMA = {
-  type: "object", additionalProperties: false, required: ["note", "objects"],
-  properties: {
-    note: { type: "string", description: "What this step changed, briefly." },
-    objects: {
-      type: "array",
-      description: "For each object of the step: the functions, types or dispatch names (switch case labels, map keys) you changed for that object. Code shared by several of the step's objects may be left out.",
-      items: { type: "object", additionalProperties: false, required: ["object", "anchors"], properties: { object: { type: "string" }, anchors: { type: "array", items: { type: "string" } } } },
-    },
-  },
-}
-
 export const EXECUTOR_SYSTEM_PROMPT = [
   "You implement a Go command-line program in the working directory from a work order. The source zone is the only authority on what the program must do.",
-  "Do the task zone; do not break the protection zone (its checks are rerun after every step); the status zone is information, not work.",
+  "Do the whole task zone in this session; do not break what the protection zone lists; the status zone is information, not work.",
   "In the source zone, ⟦<id> → revised by <ids>⟧ marks text that later text revised: the text named after it is in force, not the marked text. ⟦<id> → amended by <ids>⟧ marks a code block or table that newer text corrects: both stand, and where they differ the newer wins. ⟦<id> → withdrawn by <ids>⟧ marks text that no longer holds.",
-  "First propose steps: each names the task-zone objects it covers, fully or partly; a shared foundation step may cover several objects partly, but every partly covered object needs a later step that covers it fully.",
-  "Then do one step per request: edit the code for that step only. Do not commit; the controller builds, checks and commits. When a request lists problems from the previous attempt, fix those. After each step, report per object which functions, types or dispatch names you changed for it.",
+  "Do not commit; the controller builds, runs the acceptance checks and commits. When a message lists failing checks, make the program meet what they test; if you are sure a check contradicts the requirements, write a line `CONTEST <check id>: <block ids> <why>` instead of changing code for it.",
+  "Stay inside the working directory, and do not run commands that wait for input (use git --no-pager).",
 ].join("\n")
 
 const unwrap = (v: unknown): Record<string, any> => {
@@ -90,10 +61,27 @@ const unwrap = (v: unknown): Record<string, any> => {
   return (r.data && typeof r.data === "object" ? r.data : r) as Record<string, any>
 }
 
-function usageOf(response: Record<string, any>): TokenUsage {
-  const t = response.info?.tokens ?? {}
+function tokensOf(info: Record<string, any> | undefined): TokenUsage {
+  const t = info?.tokens ?? {}
   const n = (x: unknown) => typeof x === "number" && Number.isFinite(x) ? x : 0
   return { input_tokens: n(t.input), output_tokens: n(t.output), reasoning_tokens: n(t.reasoning), cache_read_tokens: n(t.cache?.read), cache_write_tokens: n(t.cache?.write) }
+}
+
+const add = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
+  input_tokens: a.input_tokens + b.input_tokens, cache_read_tokens: a.cache_read_tokens + b.cache_read_tokens, cache_write_tokens: a.cache_write_tokens + b.cache_write_tokens,
+  output_tokens: a.output_tokens + b.output_tokens, reasoning_tokens: a.reasoning_tokens + b.reasoning_tokens,
+})
+const minus = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
+  input_tokens: a.input_tokens - b.input_tokens, cache_read_tokens: a.cache_read_tokens - b.cache_read_tokens, cache_write_tokens: a.cache_write_tokens - b.cache_write_tokens,
+  output_tokens: a.output_tokens - b.output_tokens, reasoning_tokens: a.reasoning_tokens - b.reasoning_tokens,
+})
+const ZERO: TokenUsage = { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 }
+
+/** The session's tokens: every assistant message, summed. */
+export function sessionTokens(messages: unknown): TokenUsage | null {
+  const list = Array.isArray(messages) ? messages : Array.isArray(unwrap(messages).messages) ? unwrap(messages).messages : null
+  if (!list) return null
+  return (list as unknown[]).map(unwrap).filter((m: Record<string, any>) => m.info?.role === "assistant").reduce((t: TokenUsage, m: Record<string, any>) => add(t, tokensOf(m.info)), ZERO)
 }
 
 export class OpenCodeExecutor implements Executor {
@@ -105,43 +93,29 @@ export class OpenCodeExecutor implements Executor {
     const id = String(created.id ?? "")
     if (!id) throw new SessionBroken("session.create returned no id")
     const options = this.options
-    const prompt = async (text: string, format?: { type: "json_schema"; schema: unknown; retryCount?: number }) => {
-      // A rate limit is waited out and the same prompt sent again; a provider failure can come back inside a normal reply.
-      try {
-        return await withRateLimitRetry(async () => {
-          const r = unwrap(await client.session.prompt({
-            path: { id }, query: { directory: context.workdir },
-            body: { model: { providerID: options.providerId, modelID: options.modelId }, ...(options.variant ? { variant: options.variant } : {}), agent: options.agent ?? "build", system: EXECUTOR_SYSTEM_PROMPT, ...(format ? { format } : {}), parts: [{ type: "text", text }] },
-          }))
-          if (r.info?.error) throw new Error(JSON.stringify(r.info.error))
-          return r
-        }, options.rateLimit)
-      } catch (e) { throw broken("session.prompt", e) }
-    }
-    const opening = context.resume
-      ? `${context.text}\nA previous session stopped. Steps already committed: ${context.resume.done.join(", ") || "none"}. Do only the steps left: ${context.resume.remaining.map(s => `${s.id} ${s.label}`).join("; ")}.`
-      : context.text
-    let first = true
+    let counted = ZERO
     return {
       id,
-      async propose(feedback: string[]) {
-        const text = `${first ? opening + "\n" : ""}Propose the steps.${feedback.length ? `\nThe previous plan was refused:\n- ${feedback.join("\n- ")}` : ""}`
-        first = false
-        const r = await prompt(text, { type: "json_schema", schema: PLAN_SCHEMA, retryCount: 0 })
-        const steps = (r.info?.structured?.steps ?? []) as StepProposal[]
-        return { steps, usage: usageOf(r) }
-      },
-      async work(step: ApprovedStep, feedback: string[]) {
-        const text = `${first ? opening + "\n" : ""}Do step ${step.id} (${step.label}): ${step.summary}\nObjects: ${step.objects.map(o => `${o.object} ${o.coverage}`).join(", ")}${feedback.length ? `\nThe previous attempt failed:\n- ${feedback.join("\n- ")}` : ""}`
-        first = false
-        const r = await prompt(text, { type: "json_schema", schema: STEP_REPORT_SCHEMA, retryCount: 0 })
-        const report = r.info?.structured as { note?: unknown; objects?: unknown } | undefined
-        const text_ = (Array.isArray(r.parts) ? r.parts : []).filter((p: any) => p?.type === "text").map((p: any) => String(p.text)).join("\n")
-        const note = (typeof report?.note === "string" ? report.note : text_).slice(0, 4000)
-        const anchors = Array.isArray(report?.objects)
-          ? (report!.objects as any[]).filter(o => typeof o?.object === "string" && Array.isArray(o.anchors)).map(o => ({ object: String(o.object), anchors: (o.anchors as unknown[]).filter((a): a is string => typeof a === "string") }))
-          : undefined
-        return { usage: usageOf(r), note, ...(anchors ? { anchors } : {}) }
+      async send(text: string) {
+        let r: Record<string, any>
+        // A rate limit is waited out and the same prompt sent again; a provider failure can come back inside a normal reply.
+        try {
+          r = await withRateLimitRetry(async () => {
+            const reply = unwrap(await client.session.prompt({
+              path: { id }, query: { directory: context.workdir },
+              body: { model: { providerID: options.providerId, modelID: options.modelId }, ...(options.variant ? { variant: options.variant } : {}), agent: options.agent ?? "build", system: EXECUTOR_SYSTEM_PROMPT, parts: [{ type: "text", text }] },
+            }))
+            if (reply.info?.error) throw new Error(JSON.stringify(reply.info.error))
+            return reply
+          }, options.rateLimit)
+        } catch (e) { throw broken("session.prompt", e) }
+        const note = (Array.isArray(r.parts) ? r.parts : []).filter((p: any) => p?.type === "text").map((p: any) => String(p.text)).join("\n")
+        // Tokens of everything since the last count, from the whole message list; the reply's own count if that fails.
+        let total: TokenUsage | null = null
+        try { if (client.session.messages) total = sessionTokens(await client.session.messages({ path: { id }, query: { directory: context.workdir } })) } catch { total = null }
+        const usage = total ? minus(total, counted) : tokensOf(r.info)
+        if (total) counted = total
+        return { usage, note }
       },
       async close() { try { await client.session.abort?.({ path: { id }, query: { directory: context.workdir } }) } catch { /* closing a finished session may fail; nothing depends on it */ } },
     }

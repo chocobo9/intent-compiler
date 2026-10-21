@@ -22,7 +22,7 @@ export interface RoundReport {
   interrupted: { attempts: number; stages: { understand: StageCost; acceptance: StageCost; coding: StageCost } }
   scope: string[]
   zones: { task: number; protect: number; status: number; source_blocks: number; anchors: number }
-  execution: { status: ExecutionRecord["status"]; steps: number; committed: number; failed: number; carried_steps: number; carried_objects: string[]; sessions: number; broken_sessions: number }
+  execution: { status: ExecutionRecord["status"]; cycles: number; repairs: number; kept: string | null; failing_at_end: number; contests: number; carried_objects: string[]; sessions: number; broken_sessions: number }
   checks: { entered: number; stale: number; retired: number; run: number; passed: number; failed: number }
   objects: { object: string; name: string; status: ObjectStatus["status"]; reasons: string[]; passing_strong: string[]; not_landed: string[]; unknown: string[] }[]
   /**
@@ -48,8 +48,8 @@ export function stageCost(calls: readonly { usage: TokenUsage; stub: boolean; us
 
 export function codingCost(exec: ExecutionRecord | null, stub: boolean): StageCost {
   if (!exec) return { calls: 0, tokens: zeroUsage(), stub_calls: 0 }
-  const calls = exec.proposals.length + exec.steps.reduce((n, s) => n + s.attempts, 0)
-  const tokens = exec.steps.reduce((t, s) => addUsage(t, s.usage), exec.usage)
+  const calls = exec.cycles.length
+  const tokens = exec.usage
   return { calls, tokens, stub_calls: stub ? calls : 0 }
 }
 
@@ -86,8 +86,9 @@ export function buildReport(i: ReportInput): RoundReport {
     scope: i.registry.roundScope(i.round).map(c => c.object),
     zones: { task: i.workorder.task.length, protect: i.workorder.protect.length, status: i.workorder.status.length, source_blocks: i.workorder.source.reduce((n, g) => n + g.blocks.length, 0), anchors: i.workorder.anchors.reduce((n, a) => n + a.anchors.length, 0) },
     execution: {
-      status: e.status, steps: e.steps.length, committed: e.steps.filter(s => s.status === "committed").length, failed: e.steps.filter(s => s.status === "failed").length,
-      carried_steps: e.steps.filter(s => s.status === "carried").length, carried_objects: e.carried, sessions: e.sessions.length, broken_sessions: e.sessions.filter(s => s.closed === "broken").length,
+      status: e.status, cycles: e.cycles.length, repairs: e.cycles.filter(c => c.message === "repair").length, kept: e.kept,
+      failing_at_end: e.cycles.find(c => c.id === e.kept)?.failing.length ?? 0, contests: e.cycles.reduce((n, c) => n + c.contests.length, 0),
+      carried_objects: e.carried, sessions: e.sessions.length, broken_sessions: e.sessions.filter(s => s.closed === "broken").length,
     },
     checks: i.checks,
     objects: i.statuses.map(s => ({ object: s.object, name: name(s.object), status: s.status, reasons: s.reasons, passing_strong: s.passing_strong, not_landed: s.not_landed, unknown: s.unknown })),
@@ -116,7 +117,7 @@ export function renderReport(r: RoundReport): string {
     line("interrupted attempts: coding", r.interrupted.stages.coding),
     "",
     `Scope: ${r.scope.length} objects. Zones: task ${r.zones.task}, protection ${r.zones.protect}, status ${r.zones.status}, source blocks ${r.zones.source_blocks}, anchors ${r.zones.anchors}.`,
-    `Execution: ${r.execution.status}; ${r.execution.committed}/${r.execution.steps} steps committed, ${r.execution.failed} failed, ${r.execution.carried_steps} carried; sessions ${r.execution.sessions} (${r.execution.broken_sessions} broken).`,
+    `Execution: ${r.execution.status}; ${r.execution.cycles} cycles (${r.execution.repairs} repairs), kept ${r.execution.kept ?? "none"} with ${r.execution.failing_at_end} failing; ${r.execution.contests} contests; carried ${r.execution.carried_objects.length}; sessions ${r.execution.sessions} (${r.execution.broken_sessions} broken).`,
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,
     "",

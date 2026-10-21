@@ -55,13 +55,29 @@ describe("exp2 local: provider errors", () => {
     await assert.rejects(transport(ORDINARY[0])(request), e => !(e instanceof AuthInvalid) && !(e instanceof QuotaExhausted))
     const coding = (prompt: () => Promise<unknown>) => new OpenCodeExecutor({ client: { session: { create: async () => ({ id: "c" }), prompt } }, providerId: "p", modelId: "m" })
     const context = { round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], edges: [] }, text: "", resume: null }
-    const step = { id: "P1.1", round: 1, label: "s", summary: "", objects: [] }
     const s1 = await coding(async () => ({ info: { error: { name: "APIError", data: { message: "insufficient_quota" } } }, parts: [] })).open(context)
-    await assert.rejects(s1.work(step, []), QuotaExhausted)
+    await assert.rejects(s1.send("do it"), QuotaExhausted)
     const s2 = await coding(async () => { throw new Error("socket hang up") }).open(context)
-    await assert.rejects(s2.work(step, []), SessionBroken)
+    await assert.rejects(s2.send("do it"), SessionBroken)
     const s3 = await coding(async () => { throw new Error(AUTH_TEXTS[0]) }).open(context)
-    await assert.rejects(s3.work(step, []), AuthInvalid)
+    await assert.rejects(s3.send("do it"), AuthInvalid)
+  })
+
+  it("the coding executor counts the tokens of every assistant message of the session, not just the reply's last one", async () => {
+    const msg = (role: string, input: number, output: number) => ({ info: { role, tokens: { input, output, reasoning: 0, cache: { read: input * 10, write: 0 } } }, parts: [] })
+    const history: unknown[] = []
+    const client = {
+      session: {
+        create: async () => ({ id: "c" }),
+        // Each prompt adds a user message and three assistant messages (tool calls); the reply carries the last only.
+        prompt: async () => { history.push(msg("user", 0, 0), msg("assistant", 100, 5), msg("assistant", 120, 7), msg("assistant", 130, 9)); return { info: { role: "assistant", tokens: { input: 130, output: 9 } }, parts: [{ type: "text", text: "ok" }] } },
+        messages: async () => history,
+      },
+    }
+    const session = await new OpenCodeExecutor({ client, providerId: "p", modelId: "m" }).open({ round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], edges: [] }, text: "", resume: null } as never)
+    const first = await session.send("do it"), second = await session.send("fix")
+    assert.deepEqual([first.usage.input_tokens, first.usage.output_tokens, first.usage.cache_read_tokens], [350, 21, 3500])
+    assert.deepEqual([second.usage.input_tokens, second.usage.output_tokens], [350, 21], "each send counts only what it added")
   })
 
   it("a rate limit is waited out with short retries of the same call; when they run out it counts as a spent quota", async () => {
@@ -77,7 +93,7 @@ describe("exp2 local: provider errors", () => {
     let prompts = 0
     const client = { session: { create: async () => ({ id: "c" }), prompt: async () => { if (++prompts === 1) throw new Error(RATE_TEXTS[1]); return { info: {}, parts: [{ type: "text", text: "done" }] } } } }
     const session = await new OpenCodeExecutor({ client, providerId: "p", modelId: "m", rateLimit: policy }).open({ round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], edges: [] }, text: "", resume: null } as never)
-    assert.equal((await session.work({ id: "P1.1", round: 1, label: "s", summary: "", objects: [] }, [])).note, "done")
+    assert.equal((await session.send("do it")).note, "done")
     assert.equal(prompts, 2)
   })
 
@@ -113,8 +129,8 @@ describe("exp2 local: provider errors", () => {
     const serial = new Serial({
       store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
       executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(),
-      build: (workdir, label) => { if (label.startsWith("P2.")) throw new EnvironmentBlocked("the host blocked P2.1/dpipe.exe 3 times: Error: spawn UNKNOWN"); return real(workdir, label) },
-      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, maxAttemptsPerStep: 2 } },
+      build: (workdir, label) => { if (label.startsWith("C2.")) throw new EnvironmentBlocked("the host blocked C2.1/dpipe.exe 3 times: Error: spawn UNKNOWN"); return real(workdir, label) },
+      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
     })
     const outcome = await serial.run({ to: 3, wait: async () => assert.fail("an environment block is not waited out") })
     assert.deepEqual([outcome.status, outcome.last_checkpoint, outcome.stopped!.round], ["stopped", 1, 2])
@@ -132,7 +148,7 @@ describe("exp2 local: provider errors", () => {
     const serial = new Serial({
       store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution, checks: checkStubTransport(),
       executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds")),
-      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, maxAttemptsPerStep: 2 } },
+      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
       score: async round => { scored.push(round); return { passed: 200 + round, total: 219 } },
     })
     const outcome = await serial.run({ to: 3, wait: async () => assert.fail("a dead login is not waited out") })
@@ -255,7 +271,7 @@ describe("exp2 local: the configuration file and the entry point", () => {
     })
     assert.ok(config.runner instanceof DockerRunner && config.sandbox instanceof DockerScriptSandbox)
     assert.equal(config.executorIsStub, false)
-    assert.equal(config.limits.execution.maxAttemptsPerStep, 3)
+    assert.equal(config.limits.execution.repairCycles, 3)
   })
 
   it("names what is wrong with a configuration", () => {

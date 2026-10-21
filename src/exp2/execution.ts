@@ -1,29 +1,21 @@
-import { diffAnchors, touched, type Anchor, type AnchorExtractor } from "./anchors.js"
+import { diffAnchors, touched, type AnchorExtractor } from "./anchors.js"
 import type { TokenUsage } from "./attribution.js"
 import { activeChecks, type CheckEvent, type CheckRecord, type CodeFacts } from "./checks.js"
 import { commitStep, head, readTrailers, resetTo } from "./git.js"
 import type { Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef } from "./runner.js"
-import { runCheck, type CheckRun } from "./verdict.js"
-import { objectAnchors, type AnchorLink, type WorkOrder } from "./workorder.js"
+import { runCheck, type CheckRun, type DisputeKind } from "./verdict.js"
+import type { AnchorLink, WorkOrder } from "./workorder.js"
 
 /**
- * The execution layer (DESIGN §7). The executor proposes steps within the task zone; the code checks their shape,
- * then lets the executor work one step at a time. After each step the code builds, works out which anchors changed,
- * checks the declared coverage against them, and runs the relevant checks. A good step is committed with IC trailers
- * (the only part of a commit the code reads). A bad step is sent back to the same session; when the session breaks,
- * the work tree goes back to the last good checkpoint and a new session gets only the remaining steps. Budgets and
- * timeouts are per step; what is left undone goes to the next round's task zone.
+ * The execution layer (DESIGN §7 as changed by BLOCK9 §2.4). One session gets the round's work order and does it.
+ * When it replies, the code builds the program, runs the whole check library, and commits a checkpoint (one commit
+ * per cycle, with IC trailers, the only part of a commit the code reads). While a task object is not landed by the
+ * checks, or a check that passed at the start of the round fails, the failures go back to the same session as
+ * evidence. Completion is decided by the checks, never by what the session says. The session may contest a check
+ * with a basis in the text; a ruling settles it. When the cycles run out, the tree goes back to the cycle with the
+ * fewest failures, and what is still not landed is carried into the next round.
  */
-
-export interface StepProposal {
-  /** The executor's label; the code assigns the step id. */
-  label: string
-  objects: { object: string; coverage: "full" | "partial" }[]
-  summary: string
-}
-
-export interface ApprovedStep extends StepProposal { id: string; round: number }
 
 export interface ExecutorContext {
   round: number
@@ -31,15 +23,94 @@ export interface ExecutorContext {
   workorder: WorkOrder
   /** The rendered work order (the executor's reading). */
   text: string
-  /** A new session after a broken one: the steps already done and those left. */
-  resume: { done: string[]; remaining: ApprovedStep[] } | null
+  /** A new session after a broken one: what the checks said at the last checkpoint. */
+  resume: { evidence: string } | null
 }
 
-/**
- * What the executor says it did in a step: a note, and per object the functions, types or dispatch names it changed
- * for that object (anchor ids or plain names). Code keeps only those the step did change.
- */
-export interface StepReport { usage: TokenUsage; note: string; anchors?: { object: string; anchors: string[] }[] }
+export interface ExecutorReply { usage: TokenUsage; note: string }
+
+export interface ExecutorSession {
+  readonly id: string
+  /** One message to the session; it edits the work tree (no commit) and replies. */
+  send(message: string): Promise<ExecutorReply>
+  close(): Promise<void>
+}
+
+export interface Executor { open(context: ExecutorContext): Promise<ExecutorSession> }
+
+/** Thrown by an executor whose session can no longer go on (crashed, hung, lost its context). */
+export class SessionBroken extends Error {}
+
+export interface ExecutionLimits {
+  /** Messages with failure evidence after the first, within one round. */
+  repairCycles: number
+  maxSessions: number
+  /** The watchdog on one message to the session. */
+  callTimeoutMs: number
+}
+
+export const DEFAULT_LIMITS: ExecutionLimits = { repairCycles: 3, maxSessions: 3, callTimeoutMs: 40 * 60_000 }
+
+export interface BuildResult { ok: boolean; output: string; program: ProgramRef | null }
+
+export interface ExecutionDeps {
+  registry: Registry
+  library: readonly CheckRecord[]
+  events: readonly CheckEvent[]
+  links: readonly AnchorLink[]
+  anchors: AnchorExtractor
+  build: (workdir: string, label: string) => BuildResult
+  runner: CheckRunner
+  facts: CodeFacts
+  /** Checks that passed on the program at the start of the round (its verdict run): a failure of one is a regression. */
+  passing?: readonly string[]
+  /** The kinds of dispute a ruling upheld a check against. */
+  upheld?: (check: string) => ReadonlySet<DisputeKind>
+  /** Rules on disputes (evidence code saw, or a contest); absent offline, disputed checks then just do not count. */
+  settle?: (disputes: { check: string; run: CheckRun; kind: DisputeKind; detail: string }[]) => Promise<{ wrong: Set<string>; right: Set<string> }>
+  /** Called after every cycle with the record so far (for the record of an interrupted round). */
+  onProgress?: (record: ExecutionRecord) => void
+  checkTimeoutMs?: number
+}
+
+export interface CycleRecord {
+  id: string
+  round: number
+  session: string
+  message: "work" | "repair" | "resume"
+  commit: string
+  build: { ok: boolean; output: string }
+  runs: { check: string; outcome: CheckRun["outcome"]; failure: string | null }[]
+  /** Checks against the round's work: not landed on a task object, or a regression of one that passed at the start. */
+  failing: string[]
+  contests: { check: string; claim: string; verdict: "check_wrong" | "check_right" | "unsettled" }[]
+  anchors: string[]
+  note: string
+  usage: TokenUsage
+}
+
+export interface ExecutionRecord {
+  round: number
+  base: string
+  head: string
+  status: "done" | "cycles_spent" | "sessions_spent"
+  /** The work order's task zone, so the next round can carry what was left undone. */
+  task: string[]
+  sessions: { id: string; opened_for: string; closed: "normally" | "broken" }[]
+  cycles: CycleRecord[]
+  /** The cycle whose tree the round ends on. */
+  kept: string | null
+  /** Task objects still not landed (or never built): the next round's task zone carries them. */
+  carried: string[]
+  links: AnchorLink[]
+  usage: TokenUsage
+}
+
+const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
+const plus = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
+  input_tokens: a.input_tokens + b.input_tokens, cache_read_tokens: a.cache_read_tokens + b.cache_read_tokens, cache_write_tokens: a.cache_write_tokens + b.cache_write_tokens,
+  output_tokens: a.output_tokens + b.output_tokens, reasoning_tokens: a.reasoning_tokens + b.reasoning_tokens,
+})
 
 /** Lower-case words of a name: camelCase, snake_case, dots and other separators split. */
 export function nameWords(name: string): string[] {
@@ -58,287 +129,176 @@ export function anchorNames(anchorId: string, objectName: string): boolean {
 }
 
 /**
- * Links what a committed step changed to its objects (DESIGN §12d item 9): an anchor named for an object goes to that
- * object; one the executor reported for an object goes to it when the step did change it; the rest are shared by the
- * step's objects. File anchors are never linked. Returns the links and the reported anchors the step did not change.
+ * Links what a cycle changed to the objects it worked on (DESIGN §12d item 9): an anchor named for an object goes
+ * to that object; one reported for an object goes to it when it did change; the rest are shared by the objects.
+ * File anchors are never linked. Returns the links and the reported anchors that did not change.
  */
-export function linkStepAnchors(step: ApprovedStep, touched: readonly string[], report: StepReport["anchors"], names: (object: string) => string, round: number): { links: AnchorLink[]; unverified: string[] } {
-  const changed = touched.filter(a => !a.includes(":file:"))
-  const matches = (a: string, r: string) => a === r || a.split(":").slice(3).join(":").replace(/#\d+$/u, "") === r || a.split(":").slice(3).join(":").replace(/#\d+$/u, "").split(".").pop() === r
+export function linkStepAnchors(unit: { id: string; objects: readonly { object: string }[] }, changedIds: readonly string[], report: { object: string; anchors: string[] }[] | undefined, names: (object: string) => string, round: number): { links: AnchorLink[]; unverified: string[] } {
+  const changed = changedIds.filter(a => !a.includes(":file:"))
+  const bare = (a: string) => a.split(":").slice(3).join(":").replace(/#\d+$/u, "")
+  const matches = (a: string, r: string) => a === r || bare(a) === r || bare(a).split(".").pop() === r
   const links: AnchorLink[] = [], owned = new Set<string>(), unverified: string[] = []
-  for (const o of step.objects) {
+  for (const o of unit.objects) {
     const reported = (report ?? []).filter(r => r.object === o.object).flatMap(r => r.anchors)
     for (const r of reported) if (!changed.some(a => matches(a, r))) unverified.push(`${o.object}: ${r}`)
     for (const a of changed) {
       const named = anchorNames(a, names(o.object))
       if (!named && !reported.some(r => matches(a, r))) continue
-      links.push({ object: o.object, anchor: a, round, via: named ? "name" : "step", step: step.id })
+      links.push({ object: o.object, anchor: a, round, via: named ? "name" : "step", step: unit.id })
       owned.add(a)
     }
   }
-  for (const a of changed) if (!owned.has(a)) for (const o of step.objects) links.push({ object: o.object, anchor: a, round, via: "shared", step: step.id })
+  for (const a of changed) if (!owned.has(a)) for (const o of unit.objects) links.push({ object: o.object, anchor: a, round, via: "shared", step: unit.id })
   return { links, unverified }
 }
 
-export interface ExecutorSession {
-  readonly id: string
-  propose(feedback: string[]): Promise<{ steps: StepProposal[]; usage: TokenUsage }>
-  /** Edits the work tree for one step (no commit). `feedback` lists what failed on the previous attempt. */
-  work(step: ApprovedStep, feedback: string[]): Promise<StepReport>
-  close(): Promise<void>
-}
-
-export interface Executor { open(context: ExecutorContext): Promise<ExecutorSession> }
-
-/** Thrown by an executor whose session can no longer go on (crashed, hung, lost its context). */
-export class SessionBroken extends Error {}
-
-export interface ExecutionLimits {
-  maxSteps: number
-  maxObjectsPerStep: number
-  maxProposals: number
-  maxAttemptsPerStep: number
-  maxSessions: number
-  stepTimeoutMs: number
-  /** Step attempts over the whole round; when spent, the rest is carried. */
-  roundAttempts: number
-}
-
-export const DEFAULT_LIMITS: ExecutionLimits = { maxSteps: 12, maxObjectsPerStep: 6, maxProposals: 3, maxAttemptsPerStep: 3, maxSessions: 3, stepTimeoutMs: 20 * 60_000, roundAttempts: 30 }
-
-export interface BuildResult { ok: boolean; output: string; program: ProgramRef | null }
-
-export interface ExecutionDeps {
-  registry: Registry
-  library: readonly CheckRecord[]
-  events: readonly CheckEvent[]
-  links: readonly AnchorLink[]
-  anchors: AnchorExtractor
-  build: (workdir: string, label: string) => BuildResult
-  runner: CheckRunner
-  facts: CodeFacts
-  /** Checks that passed on the program at the start of the round (its verdict run). */
-  passing?: readonly string[]
-  /** Called after the plan and after every step with the record so far (for the record of an interrupted round). */
-  onProgress?: (record: ExecutionRecord) => void
-  checkTimeoutMs?: number
-}
-
-export interface StepRecord {
-  id: string
-  round: number
-  label: string
-  objects: { object: string; coverage: "full" | "partial" }[]
-  status: "committed" | "failed" | "carried"
-  attempts: number
-  sessions: string[]
-  checkpoint: string
-  commit: string | null
-  anchors: string[]
-  checks: { check: string; outcome: CheckRun["outcome"]; failure: string | null }[]
-  problems: string[]
-  notes: string[]
-  usage: TokenUsage
-}
-
-export interface ExecutionRecord {
-  round: number
-  base: string
-  head: string
-  status: "done" | "plan_rejected" | "budget_spent" | "sessions_spent"
-  /** The work order's task zone, so the next round can carry what was left undone. */
-  task: string[]
-  proposals: { session: string; steps: StepProposal[]; problems: string[] }[]
-  sessions: { id: string; opened_for: string; closed: "normally" | "broken" }[]
-  steps: StepRecord[]
-  /** Task objects no committed step fully covered: the next round's task zone carries them. */
-  carried: string[]
-  links: AnchorLink[]
-  usage: TokenUsage
-}
-
-const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
-const plus = (a: TokenUsage, b: TokenUsage): TokenUsage => ({
-  input_tokens: a.input_tokens + b.input_tokens, cache_read_tokens: a.cache_read_tokens + b.cache_read_tokens, cache_write_tokens: a.cache_write_tokens + b.cache_write_tokens,
-  output_tokens: a.output_tokens + b.output_tokens, reasoning_tokens: a.reasoning_tokens + b.reasoning_tokens,
-})
-
-/** Shape only: limits, objects inside the task zone, and every partly covered object later covered in full. */
-export function planProblems(steps: readonly StepProposal[], task: readonly string[], limits: ExecutionLimits): string[] {
-  const problems: string[] = []
-  const inTask = new Set(task)
-  if (!steps.length) problems.push("the plan has no steps")
-  if (steps.length > limits.maxSteps) problems.push(`the plan has ${steps.length} steps; at most ${limits.maxSteps}`)
-  steps.forEach((s, i) => {
-    const w = `step ${i + 1} (${s.label})`
-    if (!s.objects.length) problems.push(`${w}: names no object`)
-    if (s.objects.length > limits.maxObjectsPerStep) problems.push(`${w}: covers ${s.objects.length} objects; at most ${limits.maxObjectsPerStep}`)
-    const ids = s.objects.map(o => o.object)
-    if (new Set(ids).size !== ids.length) problems.push(`${w}: names an object twice`)
-    for (const o of s.objects) {
-      if (!inTask.has(o.object)) problems.push(`${w}: ${o.object} is not in the task zone`)
-      if (o.coverage !== "full" && o.coverage !== "partial") problems.push(`${w}: coverage of ${o.object} must be full or partial`)
-      if (o.coverage === "partial" && !steps.slice(i + 1).some(t => t.objects.some(x => x.object === o.object && x.coverage === "full"))) {
-        problems.push(`${w}: ${o.object} is covered in part, and no later step covers it in full`)
-      }
-    }
-  })
-  return problems
-}
-
-class StepTimeout extends Error {}
+class CallTimeout extends Error {}
 
 async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   let timer: NodeJS.Timeout | undefined
   try {
-    return await Promise.race([p, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new StepTimeout(`no answer in ${ms} ms`)), ms) })])
+    return await Promise.race([p, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new CallTimeout(`no answer in ${ms} ms`)), ms) })])
   } finally { clearTimeout(timer) }
+}
+
+/** `CONTEST <check id>: <ids and why>` lines of a reply: the executor's objection to a check (BLOCK9 §2.4). */
+export function contestsIn(note: string): { check: string; claim: string }[] {
+  return [...note.matchAll(/^\s*CONTEST\s+(K\d+)\s*:\s*(.+)$/gmu)].map(m => ({ check: m[1], claim: m[2].trim() }))
+}
+
+const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
+
+/** The evidence of the failures, as facts: input, expected, actual. Nothing about how to fix them. */
+export function renderEvidence(runs: readonly CheckRun[], failing: readonly string[], library: readonly CheckRecord[], registry: Registry, regressions: ReadonlySet<string>): string {
+  const out: string[] = []
+  for (const id of failing) {
+    const run = runs.find(r => r.check === id)!, k = library.find(c => c.id === id)!
+    const name = registry.objects.get(k.object)?.name ?? k.object
+    out.push(`- ${id} (${name}${regressions.has(id) ? ", passed at the start of the round" : ""}): ${run.failure!.reason}`)
+    out.push(`  args: ${JSON.stringify(k.input.args)}`)
+    for (const f of k.input.files) out.push(`  file ${f.path}: ${JSON.stringify(clip(f.content, 400))}`)
+    for (const a of run.assertions.filter(x => !x.ok)) {
+      const x = k.assertions.find(y => y.id === a.id)!
+      out.push(`  ${a.id} (${x.target.kind}${x.target.path ? ` ${x.target.path}` : ""}${x.target.line ? ` line ${x.target.line}` : ""}${x.target.pointer ? ` ${x.target.pointer}` : ""}${x.target.column ? ` column ${x.target.column}` : ""}): expected ${JSON.stringify(x.expect)}, got ${JSON.stringify(a.actual)}${x.reading ? ` (rests on a reading the text does not state: ${x.reading})` : ""}`)
+    }
+    if (run.failure!.reason === "crash" || run.failure!.reason === "refused") out.push(`  ${clip(run.failure!.detail, 300)}`)
+  }
+  return out.join("\n")
+}
+
+export function repairMessage(evidence: string, build: { ok: boolean; output: string }): string {
+  if (!build.ok) return `The program does not build:\n${clip(build.output.trim(), 3000)}\nFix it, and finish what the work order still needs.`
+  return [
+    "The program was built and the acceptance checks were run against the requirements. These checks fail:",
+    evidence,
+    "Make the program meet the requirements these checks test. If you are sure a check contradicts the requirements, do not change the code for it: write a line `CONTEST <check id>: <block ids> <why>` in your reply.",
+  ].join("\n")
 }
 
 export async function executeRound(workdir: string, workorder: WorkOrder, text: string, executor: Executor, deps: ExecutionDeps, limits: ExecutionLimits = DEFAULT_LIMITS): Promise<ExecutionRecord> {
   const round = workorder.round
   const task = workorder.task.map(t => t.object)
-  const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", task, proposals: [], sessions: [], steps: [], carried: [], links: [], usage: zero() }
+  const taskSet = new Set(task)
+  const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", task, sessions: [], cycles: [], kept: null, carried: [], links: [], usage: zero() }
   const links = [...deps.links]
-  // What protection guards: checks passing at the last good checkpoint (start of round, then after each kept step).
   const passing = new Set(deps.passing ?? [])
+  const retired = new Set<string>()
+  const names = (id: string) => deps.registry.objects.get(id)?.name ?? id
   let session = await executor.open({ round, workdir, workorder, text, resume: null })
-  record.sessions.push({ id: session.id, opened_for: "plan", closed: "normally" })
-
-  // 1. The plan, re-proposed with the problems until its shape holds.
-  let approved: ApprovedStep[] | null = null
-  let feedback: string[] = []
-  for (let n = 0; n < limits.maxProposals && !approved; n++) {
-    const p = await session.propose(feedback)
-    record.usage = plus(record.usage, p.usage)
-    const problems = planProblems(p.steps, task, limits)
-    record.proposals.push({ session: session.id, steps: p.steps, problems })
-    if (!problems.length) approved = p.steps.map((s, i) => ({ ...s, id: `P${round}.${i + 1}`, round }))
-    feedback = problems
-  }
-  deps.onProgress?.(record)
-  if (!approved) {
-    await session.close()
-    record.status = "plan_rejected"
-    record.carried = task
-    record.head = head(workdir)
-    return record
-  }
-
-  // 2. The steps, one by one.
-  let attemptsLeft = limits.roundAttempts
+  record.sessions.push({ id: session.id, opened_for: "work", closed: "normally" })
+  let message = text, kind: CycleRecord["message"] = "work", evidence = ""
   let sessionsLeft = limits.maxSessions - 1
-  for (const [index, step] of approved.entries()) {
-    const checkpoint = head(workdir)
-    const rec: StepRecord = { id: step.id, round, label: step.label, objects: step.objects, status: "carried", attempts: 0, sessions: [], checkpoint, commit: null, anchors: [], checks: [], problems: [], notes: [], usage: zero() }
-    record.steps.push(rec)
-    if (record.status !== "done") continue
+  let lastCommit = record.base
+  const runAll = async (program: ProgramRef) => {
+    const runs: CheckRun[] = []
+    for (const c of activeChecks(deps.library, deps.events).filter(c => !retired.has(c.id))) runs.push(await runCheck(c, program, deps.runner, round, deps.registry, deps.facts, deps.checkTimeoutMs ?? 10_000, deps.upheld?.(c.id)))
+    return runs
+  }
+  for (let n = 1; n <= limits.repairCycles + 1; n++) {
     const before = deps.anchors.extract(workdir)
-    let stepFeedback: string[] = []
-    let report: StepReport["anchors"]
-    while (rec.attempts < limits.maxAttemptsPerStep) {
-      if (attemptsLeft <= 0) { record.status = "budget_spent"; break }
-      attemptsLeft--
-      rec.attempts++
-      if (!rec.sessions.includes(session.id)) rec.sessions.push(session.id)
-      try {
-        const r = await withTimeout(session.work(step, stepFeedback), limits.stepTimeoutMs)
-        rec.usage = plus(rec.usage, r.usage)
-        rec.notes.push(r.note)
-        report = r.anchors
-      } catch (e) {
-        if (!(e instanceof SessionBroken) && !(e instanceof StepTimeout)) throw e
-        // The session is gone: back to the last good checkpoint, and a new session for the steps left.
-        rec.problems.push(`attempt ${rec.attempts}: session ${session.id} broke (${(e as Error).message})`)
-        record.sessions.find(s => s.id === session.id)!.closed = "broken"
-        resetTo(workdir, checkpoint)
-        if (sessionsLeft <= 0) { record.status = "sessions_spent"; break }
-        sessionsLeft--
-        session = await executor.open({ round, workdir, workorder, text, resume: { done: record.steps.filter(s => s.status === "committed").map(s => s.id), remaining: approved.slice(index) } })
-        record.sessions.push({ id: session.id, opened_for: step.id, closed: "normally" })
-        stepFeedback = []
-        continue
-      }
-      const verdict = await verifyStep(workdir, step, before, deps, links, passing)
-      rec.checks = verdict.checks
-      rec.anchors = verdict.touched
-      if (!verdict.problems.length) {
-        const trailers: [string, string][] = [
-          ["IC-Round", String(round)], ["IC-Step", step.id], ["IC-Session", session.id],
-          ...step.objects.map(o => ["IC-Object", `${o.object}@v${deps.registry.objects.get(o.object)!.version} ${o.coverage}`] as [string, string]),
-          ...(verdict.touched.length ? [["IC-Anchors", verdict.touched.join(", ")] as [string, string]] : []),
-          ...verdict.checks.map(c => ["IC-Checks", `${c.check} ${c.outcome}`] as [string, string]),
-        ]
-        rec.commit = commitStep(workdir, step.summary, trailers)
-        rec.status = "committed"
-        for (const c of verdict.checks) { if (c.outcome === "pass") passing.add(c.check); else passing.delete(c.check) }
-        const linked = linkStepAnchors(step, verdict.touched, report, id => deps.registry.objects.get(id)!.name, round)
-        links.push(...linked.links)
-        if (linked.unverified.length) rec.notes.push(`reported but not changed by the step: ${linked.unverified.join("; ")}`)
-        break
-      }
-      rec.problems.push(...verdict.problems.map(p => `attempt ${rec.attempts}: ${p}`))
-      stepFeedback = verdict.problems
+    let reply: ExecutorReply
+    try { reply = await withTimeout(session.send(message), limits.callTimeoutMs) } catch (e) {
+      if (!(e instanceof SessionBroken) && !(e instanceof CallTimeout)) throw e
+      // The session is gone: back to the last checkpoint, and a new session with the work order and the evidence.
+      record.sessions.find(s => s.id === session.id)!.closed = "broken"
+      void session.close().catch(() => {})
+      resetTo(workdir, lastCommit)
+      if (sessionsLeft-- <= 0) { record.status = "sessions_spent"; break }
+      session = await executor.open({ round, workdir, workorder, text, resume: evidence ? { evidence } : null })
+      record.sessions.push({ id: session.id, opened_for: `C${round}.${n}`, closed: "normally" })
+      message = evidence ? `${text}\nA previous session stopped. The work tree is at the last checkpoint, where the checks said:\n${evidence}` : text
+      kind = "resume"
+      n--
+      continue
     }
-    if (rec.status !== "committed") {
-      // Keep nothing of a failed step: the tree goes back to the last good checkpoint.
-      resetTo(workdir, checkpoint)
-      if (rec.attempts > 0 && record.status === "done") rec.status = "failed"
-    }
+    record.usage = plus(record.usage, reply.usage)
+    const id = `C${round}.${record.cycles.length + 1}`
+    const build = deps.build(workdir, id)
+    const changed = touched(diffAnchors(before, deps.anchors.extract(workdir)))
+    let runs = build.ok ? await runAll(build.program!) : []
+    // Disputes: evidence code saw against a check, and the session's contests. Settled once each, against the text.
+    const contests = contestsIn(reply.note).filter(c => runs.some(r => r.check === c.check && r.outcome === "fail"))
+    const disputes = [
+      ...runs.filter(r => r.failure?.class === "disputed").map(r => ({ check: r.check, run: r, kind: r.failure!.reason as DisputeKind, detail: r.failure!.detail })),
+      ...contests.map(c => ({ check: c.check, run: runs.find(r => r.check === c.check)!, kind: "contested" as const, detail: c.claim })),
+    ]
+    const settled = disputes.length && deps.settle ? await deps.settle(disputes) : { wrong: new Set<string>(), right: new Set<string>() }
+    for (const k of settled.wrong) retired.add(k)
+    if (settled.wrong.size || settled.right.size) runs = build.ok ? await runAll(build.program!) : []
+    const library = deps.library
+    const objectOf = (check: string) => library.find(c => c.id === check)!
+    const regressions = new Set(runs.filter(r => r.outcome === "fail" && passing.has(r.check)).map(r => r.check))
+    // Against the round's work: not landed on a task object or its conventions, or a regression; contested checks
+    // still unsettled do not count.
+    const unsettled = new Set(contests.filter(c => !settled.wrong.has(c.check) && !settled.right.has(c.check)).map(c => c.check))
+    const failing = runs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed" && !unsettled.has(r.check)
+      && (regressions.has(r.check) || taskSet.has(objectOf(r.check).object) || objectOf(r.check).uses.some(u => taskSet.has(u)))).map(r => r.check)
+    const trailers: [string, string][] = [
+      ["IC-Round", String(round)], ["IC-Cycle", id], ["IC-Session", session.id],
+      ...task.map(o => ["IC-Object", `${o}@v${deps.registry.objects.get(o)!.version}`] as [string, string]),
+      ...(changed.length ? [["IC-Anchors", changed.join(", ")] as [string, string]] : []),
+      ["IC-Build", build.ok ? "ok" : "failed"],
+      ...(failing.length ? [["IC-Failing", failing.join(", ")] as [string, string]] : []),
+    ]
+    const commit = commitStep(workdir, `${id} ${kind}`, trailers)
+    lastCommit = commit
+    const linked = linkStepAnchors({ id, objects: task.map(object => ({ object })) }, changed, undefined, names, round)
+    links.push(...linked.links)
+    record.cycles.push({
+      id, round, session: session.id, message: kind, commit, build: { ok: build.ok, output: build.ok ? "" : clip(build.output, 4000) },
+      runs: runs.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null })),
+      failing, contests: contests.map(c => ({ check: c.check, claim: c.claim, verdict: settled.wrong.has(c.check) ? "check_wrong" : settled.right.has(c.check) ? "check_right" : "unsettled" })),
+      anchors: changed, note: clip(reply.note, 4000), usage: reply.usage,
+    })
     deps.onProgress?.(record)
+    if (build.ok && !failing.length) break
+    if (n === limits.repairCycles + 1) { record.status = "cycles_spent"; break }
+    evidence = build.ok ? renderEvidence(runs, failing, library, deps.registry, regressions) : ""
+    message = repairMessage(evidence, build)
+    kind = "repair"
   }
   await session.close()
-  const fullyDone = new Set(record.steps.filter(s => s.status === "committed").flatMap(s => s.objects.filter(o => o.coverage === "full").map(o => o.object)))
-  record.carried = task.filter(o => !fullyDone.has(o))
+  // The round ends on the cycle with the fewest failures among those that built (the latest on a tie).
+  const built = record.cycles.filter(c => c.build.ok)
+  const best = built.reduce<CycleRecord | null>((b, c) => !b || c.failing.length <= b.failing.length ? c : b, null)
+  if (best) {
+    record.kept = best.id
+    if (best.commit !== head(workdir)) resetTo(workdir, best.commit)
+    const failingObjects = new Set(best.failing.flatMap(k => { const c = deps.library.find(x => x.id === k)!; return [c.object, ...c.uses] }))
+    record.carried = task.filter(o => failingObjects.has(o))
+  } else record.carried = task
   record.links = links.slice(deps.links.length)
   record.head = head(workdir)
   return record
 }
 
-/**
- * Build, anchor coverage, and the relevant checks: those of the objects the step covers in full must hold; checks of
- * objects whose anchors the step touched without declaring them are protection, and must keep holding if they held.
- */
-export async function verifyStep(workdir: string, step: ApprovedStep, before: readonly Anchor[], deps: ExecutionDeps, links: readonly AnchorLink[], passing: ReadonlySet<string> = new Set()): Promise<{ problems: string[]; touched: string[]; checks: StepRecord["checks"] }> {
-  const problems: string[] = []
-  const build = deps.build(workdir, step.id)
-  if (!build.ok) return { problems: [`build failed: ${build.output.trim().slice(0, 600)}`], touched: [], checks: [] }
-  const after = deps.anchors.extract(workdir)
-  const changed = touched(diffAnchors(before, after))
-  const declared = new Set(step.objects.map(o => o.object))
-  for (const o of step.objects) {
-    const known = [...objectAnchors(deps.registry, before, links, o.object, true), ...objectAnchors(deps.registry, after, links, o.object, true)].map(a => a.id)
-    // An object with anchors must have one of them touched; an object without any yet, some anchor at all.
-    const hit = known.length ? changed.some(a => known.includes(a)) : changed.length > 0
-    if (!hit) problems.push(`${o.object} (${deps.registry.objects.get(o.object)!.name}) is declared ${o.coverage}, but none of its anchors changed${known.length ? ` (${known.join(", ")})` : ""}`)
-  }
-  // Anchors of objects this step did not declare: run those objects' checks as protection.
-  const others = new Set<string>()
-  for (const id of deps.registry.objects.keys()) {
-    if (declared.has(id)) continue
-    const own = objectAnchors(deps.registry, before, links, id, true).map(a => a.id)
-    if (own.some(a => changed.includes(a))) others.add(id)
-  }
-  const active = activeChecks(deps.library, deps.events)
-  // A partly covered object is not finished yet: its own checks wait for the step that covers it in full.
-  const full = new Set(step.objects.filter(o => o.coverage === "full").map(o => o.object))
-  const relevant = active.filter(c => full.has(c.object) || others.has(c.object) || c.uses.some(u => others.has(u)))
-  const checks: StepRecord["checks"] = []
-  for (const c of relevant) {
-    const run = await runCheck(c, build.program!, deps.runner, step.round, deps.registry, deps.facts, deps.checkTimeoutMs ?? 10_000)
-    checks.push({ check: c.id, outcome: run.outcome, failure: run.failure ? `${run.failure.class}/${run.failure.reason}` : null })
-    // Only a failure judged not landed is evidence against the step; unknown-class failures are recorded only.
-    // Protection guards what passed before: a check of an unfinished object that never passed is no regression.
-    const guarded = full.has(c.object) || passing.has(c.id)
-    if (guarded && run.outcome === "fail" && run.failure?.class === "not_landed") problems.push(`${c.id} (${others.has(c.object) ? "protection of " : ""}${deps.registry.objects.get(c.object)!.name}) fails: ${run.failure.reason}, ${run.failure.detail}`)
-  }
-  return { problems, touched: changed, checks }
-}
-
 /** Reads back what the code committed, from the trailers alone. */
-export function stepsFromHistory(workdir: string, commits: readonly string[]): { commit: string; round: number; step: string; objects: string[]; anchors: string[]; checks: string[] }[] {
+export function cyclesFromHistory(workdir: string, commits: readonly string[]): { commit: string; round: number; cycle: string; objects: string[]; anchors: string[]; failing: string[]; build: string }[] {
   return commits.map(commit => {
     const t = readTrailers(workdir, commit)
-    return { commit, round: Number(t["IC-Round"]?.[0]), step: t["IC-Step"]?.[0] ?? "", objects: t["IC-Object"] ?? [], anchors: (t["IC-Anchors"]?.[0] ?? "").split(", ").filter(Boolean), checks: t["IC-Checks"] ?? [] }
+    return {
+      commit, round: Number(t["IC-Round"]?.[0]), cycle: t["IC-Cycle"]?.[0] ?? "", objects: t["IC-Object"] ?? [],
+      anchors: (t["IC-Anchors"]?.[0] ?? "").split(", ").filter(Boolean), failing: (t["IC-Failing"]?.[0] ?? "").split(", ").filter(Boolean), build: t["IC-Build"]?.[0] ?? "",
+    }
   })
 }
