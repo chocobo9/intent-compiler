@@ -8,7 +8,8 @@ import { SessionBroken, type ApprovedStep, type Executor, type ExecutorContext, 
  * scripted per step label and attempt, including the usual failures. It never commits; the controller does.
  */
 
-export type Action = "hang" | "break" | ((workdir: string) => void)
+/** An edit; it may return the step report's anchors per object (§12d item 9). */
+export type Action = "hang" | "break" | ((workdir: string) => void | { object: string; anchors: string[] }[])
 
 export interface ExecutorScript {
   /** Plans in order of proposal; each sees the task-zone object ids by name. */
@@ -55,8 +56,8 @@ export class StubExecutor implements Executor {
         const action = actions[Math.min(n, actions.length - 1)]
         if (action === "hang") return new Promise<never>(() => {})
         if (action === "break") throw new SessionBroken("the stand-in session lost its context")
-        action(context.workdir)
-        return { usage: zero(), note: `stand-in edit for ${step.label}, attempt ${n + 1}` }
+        const anchors = action(context.workdir)
+        return { usage: zero(), note: `stand-in edit for ${step.label}, attempt ${n + 1}`, ...(anchors ? { anchors } : {}) }
       },
       async close() {},
     }

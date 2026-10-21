@@ -86,6 +86,21 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
     assert.ok(/\[R15\.S2[\].· ]/u.test(text), "the amending text is in the source zone too")
   })
 
+  it("R3 and R15 (§12d item 8): the source zone marks each revised clause and amended block where it stands, naming the revising text", () => {
+    const r = store.registry()
+    const wo3 = renderWorkOrder(buildWorkOrder({ registry: materialize(store.inspect().sources.filter(x => x.round <= 3), store.inspect().rounds.filter(x => x.round <= 3).map(x => x.acceptance!)), round: 3, library: [], events: [], statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [] }))
+    // fill: only the "cell remains empty" clause, right before it; normalize: the population-stddev clauses.
+    assert.ok(wo3.includes("(no non-empty numeric value exists above or below), ⟦R2.S13.P4.s4.c3 → revised by R3.S2.P2.s1, R3.S2.P2.s2⟧ the cell remains empty."))
+    assert.ok(wo3.includes("⟦R2.S11.P5.s3.c1 → revised by R3.S3.P1.s1, R3.S3.P2⟧ - For `zscore`: compute `mean` and population `stddev` ⟦R2.S11.P5.s3.c2 → revised by R3.S3.P1.s1, R3.S3.P2⟧ (`sqrt(sum((xi - mean)^2) / n)`)."))
+    assert.equal((wo3.match(/⟦R2\./gu) ?? []).length, 3, "no other R2 text is marked")
+    // The text is not rewritten: without the markers it is the source text byte for byte.
+    const fill = r.block("R2.S13")!
+    assert.ok(wo3.replace(/⟦[^⟧]*⟧ /gu, "").includes(fill.text.trimEnd()))
+    const wo15 = renderWorkOrder(buildWorkOrder({ registry: r, round: 15, library: [], events: [], statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [] }))
+    assert.ok(wo15.includes("⟦R13.S4.P1 → amended by R15.S2.P1.s2, R15.S2.P2.s1⟧"))
+    assert.ok(wo15.includes("⟦R13.S7.P1.s8 → revised by R15.S2.P1.s2, R15.S2.P2.s1⟧"))
+  })
+
   it("the checks serial R1–R3 (stand-in executor, local runs) stays accepted with the recorded answers", async () => {
     process.env.GIT_AUTHOR_DATE = process.env.GIT_COMMITTER_DATE = "2026-10-20T00:00:00Z"
     const dir = mkdtempSync(join(tmpdir(), "exp2-b2-checks-"))

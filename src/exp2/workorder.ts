@@ -10,7 +10,12 @@ import { contextOf } from "./view.js"
  * failure judged not landed, or work a previous round left undone puts an object in the task zone.
  */
 
-export interface AnchorLink { object: string; anchor: string; round: number; via: "name" | "step"; step?: string }
+/**
+ * name: the anchor's name is the object's (code); step: the executor reported it for the object and the step did
+ * change it; shared: a step changed it and it is neither named for nor reported by one of the step's objects, so
+ * it belongs to all of them together (DESIGN §12d item 9).
+ */
+export interface AnchorLink { object: string; anchor: string; round: number; via: "name" | "step" | "shared"; step?: string }
 
 export interface TaskEntry {
   object: string
@@ -62,10 +67,14 @@ export interface WorkOrderInput {
   zoning?: boolean
 }
 
-/** An object's anchors now: dispatch points named like the object, and anchors that verified steps changed for it. */
-export function objectAnchors(registry: Registry, anchors: readonly Anchor[], links: readonly AnchorLink[], object: string): Anchor[] {
+/**
+ * An object's anchors now: dispatch points named like the object, and anchors linked to it by name or by a verified
+ * step report. With `shared`, also anchors a step changed for it together with other objects: those count when
+ * code is shared (protection, whether a step touched the object), not as the object's own.
+ */
+export function objectAnchors(registry: Registry, anchors: readonly Anchor[], links: readonly AnchorLink[], object: string, shared = false): Anchor[] {
   const name = registry.objects.get(object)?.name.toLowerCase()
-  const linked = new Set(links.filter(l => l.object === object).map(l => l.anchor))
+  const linked = new Set(links.filter(l => l.object === object && (shared || l.via !== "shared")).map(l => l.anchor))
   return anchors.filter(a => a.kind !== "file" && (linked.has(a.id) || (a.kind === "dispatch" && a.name.toLowerCase() === name)))
 }
 
@@ -124,10 +133,10 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   const inTask = new Set(task.map(t => t.object))
 
   // Protection: landed objects whose anchors the task objects share, with their passing checks.
-  const taskAnchors = new Set(task.flatMap(t => objectAnchors(registry, input.anchors, input.links, t.object).map(a => a.id)))
+  const taskAnchors = new Set(task.flatMap(t => objectAnchors(registry, input.anchors, input.links, t.object, true).map(a => a.id)))
   const active = activeChecks(input.library, input.events)
   const protect = input.statuses.filter(s => s.status === "landed" && !inTask.has(s.object)).flatMap(s => {
-    const shared = objectAnchors(registry, input.anchors, input.links, s.object).map(a => a.id).filter(a => taskAnchors.has(a))
+    const shared = objectAnchors(registry, input.anchors, input.links, s.object, true).map(a => a.id).filter(a => taskAnchors.has(a))
     if (!shared.length) return []
     const passing = input.runs.filter(r => r.outcome === "pass" && active.some(c => c.id === r.check && (c.object === s.object || c.uses.includes(s.object)))).map(r => r.check)
     return [{ object: s.object, name: name(s.object), checks: [...new Set(passing)], shared_anchors: shared }]
@@ -151,7 +160,7 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
       const key = owner === "none" ? null : owner
       const ctx = contextOf(registry, b.id)
       const path = registry.lineage(ctx.id).slice(ctx.level === "section" ? 1 : 0).filter(x => x.level === "section" && x.heading).map(x => x.heading!.trim()).reverse()
-      groups.set(key, [...(groups.get(key) ?? []), { id: b.id, state: states.get(b.id) ?? "none", heading_path: path, text: b.text }])
+      groups.set(key, [...(groups.get(key) ?? []), { id: b.id, state: states.get(b.id) ?? "none", heading_path: path, text: markRevisions(registry, b.id, round) }])
     }
   }
   const order = [...groups.keys()].sort((a, b) => a === null ? 1 : b === null ? -1 : Number(a.slice(1)) - Number(b.slice(1)))
@@ -168,6 +177,27 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
     return (from && inTask.has(from)) || (to && inTask.has(to))
   }).map(e => ({ from: e.from, to: e.to, kind: e.kind }))
   return { round, task, protect, status: statusZone, source, anchors: anchorZone, edges }
+}
+
+/**
+ * The block's text with a marker where later text revised it (DESIGN §12d item 8), up to `round`: at the revised
+ * sentence, clause, code block or table, `⟦<id> → revised by <ids>⟧` (or amended, withdrawn). The text itself is
+ * neither copied nor rewritten; the revising text is in the source zone under its own id.
+ */
+export function markRevisions(registry: Registry, block: string, round: number): string {
+  const b = registry.block(block)!
+  const own = registry.objects.get(registry.assigned.get(block) ?? "")?.blocks.find(x => x.block === block)
+  const marks = new Map<number, string[]>()
+  for (const m of own?.modifications.filter(x => x.round <= round) ?? []) for (const p of m.parts) {
+    const part = registry.block(p)
+    if (!part || part.start < b.start || part.end > b.end) continue
+    const how = (m.amended ?? []).includes(p) ? "amended" : m.kind === "withdraw" ? "withdrawn" : "revised"
+    const at = part.start - b.start
+    marks.set(at, [...(marks.get(at) ?? []), `⟦${p} → ${how} by ${m.by.join(", ")}⟧`])
+  }
+  let text = b.text
+  for (const at of [...marks.keys()].sort((x, y) => y - x)) text = `${text.slice(0, at)}${marks.get(at)!.join("")} ${text.slice(at)}`
+  return text
 }
 
 /** The work order as the executor reads it. Only the source zone carries source text. */

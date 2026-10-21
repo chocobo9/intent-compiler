@@ -69,3 +69,23 @@
 | 6 不可切分块被修正而不是被替换，留在当前原文里，工单两者都出现，新原文优先；以它为依据的检查照常过期；句子、子句照旧替换 | 成立：R15 单元情形 |
 | 回放 batch2：按回答顺序；报告未使用的回答；15 轮归属、3 轮检查都通过 | 成立，见第 2 节 |
 | R6、R9、R15 的单元情形用真实原文 | 成立 |
+
+## 6. 补充：第 8、9 项（DESIGN §12d，已合并 `exp2-pure-ic` 的 13b9a24）
+
+| 项 | 内容 | 文件 |
+|---|---|---|
+| 8 | 工单原文区里，被修订的句子、子句、被修正的代码块或表格前面插入标记：`⟦<编号> → revised by <新原文编号>⟧`，被修正的写 `amended by`，被撤回的写 `withdrawn by`。原文不复制、不改写，去掉标记后与原文逐字相同。执行方的系统提示里写明三种标记的含义 | `workorder.ts`（`markRevisions`）、`opencode-executor.ts` |
+| 9 | 锚点按对象归属，不再把一步改过的全部锚点都记给这一步的每个对象（`linkStepAnchors`，`execution.ts`）：<br>- 锚点名或所在文件名按整词含有对象名的（`opFilter`、`dispatch:filter`、`op_filter.go` 里的函数），由代码直接归给该对象；<br>- 执行方在步骤报告里按对象报出的函数、类型、分派名，只有这一步确实改过的才归给该对象；报了但没改的，记在步骤记录的 notes 里，不归属；<br>- 其余记为这一步内各对象共享（`via: "shared"`）。<br>对象自己名下的锚点（锚点区）不含共享的。判断一步是否碰到了对象、判断保护区时，共享的也算，因为共享代码改了，确实可能破坏别的对象。OpenCode 执行方每一步都用结构化输出返回 `{note, objects: [{object, anchors}]}` | `execution.ts`、`workorder.ts`、`opencode-executor.ts` |
+
+**验证**（exp2 共 138 项，全部通过；全量 826 项，819 通过，6 项跳过，失败 1 项仍是原有的 `repair-batch`）：
+- 第 8 项用 Haiku 第二批 R1–R3 的真实归属：R3 工单里，fill 的标记正好在 "the cell remains empty" 之前（`⟦R2.S13.P4.s4.c3 → revised by R3.S2.P2.s1, R3.S2.P2.s2⟧`）；normalize 的标记在总体标准差的两个子句之前（c1、c2，revised by R3.S3.P1.s1, R3.S3.P2）；R2 的原文里只有这 3 处标记。R15 工单里，R13.S4.P1 标 amended，R13.S7.P1.s8 标 revised。
+- 第 9 项：
+  - 第 3 块的执行测试里，filter 名下只有 `opFilter` 和 `dispatch:filter`，不再有 `opSort`、`opDrop`、`opRename`、`runTransform`、`col`；
+  - 替身执行方报了一个没改过的函数（`opNowhere`），没有被归属，记在 notes 里；
+  - transform 不落地时，filter 进入保护区，依据只剩它们真正共用的 `dispatch:filter`（以前是 `runTransform` 等）；
+  - 单元测试覆盖了按名、按报告、共享三种情况，以及整词匹配（`sorter.go` 不算 sort）。
+- 第二批录音回放的结果不变：归属 15 轮、检查 3 轮都通过，入库 55 条，强检查 49 条。
+
+**需要设计会话知道的**：
+- 按文件名归属会把 `transform.go` 里的全部函数（包括 `dispatch:filter`）都归给 transform。`dispatch:filter` 同时按自身名字归给 filter，所以两者共有它。这正是保护区需要的那种共享。
+- 执行方报告里的锚点可以写锚点编号，也可以写函数名或方法名的最后一段。

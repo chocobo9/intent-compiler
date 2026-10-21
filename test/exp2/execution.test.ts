@@ -6,12 +6,12 @@ import assert from "node:assert/strict"
 import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { goBuilder } from "../../src/exp2/build.js"
 import { codeFacts } from "../../src/exp2/checks.js"
-import { executeRound, planProblems, stepsFromHistory, DEFAULT_LIMITS, type ExecutionRecord } from "../../src/exp2/execution.js"
+import { anchorNames, executeRound, linkStepAnchors, planProblems, stepsFromHistory, DEFAULT_LIMITS, type ExecutionRecord } from "../../src/exp2/execution.js"
 import { commitsSince, initRepo, readTrailers } from "../../src/exp2/git.js"
 import { LocalProcessRunner, LocalScriptSandbox, nullBaseline } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import type { ObjectStatus } from "../../src/exp2/verdict.js"
-import { buildWorkOrder, nameLinks, renderWorkOrder, type WorkOrder } from "../../src/exp2/workorder.js"
+import { buildWorkOrder, nameLinks, objectAnchors, renderWorkOrder, type WorkOrder } from "../../src/exp2/workorder.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { DROP, FILTER, GO_MOD, MAIN, RENAME, SORT, TRANSFORM, TRANSFORM_STUB, VERIFY, VERIFY_STUB } from "./go-fixtures.js"
 import { roundText } from "./inputs.js"
@@ -49,7 +49,8 @@ describe("exp2 block 3: work order and execution, with a stand-in executor writi
       foundation: [wd => write(wd, { "go.mod": GO_MOD, "main.go": MAIN, "verify.go": VERIFY_STUB, "transform.go": TRANSFORM_STUB })],
       verify: [wd => write(wd, { "verify.go": VERIFY() })],
       // Wrong first (keeps the rejected rows), right after the failing check is reported.
-      filter: [wd => write(wd, { "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(true) }), wd => write(wd, { "filter.go": FILTER(false) })],
+      // The second attempt reports per object what it changed: transform the shared table helpers, plus one function the step never touched.
+      filter: [wd => write(wd, { "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(true) }), wd => { write(wd, { "filter.go": FILTER(false) }); return [{ object: id("transform"), anchors: ["col", "opNowhere"] }] }],
       // The session hangs; a new one does the step.
       sort: ["hang", wd => write(wd, { "transform.go": TRANSFORM(["filter", "sort"]), "sort.go": SORT })],
       // Every attempt also breaks verify's output: protection checks catch it, and the step is dropped.
@@ -197,8 +198,36 @@ describe("exp2 block 3: work order and execution, with a stand-in executor writi
     assert.deepEqual(t.why, ["not_landed"])
     assert.deepEqual(t.evidence.map(e => [e.check, e.reason, e.mismatches[0].expected, e.mismatches[0].actual]), [[failing.check, "value_mismatch", 0, 1]])
     const filter = w2b.protect.find(p => p.name === "filter")!
-    assert.ok(filter.shared_anchors.includes("A:transform.go:func:runTransform"))
+    // §12d item 9: filter's own anchors are its own, not every function its step or other steps touched.
+    const own = (name: string) => objectAnchors(registry, now, links, id(name)).map(a => a.id)
+    assert.ok(own("filter").includes("A:filter.go:func:opFilter") && own("filter").includes("A:transform.go:dispatch:filter"))
+    for (const other of ["opSort", "opDrop", "opRename", "runTransform", "col"]) assert.ok(!own("filter").some(a => a.endsWith(`:${other}`)), `filter does not own ${other}`)
+    assert.ok(own("transform").includes("A:transform.go:func:col"), "reported for transform and changed by the step")
+    const filterStep = record.steps.find(s => s.label === "filter")!
+    assert.ok(filterStep.notes.some(n => /reported but not changed by the step: O\d+: opNowhere/u.test(n)), "a reported anchor the step did not change is not linked")
+    assert.ok(!links.some(l => l.anchor.endsWith(":opNowhere")))
+    // filter is protected through the dispatch point it shares with transform: named for filter, in transform's file.
+    assert.deepEqual(filter.shared_anchors, ["A:transform.go:dispatch:filter"])
+    assert.ok(!filter.shared_anchors.includes("A:transform.go:func:runTransform"), "runTransform is transform's by name, not filter's")
     assert.ok(filter.checks.includes(state.checks.find(c => c.key === "filter-gt")!.id))
     assert.ok(w2b.anchors.some(a => a.object === id("filter") && a.last_steps.length))
+  })
+})
+
+describe("exp2 anchors linked per object (§12d item 9)", () => {
+  it("named anchors go to their object, reported ones to theirs if changed, the rest are shared by the step", () => {
+    const step = { id: "P1.3", round: 1, label: "filter", summary: "", objects: [{ object: "O4", coverage: "full" as const }, { object: "O3", coverage: "full" as const }] }
+    const touched = ["A:main.go:func:parseFlags", "A:op_filter.go:func:apply", "A:util.go:func:readTable", "A:transform.go:func:runTransform", "A:util.go:func:sortKeys", "A:main.go:file:main.go"]
+    const names = (id: string) => ({ O4: "filter", O3: "transform" } as Record<string, string>)[id]
+    const { links, unverified } = linkStepAnchors(step, touched, [{ object: "O3", anchors: ["readTable", "opMissing"] }], names, 1)
+    const of = (object: string, via?: string) => links.filter(l => l.object === object && (!via || l.via === via)).map(l => l.anchor).sort()
+    assert.deepEqual(of("O4", "name"), ["A:op_filter.go:func:apply"], "a file named for filter")
+    assert.deepEqual(of("O3", "name"), ["A:transform.go:func:runTransform"])
+    assert.deepEqual(of("O3", "step"), ["A:util.go:func:readTable"])
+    assert.deepEqual(of("O4", "shared"), ["A:main.go:func:parseFlags", "A:util.go:func:sortKeys"])
+    assert.deepEqual(of("O3", "shared"), of("O4", "shared"))
+    assert.ok(!links.some(l => l.anchor.includes(":file:")))
+    assert.deepEqual(unverified, ["O3: opMissing"])
+    assert.ok(anchorNames("A:x.go:func:opFilter", "filter") && !anchorNames("A:x.go:func:opFilterRows", "rows filter") && !anchorNames("A:sorter.go:func:x", "sort"))
   })
 })

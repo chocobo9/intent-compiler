@@ -35,11 +35,56 @@ export interface ExecutorContext {
   resume: { done: string[]; remaining: ApprovedStep[] } | null
 }
 
+/**
+ * What the executor says it did in a step: a note, and per object the functions, types or dispatch names it changed
+ * for that object (anchor ids or plain names). Code keeps only those the step did change.
+ */
+export interface StepReport { usage: TokenUsage; note: string; anchors?: { object: string; anchors: string[] }[] }
+
+/** Lower-case words of a name: camelCase, snake_case, dots and other separators split. */
+export function nameWords(name: string): string[] {
+  return name.replace(/([a-z0-9])([A-Z])/gu, "$1 $2").toLowerCase().split(/[^a-z0-9]+/u).filter(Boolean)
+}
+
+/**
+ * The anchor (A:<file>:<kind>:<name>[#n]) is named for the object: its name, or its file's name without the
+ * extension, holds the object's name as whole words, in order (opFilter, dispatch:filter, anything in op_filter.go).
+ */
+export function anchorNames(anchorId: string, objectName: string): boolean {
+  const [, file = "", , ...rest] = anchorId.split(":")
+  const o = nameWords(objectName)
+  const holds = (w: string[]) => o.length > 0 && w.some((_, i) => o.every((x, k) => w[i + k] === x))
+  return holds(nameWords(rest.join(":").replace(/#\d+$/u, ""))) || holds(nameWords(file.split("/").pop()!.replace(/\.[^.]*$/u, "")))
+}
+
+/**
+ * Links what a committed step changed to its objects (DESIGN §12d item 9): an anchor named for an object goes to that
+ * object; one the executor reported for an object goes to it when the step did change it; the rest are shared by the
+ * step's objects. File anchors are never linked. Returns the links and the reported anchors the step did not change.
+ */
+export function linkStepAnchors(step: ApprovedStep, touched: readonly string[], report: StepReport["anchors"], names: (object: string) => string, round: number): { links: AnchorLink[]; unverified: string[] } {
+  const changed = touched.filter(a => !a.includes(":file:"))
+  const matches = (a: string, r: string) => a === r || a.split(":").slice(3).join(":").replace(/#\d+$/u, "") === r || a.split(":").slice(3).join(":").replace(/#\d+$/u, "").split(".").pop() === r
+  const links: AnchorLink[] = [], owned = new Set<string>(), unverified: string[] = []
+  for (const o of step.objects) {
+    const reported = (report ?? []).filter(r => r.object === o.object).flatMap(r => r.anchors)
+    for (const r of reported) if (!changed.some(a => matches(a, r))) unverified.push(`${o.object}: ${r}`)
+    for (const a of changed) {
+      const named = anchorNames(a, names(o.object))
+      if (!named && !reported.some(r => matches(a, r))) continue
+      links.push({ object: o.object, anchor: a, round, via: named ? "name" : "step", step: step.id })
+      owned.add(a)
+    }
+  }
+  for (const a of changed) if (!owned.has(a)) for (const o of step.objects) links.push({ object: o.object, anchor: a, round, via: "shared", step: step.id })
+  return { links, unverified }
+}
+
 export interface ExecutorSession {
   readonly id: string
   propose(feedback: string[]): Promise<{ steps: StepProposal[]; usage: TokenUsage }>
   /** Edits the work tree for one step (no commit). `feedback` lists what failed on the previous attempt. */
-  work(step: ApprovedStep, feedback: string[]): Promise<{ usage: TokenUsage; note: string }>
+  work(step: ApprovedStep, feedback: string[]): Promise<StepReport>
   close(): Promise<void>
 }
 
@@ -190,6 +235,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     if (record.status !== "done") continue
     const before = deps.anchors.extract(workdir)
     let stepFeedback: string[] = []
+    let report: StepReport["anchors"]
     while (rec.attempts < limits.maxAttemptsPerStep) {
       if (attemptsLeft <= 0) { record.status = "budget_spent"; break }
       attemptsLeft--
@@ -199,6 +245,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
         const r = await withTimeout(session.work(step, stepFeedback), limits.stepTimeoutMs)
         rec.usage = plus(rec.usage, r.usage)
         rec.notes.push(r.note)
+        report = r.anchors
       } catch (e) {
         if (!(e instanceof SessionBroken) && !(e instanceof StepTimeout)) throw e
         // The session is gone: back to the last good checkpoint, and a new session for the steps left.
@@ -225,7 +272,9 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
         rec.commit = commitStep(workdir, step.summary, trailers)
         rec.status = "committed"
         for (const c of verdict.checks) { if (c.outcome === "pass") passing.add(c.check); else passing.delete(c.check) }
-        for (const o of step.objects) for (const a of verdict.touched) if (!a.includes(":file:")) links.push({ object: o.object, anchor: a, round, via: "step", step: step.id })
+        const linked = linkStepAnchors(step, verdict.touched, report, id => deps.registry.objects.get(id)!.name, round)
+        links.push(...linked.links)
+        if (linked.unverified.length) rec.notes.push(`reported but not changed by the step: ${linked.unverified.join("; ")}`)
         break
       }
       rec.problems.push(...verdict.problems.map(p => `attempt ${rec.attempts}: ${p}`))
@@ -258,7 +307,7 @@ export async function verifyStep(workdir: string, step: ApprovedStep, before: re
   const changed = touched(diffAnchors(before, after))
   const declared = new Set(step.objects.map(o => o.object))
   for (const o of step.objects) {
-    const known = [...objectAnchors(deps.registry, before, links, o.object), ...objectAnchors(deps.registry, after, links, o.object)].map(a => a.id)
+    const known = [...objectAnchors(deps.registry, before, links, o.object, true), ...objectAnchors(deps.registry, after, links, o.object, true)].map(a => a.id)
     // An object with anchors must have one of them touched; an object without any yet, some anchor at all.
     const hit = known.length ? changed.some(a => known.includes(a)) : changed.length > 0
     if (!hit) problems.push(`${o.object} (${deps.registry.objects.get(o.object)!.name}) is declared ${o.coverage}, but none of its anchors changed${known.length ? ` (${known.join(", ")})` : ""}`)
@@ -267,7 +316,7 @@ export async function verifyStep(workdir: string, step: ApprovedStep, before: re
   const others = new Set<string>()
   for (const id of deps.registry.objects.keys()) {
     if (declared.has(id)) continue
-    const own = objectAnchors(deps.registry, before, links, id).map(a => a.id)
+    const own = objectAnchors(deps.registry, before, links, id, true).map(a => a.id)
     if (own.some(a => changed.includes(a))) others.add(id)
   }
   const active = activeChecks(deps.library, deps.events)

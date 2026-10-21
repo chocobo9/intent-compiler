@@ -64,11 +64,25 @@ export const PLAN_SCHEMA = {
   },
 }
 
+/** The step report (DESIGN §12d item 9): what was done, and per object the functions, types or dispatch names changed for it. */
+export const STEP_REPORT_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["note", "objects"],
+  properties: {
+    note: { type: "string", description: "What this step changed, briefly." },
+    objects: {
+      type: "array",
+      description: "For each object of the step: the functions, types or dispatch names (switch case labels, map keys) you changed for that object. Code shared by several of the step's objects may be left out.",
+      items: { type: "object", additionalProperties: false, required: ["object", "anchors"], properties: { object: { type: "string" }, anchors: { type: "array", items: { type: "string" } } } },
+    },
+  },
+}
+
 export const EXECUTOR_SYSTEM_PROMPT = [
   "You implement a Go command-line program in the working directory from a work order. The source zone is the only authority on what the program must do.",
   "Do the task zone; do not break the protection zone (its checks are rerun after every step); the status zone is information, not work.",
+  "In the source zone, ⟦<id> → revised by <ids>⟧ marks text that later text revised: the text named after it is in force, not the marked text. ⟦<id> → amended by <ids>⟧ marks a code block or table that newer text corrects: both stand, and where they differ the newer wins. ⟦<id> → withdrawn by <ids>⟧ marks text that no longer holds.",
   "First propose steps: each names the task-zone objects it covers, fully or partly; a shared foundation step may cover several objects partly, but every partly covered object needs a later step that covers it fully.",
-  "Then do one step per request: edit the code for that step only. Do not commit; the controller builds, checks and commits. When a request lists problems from the previous attempt, fix those.",
+  "Then do one step per request: edit the code for that step only. Do not commit; the controller builds, checks and commits. When a request lists problems from the previous attempt, fix those. After each step, report per object which functions, types or dispatch names you changed for it.",
 ].join("\n")
 
 const unwrap = (v: unknown): Record<string, any> => {
@@ -120,9 +134,14 @@ export class OpenCodeExecutor implements Executor {
       async work(step: ApprovedStep, feedback: string[]) {
         const text = `${first ? opening + "\n" : ""}Do step ${step.id} (${step.label}): ${step.summary}\nObjects: ${step.objects.map(o => `${o.object} ${o.coverage}`).join(", ")}${feedback.length ? `\nThe previous attempt failed:\n- ${feedback.join("\n- ")}` : ""}`
         first = false
-        const r = await prompt(text)
-        const note = (Array.isArray(r.parts) ? r.parts : []).filter((p: any) => p?.type === "text").map((p: any) => String(p.text)).join("\n").slice(0, 4000)
-        return { usage: usageOf(r), note }
+        const r = await prompt(text, { type: "json_schema", schema: STEP_REPORT_SCHEMA, retryCount: 0 })
+        const report = r.info?.structured as { note?: unknown; objects?: unknown } | undefined
+        const text_ = (Array.isArray(r.parts) ? r.parts : []).filter((p: any) => p?.type === "text").map((p: any) => String(p.text)).join("\n")
+        const note = (typeof report?.note === "string" ? report.note : text_).slice(0, 4000)
+        const anchors = Array.isArray(report?.objects)
+          ? (report!.objects as any[]).filter(o => typeof o?.object === "string" && Array.isArray(o.anchors)).map(o => ({ object: String(o.object), anchors: (o.anchors as unknown[]).filter((a): a is string => typeof a === "string") }))
+          : undefined
+        return { usage: usageOf(r), note, ...(anchors ? { anchors } : {}) }
       },
       async close() { try { await client.session.abort?.({ path: { id }, query: { directory: context.workdir } }) } catch { /* closing a finished session may fail; nothing depends on it */ } },
     }
