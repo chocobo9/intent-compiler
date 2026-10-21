@@ -93,11 +93,11 @@ function r1(request: CheckRequest, first: boolean): CheckDraft[] {
       reference_script: null,
     }),
     check({
-      key: "verify-match", object: id("verify"), blocks: ["R1.S4"], uses: [],
+      key: "verify-match", object: id("verify"), blocks: ["R1.S4.P2.s1", "R1.S4.P2.s2"], uses: [],
       input: { args: ["verify", "--file", "data.csv", "--checksum", "data.csv.sha256"], files: [{ path: "data.csv", content: DATA }, { path: "data.csv.sha256", content: "{{computed:digest}}\n" }] },
       assertions: [
-        // First answer: a quote that is not in the block.
-        verbatim("out", t("stdout_line", { line: 1 }), "VERIFIED", "R1.S4.P2.s2", first ? "prints VERIFIED OK" : "VERIFIED"),
+        // First answer: the value is cited to a unit that does not state it.
+        verbatim("out", t("stdout_line", { line: 1 }), "VERIFIED", first ? "R1.S4.P2.s1" : "R1.S4.P2.s2", "VERIFIED"),
         verbatim("exit", t("exit_code"), 0, "R1.S4.P2.s2", "Exit code 0"),
       ],
       reference_script: py("import hashlib, json\nprint(json.dumps({'digest': hashlib.sha256(open('data.csv', 'rb').read()).hexdigest()}))"),
@@ -174,8 +174,8 @@ function r3(request: CheckRequest, first: boolean): { checks: CheckDraft[]; reti
       succeeds(check({ key: "minmax-again", object: normalize, blocks: ["R2.S11.P6.s5"], uses: [], input: normalizeInput("minmax"), assertions: cells([0, 0.5, 1]), reference_script: normalizeScript("minmax") })),
       succeeds(check({
         key: "zscore-single", object: normalize, blocks: ["R3.S3.P3"], uses: [], input: normalizeInput("zscore", "id,value\n1,5\n"),
-        // First answer: a paraphrase given as a quote.
-        assertions: [verbatim("n1", t("csv_cell", { path: "out.csv", line: 1, column: "v_norm" }), 0, "R3.S3.P3", first ? "If n < 2, all outputs are 0" : "If `n < 2`, all output values are `\"0\"`.")],
+        // First answer: an id that does not exist (a sentence number past the paragraph's last).
+        assertions: [verbatim("n1", t("csv_cell", { path: "out.csv", line: 1, column: "v_norm" }), 0, first ? "R3.S3.P3.s9" : "R3.S3.P3.s2", "")],
         reference_script: null,
       })),
     ],
@@ -272,9 +272,12 @@ export function checkStubTransport(scripts = CHECK_SCRIPTS, log: CheckRequest[] 
   // Answers from the request alone (an empty draft gets the first answer, otherwise the repair), as stubTransport.
   return async request => {
     log.push(request)
-    const n = request.previous_draft.checks.length === 0 && request.previous_draft.retire.length === 0 ? 0 : 1
+    const n = request.previous_draft.checks.length === 0 && request.previous_draft.retire.length === 0 && !(request.previous_draft.uncheckable ?? []).length ? 0 : 1
     const script = scripts[request.round]
-    const reply = script ? script[Math.min(n, script.length - 1)](request) : patch({})
+    const scripted = script ? script[Math.min(n, script.length - 1)](request) : patch({})
+    // The stand-in writes the checks it has; the units the code reports uncovered it declares not checked offline.
+    const units = request.issues.filter(i => i.code === "uncovered").flatMap(i => [...i.message.matchAll(/\b(R\d+\.S\d+(?:\.[A-Za-z]+\d*)*) "/gu)].map(m => m[1]))
+    const reply = units.length ? { ...scripted, uncheckable_add: units.map(block => ({ block, reason: "stand-in: no check written offline" })) } : scripted
     return { text: JSON.stringify(reply), usage: { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 }, stub: true, model: script ? "stub:scripted" : "stub:none" }
   }
 }

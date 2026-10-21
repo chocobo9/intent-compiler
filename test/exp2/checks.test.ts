@@ -69,11 +69,12 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     await runOn(10, "r5")
   })
 
-  it("R1 first answer: an invented option, a quote not in its block and a convention left out of uses are sent back; the patch fixes them", () => {
+  it("R1 first answer: an invented option, a value cited to a unit that does not state it and a convention left out of uses are sent back; the patch fixes them", () => {
     const first = store.inspect().check_calls.filter(c => c.round === 1)
     assert.deepEqual(first.map(c => c.kind), ["attribute", "repair"])
-    const codes = first[0].issues.map(i => `${i.code}:${i.check}`).sort()
-    assert.deepEqual(codes, ["computed_by_hand:verify-match-2", "name_unknown:filter-gt", "uses_missing:transform-missing-input", "verbatim_not_found:verify-match"])
+    const codes = first[0].issues.filter(i => i.code !== "uncovered").map(i => `${i.code}:${i.check}`).sort()
+    assert.deepEqual(codes, ["computed_by_hand:verify-match-2", "name_unknown:filter-gt", "uses_missing:transform-missing-input", "verbatim_mismatch:verify-match"])
+    assert.match(first[0].issues.find(i => i.code === "verbatim_mismatch")!.message, /"VERIFIED" does not occur in R1\.S4\.P2\.s1, which reads "Reads <path>, computes SHA-256/u)
     assert.match(first[0].issues.find(i => i.code === "name_unknown")!.message, /option --precision does not appear/u)
     assert.match(first[0].issues.find(i => i.code === "uses_missing")!.message, /`ERROR: file not found: <path>` of O\d+ \(error handling\)/u)
     assert.deepEqual(first[1].issues, [])
@@ -128,7 +129,7 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
 
   it("R2 first answer: a check without an expected exit code is sent back", () => {
     const calls = store.inspect().check_calls.filter(c => c.round === 2)
-    assert.deepEqual(calls[0].issues.map(i => `${i.code}:${i.check}`), ["exit_missing:profile-numeric"])
+    assert.deepEqual(calls[0].issues.filter(i => i.code !== "uncovered").map(i => `${i.code}:${i.check}`), ["exit_missing:profile-numeric"])
     assert.deepEqual(calls[1].issues, [])
   })
 
@@ -188,7 +189,7 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.equal(status("3:r2", "normalize").status, "not_landed")
     // R3's paraphrased quote was sent back once.
     const r3calls = state.check_calls.filter(c => c.round === 3)
-    assert.deepEqual(r3calls[0].issues.map(i => i.code), ["verbatim_not_found"])
+    assert.deepEqual(r3calls[0].issues.filter(i => i.code !== "uncovered").map(i => i.code), ["verbatim_not_found"])
   })
 
   it("a check the previous version already satisfied is weak against that baseline", () => {

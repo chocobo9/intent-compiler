@@ -29,15 +29,17 @@ export interface Target {
 }
 
 /**
- * verbatim: quoted from the source. derived: worked out by the model (method A) and by the reference script
- * (method B), kept when they agree. computed: a value that takes computing (a digest, a hash): only the reference
- * script gives it, the model never works it out (DESIGN §12b item 2).
+ * verbatim: the text states the value; `block` is the block, sentence or clause that states it, and the code finds
+ * the value there (DESIGN §12e, BLOCK9 §2.1: no text is copied back). derived: worked out by the model (method A)
+ * and by the reference script (method B), kept when they agree. computed: a value that takes computing (a digest,
+ * a hash): only the reference script gives it, the model never works it out (DESIGN §12b item 2).
  */
 export interface ExpectSource {
   kind: "verbatim" | "derived" | "computed"
-  /** verbatim: the block and the exact text quoted from it. */
+  /** The id of the text the value comes from (required for verbatim; any kind may give one, and it joins the basis). */
   block: string | null
-  quote: string | null
+  /** Older answers quoted the text; it is ignored. */
+  quote?: string | null
 }
 
 export interface AssertionDraft {
@@ -76,7 +78,10 @@ export interface CheckDraft {
 
 export interface RetireDraft { check: string; reason: string }
 
-export interface ChecksDraft { checks: CheckDraft[]; retire: RetireDraft[] }
+/** A unit of the text the model holds cannot be checked, with why (BLOCK9 §2.2); code records it, it closes the gap. */
+export interface UncheckableDraft { block: string; reason: string }
+
+export interface ChecksDraft { checks: CheckDraft[]; retire: RetireDraft[]; uncheckable?: UncheckableDraft[] }
 
 export interface ChecksPatch {
   upsert: CheckDraft[]
@@ -84,9 +89,10 @@ export interface ChecksPatch {
   remove: string[]
   retire_add: RetireDraft[]
   retire_remove: string[]
+  uncheckable_add?: UncheckableDraft[]
 }
 
-export const EMPTY_CHECKS: ChecksDraft = { checks: [], retire: [] }
+export const EMPTY_CHECKS: ChecksDraft = { checks: [], retire: [], uncheckable: [] }
 
 export interface Assertion extends Omit<AssertionDraft, "expect_json"> {
   expect: unknown
@@ -158,7 +164,7 @@ export interface CheckEvent {
  * clause leaves it standing.
  */
 export function basisOf(registry: Registry, check: Pick<CheckRecord, "blocks" | "assertions">): string[] {
-  const quoted = check.assertions.flatMap(a => a.source.kind === "verbatim" && a.source.block ? [quoteUnit(registry, parseRef(a.source.block).id, a.source.quote ?? "")] : [])
+  const quoted = check.assertions.flatMap(a => a.source.block && registry.block(parseRef(a.source.block).id) ? [a.source.quote ? quoteUnit(registry, parseRef(a.source.block).id, a.source.quote) : parseRef(a.source.block).id] : [])
   return [...new Set([...check.blocks.map(b => parseRef(b).id), ...quoted])]
 }
 
@@ -309,9 +315,74 @@ export interface CheckRequest {
 export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
-  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "transport" | "quota" | "auth"
+  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth"
 
-export interface CheckIssue { code: CheckIssueCode; check?: string; message: string }
+/** `blocks`: for code, the units an `uncovered` issue names. */
+export interface CheckIssue { code: CheckIssueCode; check?: string; message: string; blocks?: string[] }
+
+// ---------------------------------------------------------------- coverage (BLOCK9 §2.2)
+
+export interface Coverage {
+  /** Units of this round's changed text that state something specific (inline code or a number). */
+  units: string[]
+  covered: string[]
+  uncheckable: UncheckableDraft[]
+  /** Units neither covered nor declared uncheckable, by the object that owns them. */
+  gaps: { object: string; units: string[] }[]
+}
+
+/** Sentence-level units inside a block (a paragraph without sentences is one unit; a clause is its own unit). */
+function unitsOf(registry: Registry, id: string): SourceBlock[] {
+  const b = registry.block(id)
+  if (!b || b.kind === "heading") return []
+  if (b.level === "clause" || b.level === "sentence" || (b.level === "paragraph" && !b.children.length)) return [b]
+  return b.children.flatMap(c => unitsOf(registry, c))
+}
+
+/** A basis id rests on a unit when it is the unit, lies inside it, or holds it without holding anything else. */
+function restsOn(registry: Registry, basis: string, unit: SourceBlock): boolean {
+  if (within(registry, basis, unit.id)) return true
+  if (!within(registry, unit.id, basis)) return false
+  const b = registry.block(basis)!
+  return b.level === "sentence" || (b.level === "paragraph" && b.children.length <= 1)
+}
+
+/**
+ * What of this round's changed text the checks cover, measured by code (BLOCK9 §2.2): the units that state something
+ * specific, which of them some check (in the draft or the library) rests on, and which the model declared it cannot
+ * check. Whole sections and multi-sentence paragraphs cited as a basis cover none of their sentences.
+ */
+export function coverage(registry: Registry, round: number, draft: ChecksDraft, library: readonly CheckRecord[], events: readonly CheckEvent[]): Coverage {
+  const changed = new Set<string>()
+  for (const c of registry.roundScope(round)) {
+    for (const e of c.entries) changed.add(e.block)
+    for (const m of c.received) for (const b of m.by) changed.add(b)
+    for (const a of c.applied) changed.add(a.from)
+  }
+  const seen = new Set<string>()
+  const units = [...changed].flatMap(id => unitsOf(registry, id)).filter(u => !seen.has(u.id) && seen.add(u.id) && /`[^`]+`|\d/u.test(u.text))
+  const draftBasis = (k: CheckDraft) => [...k.blocks, ...k.assertions.map(a => a.source.block).filter((b): b is string => !!b)].map(b => parseRef(b).id).filter(b => registry.block(b))
+  const basis = [...draft.checks.flatMap(draftBasis), ...activeChecks(library, events).flatMap(k => basisOf(registry, k))]
+  const declared = (draft.uncheckable ?? []).filter(u => registry.block(parseRef(u.block).id))
+  const covered = units.filter(u => basis.some(b => restsOn(registry, b, u)))
+  const closed = (u: SourceBlock) => covered.includes(u) || declared.some(d => within(registry, u.id, parseRef(d.block).id) || within(registry, parseRef(d.block).id, u.id))
+  const gaps = new Map<string, string[]>()
+  for (const u of units.filter(x => !closed(x))) {
+    const owner = registry.coverOf(u.id)?.owner
+    if (!owner || owner === "none") continue
+    gaps.set(owner, [...(gaps.get(owner) ?? []), u.id])
+  }
+  return { units: units.map(u => u.id), covered: covered.map(u => u.id), uncheckable: declared, gaps: [...gaps.entries()].map(([object, ids]) => ({ object, units: ids })) }
+}
+
+export function coverageIssues(registry: Registry, cov: Coverage, draft: ChecksDraft, library: readonly CheckRecord[], events: readonly CheckEvent[]): CheckIssue[] {
+  return cov.gaps.map(g => {
+    const o = registry.objects.get(g.object)
+    const none = !draft.checks.some(k => k.object === g.object) && !activeChecks(library, events).some(k => k.object === g.object)
+    const list = g.units.map(id => `${id} ${JSON.stringify(excerpt(registry.block(id)!.text, 70))}`).join("; ")
+    return { code: "uncovered" as const, blocks: g.units, message: `${g.object} (${o?.name ?? g.object})${none ? " has no check yet;" : ":"} ${g.units.length === 1 ? "1 unit of this round's text states" : `${g.units.length} units of this round's text state`} a specific value or rule and no check rests on ${g.units.length === 1 ? "it" : "them"}: ${list}. Write checks resting on them, or list in uncheckable_add those a run cannot check` }
+  })
+}
 
 export function buildCheckRequest(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], previous: ChecksDraft = EMPTY_CHECKS, issues: CheckIssue[] = []): CheckRequest {
   const rounds = [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)
@@ -329,7 +400,9 @@ export function buildCheckRequest(registry: Registry, round: number, library: re
   })
   return {
     round, sources: rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n"), scope,
-    objects: [...registry.objects.values()].map(o => ({ id: o.id, name: o.name })), checks, stale, issues, previous_draft: previous,
+    objects: [...registry.objects.values()].map(o => ({ id: o.id, name: o.name })), checks, stale,
+    // The message names the units; the `blocks` list is for code.
+    issues: issues.map(({ blocks: _, ...i }) => i), previous_draft: previous,
   }
 }
 
@@ -397,9 +470,8 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
       else {
         const ref = parseRef(a.source.block ?? "")
         const block = registry.block(ref.id)
-        if (!block || roundOf(ref.id) > round) add("verbatim_not_found", `${aw}: quoted block ${a.source.block} does not exist`, k.key)
-        else if (!a.source.quote || !block.text.includes(a.source.quote)) add("verbatim_not_found", `${aw}: the quote ${JSON.stringify(a.source.quote)} is not in ${ref.id}; quote its text exactly, or derive the value`, k.key)
-        else if (!quoteSays(a.source.quote, expect)) add("verbatim_mismatch", `${aw}: the expected value ${a.expect_json} does not occur literally in the quote ${JSON.stringify(a.source.quote)}; when the text states the value in words (say "an empty string" for "", "writes the file" for the file existing), make the source derived and have the reference script compute it`, k.key)
+        if (!block || roundOf(ref.id) > round) add("verbatim_not_found", `${aw}: a stated value needs the id of the block, sentence or clause that states it; ${a.source.block ?? "(none)"} does not exist`, k.key)
+        else if (!statedIn(block.text, expect)) add("verbatim_mismatch", `${aw}: ${a.expect_json} does not occur in ${ref.id}, which reads ${JSON.stringify(excerpt(block.text, 160))}; cite the unit that states it, or, when the text states the value in words (say "an empty string" for "", "writes the file" for the file existing), make the source derived and have the reference script compute it`, k.key)
       }
       // A key form of a shared convention in the expectation needs that convention in uses.
       for (const text of strings(expect)) {
@@ -467,6 +539,30 @@ function targetProblems(t: Target): string | null {
   return null
 }
 
+/** Whitespace collapsed and Markdown marks (code ticks, emphasis, list and number markers) removed. */
+export function plainText(s: string): string {
+  return s.replace(/`|\*\*|__/gu, "").replace(/^\s*(?:[-*+]|\d+\.)\s+/gmu, "").replace(/\s+/gu, " ").trim()
+}
+
+const excerpt = (s: string, n: number) => { const p = plainText(s); return p.length > n ? `${p.slice(0, n)}…` : p }
+
+/**
+ * Does the text at this id state the value (BLOCK9 §2.1)? Compared without whitespace and Markdown differences: the
+ * value as written there, an inline-code form of it with its <placeholders> filled, or the number in it.
+ */
+export function statedIn(text: string, expect: unknown): boolean {
+  const forms = [...text.matchAll(/`([^`]+)`/gu)].map(m => m[1])
+  if (typeof expect === "string") {
+    // A form is a template only with some fixed text: `<path>` alone would match anything.
+    if (forms.some(f => /<[^<>\s]+>/u.test(f) && f.replace(/<[^<>\s]+>/gu, "").replace(/\s+/gu, "").length >= 3 && templateRegex(f).test(expect))) return true
+    const e = plainText(expect), t = plainText(text)
+    if (!e) return false
+    if (forms.some(f => plainText(f) === e)) return true
+    return e.length >= 3 ? t.includes(e) : new RegExp(`(^|[^\\w.])${escape(e)}($|[^\\w.])`, "u").test(t)
+  }
+  return quoteSays(plainText(text), expect)
+}
+
 /** Does the quoted text say this value: the same text, the text with its <placeholders> filled in, or the number in it. */
 export function quoteSays(quote: string, expect: unknown): boolean {
   if (typeof expect === "string") {
@@ -505,6 +601,7 @@ export function checksShapeProblems(value: unknown): string[] {
   })
   if (!strs(value.remove) || !strs(value.retire_remove)) p.push("remove and retire_remove must be string arrays")
   if (!Array.isArray(value.retire_add) || !value.retire_add.every(r => obj(r) && typeof r.check === "string" && typeof r.reason === "string")) p.push("retire_add: not an array of {check, reason}")
+  if (value.uncheckable_add !== undefined && !(Array.isArray(value.uncheckable_add) && value.uncheckable_add.every(u => obj(u) && typeof u.block === "string" && typeof u.reason === "string"))) p.push("uncheckable_add: not an array of {block, reason}")
   return p
 }
 
@@ -514,7 +611,9 @@ export function applyChecksPatch(previous: ChecksDraft, patch: ChecksPatch): Che
   const checks = previous.checks.filter(k => !removed.has(k.key) || upserts.has(k.key)).map(k => upserts.get(k.key) ?? k)
   for (const [key, k] of upserts) if (!previous.checks.some(x => x.key === key)) checks.push(k)
   const retire = [...previous.retire.filter(r => !patch.retire_remove.includes(r.check) && !patch.retire_add.some(x => x.check === r.check)), ...patch.retire_add]
-  return { checks, retire }
+  const added = patch.uncheckable_add ?? []
+  const uncheckable = [...(previous.uncheckable ?? []).filter(u => !added.some(x => x.block === u.block)), ...added]
+  return { checks, retire, uncheckable }
 }
 
 // ---------------------------------------------------------------- method B
@@ -611,13 +710,22 @@ export interface CheckCallRecord {
   error?: string
 }
 
-export interface DeriveOutcome { status: "accepted" | "failed" | "interrupted"; draft?: ChecksDraft; calls: CheckCallRecord[]; issues: CheckIssue[] }
+export interface DeriveOutcome {
+  status: "accepted" | "failed" | "interrupted"
+  draft?: ChecksDraft
+  calls: CheckCallRecord[]
+  issues: CheckIssue[]
+  /** Checks that still had problems when the repairs ran out: dropped one by one, with their issues (BLOCK9 §2.1). */
+  dropped?: { key: string; issues: CheckIssue[] }[]
+  coverage?: Coverage
+}
 
 export async function deriveChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], transport: ChecksTransport, options: { maxRepairs: number; callId: (n: number) => string }): Promise<DeriveOutcome> {
   const calls: CheckCallRecord[] = []
   const facts = codeFacts(registry, round)
   let draft = EMPTY_CHECKS
   let issues: CheckIssue[] = []
+  let parsedOnce = false
   for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
     const request = buildCheckRequest(registry, round, library, events, draft, issues)
     const text = requestJson(request)
@@ -640,11 +748,22 @@ export async function deriveChecks(registry: Registry, round: number, library: r
     const shape = checksShapeProblems(parsed)
     if (shape.length) { issues = shape.map(message => ({ code: "shape" as const, message })); record.issues = issues; continue }
     draft = applyChecksPatch(draft, parsed as ChecksPatch)
-    issues = checkChecks(registry, round, draft, library, events, facts)
+    issues = [...checkChecks(registry, round, draft, library, events, facts), ...coverageIssues(registry, coverage(registry, round, draft, library, events), draft, library, events)]
     record.issues = issues
-    if (!issues.length) return { status: "accepted", draft, calls, issues }
+    parsedOnce = true
+    if (!issues.length) return { status: "accepted", draft, calls, issues, dropped: [], coverage: coverage(registry, round, draft, library, events) }
   }
-  return { status: "failed", calls, issues }
+  if (!parsedOnce) return { status: "failed", calls, issues }
+  // The repairs ran out: each check with a problem left is dropped on its own; the rest enter (BLOCK9 §2.1).
+  const bad = new Set(issues.map(i => i.check).filter((k): k is string => !!k))
+  const retired = new Set(events.filter(e => e.status === "retired").map(e => e.check))
+  const kept: ChecksDraft = {
+    checks: draft.checks.filter(k => !bad.has(k.key)),
+    retire: draft.retire.filter(r => library.some(c => c.id === r.check && c.admission === "admitted") && !retired.has(r.check)),
+    uncheckable: (draft.uncheckable ?? []).filter(u => registry.block(parseRef(u.block).id)),
+  }
+  const dropped = [...bad].map(key => ({ key, issues: issues.filter(i => i.check === key) }))
+  return { status: "accepted", draft: kept, calls, issues, dropped, coverage: coverage(registry, round, kept, library, events) }
 }
 
 function zero(): TokenUsage { return { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 } }
@@ -692,11 +811,10 @@ const checkSchema = {
           tolerance: { type: ["number", "null"], description: "Allowed relative numeric difference; null for the default." },
           reading: { ...nullableString, description: "When the expected value rests on a reading the text does not state (say, whether row numbers count data rows from 1), that reading in one sentence; null when the text states it." },
           source: {
-            type: "object", additionalProperties: false, required: ["kind", "block", "quote"],
+            type: "object", additionalProperties: false, required: ["kind", "block"],
             properties: {
-              kind: { type: "string", enum: ["verbatim", "derived", "computed"], description: "verbatim: the value is stated in the source (quote it exactly; <placeholders> may be filled from the input). derived: you worked it out; the reference script must work it out too. computed: it takes computing (a digest, a hash, a checksum): do not write it (expect_json \"null\"); only the reference script gives it." },
-              block: nullableString,
-              quote: nullableString,
+              kind: { type: "string", enum: ["verbatim", "derived", "computed"], description: "verbatim: the text states the value (<placeholders> may be filled from the input); the code finds it at `block`. derived: you worked it out; the reference script must work it out too. computed: it takes computing (a digest, a hash, a checksum): do not write it (expect_json \"null\"); only the reference script gives it." },
+              block: { ...nullableString, description: "The id of the block, sentence or clause the value rests on (required for verbatim). Do not copy its text." },
             },
           },
         },
@@ -714,21 +832,23 @@ const checkSchema = {
 export const CHECKS_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["upsert", "remove", "retire_add", "retire_remove"],
+  required: ["upsert", "remove", "retire_add", "retire_remove", "uncheckable_add"],
   properties: {
     upsert: { type: "array", items: checkSchema, description: "Checks to add, or to replace the draft's check with the same key." },
     remove: { ...stringArray, description: "Draft keys dropped." },
     retire_add: { type: "array", items: { type: "object", additionalProperties: false, required: ["check", "reason"], properties: { check: { type: "string" }, reason: { type: "string" } } }, description: "Proposals: library checks whose expectation rests on text that no longer holds. The code accepts one only when that check's source was in fact revised." },
     retire_remove: stringArray,
+    uncheckable_add: { type: "array", items: { type: "object", additionalProperties: false, required: ["block", "reason"], properties: { block: { type: "string" }, reason: { type: "string" } } }, description: "Units named in an `uncovered` issue that state nothing a run of the program can check (say, a sentence that only introduces what follows), each with why." },
   },
 }
 
 export const CHECKS_SYSTEM_PROMPT = [
   "You write acceptance checks for a command-line program from its requirements. `sources` holds every round so far, annotated with block ids; the original text is the only authority and newer text overrides older text.",
   "Write checks for the objects in `scope` (they changed this round), and to replace the checks in `stale` (whose source, a block they refer to, or a convention they use changed); for no other object. A check runs the program once: `input.files` are written into an empty directory, the program is called with `input.args`, and each assertion reads one fact of the result. Command names, options and JSON keys must be those the requirements' code fragments show.",
-  "Every expected value needs a source: verbatim when the requirement states it (quote the block's text exactly), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept. Never compute a digest, hash or checksum yourself: an expected one is source computed, and one an input file needs is written as {{computed:NAME}} in the file, with the reference script printing NAME's value; the code fills it in before the program runs.",
+  "Every expected value needs a source: verbatim when the requirement states it (give the id of the block, sentence or clause that states it; do not copy the text), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept. Never compute a digest, hash or checksum yourself: an expected one is source computed, and one an input file needs is written as {{computed:NAME}} in the file, with the reference script printing NAME's value; the code fills it in before the program runs.",
   "One assertion reads one fact. A fact that rests on a reading the text does not state goes in its own assertion, apart from the facts that do not, and names that reading in `reading`; a failure of such an assertion is reported, not counted against the program.",
   "Keep convention facts (a shared error format, an output-formatting rule) in their own assertions with role convention, and list those conventions in `uses`; business facts are the object's own behaviour.",
   "Every check states its expected exit code. Prefer checks whose expected output depends on the input data; a check of the exit code alone shows little. `checks` lists the library's checks for these objects and `stale` those whose source text changed this round: derive their replacements where the text still says something checkable. You may propose retiring a check whose expectation rests on replaced text; the code verifies the proposal.",
+  "Cover the text: every sentence, list item or clause of this round's changed blocks that states a specific value, limit, edge case or error needs a check resting on it (by `blocks` or by an assertion's `block`, at that unit or finer). An `uncovered` issue lists the units no check rests on yet; cover them, or list in `uncheckable_add` those that state nothing a run can check. A check with a problem left is dropped on its own; the others enter.",
   "Answer as a patch on `previous_draft` (empty on the first call). When `issues` is not empty, fix exactly those problems and leave the rest as it is.",
 ].join("\n")

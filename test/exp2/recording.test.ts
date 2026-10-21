@@ -111,7 +111,7 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
       store: serialStore, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: r.attribution, checks: r.checks,
       executor: serialExecutor([], new Set()), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(),
       build: goBuilder(join(dir, "builds"), {}, "dpipe"),
-      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 20_000, execution: DEFAULT_LIMITS },
+      limits: { attributionRepairs: 2, checkRepairs: 1, managementTimeoutMs: 60_000, checkTimeoutMs: 20_000, execution: DEFAULT_LIMITS },
     })
     assert.equal((await serial.run({ to: 3 })).status, "done")
     const s = serialStore.inspect()
@@ -123,6 +123,9 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
     CHECK_SUMMARY.first_r1 = s.check_calls.find(c => c.round === 1)!.issues.map(i => i.message)
     assert.ok((CHECK_SUMMARY.first_r1 as string[]).some(m => /make the source derived and have the reference script compute it/u.test(m)), "the verbatim mismatch points to the derived route")
     assert.ok((CHECK_SUMMARY.first_r1 as string[]).some(m => /shared convention the check lists in uses/u.test(m)), "the basis issue names the uses route")
+    // Haiku answered twice per round: the replay allows one repair, and what is left after it is per-check admission and coverage.
+    CHECK_SUMMARY.coverage = s.check_rounds.map(c => c.coverage ? `${c.coverage.covered.length}/${c.coverage.units.length}` : "-")
+    CHECK_SUMMARY.dropped = s.check_rounds.map(c => (c.dropped ?? []).map(d => d.key))
     CHECK_SUMMARY.unused = r.unused().filter(u => u.step === "checks").map(u => `R${u.round}#${u.answer}`)
     process.stdout.write(`# batch2 checks: ${JSON.stringify({ ...CHECK_SUMMARY, first_r1: undefined })}\n`)
   })

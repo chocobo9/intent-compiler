@@ -3,7 +3,7 @@ import { resolve } from "node:path"
 import { attributeRound, type AttributionTransport, type Issue, type ModelCallRecord } from "./attribution.js"
 import { materialize, type Registry, type RoundAcceptance, type Signal } from "./registry.js"
 import { contentHash } from "./source.js"
-import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport } from "./checks.js"
+import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport, type Coverage } from "./checks.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import type { ExecutionRecord } from "./execution.js"
 import type { RoundReport } from "./report.js"
@@ -56,6 +56,10 @@ export interface CheckRoundRecord {
   /** Retire proposals the code did not accept: the check's basis had not changed. */
   rejected_retire: { check: string; reason: string }[]
   issues?: CheckIssue[]
+  /** Checks dropped one by one when the repairs ran out, with their issues (BLOCK9 §2.1). */
+  dropped?: { key: string; issues: CheckIssue[] }[]
+  /** What of this round's changed text the checks cover (BLOCK9 §2.2). */
+  coverage?: Coverage
 }
 
 export interface DeriveDeps {
@@ -170,7 +174,7 @@ export class Exp2Store {
         if (replacedBasis(registry, basisOf(registry, k), k.round, round).length) { s.check_events.push({ check: r.check, round, status: "retired", reason: r.reason, by: "model", cause: { kind: "proposal", source: r.check } }); retired.push(r.check) }
         else rejected.push(r)
       }
-      const record: CheckRoundRecord = { round, status: "accepted", calls, entered, retired, rejected_retire: rejected }
+      const record: CheckRoundRecord = { round, status: "accepted", calls, entered, retired, rejected_retire: rejected, dropped: outcome.dropped ?? [], ...(outcome.coverage ? { coverage: outcome.coverage } : {}) }
       s.check_rounds.push(record)
       return record
     })
