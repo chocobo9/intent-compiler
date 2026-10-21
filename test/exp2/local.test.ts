@@ -268,7 +268,9 @@ describe("exp2 local: the configuration file and the entry point", () => {
     const { config } = assembleSerial({
       ...c, state_dir: join(tmp, "state"), checkpoints_dir: join(tmp, "cp"), repo_dir: join(tmp, "app"), builds_dir: join(tmp, "b"),
       management: { ...c.management, directory: join(tmp, "mgmt") }, coding: { ...c.coding, directory: join(tmp, "app") },
+      recording: { ...c.recording!, cassette: join(tmp, "recording", "cassette.json") },
     })
+    assert.ok(existsSync(join(tmp, "recording", "cassette.json")), "the recording is written at assembly")
     assert.ok(config.runner instanceof DockerRunner && config.sandbox instanceof DockerScriptSandbox)
     assert.equal(config.executorIsStub, false)
     assert.equal(config.limits.execution.repairCycles, 3)
