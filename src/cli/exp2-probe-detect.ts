@@ -26,7 +26,7 @@ async function main(argv: string[]): Promise<number> {
   const { config: c } = assembleSerial(loadLocalConfig(resolve(config)))
   if (!c.probes || !c.judge) { process.stderr.write("the config switches the probe writer or the judge off (roles: null)\n"); return 2 }
   const products = parseProducts(readFileSync(resolve(list), "utf8")).map(p => ({ ...p, path: resolve(p.path) }))
-  const result = await probeDetect({ store, probes: c.probes, judge: c.judge, sandbox: c.sandbox, build: c.build, runner: c.runner, timeoutMs: c.limits.checkTimeoutMs, root: out, anchors: c.anchors, ...(c.buildAsync ? { buildAsync: c.buildAsync } : {}), mutants: c.limits.mutants ?? 20, platform: c.platform, maxRepairs: c.limits.probeRepairs }, products)
+  const result = await probeDetect({ store, probes: c.probes, judge: c.judge, ...(c.ruling ? { ruling: c.ruling } : {}), sandbox: c.sandbox, build: c.build, runner: c.runner, timeoutMs: c.limits.checkTimeoutMs, root: out, anchors: c.anchors, ...(c.buildAsync ? { buildAsync: c.buildAsync } : {}), mutants: c.limits.mutants ?? 0, platform: c.platform, maxRepairs: c.limits.probeRepairs }, products)
   const s = store.inspect()
   const key = (id: string) => s.probes.find(p => p.id === id)?.key ?? id
   const lines = ["# Probes and judge on products with known official results", ""]

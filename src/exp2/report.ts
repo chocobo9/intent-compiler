@@ -1,7 +1,8 @@
 import type { TokenUsage } from "./attribution.js"
 import type { ExecutionRecord } from "./execution.js"
 import type { Registry } from "./registry.js"
-import type { ObjectStatus } from "./verdict.js"
+import type { CheckEvent, CheckRecord } from "./checks.js"
+import type { CheckRun, ObjectStatus } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
 import type { ProbeRoundRecord } from "./probes.js"
 import { pairKey, type Finding } from "./judge.js"
@@ -38,7 +39,7 @@ export interface RoundReport {
     /** Case-level coverage of this round's units (BLOCK10 §7.3). */
     cases: { total: number; covered: number; excused: number; open: string[] } | null
     /** Probes run per cycle and why (BLOCK11 §1). */
-    runs_by_cycle: { cycle: string; first: number; open: number; affected: number; new: number; check: number }[]
+    runs_by_cycle: { cycle: string; checks: number; probes: number; judged: number; cached: number; by_code: number }[]
     /** Units (or cases) no probe exercises yet, carried into this round's writing, and those still open at its end (BLOCK11 §2). */
     gaps: { carried_in: string[]; open: string[] }
     /** Whether the probes tell the round's program from mutants of it, measured by code; null when not run. */
@@ -58,6 +59,39 @@ export interface RoundReport {
   wall?: { round_ms: number; stages: { stage: string; ms: number; spans: number; first_start_ms: number; last_end_ms: number }[] }
   /** Calls into the management stages (attribution, checks) this round, by stage, for the per-round budget. */
   management_calls: number
+  /**
+   * The round's acceptance in one model (DESIGN §12g): determinations on the final program by kind (A a stated value
+   * compared by code, B a reference's value or property compared by code, C a model judgment), and open items by reason.
+   */
+  acceptance?: AcceptanceSummary
+}
+
+export interface AcceptanceSummary {
+  by_kind: { A: number; B: number; C: number }
+  open: {
+    program_wrong: string[]; uncovered: string[]; reference_pending: string[]; ambiguous: string[]
+    /** Closed by code: left unexercised by two writings in a row. Reported, no longer written for. */
+    uncheckable: { unit: string; reason: string }[]
+  }
+}
+
+/** Kind of a library check: B when any expected value rests on a reference (derived, computed), else A. */
+export const libraryKind = (k: CheckRecord): "A" | "B" => k.assertions.some(a => a.source.kind === "derived" || a.source.kind === "computed") ? "B" : "A"
+
+export function acceptanceSummary(i: { library: readonly CheckRecord[]; runs: readonly CheckRun[]; events: readonly CheckEvent[]; findings: readonly Finding[]; gaps: { open: string[]; closed: { unit: string; reason: string }[] } }): AcceptanceSummary {
+  const by_kind = { A: 0, B: 0, C: 0 }
+  for (const r of i.runs) { const k = i.library.find(c => c.id === r.check); if (k) by_kind[libraryKind(k)]++ }
+  for (const f of i.findings) by_kind[f.kind ?? "C"]++
+  return {
+    by_kind,
+    open: {
+      program_wrong: [...i.runs.filter(r => r.failure?.class === "not_landed").map(r => r.check), ...i.findings.filter(f => f.verdict === "wrong").map(f => pairKey(f.probe, f.unit))],
+      uncovered: i.gaps.open,
+      reference_pending: i.runs.filter(r => r.failure?.class === "disputed").map(r => r.check),
+      ambiguous: [...i.events.filter(e => e.status === "retired" && e.reason.startsWith("ruled ambiguous")).map(e => e.check), ...i.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit))],
+      uncheckable: i.gaps.closed.map(c => ({ unit: c.unit, reason: c.reason })),
+    },
+  }
 }
 
 export const zeroUsage = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
@@ -90,6 +124,7 @@ export interface ReportInput {
   statuses: readonly ObjectStatus[]
   checks: RoundReport["checks"]
   wall?: RoundReport["wall"]
+  summary?: AcceptanceSummary
   probes?: null | {
     calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
     judge_calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
@@ -147,6 +182,7 @@ export function buildReport(i: ReportInput): RoundReport {
     loss,
     management_calls: i.understand.length + i.acceptance.length,
     ...(i.wall ? { wall: i.wall } : {}),
+    ...(i.summary ? { acceptance: i.summary } : {}),
   }
 }
 
@@ -173,11 +209,15 @@ export function renderReport(r: RoundReport): string {
     `Execution: ${r.execution.status}; ${r.execution.cycles} cycles (${r.execution.repairs} repairs), kept ${r.execution.kept ?? "none"} with ${r.execution.failing_at_end} failing; ${r.execution.contests} contests; carried ${r.execution.carried_objects.length}; sessions ${r.execution.sessions} (${r.execution.broken_sessions} broken).`,
     ...(r.probes ? [
       `Probes: ${r.probes.written} written for ${r.probes.units} units (${r.probes.uncovered.length} not exercised, ${r.probes.dropped} dropped), ${r.probes.stale} stale, ${r.probes.active} active. Carried in ${r.probes.carried_in}; open at the end ${r.probes.open_at_end.length}; ambiguous ${r.probes.ambiguous_at_end.length}; broke ${r.probes.broke.length}.`,
-      `Probe runs: ${r.probes.runs_by_cycle.map(c => `${c.cycle} ${c.first ? `all ${c.first}` : `open ${c.open}, affected ${c.affected}, new ${c.new}${c.check ? `, end check ${c.check}` : ""}`}`).join("; ") || "none"}. Gaps carried in ${r.probes.gaps.carried_in.length}, open ${r.probes.gaps.open.length}.`,
+      `Runs per cycle (every check and probe, in batches): ${r.probes.runs_by_cycle.map(c => `${c.cycle} checks ${c.checks}, probes ${c.probes}: judged ${c.judged} (output changed), cached ${c.cached}, by code ${c.by_code}`).join("; ") || "none"}.`,
       `Cases: ${r.probes.cases ? `${r.probes.cases.covered}/${r.probes.cases.total} reached, ${r.probes.cases.excused} uncheckable, ${r.probes.cases.open.length} open` : "n/a"}. Discrimination: ${r.probes.discrimination ? `${r.probes.discrimination.killed} of ${r.probes.discrimination.killed + r.probes.discrimination.survived} mutants told apart (${r.probes.discrimination.build_failed} did not build); weak units ${r.probes.discrimination.weak_units.length}, probes added ${r.probes.discrimination.strengthened.length}, still not told apart ${r.probes.discrimination.still_weak}` : "not run"}.`,
       `Probe writer (${r.probes.models.writer.join(", ") || "?"}): ${r.probes.writer.calls} calls, ${tok(r.probes.writer.tokens)}. Judge (${r.probes.models.judge.join(", ") || "?"}): ${r.probes.judge.calls} calls, ${tok(r.probes.judge.tokens)}. Share of coding tokens: ${r.probes.share.all ?? "n/a"} (uncached ${r.probes.share.uncached ?? "n/a"}).`,
     ] : []),
     ...(r.wall ? [`Wall time ${(r.wall.round_ms / 1000).toFixed(0)} s. ${r.wall.stages.map(x => `${x.stage} ${(x.ms / 1000).toFixed(1)} s (${x.spans}×, ${(x.first_start_ms / 1000).toFixed(0)}–${(x.last_end_ms / 1000).toFixed(0)} s)`).join("; ")}.`] : []),
+    ...(r.acceptance ? [
+      `Determinations on the final program: ${r.acceptance.by_kind.A} stated values (A), ${r.acceptance.by_kind.B} by a reference (B), ${r.acceptance.by_kind.C} by judgment (C), all A and B compared by code.`,
+      `Open: program wrong ${r.acceptance.open.program_wrong.length}, uncovered ${r.acceptance.open.uncovered.length}, reference disagreement pending ${r.acceptance.open.reference_pending.length}, ambiguous ${r.acceptance.open.ambiguous.length}; closed as uncheckable ${r.acceptance.open.uncheckable.length}${r.acceptance.open.uncheckable.length ? ` (${r.acceptance.open.uncheckable.map(u => u.unit).join(", ")})` : ""}.`,
+    ] : []),
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,
     "",

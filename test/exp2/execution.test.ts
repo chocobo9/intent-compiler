@@ -42,7 +42,8 @@ describe("exp2 block 9: one session per round, checks drive the repairs", () => 
     const registry = store.registry(), state = store.inspect()
     const executor = new StubExecutor({ messages })
     const record = await executeRound(workdir, w1, renderWorkOrder(w1), executor, {
-      registry, library: state.checks, events: state.check_events, links: [], anchors, build: goBuilder(join(dir, `${name}-builds`)), runner, facts: codeFacts(registry, 1), ...extra,
+      // The stand-in library's references stand as upheld (DESIGN §12g): their failures count against the program.
+      registry, library: state.checks, events: state.check_events, links: [], anchors, build: goBuilder(join(dir, `${name}-builds`)), runner, facts: codeFacts(registry, 1), upheld: () => new Set(["reference"]), ...extra,
     }, { ...DEFAULT_LIMITS, ...limits })
     return { workdir, base, executor, record }
   }

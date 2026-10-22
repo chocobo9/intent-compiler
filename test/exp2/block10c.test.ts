@@ -87,7 +87,7 @@ func opFilter(t table, op map[string]any) (table, error) {
     await store.deriveRoundProbes(1, stubProbeWriter())
   })
 
-  it("the run is stopped at the memory limit, the judge sees it as what the program did, and the round goes on", async () => {
+  it("the run is stopped at the memory limit, ruled wrong by code (DESIGN §12g) as what the program did, and the round goes on", async () => {
     const workdir = join(dir, "work")
     mkdirSync(workdir, { recursive: true })
     initRepo(workdir)
@@ -114,7 +114,7 @@ func opFilter(t table, op map[string]any) (table, error) {
     assert.deepEqual(seen, ["memory limit: resident memory passed the 200 MiB limit"], "only the filter probe ran into the limit")
     assert.equal(record.status, "done")
     assert.equal(record.cycles[0].corrections.length, 1)
-    assert.match(executor.log.messages[1].text, /"stopped": "memory limit: resident memory passed the 200 MiB limit"[\s\S]*the program did not finish/u)
+    assert.match(executor.log.messages[1].text, /"stopped": "memory limit: resident memory passed the 200 MiB limit"[\s\S]*the program was stopped: memory limit/u)
     assert.deepEqual(record.cycles[1].corrections, [])
   })
 

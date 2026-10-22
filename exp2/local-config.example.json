@@ -71,11 +71,16 @@
       "variant": "low"
     },
     "judge": {
+      "model": "gpt-6-sol-fast",
+      "variant": "low"
+    },
+    "checks": {
+      "model": "gpt-6-sol-fast",
+      "variant": "low"
+    },
+    "adjudicate": {
       "model": "gpt-5.6-luna-fast",
       "variant": "medium"
     }
-  },
-  "ablation": {
-    "checks": false
   }
 }

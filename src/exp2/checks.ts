@@ -376,6 +376,12 @@ export function coverage(registry: Registry, round: number, draft: ChecksDraft, 
   return { units: units.map(u => u.id), covered: covered.map(u => u.id), uncheckable: declared, gaps: [...gaps.entries()].map(([object, ids]) => ({ object, units: ids })) }
 }
 
+/** Whether an active library check rests on a unit: one coverage for both kinds of check (DESIGN §12g). */
+export function libraryCovers(registry: Registry, library: readonly CheckRecord[], events: readonly CheckEvent[]): (unit: string) => boolean {
+  const basis = activeChecks(library, events).flatMap(k => basisOf(registry, k))
+  return unit => { const u = registry.block(unit); return !!u && basis.some(b => restsOn(registry, b, u)) }
+}
+
 export function coverageIssues(registry: Registry, cov: Coverage, draft: ChecksDraft, library: readonly CheckRecord[], events: readonly CheckEvent[]): CheckIssue[] {
   return cov.gaps.map(g => {
     const o = registry.objects.get(g.object)

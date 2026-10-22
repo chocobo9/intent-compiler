@@ -16,12 +16,13 @@ export interface AssertionResult { id: string; ok: boolean; actual: unknown; rol
 export type FailureClass = "not_landed" | "unknown" | "disputed"
 export type FailureReason =
   | "value_mismatch" | "missing_name" | "still_present" | "crash" | "refused" | "timeout" | "reading"
-  | "position" | "input_incomplete" | "contested"
+  | "position" | "input_incomplete" | "contested" | "reference"
   /** Kept for runs recorded before block 9. */
   | "rejected" | "other_error_rule"
 
 /** The kinds of dispute: evidence code sees against a check, or the executor's contest. */
-export type DisputeKind = "position" | "input_incomplete" | "contested"
+/** reference: a value the check computed independently (kind B) disagrees with the program (DESIGN §12g). */
+export type DisputeKind = "position" | "input_incomplete" | "contested" | "reference"
 
 export interface Failure {
   class: FailureClass
@@ -201,11 +202,31 @@ export function classify(check: CheckRecord, results: AssertionResult[], out: Ru
   if (exitExpected === 0 && out.exit_code !== 0) {
     return { class: "not_landed", reason: "refused", detail: `the call exited ${out.exit_code} (${out.stderr.trim().slice(0, 160) || "no stderr"}) where a successful exit was expected; ${failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; ")}`, roles }
   }
+  // Only values that rest on a reference (derived or computed: kind B) failed: a disagreement, ruled on by a session
+  // that sees the text, the output and the reference's values but not its code (DESIGN §12g). A stated value (kind
+  // A) that fails is the program's.
+  const kindOf = (id: string) => check.assertions.find(a => a.id === id)?.source.kind
+  if (!upheld.has("reference") && failed.length && failed.every(r => kindOf(r.id) === "derived" || kindOf(r.id) === "computed")) {
+    return { class: "disputed", reason: "reference", detail: `the program's values differ from the reference's: ${failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; ")}`, roles }
+  }
   return { class: "not_landed", reason: "value_mismatch", detail: failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; "), roles }
 }
 
 export async function runCheck(check: CheckRecord, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, timeoutMs: number, upheld: ReadonlySet<DisputeKind> = new Set()): Promise<CheckRun> {
-  const out = await runner.run(program, check.input, timeoutMs)
+  return checkRun(check, await runner.run(program, check.input, timeoutMs), program, runner, round, registry, facts, upheld)
+}
+
+/**
+ * Many checks on one program (BLOCK11 §5): run as one batch where the runner can (a container per batch, not per
+ * check), each then compared and classified by code as one alone would be.
+ */
+export async function runChecks(checks: readonly CheckRecord[], program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, timeoutMs: number, upheld: (check: string) => ReadonlySet<DisputeKind> = () => new Set()): Promise<CheckRun[]> {
+  if (!runner.runBatch) return Promise.all(checks.map(c => runCheck(c, program, runner, round, registry, facts, timeoutMs, upheld(c.id))))
+  const outs = await runner.runBatch(program, checks.map(c => c.input), timeoutMs)
+  return checks.map((c, i) => checkRun(c, outs[i], program, runner, round, registry, facts, upheld(c.id)))
+}
+
+function checkRun(check: CheckRecord, out: RunOutput, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, upheld: ReadonlySet<DisputeKind>): CheckRun {
   const assertions = compare(check.assertions, out)
   const satisfied = assertions.every(a => a.ok)
   const pass = check.direction === "holds" ? satisfied : !satisfied

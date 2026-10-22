@@ -80,7 +80,10 @@ describe("exp2 block 9: the offline acceptance harness (products with known offi
       `panic\t1\t${product("panic", { ...base, "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(false).replace("func opFilter(t table, op map[string]any) (table, error) {", "func opFilter(t table, op map[string]any) (table, error) {\n\tvar xs []int\n\t_ = xs[len(t.rows)]") })}\t191`,
       `stopped-early\t1\t${product("early", { ...base, "transform.go": TRANSFORM([]) })}\t91`,
     ].join("\n"))
-    const report = await detect(store.inspect(), products, { build: goBuilder(join(dir, "builds"), {}, "dpipe"), runner: new LocalProcessRunner() })
+    // The stand-in adjudicator upholds the references (DESIGN §12g): their failures then count against the program.
+    const upholds = async (r: { check: { blocks: string[] } }) => ({ stub: true, text: JSON.stringify({ verdict: "check_right", basis: [r.check.blocks[0]], reason: "stand-in" }) })
+    const report = await detect(store.inspect(), products, { build: goBuilder(join(dir, "builds"), {}, "dpipe"), runner: new LocalProcessRunner(), adjudicate: upholds })
+    assert.ok(report.rulings.length > 0 && report.rulings.every(r => r.verdict === "check_right"))
     const by = (n: string) => report.products.find(p => p.product.name === n)!
     assert.ok(by("correct").landed.includes("filter"))
     assert.ok(by("wrong-value").not_landed.includes("filter"))

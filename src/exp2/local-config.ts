@@ -54,7 +54,7 @@ export interface LocalConfig {
     management_timeout_ms?: number
     check_timeout_ms?: number
     probe_repairs?: number
-    /** Mutants the discrimination measure runs a round at most (default 20; 0 switches it off). */
+    /** Mutants the discrimination measure runs a round at most (default 0: off; set it to measure check strength). */
     mutants?: number
     /** Probe runs side by side (default 4); each run is within the runner's resource limits. */
     probe_concurrency?: number
@@ -75,7 +75,7 @@ export interface LocalConfig {
    * Probe writer and judge (BLOCK10 §1.2, §1.4) on the management server, each call a new session. Defaults:
    * gpt-6-sol-fast low and gpt-5.6-luna-fast medium, with the management server's provider. null switches them off.
    */
-  roles?: null | { probes?: RoleConfig; judge?: RoleConfig }
+  roles?: null | { probes?: RoleConfig; judge?: RoleConfig; checks?: RoleConfig; adjudicate?: RoleConfig }
   /** Ablation switches (DESIGN §12b item 14); all default true. Kept in the state: an ablation run needs its own state. */
   ablation?: { zoning?: boolean; checks?: boolean; clauses?: boolean }
   /**
@@ -87,7 +87,13 @@ export interface LocalConfig {
 
 export interface RoleConfig { provider?: string; model?: string; variant?: string }
 
-export const DEFAULT_ROLES = { probes: { model: "gpt-6-sol-fast", variant: "low" }, judge: { model: "gpt-5.6-luna-fast", variant: "medium" } } as const
+/**
+ * The verifier (probes, judgments, library checks) comes from another source than the executor and never sees its
+ * process; the adjudicator of disagreements is a session of its own, shown no reference code (DESIGN §12g). null
+ * roles: probes and judge off.
+ */
+const VERIFIER = { model: "gpt-6-sol-fast", variant: "low" } as const
+export const DEFAULT_ROLES = { probes: VERIFIER, judge: VERIFIER, checks: VERIFIER, adjudicate: { model: "gpt-5.6-luna-fast", variant: "medium" } } as const
 
 /** Absolute on either platform: the file is written for the Windows machine and checked anywhere. */
 const absolute = (p: string) => win32.isAbsolute(p) || posix.isAbsolute(p)
@@ -209,8 +215,8 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       return readFileSync(file, "utf8")
     },
     ...recorded(c, at, {
-      attribution: createOpenCodeAttributionTransport(management, rateLimit), checks: createOpenCodeChecksTransport(management, rateLimit), adjudicate: createOpenCodeAdjudicationTransport(management, rateLimit),
-      ...(c.roles === null ? {} : { probes: createOpenCodeProbesTransport(roleOptions(management, c, "probes"), rateLimit), judge: createOpenCodeJudgeTransport(roleOptions(management, c, "judge"), rateLimit) }),
+      attribution: createOpenCodeAttributionTransport(management, rateLimit), checks: createOpenCodeChecksTransport(roleOptions(management, c, "checks"), rateLimit), adjudicate: createOpenCodeAdjudicationTransport(roleOptions(management, c, "adjudicate"), rateLimit),
+      ...(c.roles === null ? {} : { probes: createOpenCodeProbesTransport(roleOptions(management, c, "probes"), rateLimit), judge: createOpenCodeJudgeTransport(roleOptions(management, c, "judge"), rateLimit), ruling: createOpenCodeJudgeTransport(roleOptions(management, c, "adjudicate"), rateLimit) }),
     }),
     binary,
     platform,
@@ -227,7 +233,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       managementTimeoutMs: c.limits?.management_timeout_ms ?? 30 * 60_000,
       checkTimeoutMs: c.limits?.check_timeout_ms ?? 60_000,
       probeRepairs: c.limits?.probe_repairs ?? 2,
-      mutants: c.limits?.mutants ?? 20,
+      mutants: c.limits?.mutants ?? 0,
       probeConcurrency: c.limits?.probe_concurrency ?? PROBE_CONCURRENCY,
       execution: { ...DEFAULT_LIMITS, ...c.limits?.execution },
     },
@@ -236,18 +242,18 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   return { serial: new Serial(config), config }
 }
 
-function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport }) {
+function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport }) {
   if (!c.recording) return t
   const file = at(c.recording.cassette)
   const cassette = existsSync(file) ? loadCassette(file) : emptyCassette(c.recording.label)
   // Written now, so a path that cannot be written stops the run before any call is made.
   saveCassette(file, cassette)
   const r = recordingTransports(t, cassette, file)
-  return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate!, ...(r.probes ? { probes: r.probes, judge: r.judge! } : {}) }
+  return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate!, ...(r.probes ? { probes: r.probes, judge: r.judge!, ruling: r.ruling! } : {}) }
 }
 
 /** The management transport options with a role's model. */
-export function roleOptions<T extends { providerId: string; modelId: string; variant?: string }>(management: T, c: LocalConfig, role: "probes" | "judge"): T {
+export function roleOptions<T extends { providerId: string; modelId: string; variant?: string }>(management: T, c: LocalConfig, role: keyof typeof DEFAULT_ROLES): T {
   const r = { ...DEFAULT_ROLES[role], ...(c.roles?.[role] ?? {}) } as RoleConfig
   return { ...management, providerId: r.provider ?? management.providerId, modelId: r.model!, variant: r.variant }
 }

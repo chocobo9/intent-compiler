@@ -89,13 +89,15 @@ function recorder<R>(step: RecordedStep, inner: (r: R) => Promise<ModelReply>, c
 }
 
 /** Wraps real transports; every answered call is appended to the cassette (and saved, when a file is given). */
-export function recordingTransports(t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport }, cassette: Cassette, file?: string): { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport } {
+export function recordingTransports(t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport }, cassette: Cassette, file?: string): { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport } {
   const save = file ? () => saveCassette(file, cassette) : undefined
   return {
     attribution: recorder<ModelRequest>("attribution", t.attribution, cassette, save), checks: recorder<CheckRequest>("checks", t.checks, cassette, save),
     ...(t.adjudicate ? { adjudicate: recorder<AdjudicationRequest>("adjudication", t.adjudicate, cassette, save) } : {}),
     ...(t.probes ? { probes: recorder<ProbeRequest>("probes", t.probes, cassette, save) } : {}),
     ...(t.judge ? { judge: recorder<JudgeRequest>("judge", t.judge, cassette, save) } : {}),
+    // The adjudicator's rulings on computed disagreements have the judge's request shape; replayed by request hash.
+    ...(t.ruling ? { ruling: recorder<JudgeRequest>("judge", t.ruling, cassette, save) } : {}),
   }
 }
 

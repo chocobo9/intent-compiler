@@ -4,7 +4,7 @@ import { activeChecks, type CheckEvent, type CheckRecord, type CodeFacts } from 
 import { commitStep, head, readTrailers, resetTo } from "./git.js"
 import type { Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef } from "./runner.js"
-import { runCheck, type CheckRun, type DisputeKind } from "./verdict.js"
+import { runChecks, type CheckRun, type DisputeKind } from "./verdict.js"
 import type { AnchorLink, WorkOrder } from "./workorder.js"
 import { pairKey, renderCorrections, type CorrectionItem, type Finding } from "./judge.js"
 
@@ -76,11 +76,10 @@ export interface ExecutionDeps {
    */
   detect?: {
     /**
-     * Runs probes on the cycle's program and judges them (BLOCK11 §1). `scope`: all of them (the round's first run
-     * on a built program, and the end-of-round check), or after a repair only the open items' probes, the probes of
-     * the objects the change touched, and probes not run yet this round. Returns the counts by reason.
+     * Runs every active probe on the cycle's program in a batch and judges what needs judging (BLOCK11, DESIGN §12g):
+     * a judgment is redone only where the output changed. Returns the counts.
      */
-    run(program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>, scope?: ProbeScope): Promise<{ items: CorrectionItem[]; findings: Finding[]; counts?: ProbeRunCounts }>
+    run(program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>): Promise<{ items: CorrectionItem[]; findings: Finding[]; counts?: Partial<CheckRunCounts> }>
     /** Pairs judged ok on the program at the start of the round. */
     passed: ReadonlySet<string>
     /** The program's name, for the calls in the correction list. */
@@ -98,10 +97,11 @@ export interface ExecutionDeps {
   checkTimeoutMs?: number
 }
 
-export type ProbeScope = { kind: "first" | "check" } | { kind: "scoped"; objects: string[]; open: string[] }
-
-/** Probes run in a cycle, by why: all on the first run, open items, objects the change touched, new this round, the end-of-round check. */
-export interface ProbeRunCounts { first: number; open: number; affected: number; new: number; check: number }
+/**
+ * What a cycle ran (DESIGN §12g): every library check and every probe, each set in one batch; and how many verdicts
+ * were new because an output changed (the rest came from the cache or from code).
+ */
+export interface CheckRunCounts { checks: number; probes: number; judged: number; cached: number; by_code: number }
 
 export interface CycleRecord {
   id: string
@@ -119,8 +119,8 @@ export interface CycleRecord {
   ambiguous: string[]
   /** Items wrong now that were judged ok earlier: a change broke them. */
   broke: string[]
-  /** Probes run in this cycle, by why (BLOCK11 §1). */
-  probe_runs?: ProbeRunCounts
+  /** What this cycle ran and how its verdicts were reached (DESIGN §12g). */
+  probe_runs?: CheckRunCounts
   /** The discrimination measure, on the cycle it ran on. */
   measure?: { mutants: number; killed: number; survived: number; build_failed: number; score: number | null; weak_units: string[]; strengthened: string[]; still_weak: number }
   anchors: string[]
@@ -249,7 +249,6 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
   const taskSet = new Set(task)
   const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", task, sessions: [], cycles: [], kept: null, carried: [], open: [], links: [], usage: zero() }
   const okSoFar = new Set(deps.detect?.passed ?? [])
-  let ranFull = false, openProbes = new Set<string>()
   let measuredOnce = false
   const itemsOf = new Map<string, CorrectionItem[]>()
   const links = [...deps.links]
@@ -261,11 +260,8 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
   let message = text, kind: CycleRecord["message"] = "work", evidence = ""
   let sessionsLeft = limits.maxSessions - 1
   let lastCommit = record.base
-  const runAll = async (program: ProgramRef) => {
-    const runs: CheckRun[] = []
-    for (const c of activeChecks(deps.library, deps.events).filter(c => !retired.has(c.id))) runs.push(await runCheck(c, program, deps.runner, round, deps.registry, deps.facts, deps.checkTimeoutMs ?? 10_000, deps.upheld?.(c.id)))
-    return runs
-  }
+  // Every library check, every cycle, in one batch: no model is involved, so nothing is gained by leaving any out.
+  const runAll = (program: ProgramRef) => runChecks(activeChecks(deps.library, deps.events).filter(c => !retired.has(c.id)), program, deps.runner, round, deps.registry, deps.facts, deps.checkTimeoutMs ?? 10_000, id => deps.upheld?.(id) ?? new Set())
   for (let n = 1; n <= limits.repairCycles + 1; n++) {
     const before = deps.anchors.extract(workdir)
     let reply: ExecutorReply
@@ -316,23 +312,12 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     let measured: CycleRecord["measure"]
     if (build.ok && deps.detect?.measure && !measuredOnce) { measuredOnce = true; measured = await deps.detect.measure(workdir, build.program!, [...links, ...linked.links]) }
     // Probes on this cycle's program, judged; what is wrong goes to the correction list.
-    // The first run on a built program covers every probe; after a repair, what the change can affect and the open
-    // items. When that is clean, all probes once more on the same program: what the change broke elsewhere is caught
-    // before the round ends. Verdicts of probes not rerun carry forward.
-    const changedSet = new Set(changed)
-    const touchedObjects = [...new Set([...links, ...linked.links].filter(l => changedSet.has(l.anchor)).map(l => l.object))]
-    const scope: ProbeScope = !ranFull ? { kind: "first" } : { kind: "scoped", objects: touchedObjects, open: [...openProbes] }
-    let detected = build.ok && deps.detect ? await deps.detect.run(build.program!, okSoFar, probeContests, scope) : { items: [] as CorrectionItem[], findings: [] as Finding[], counts: undefined }
-    const counts: ProbeRunCounts = { first: 0, open: 0, affected: 0, new: 0, check: 0, ...detected.counts }
-    if (build.ok && deps.detect) ranFull = true
-    if (build.ok && deps.detect && scope.kind === "scoped" && !detected.items.length && !failing.length) {
-      const check = await deps.detect.run(build.program!, okSoFar, new Map(), { kind: "check" })
-      counts.check = check.counts?.check ?? 0
-      detected = { items: check.items, findings: [...detected.findings, ...check.findings], counts }
-    }
+    // Every probe, every cycle, in one batch: what a repair broke anywhere is seen in the same cycle. Only outputs that
+    // changed go to the judge; the rest come from the cache.
+    const detected = build.ok && deps.detect ? await deps.detect.run(build.program!, okSoFar, probeContests) : { items: [] as CorrectionItem[], findings: [] as Finding[], counts: undefined }
+    const counts: CheckRunCounts = { checks: runs.length, probes: 0, judged: 0, cached: 0, by_code: 0, ...detected.counts }
     for (const f of detected.findings) if (f.verdict === "ok") okSoFar.add(pairKey(f.probe, f.unit))
     const corrections = detected.items
-    openProbes = new Set(corrections.map(c => c.probe))
     const trailers: [string, string][] = [
       ["IC-Round", String(round)], ["IC-Cycle", id], ["IC-Session", session.id],
       ...task.map(o => ["IC-Object", `${o}@v${deps.registry.objects.get(o)!.version}`] as [string, string]),

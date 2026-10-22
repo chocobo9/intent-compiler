@@ -1,3 +1,4 @@
+import { adjudicate, type AdjudicationTransport } from "./adjudication.js"
 import { activeChecks, codeFacts } from "./checks.js"
 import type { BuildResult } from "./execution.js"
 import { materialize } from "./registry.js"
@@ -48,10 +49,14 @@ export interface DetectReport {
   products: ProductResult[]
   /** Checks that failed on every product that built and ran them: by design of the test set, the wrong checks show here. */
   fail_everywhere: { check: string; key: string; object: string; classes: string[] }[]
+  /** Rulings on reference disagreements (DESIGN §12g), once per check: check_right counts against the program. */
+  rulings: { check: string; verdict: string; reason: string }[]
 }
 
-export async function detect(state: Exp2State, products: readonly Product[], deps: { build: (dir: string, label: string) => BuildResult; runner: CheckRunner; timeoutMs?: number }): Promise<DetectReport> {
+export async function detect(state: Exp2State, products: readonly Product[], deps: { build: (dir: string, label: string) => BuildResult; runner: CheckRunner; timeoutMs?: number; adjudicate?: AdjudicationTransport }): Promise<DetectReport> {
   const results: ProductResult[] = []
+  // A reference disagreement is ruled on once per check, by the adjudicator when there is one; without one it stays disputed.
+  const ruled = new Map<string, { verdict: string; reason: string }>()
   for (const p of products) {
     const registry = materialize(state.sources.filter(s => s.round <= p.round), state.rounds.filter(r => r.status === "accepted" && r.round <= p.round).map(r => r.acceptance!), { clauses: state.ablation?.clauses })
     const library = activeChecks(state.checks.filter(c => c.round <= p.round), state.check_events.filter(e => e.round <= p.round))
@@ -59,7 +64,20 @@ export async function detect(state: Exp2State, products: readonly Product[], dep
     if (!built.ok) { results.push({ product: p, built: false, build_output: built.output.slice(0, 2000), runs: [], not_landed: [], landed: [], unknown: [], failures: {} }); continue }
     const facts = codeFacts(registry, p.round)
     const runs: CheckRun[] = []
-    for (const c of library) runs.push(await runCheck(c, built.program!, deps.runner, p.round, registry, facts, deps.timeoutMs ?? 20_000, upheldKinds(state, c.id)))
+    for (const c of library) {
+      const upheld = upheldKinds(state, c.id)
+      let run = await runCheck(c, built.program!, deps.runner, p.round, registry, facts, deps.timeoutMs ?? 20_000, upheld)
+      if (deps.adjudicate && run.failure?.class === "disputed" && run.failure.reason === "reference") {
+        if (!ruled.has(c.id)) {
+          const out = await adjudicate(registry, p.round, c, run, "reference", run.failure.detail, deps.adjudicate, n => `D${ruled.size + 1}.${n}`)
+          ruled.set(c.id, out.ruling ? { verdict: out.ruling.verdict, reason: out.ruling.reason } : { verdict: "none", reason: "no ruling came back" })
+        }
+        const r = ruled.get(c.id)!
+        if (r.verdict === "check_right") run = await runCheck(c, built.program!, deps.runner, p.round, registry, facts, deps.timeoutMs ?? 20_000, new Set([...upheld, "reference"]))
+        else if (r.verdict !== "none") continue
+      }
+      runs.push(run)
+    }
     const statuses = objectStatuses(registry, state.checks, state.check_events, runs, p.round)
     const name = (id: string) => registry.objects.get(id)?.name ?? id
     const failures: Record<string, string[]> = {}
@@ -81,7 +99,7 @@ export async function detect(state: Exp2State, products: readonly Product[], dep
     const classes = [...new Set(ran.map(r => r.runs.find(x => x.check === id)!.failure).map(f => `${f!.class}/${f!.reason}`))]
     return { check: id, key: k.key, object: k.object, classes }
   })
-  return { products: results, fail_everywhere }
+  return { products: results, fail_everywhere, rulings: [...ruled.entries()].map(([check, r]) => ({ check, ...r })) }
 }
 
 export function renderDetect(r: DetectReport, state: Exp2State): string {

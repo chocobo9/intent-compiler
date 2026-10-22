@@ -92,7 +92,7 @@ export function withContainerLimit<T extends ScriptResult>(r: T, memoryMb: numbe
 }
 
 /** Runs per container in a batch (BLOCK11 §1). */
-export const BATCH_SIZE = 100
+export const BATCH_SIZE = 1000
 
 const quote = (s: string) => `'${s.replace(/'/gu, `'\\''`)}'`
 

@@ -10,8 +10,9 @@ import type { Exp2State } from "../exp2/store.js"
 
 /**
  * The offline acceptance harness (BLOCK9; ANALYSIS-MEDIUM-AND-ACCEPTANCE §5): runs the check library of a state on
- * products whose official results are known and prints a per-product table. No model is called. With --config the
- * run's runner and build are used (docker included); otherwise local processes. Usage:
+ * products whose official results are known and prints a per-product table. With --config the run's runner, build
+ * and adjudicator are used (docker included), and a reference disagreement is ruled on once per check (DESIGN §12g);
+ * otherwise local processes, no model call, and such a failure stays disputed. Usage:
  *   intent-exp2-detect --products <list.tsv> --state <state.json> [--config <file>] [--binary <name>] [--out <file.md>]
  * The list is tab-separated: name, round, path of the product's source tree, official result, note.
  */
@@ -24,7 +25,7 @@ async function main(argv: string[]): Promise<number> {
   const config = at("--config")
   const assembled = config ? assembleSerial(loadLocalConfig(resolve(config))).config : null
   const build = assembled ? assembled.build : goBuilder(mkdtempSync(join(tmpdir(), "exp2-detect-builds-")), {}, at("--binary") ?? "dpipe")
-  const report = await detect(state, products, { build, runner: assembled ? assembled.runner : new LocalProcessRunner(), timeoutMs: assembled?.limits.checkTimeoutMs })
+  const report = await detect(state, products, { build, runner: assembled ? assembled.runner : new LocalProcessRunner(), timeoutMs: assembled?.limits.checkTimeoutMs, ...(assembled?.adjudicate ? { adjudicate: assembled.adjudicate } : {}) })
   const md = renderDetect(report, state)
   const out = at("--out")
   if (out) {

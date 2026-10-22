@@ -191,9 +191,11 @@ new Serial({
   - 变异体同时 2 个。
 - **资源限制**：`runner.limits`（`memoryMb`，默认 1024；`outputBytes`，默认 8 MiB；`pids`，默认 256），以及 `runner.buildMemoryMb`（默认 2048）。docker 容器带 `--memory`/`--memory-swap`/`--pids-limit`。可以不再用外部守护进程；如果仍想留着，阈值应高于这里的上限，避免抢先杀掉容器。
 
-## 14. 第 11 块之后的变化
+## 14. 第 11 块之后的变化（统一验收模型，见 BLOCK11-NOTES）
 
-- **批量运行**：docker 下每 100 个探针一个容器。镜像需要有 `timeout`（coreutils）和支持 `%N` 的 `date`。没有 `timeout` 时自动退回到每个探针一个容器；没有 `%N` 时，超时只能靠退出码 124 来识别。
-- **修补之后只跑改动所涉的探针**，加上未修好的条目和本轮新写的探针；干净时再跑一遍全量作为轮末检查。报告的 Probes 一节有一行 "Probe runs"，给出每个周期跑了多少、为什么。
-- **缺口**：报告里有 "Gaps carried in … open …"。没有被触发的单位会在后面的轮次里继续写探针，直到覆盖或者被声明为不可测。
+- **每个周期全部运行**：全部有效库检查一批、全部有效探针一批，docker 下每批一个容器（每批最多 1000 次运行）。镜像需要有 `timeout`（coreutils）和支持 `%N` 的 `date`。没有 `timeout` 时自动退回到每次运行一个容器；没有 `%N` 时，超时只能靠退出码 124 来识别。判断只在输出变化时重做。按锚点挑选和轮末检查已删除。
+- **库检查默认打开**：示例配置去掉了 `ablation.checks: false`。已有 state 里记着 `checks: false` 的运行需要新的 state。
+- **角色**：`roles` 有 `probes`、`judge`、`checks`、`adjudicate` 四项，默认都是 `gpt-6-sol-fast` low（与 executor 不同的来源）。
+- **变异体度量默认关闭**；要打开，设 `limits.mutants`。
+- **报告**：新增两行。"Determinations on the final program" 给出 A/B/C 三类各多少；"Open" 按原因给出程序错、未覆盖、参考不一致待裁决、有歧义的条目数，以及由代码关闭为不可测的单位。"Runs per cycle" 给出每个周期的库检查数、探针数，以及判断重做、沿用缓存、由代码判定的数目。
 - **判断要求计算时**，用配置里的脚本沙箱（docker 下是 `runner.python`）。离线检出和修复工具也会传入这个沙箱。

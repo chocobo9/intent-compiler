@@ -205,7 +205,8 @@ describe("exp2 readings the text does not state (§12d item 10), on the real R4 
     assert.ok(draft.assertions.filter(a => /^v\d+$/u.test(a.id)).length >= 6, "the recorded check bundles each violation into one JSON assertion")
     const registry = store.registry(), facts = codeFacts(registry, 4)
     assert.equal((await runCheck(record(draft.assertions), program, runner(report(0)), 4, registry, facts, 1000)).outcome, "pass", "the check's own reading passes")
-    const plain = await runCheck(record(draft.assertions), program, runner(report(-1)), 4, registry, facts, 1000)
+    // The derived values stand as upheld by a ruling (DESIGN §12g): without one, their failure is a disagreement to rule on.
+    const plain = await runCheck(record(draft.assertions), program, runner(report(-1)), 4, registry, facts, 1000, new Set(["reference"]))
     assert.deepEqual([plain.failure!.class, plain.failure!.reason], ["not_landed", "value_mismatch"])
     const read = await runCheck(record(draft.assertions.map(a => /^v\d+$/u.test(a.id) ? { ...a, reading: rowReading } : a)), program, runner(report(-1)), 4, registry, facts, 1000)
     assert.deepEqual([read.failure!.class, read.failure!.reason], ["unknown", "reading"])
@@ -223,7 +224,7 @@ describe("exp2 readings the text does not state (§12d item 10), on the real R4 
     const shifted = await runCheck(k, program, runner(report(-1)), 4, registry, facts, 1000)
     assert.deepEqual([shifted.failure!.class, shifted.failure!.reason], ["unknown", "reading"])
     assert.ok(shifted.assertions.filter(a => !a.ok).every(a => a.id.endsWith(".row")), "only the row facts fail")
-    const wrong = await runCheck(k, program, runner(report(0, "bad")), 4, registry, facts, 1000)
+    const wrong = await runCheck(k, program, runner(report(0, "bad")), 4, registry, facts, 1000, new Set(["reference"]))
     assert.deepEqual([wrong.failure!.class, wrong.failure!.reason], ["not_landed", "value_mismatch"])
     // The work order shows the reading next to the failure, in the status zone (unknown never becomes a task).
     const status = objectStatuses(registry, [{ ...k, strength: { strong: true, baseline: "b", baseline_ok: true, data_assertions: ["total"], reason: "" } }], [], [{ ...shifted, verdict: true }], 4).find(s => s.object === k.object)!

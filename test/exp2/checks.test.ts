@@ -29,6 +29,13 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
   const check = (key: string): CheckRecord => store.inspect().checks.find(c => c.key === key)!
   const runOf = (key: string, checkKey: string) => runs.get(key)!.find(r => r.check === check(checkKey).id)!
   const adjudicator: AdjudicationTransport = async request => ({ stub: true, text: JSON.stringify({ verdict: request.dispute.kind === "input_incomplete" ? "check_wrong" : "check_right", basis: [request.check.blocks[0]], reason: "stand-in ruling" }) })
+  // The stand-in adjudicator upholds every reference of the stand-in library at once (DESIGN §12g): a failure of a
+  // derived or computed value then counts against the program, as the programs here are wrong where they fail.
+  const upholdReferences = async (round: number) => {
+    const ds = store.inspect().checks.filter(c => c.round === round && c.assertions.some(a => a.source.kind === "derived" || a.source.kind === "computed"))
+      .map(c => ({ check: c.id, run: { check: c.id, round, program: "-", outcome: "fail" as const, assertions: [], exit_code: 0, stderr_head: "", failure: null }, kind: "reference" as const, detail: "stand-in" }))
+    if (ds.length) await store.settle(round, ds, async r => ({ stub: true, text: JSON.stringify({ verdict: "check_right", basis: [r.check.blocks[0]], reason: "stand-in" }) }))
+  }
   /** The first program of each round is that round's verdict run; the others are probes on other versions. */
   const runOn = async (round: number, program: string, verdict = false) => {
     // From R2 on, disputed checks are ruled on (a stand-in ruling: a check that leaves out an input it names is wrong).
@@ -51,23 +58,28 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
 
     const checks = checkStubTransport(undefined, requests)
     assert.equal((await store.deriveRoundChecks(1, checks, { sandbox, runner, baseline: programs.null })).status, "accepted")
+    await upholdReferences(1)
     await runOn(1, "r1", true)
     for (const p of ["shell", "badError", "badDigest"]) await runOn(1, p)
     assert.equal((await store.deriveRoundChecks(2, checks, { sandbox, runner, baseline: programs.r1 })).status, "accepted")
+    await upholdReferences(2)
     await runOn(2, "r2", true)
     await runOn(2, "noProfile")
     assert.equal((await store.deriveRoundChecks(3, checks, { sandbox, runner, baseline: programs.r2 })).status, "accepted")
+    await upholdReferences(3)
     await runOn(3, "r3", true)
     for (const p of ["r2", "shell"]) await runOn(3, p)
     for (const round of [4, 5]) assert.equal((await store.ingestRound(round, roundText(round), t)).status, "accepted")
     programs.r5 = writeProgram(dir, "r5", "R5: no sidecar, BLAKE2b verify", { normalize: "sample", profile: true, sidecar: false, checksum: "blake2b" })
     assert.equal((await store.deriveRoundChecks(5, checks, { sandbox, runner, baseline: programs.r3 })).status, "accepted")
+    await upholdReferences(5)
     await runOn(5, "r5", true)
     await runOn(5, "r3")
     for (let round = 6; round <= 10; round++) assert.equal((await store.ingestRound(round, roundText(round), t)).status, "accepted")
     programs.r10 = writeProgram(dir, "r10", "R10 with reconcile", { normalize: "sample", profile: true, reconcile: true, sidecar: false, checksum: "blake2b" })
     programs.r10wrong = writeProgram(dir, "r10-wrong", "R10 with reconcile, wrong error format", { normalize: "sample", profile: true, reconcile: true, errors: "wrong" })
     assert.equal((await store.deriveRoundChecks(10, checks, { sandbox, runner, baseline: programs.r5 })).status, "accepted")
+    await upholdReferences(10)
     await runOn(10, "r10", true)
     await runOn(10, "r5")
   })
@@ -127,8 +139,8 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     const s = store.inspect()
     const e = s.check_events.find(x => x.check === check("verify-match-2").id)!
     assert.deepEqual([e.status, e.by, e.round, e.cause], ["retired", "model", 2, { kind: "adjudicated", source: "input_incomplete" }])
-    assert.deepEqual(s.rulings.map(r => [r.check, r.kind, r.verdict]), [[e.check, "input_incomplete", "check_wrong"]])
-    assert.equal(s.adjudication_calls.length, 1, "one call, not one per run")
+    assert.deepEqual(s.rulings.filter(r => r.kind !== "reference").map(r => [r.check, r.kind, r.verdict]), [[e.check, "input_incomplete", "check_wrong"]])
+    assert.equal(s.adjudication_calls.filter(c => c.kind !== "reference").length, 1, "one call, not one per run")
     assert.ok(!runs.get("3:r3")!.some(r => r.check === e.check))
     // The object is derived again in the next derivation: verify's retired check is listed as one to replace.
     const r3 = requests.find(q => q.round === 3)!

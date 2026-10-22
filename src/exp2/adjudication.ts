@@ -27,7 +27,8 @@ export interface AdjudicationRequest {
   }
 }
 
-export interface AdjudicationAnswer { verdict: "check_wrong" | "check_right"; basis: string[]; reason: string }
+/** check_wrong: the reference or check is wrong; check_right: the program is; text_ambiguous: the text allows both. */
+export interface AdjudicationAnswer { verdict: "check_wrong" | "check_right" | "text_ambiguous"; basis: string[]; reason: string }
 
 export type AdjudicationTransport = (request: AdjudicationRequest) => Promise<ModelReply>
 
@@ -62,7 +63,7 @@ export interface AdjudicationCallRecord {
 export const ADJUDICATION_SCHEMA = {
   type: "object", additionalProperties: false, required: ["verdict", "basis", "reason"],
   properties: {
-    verdict: { type: "string", enum: ["check_wrong", "check_right"], description: "check_wrong: the check expects what the text does not require of this input, or gives an input the text does not allow. check_right: the text requires what the check expects." },
+    verdict: { type: "string", enum: ["check_wrong", "check_right", "text_ambiguous"], description: "check_wrong: the check expects what the text does not require of this input, or gives an input the text does not allow. check_right: the text requires what the check expects. text_ambiguous: the text can be read both ways." },
     basis: { type: "array", items: { type: "string" }, description: "Ids of the blocks, sentences or clauses the ruling rests on." },
     reason: { type: "string", description: "One or two sentences." },
   },
@@ -70,7 +71,7 @@ export const ADJUDICATION_SCHEMA = {
 
 export const ADJUDICATION_SYSTEM_PROMPT = [
   "You rule on one acceptance check of a command-line program. `sources` holds the requirements, annotated with block ids; the original text is the only authority and newer text overrides older text.",
-  "The check ran the program and failed, and the check itself is in question. `dispute.kind` says why: position (the text the check expects appears in the output, but not on the line or stream the check reads), input_incomplete (the program reports an input file the check names but does not give), contested (the coding agent says the check contradicts the requirements; its claim is in `dispute.detail`).",
+  "The check ran the program and failed, and the check itself is in question. `dispute.kind` says why: position (the text the check expects appears in the output, but not on the line or stream the check reads), input_incomplete (the program reports an input file the check names but does not give), contested (the coding agent says the check contradicts the requirements; its claim is in `dispute.detail`), reference (a value the check computed independently, its `expect`, differs from what the program produced).",
   "Decide from the text alone, not from what the program does: check_wrong when the check expects something the text does not require of this input (a line or stream the text does not fix, a value the text does not give) or gives an input the text does not allow; check_right when the text requires what the check expects. Give the ids your ruling rests on.",
 ].join("\n")
 
@@ -92,7 +93,7 @@ export function adjudicationProblems(registry: Registry, value: unknown): string
   const v = value as Partial<AdjudicationAnswer> | null
   if (!v || typeof v !== "object") return ["the answer is not an object"]
   const p: string[] = []
-  if (v.verdict !== "check_wrong" && v.verdict !== "check_right") p.push("verdict must be check_wrong or check_right")
+  if (v.verdict !== "check_wrong" && v.verdict !== "check_right" && v.verdict !== "text_ambiguous") p.push("verdict must be check_wrong, check_right or text_ambiguous")
   if (!Array.isArray(v.basis) || !v.basis.length || !v.basis.every(b => typeof b === "string")) p.push("basis must name at least one id")
   else for (const b of v.basis) if (!registry.block(b.split("#")[0])) p.push(`basis ${b} does not exist`)
   if (typeof v.reason !== "string") p.push("reason must be a string")

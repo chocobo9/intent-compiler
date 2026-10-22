@@ -299,17 +299,33 @@ export function activeProbes(probes: readonly ProbeRecord[], events: readonly Pr
  * Units no probe exercises yet (BLOCK11 §2): unexercised units and units with open cases of earlier rounds, until
  * a later round covers them or declares them uncheckable; only text still in force.
  */
-export function openGaps(registry: Registry, rounds: readonly ProbeRoundRecord[]): string[] {
-  const open = new Set<string>()
+export function openGaps(registry: Registry, rounds: readonly ProbeRoundRecord[], coveredElsewhere: (unit: string) => boolean = () => false): string[] {
+  return gapState(registry, rounds, coveredElsewhere).open
+}
+
+/** A unit the writing left unexercised twice is closed by code as uncheckable, with that reason, and still reported (DESIGN §12g). */
+export const GAP_ATTEMPTS = 2
+
+/**
+ * Open and closed gaps: a unit stays open until a probe exercises it, the writer declares it uncheckable, a library
+ * check rests on it, its text goes out of force, or GAP_ATTEMPTS writings in a row leave it unexercised.
+ */
+export function gapState(registry: Registry, rounds: readonly ProbeRoundRecord[], coveredElsewhere: (unit: string) => boolean = () => false): { open: string[]; closed: { unit: string; round: number; reason: string }[] } {
+  const open = new Map<string, number[]>()
+  const closed: { unit: string; round: number; reason: string }[] = []
   const unitOf = (id: string) => id.includes("#") ? id.split("#")[0] : registry.block(id)?.parent ?? id
   for (const r of [...rounds].filter(x => x.status === "accepted").sort((a, b) => a.round - b.round)) {
     for (const u of r.covered) open.delete(u)
     // A unit declared uncheckable is closed; a case declared so already lets its unit count as covered.
     for (const u of r.uncheckable) open.delete(u.unit)
-    for (const u of r.uncovered) open.add(u)
-    for (const c of r.cases?.open ?? []) open.add(unitOf(c))
+    for (const u of new Set([...r.uncovered, ...(r.cases?.open ?? []).map(unitOf)])) {
+      const tries = [...(open.get(u) ?? []), r.round]
+      if (tries.length < GAP_ATTEMPTS) { open.set(u, tries); continue }
+      open.delete(u)
+      closed.push({ unit: u, round: r.round, reason: `uncheckable: no probe exercised it in ${tries.length} writings (rounds ${tries.join(", ")})` })
+    }
   }
-  return [...open].filter(u => live(registry, u))
+  return { open: [...open.keys()].filter(u => live(registry, u) && !coveredElsewhere(u)), closed: closed.filter(c => live(registry, c.unit)) }
 }
 
 const live = (registry: Registry, unit: string) => {

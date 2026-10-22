@@ -6,15 +6,20 @@ import { before, describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { goBuilder } from "../../src/exp2/build.js"
-import { codeFacts } from "../../src/exp2/checks.js"
+import { activeChecks, codeFacts } from "../../src/exp2/checks.js"
+import type { AdjudicationRequest } from "../../src/exp2/adjudication.js"
+import { acceptanceSummary, libraryKind, renderReport } from "../../src/exp2/report.js"
+import { runChecks } from "../../src/exp2/verdict.js"
+import { checkStubTransport } from "./check-stubs.js"
 import { batchResult, batchScript } from "../../src/exp2/docker.js"
 import { executeRound, DEFAULT_LIMITS } from "../../src/exp2/execution.js"
 import { initRepo } from "../../src/exp2/git.js"
 import { correctionItems, judgeRuns, pairKey, type JudgeRequest } from "../../src/exp2/judge.js"
-import { activeProbes, openGaps, runProbes, type ProbeRecord, type ProbeRequest } from "../../src/exp2/probes.js"
-import { LocalProcessRunner, LocalScriptSandbox, type ProgramRef } from "../../src/exp2/runner.js"
-import { pickProbes } from "../../src/exp2/serial.js"
+import { activeProbes, gapState, openGaps, runProbes, type ProbeRecord, type ProbeRequest } from "../../src/exp2/probes.js"
+import { LocalProcessRunner, LocalScriptSandbox, nullBaseline, type ProgramRef } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
+import { Serial, verdictCounts } from "../../src/exp2/serial.js"
+import { serialExecutor } from "./serial-executor.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
 import { DROP, FILTER, GO_MOD, MAIN, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
 import { roundText } from "./inputs.js"
@@ -31,7 +36,7 @@ const files = (o: { filterWrong?: boolean; reverseAfterSort?: boolean; sort?: st
   return { "go.mod": GO_MOD, "main.go": MAIN, "verify.go": VERIFY(), "transform.go": transform, "filter.go": FILTER(o.filterWrong ?? false), "sort.go": o.sort ?? SORT_NUM, "rename.go": RENAME, "drop.go": DROP }
 }
 
-describe("exp2 block 11 §1: after a repair only what the change can affect is verified again; an end-of-round check still catches what it broke elsewhere", () => {
+describe("exp2 block 11 §1: every cycle runs every check and probe in one batch; only judgments whose output changed are redone", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-b11a-"))
   const store = new Exp2Store(join(dir, "store"), "b11a")
   before(async () => {
@@ -39,14 +44,15 @@ describe("exp2 block 11 §1: after a repair only what the change can affect is v
     await store.deriveRoundProbes(1, stubProbeWriter())
   })
 
-  it("the repair of filter reruns filter's and the changed command's probes and the open item; the sort it broke is caught by the end check, before the round ends", async () => {
+  it("the repair of filter breaks sort in the transform command's own code; the same cycle's full run catches it, marked as broken", async () => {
     const workdir = join(dir, "work")
     mkdirSync(workdir, { recursive: true })
     initRepo(workdir)
     const registry = store.registry(), anchors = new GoAnchorExtractor(), runner = new LocalProcessRunner()
     const all = activeProbes(store.inspect().probes, store.inspect().probe_events)
-    const ran = new Set<string>()
     const judge = stubJudge()
+    let batches = 0
+    const batching = new class extends LocalProcessRunner { override runBatch(...a: Parameters<LocalProcessRunner["runBatch"]>) { batches++; return super.runBatch(...a) } }()
     const w = buildWorkOrder({ registry, round: 1, library: [], events: [], statuses: [], runs: [], anchors: anchors.extract(workdir), links: [], steps: [], previous_task: [] })
     const executor = new StubExecutor({ messages: [
       wd => write(wd, files({ filterWrong: true })),
@@ -57,30 +63,26 @@ describe("exp2 block 11 §1: after a repair only what the change can affect is v
       registry, library: [], events: [], links: [], anchors, build: goBuilder(join(dir, "b"), {}, "dpipe"), runner, facts: codeFacts(registry, 1),
       detect: {
         passed: new Set(), program: "dpipe",
-        run: async (program, beforeOk, contests, scope) => {
-          const { pick, counts } = pickProbes(all, scope ?? { kind: "first" }, registry, ran)
-          const runs = await runProbes(pick, program, runner, 10_000)
+        run: async (program, beforeOk, contests) => {
+          const runs = await runProbes(all, program, batching, 10_000)
           const findings = await store.judge(1, runs, judge, { contests })
-          return { findings, items: correctionItems(store.registry(), pick, runs, findings, beforeOk), counts }
+          return { findings, items: correctionItems(store.registry(), all, runs, findings, beforeOk), counts: { probes: all.length, ...verdictCounts(findings) } }
         },
       },
     }, { ...DEFAULT_LIMITS, repairCycles: 3 })
     const key = (name: string) => all.find(p => p.key.endsWith(name))!.id
     const [c1, c2, c3] = record.cycles
     assert.equal(record.status, "done")
-    assert.equal(c1.probe_runs!.first, all.length, "the first run covers every probe")
+    assert.equal(batches, record.cycles.length, "one batch per cycle")
+    for (const c of record.cycles) assert.equal(c.probe_runs!.probes, all.length, "every probe, every cycle")
     assert.deepEqual(c1.corrections.map(k => k.split("/")[0]), [key("filter-gt")])
-    // The repair: the open item, and the probes of the objects whose code changed (filter, transform); not the rest.
-    assert.equal(c2.probe_runs!.open, 1)
-    assert.ok(c2.probe_runs!.affected > 0 && c2.probe_runs!.open + c2.probe_runs!.affected + c2.probe_runs!.new < all.length / 4, JSON.stringify(c2.probe_runs))
-    // That came back clean; the end-of-round check ran everything and found the sort it broke, marked as broken.
-    assert.equal(c2.probe_runs!.check, all.length)
+    // The repair of filter broke sort: caught in that same cycle, no anchor selection needed.
     assert.deepEqual(c2.corrections.map(k => k.split("/")[0]), [key("sort-asc")])
     assert.deepEqual(c2.broke, c2.corrections)
-    // Fixed in the next cycle: its own scoped run and the end check both clean.
-    assert.equal(c3.probe_runs!.open, 1)
-    assert.equal(c3.probe_runs!.check, all.length)
     assert.deepEqual(c3.corrections, [])
+    // Judgments are redone only where the output changed: most come from the cache after the first cycle.
+    assert.ok(c1.probe_runs!.judged > 0 && c1.probe_runs!.cached === 0, JSON.stringify(c1.probe_runs))
+    assert.ok(c2.probe_runs!.cached > c2.probe_runs!.judged, JSON.stringify(c2.probe_runs))
   })
 
   it("a batch is one shell script: each run in its own directory, with its own time and output limit", () => {
@@ -200,7 +202,145 @@ describe("exp2 block 11 §4: a value that needs computing is ruled on an indepen
     assert.equal(w.calls.length, 2, "the request for a computation and the verdict on it")
     const okRuns = await runProbes([probe], program(right), runner, 10_000)
     assert.deepEqual((await judgeRuns(registry, 1, [probe], okRuns, [], judge, { callId: n => `J${n}`, sandbox })).findings.map(f => f.verdict), ["ok"])
+    // With an adjudicator, it rules the disagreement, shown the computed value and not the script.
+    const ruled: JudgeRequest[] = []
+    const ruling = async (r: JudgeRequest) => { ruled.push(r); return judge(r) }
+    const viaRuling = await judgeRuns(registry, 1, [probe], wrongRuns, [], judge, { callId: n => `J${n}`, sandbox, ruling })
+    assert.deepEqual(viaRuling.findings.map(f => [f.verdict, f.kind]), [["wrong", "B"]])
+    assert.equal(ruled.length, 1)
+    assert.ok(ruled[0].items[0].computed && !JSON.stringify(ruled[0]).includes("hashlib"), "no script in the ruling's request")
     const none = await judgeRuns(registry, 1, [probe], wrongRuns, [], judge, { callId: n => `J${n}` })
     assert.deepEqual(none.findings.map(f => [f.verdict, f.reason]), [["cannot_tell", "a value to compute, and no sandbox to compute it"]])
+  })
+})
+
+describe("exp2 block 11 §5 (DESIGN §12g): one acceptance model; A and B are compared by code, a B disagreement is ruled without the reference code", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-b11u-"))
+  const store = new Exp2Store(join(dir, "store"), "b11u")
+  const base = { "go.mod": GO_MOD, "main.go": MAIN, "verify.go": VERIFY() }
+  const built = (name: string, fs: Record<string, string>) => { const p = join(dir, name); mkdirSync(p, { recursive: true }); write(p, fs); return goBuilder(join(dir, `b-${name}`), {}, "dpipe")(p, name).program! }
+  before(async () => {
+    await store.ingestRound(1, roundText(1), stubTransport())
+    await store.deriveRoundChecks(1, checkStubTransport(), { sandbox: new LocalScriptSandbox(), runner: new LocalProcessRunner(), baseline: nullBaseline(join(dir, "null")) })
+  })
+
+  it("a value the text states, and a crash, are ruled wrong by code: no judge or adjudicator call", async () => {
+    const registry = store.registry(), lib = store.inspect().checks
+    // A stated message (kind A) the program does not print: not landed by code.
+    const missing = lib.find(k => k.key === "transform-missing-input")!
+    assert.equal(libraryKind(missing), "A")
+    const wrongMsg = built("msg", { ...base, "transform.go": TRANSFORM(["filter"]).replaceAll("file not found", "no such file"), "filter.go": FILTER(false) })
+    const [run] = await runChecks([missing], wrongMsg, new LocalProcessRunner(), 1, registry, codeFacts(registry, 1), 10_000)
+    assert.deepEqual([run.outcome, run.failure?.class, run.failure?.reason], ["fail", "not_landed", "value_mismatch"])
+    // A probe whose run panics: wrong by code, before any judge sees it.
+    const unit = "R1.S3.P9.s2"
+    const probe: ProbeRecord = { ...sortProbe(unit, null), id: "P1", round: 1, key: "g1_panic", call: "W1" }
+    const panics: ProgramRef = { id: "p", label: "p", source_dir: null, command: [process.execPath, "-e", `process.stderr.write("panic: runtime error: index out of range [3] with length 3\\n\\ngoroutine 1 [running]:\\nmain.opSort()\\n"); process.exit(2)`] }
+    const runs = await runProbes([probe], panics, new LocalProcessRunner(), 10_000)
+    const judged = await judgeRuns(registry, 1, [probe], runs, [], async () => { throw new Error("no model call expected") }, { callId: n => `J${n}` })
+    assert.deepEqual(judged.findings.map(f => [f.verdict, f.kind]), [["wrong", "B"]])
+    assert.equal(judged.calls.length, 0)
+  })
+
+  it("a reference value (kind B) the program disagrees with is ruled on from the text, the output and the reference's value, not its code; program wrong, reference wrong, or ambiguous", async () => {
+    const registry = store.registry(), lib = store.inspect().checks
+    const k = lib.find(c => c.key === "filter-gt")!
+    assert.equal(libraryKind(k), "B")
+    assert.ok(k.reference_script, "the check has a reference script")
+    const wrong = built("filter-wrong", { ...base, "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(true) })
+    const [run] = await runChecks([k], wrong, new LocalProcessRunner(), 1, registry, codeFacts(registry, 1), 10_000)
+    assert.deepEqual([run.failure?.class, run.failure?.reason], ["disputed", "reference"])
+    const seen: AdjudicationRequest[] = []
+    const ruling = (verdict: string) => async (r: AdjudicationRequest) => { seen.push(r); return { stub: true, text: JSON.stringify({ verdict, basis: [k.blocks[0]], reason: "the text" }) } }
+    // The program wrong: the check stands, and counts against the program from then on.
+    const right = await store.settle(1, [{ check: k.id, run, kind: "reference", detail: run.failure!.detail }], ruling("check_right"))
+    assert.deepEqual([...right.right], [k.id])
+    const text = JSON.stringify(seen[0])
+    assert.ok(!text.includes(k.reference_script!.code.trim().split("\n")[0]) && !("reference_script" in seen[0].check), "the reference's code is not shown")
+    assert.deepEqual(seen[0].dispute.run.failed.map(f => f.id).sort(), run.assertions.filter(a => !a.ok).map(a => a.id).sort(), "the program's output")
+    assert.ok(seen[0].check.assertions.every(a => a.expect !== undefined), "the reference's values")
+    const [again] = await runChecks([k], wrong, new LocalProcessRunner(), 1, registry, codeFacts(registry, 1), 10_000, () => new Set(["reference"]))
+    assert.deepEqual([again.failure?.class, again.failure?.reason], ["not_landed", "value_mismatch"])
+  })
+
+  it("ruled \"reference wrong\": the check leaves, and nothing about it goes to the executor", async () => {
+    const s4 = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b11r-")), "b11r")
+    await s4.ingestRound(1, roundText(1), stubTransport())
+    await s4.deriveRoundChecks(1, checkStubTransport(), { sandbox: new LocalScriptSandbox(), runner: new LocalProcessRunner(), baseline: nullBaseline(join(dir, "null4")) })
+    const registry = s4.registry(), anchors = new GoAnchorExtractor()
+    const k = s4.inspect().checks.find(c => c.key === "filter-gt")!
+    const workdir = join(dir, "work-r")
+    mkdirSync(workdir, { recursive: true })
+    initRepo(workdir)
+    const w = buildWorkOrder({ registry, round: 1, library: [k], events: [], statuses: [], runs: [], anchors: anchors.extract(workdir), links: [], steps: [], previous_task: [] })
+    const executor = new StubExecutor({ messages: [wd => write(wd, { ...base, "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(true) })] })
+    const settle = (d: Parameters<Exp2Store["settle"]>[1]) => s4.settle(1, d, async () => ({ stub: true, text: JSON.stringify({ verdict: "check_wrong", basis: [k.blocks[0]], reason: "the reference reads the threshold as exclusive" }) }))
+    const record = await executeRound(workdir, w, renderWorkOrder(w), executor, {
+      registry, library: [k], events: [], links: [], anchors, build: goBuilder(join(dir, "b-r"), {}, "dpipe"), runner: new LocalProcessRunner(), facts: codeFacts(registry, 1), settle,
+    }, { ...DEFAULT_LIMITS, repairCycles: 2 })
+    assert.equal(s4.inspect().rulings[0].kind, "reference")
+    assert.deepEqual(record.cycles[0].failing, [])
+    assert.equal(executor.log.messages.length, 1, "no repair message")
+    assert.ok(!activeChecks(s4.inspect().checks, s4.inspect().check_events).some(c => c.id === k.id))
+  })
+
+  it("a ruling of ambiguity retires the check from repair and leaves it on record as an open item of that reason", async () => {
+    const s2 = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b11v-")), "b11v")
+    await s2.ingestRound(1, roundText(1), stubTransport())
+    await s2.deriveRoundChecks(1, checkStubTransport(), { sandbox: new LocalScriptSandbox(), runner: new LocalProcessRunner(), baseline: nullBaseline(join(dir, "null2")) })
+    const registry = s2.registry(), k = s2.inspect().checks.find(c => c.key === "filter-gt")!
+    const wrong = built("filter-wrong2", { ...base, "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(true) })
+    const [run] = await runChecks([k], wrong, new LocalProcessRunner(), 1, registry, codeFacts(registry, 1), 10_000)
+    const out = await s2.settle(1, [{ check: k.id, run, kind: "reference", detail: run.failure!.detail }], async () => ({ stub: true, text: JSON.stringify({ verdict: "text_ambiguous", basis: [k.blocks[0]], reason: "either reading" }) }))
+    assert.deepEqual([...out.wrong], [k.id])
+    const st = s2.inspect()
+    const summary = acceptanceSummary({ library: st.checks, runs: [], events: st.check_events, findings: [], gaps: { open: [], closed: [] } })
+    assert.deepEqual(summary.open.ambiguous, [k.id])
+    assert.ok(!activeChecks(st.checks, st.check_events).some(c => c.id === k.id), "no longer sent for repair")
+  })
+
+  it("an uncovered unit written for twice without a probe is closed as uncheckable by code, and still reported", async () => {
+    const X = "R1.S3.P9.s3"
+    const s3 = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b11x-")), "b11x")
+    for (const r of [1, 2]) await s3.ingestRound(r, roundText(r), stubTransport())
+    const without = async (r: ProbeRequest) => {
+      const reply = await stubProbeWriter()(r)
+      const a = JSON.parse(reply.text)
+      a.probes = a.probes.filter((p: { covers: { unit: string }[] }) => !p.covers.some(c => c.unit === X))
+      return { ...reply, text: JSON.stringify(a) }
+    }
+    await s3.deriveRoundProbes(1, without)
+    assert.deepEqual(gapState(s3.registry(), s3.inspect().probe_rounds).open, [X], "carried")
+    const r2 = await s3.deriveRoundProbes(2, without)
+    assert.deepEqual(r2.gaps_in, [X])
+    const g = gapState(s3.registry(), s3.inspect().probe_rounds)
+    assert.deepEqual(g.open, [])
+    assert.deepEqual(g.closed.map(c => [c.unit, c.reason]), [[X, "uncheckable: no probe exercised it in 2 writings (rounds 1, 2)"]])
+    const summary = acceptanceSummary({ library: [], runs: [], events: [], findings: [], gaps: g })
+    assert.deepEqual(summary.open.uncheckable.map(u => u.unit), [X])
+  })
+})
+
+describe("exp2 block 11 §6: the round report shows determinations by kind, open items by reason, and what each cycle ran", () => {
+  it("a stand-in R1 with the check library on, probes, judge and adjudicator", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "exp2-b11p-"))
+    const store = new Exp2Store(join(dir, "store"), "b11p")
+    const serial = new Serial({
+      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
+      executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
+      probes: stubProbeWriter(), judge: stubJudge(), adjudicate: async () => ({ stub: true, text: JSON.stringify({ verdict: "check_right", basis: ["R1.S3"], reason: "the text" }) }),
+      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
+    })
+    assert.equal((await serial.run({ to: 1 })).status, "done")
+    const r1 = store.inspect().reports[0]
+    const a = r1.acceptance!
+    assert.ok(a.by_kind.A > 0 && a.by_kind.B > 0 && a.by_kind.C > 0, JSON.stringify(a.by_kind))
+    assert.deepEqual(Object.keys(a.open).sort(), ["ambiguous", "program_wrong", "reference_pending", "uncheckable", "uncovered"])
+    const cycles = r1.probes!.runs_by_cycle
+    assert.ok(cycles.length > 0 && cycles.every(c => c.checks > 0 && c.probes > 0), JSON.stringify(cycles))
+    const text = renderReport(r1)
+    assert.match(text, /Determinations on the final program: \d+ stated values \(A\), \d+ by a reference \(B\), \d+ by judgment \(C\)/u)
+    assert.match(text, /Open: program wrong \d+, uncovered \d+, reference disagreement pending \d+, ambiguous \d+; closed as uncheckable \d+/u)
+    assert.match(text, /Runs per cycle \(every check and probe, in batches\): \S+ checks \d+, probes \d+: judged \d+ \(output changed\), cached \d+, by code \d+/u)
   })
 })

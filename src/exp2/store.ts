@@ -4,11 +4,11 @@ import { attributeRound, RoleUnavailable, type AttributionTransport, type Issue,
 import { writing } from "./platform.js"
 import { materialize, type Registry, type RoundAcceptance, type Signal } from "./registry.js"
 import { contentHash } from "./source.js"
-import { activeChecks, basisOf, codeFacts, deriveChecks, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport, type Coverage } from "./checks.js"
+import { activeChecks, basisOf, codeFacts, deriveChecks, libraryCovers, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport, type Coverage } from "./checks.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import type { ExecutionRecord } from "./execution.js"
 import type { RoundReport } from "./report.js"
-import { objectStatuses, runCheck, strength, type CheckRun, type DisputeKind, type ObjectStatus } from "./verdict.js"
+import { objectStatuses, runCheck, runChecks, strength, type CheckRun, type DisputeKind, type ObjectStatus } from "./verdict.js"
 import { adjudicate, type AdjudicationCallRecord, type AdjudicationTransport, type Ruling } from "./adjudication.js"
 import type { Discrimination } from "./discrimination.js"
 import { activeProbes, deriveProbes, openGaps, probeUnits, staleProbes, strengthenProbes, type ProbeCallRecord, type ProbeEvent, type ProbeRecord, type ProbeRoundRecord, type ProbeRun, type ProbeTransport } from "./probes.js"
@@ -220,9 +220,8 @@ export class Exp2Store {
       const registry = this.registry(s)
       s.check_events.push(...staleChecks(registry, s.checks.filter(c => c.round <= round), s.check_events, round))
       const facts = codeFacts(registry, round)
-      let runs: CheckRun[] = []
       const library = activeChecks(s.checks.filter(c => c.round <= round), s.check_events.filter(e => e.round <= round))
-      for (const check of library) runs.push({ ...await runCheck(check, program, runner, round, registry, facts, timeoutMs, upheldKinds(s, check.id)), verdict })
+      let runs: CheckRun[] = (await runChecks(library, program, runner, round, registry, facts, timeoutMs, id => upheldKinds(s, id))).map(r => ({ ...r, verdict }))
       // Disputed failures are ruled on against the text (BLOCK9 §2.3): a wrong check leaves, a right one is run again.
       if (options.adjudicate) {
         const disputes = runs.filter(r => r.failure?.class === "disputed").map(r => ({ check: r.check, run: r, kind: r.failure!.reason as DisputeKind, detail: r.failure!.detail }))
@@ -261,7 +260,7 @@ export class Exp2Store {
       const now = s.probe_events.filter(e => e.round === round).map(e => e.probe)
       const units = probeUnits(registry, round, s.probes.filter(p => now.includes(p.id)))
       // Units earlier rounds left unexercised come back until covered or declared uncheckable (BLOCK11 §2).
-      const gaps = openGaps(registry, s.probe_rounds).filter(u => !units.includes(u))
+      const gaps = openGaps(registry, s.probe_rounds, libraryCovers(registry, s.checks, s.check_events)).filter(u => !units.includes(u))
       return { units: [...units, ...gaps], stale: now, gaps }
     })
   }
@@ -302,7 +301,7 @@ export class Exp2Store {
   }
 
   /** Judges one program's runs of active probes; verdicts already kept for the same output are reused. */
-  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number; concurrency?: number; sandbox?: ScriptSandbox } = {}): Promise<Finding[]> {
+  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number; concurrency?: number; sandbox?: ScriptSandbox; ruling?: JudgeTransport } = {}): Promise<Finding[]> {
     // Asked outside the lock, committed in one transaction; the failed calls are kept before unavailability goes up.
     const s0 = this.inspect()
     let r: Awaited<ReturnType<typeof judgeRuns>> | RoleUnavailable
@@ -329,16 +328,18 @@ export class Exp2Store {
     const wrong = new Set<string>(), right = new Set<string>()
     for (const d of disputes) {
       const prior = s.rulings.find(r => r.check === d.check && r.kind === d.kind)
-      if (prior) { (prior.verdict === "check_wrong" ? wrong : right).add(d.check); continue }
+      if (prior) { (prior.verdict === "check_right" ? right : wrong).add(d.check); continue }
       const check = s.checks.find(c => c.id === d.check)!
       const nextCall = () => s.calls.length + s.check_calls.length + s.adjudication_calls.length
       const out = await adjudicate(registry, round, check, d.run, d.kind, d.detail, transport, n => `M${nextCall() + n}`)
       s.adjudication_calls.push(...out.calls)
       if (!out.ruling) continue
       s.rulings.push({ ...out.ruling, call: out.calls.at(-1)!.id })
-      if (out.ruling.verdict === "check_wrong") {
+      // Ruled wrong, or the text ambiguous: the check no longer counts against the program; an ambiguous one stays on
+      // record as an open item of that reason (DESIGN §12g), never sent for repair.
+      if (out.ruling.verdict !== "check_right") {
         wrong.add(d.check)
-        s.check_events.push({ check: d.check, round, status: "retired", by: "model", cause: { kind: "adjudicated", source: d.kind }, reason: `ruled wrong (${d.kind}): ${out.ruling.reason} [${out.ruling.basis.join(", ")}]` })
+        s.check_events.push({ check: d.check, round, status: "retired", by: "model", cause: { kind: "adjudicated", source: d.kind }, reason: `${out.ruling.verdict === "text_ambiguous" ? "ruled ambiguous" : "ruled wrong"} (${d.kind}): ${out.ruling.reason} [${out.ruling.basis.join(", ")}]` })
       } else right.add(d.check)
     }
     return { wrong, right }
