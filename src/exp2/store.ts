@@ -11,7 +11,7 @@ import type { RoundReport } from "./report.js"
 import { objectStatuses, runCheck, strength, type CheckRun, type DisputeKind, type ObjectStatus } from "./verdict.js"
 import { adjudicate, type AdjudicationCallRecord, type AdjudicationTransport, type Ruling } from "./adjudication.js"
 import type { Discrimination } from "./discrimination.js"
-import { activeProbes, deriveProbes, probeUnits, staleProbes, strengthenProbes, type ProbeCallRecord, type ProbeEvent, type ProbeRecord, type ProbeRoundRecord, type ProbeRun, type ProbeTransport } from "./probes.js"
+import { activeProbes, deriveProbes, openGaps, probeUnits, staleProbes, strengthenProbes, type ProbeCallRecord, type ProbeEvent, type ProbeRecord, type ProbeRoundRecord, type ProbeRun, type ProbeTransport } from "./probes.js"
 import { judgeRuns, type Finding, type JudgeCallRecord, type Judgment, type JudgeTransport } from "./judge.js"
 
 /**
@@ -251,7 +251,7 @@ export class Exp2Store {
    * The first, short part of a round's probe writing (BLOCK10 §9.1): probes whose text changed are marked stale at
    * once, so nothing run from here on uses them, and the units to write for are fixed. No model call.
    */
-  async beginRoundProbes(round: number): Promise<{ units: string[]; stale: string[] }> {
+  async beginRoundProbes(round: number): Promise<{ units: string[]; stale: string[]; gaps: string[] }> {
     return this.transaction(s => {
       const registry = this.registry(s)
       if (s.probe_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Probes of round ${round} are already written`)
@@ -259,12 +259,15 @@ export class Exp2Store {
       s.probe_events.push(...stale)
       // Stale this round, by now or an earlier attempt of the round: their live units are written again.
       const now = s.probe_events.filter(e => e.round === round).map(e => e.probe)
-      return { units: probeUnits(registry, round, s.probes.filter(p => now.includes(p.id))), stale: now }
+      const units = probeUnits(registry, round, s.probes.filter(p => now.includes(p.id)))
+      // Units earlier rounds left unexercised come back until covered or declared uncheckable (BLOCK11 §2).
+      const gaps = openGaps(registry, s.probe_rounds).filter(u => !units.includes(u))
+      return { units: [...units, ...gaps], stale: now, gaps }
     })
   }
 
   /** The model part of probe writing, outside the store's lock (coding and judging go on meanwhile); one commit at the end. */
-  async writeRoundProbes(round: number, begun: { units: string[]; stale: string[] }, transport: ProbeTransport, options: { maxRepairs?: number } = {}): Promise<ProbeRoundRecord> {
+  async writeRoundProbes(round: number, begun: { units: string[]; stale: string[]; gaps?: string[] }, transport: ProbeTransport, options: { maxRepairs?: number } = {}): Promise<ProbeRoundRecord> {
     const out = await deriveProbes(this.registry(), round, begun.units, transport, { maxRepairs: options.maxRepairs ?? 2, callId: n => `~W${n}` })
     return this.transaction(s => {
       if (s.probe_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Probes of round ${round} are already written`)
@@ -273,7 +276,7 @@ export class Exp2Store {
       const entered: string[] = []
       if (out.status === "accepted") for (const p of out.probes) { const id = `P${s.probes.length + 1}`; s.probes.push({ id, ...p, call: ids.get(p.call) ?? p.call }); entered.push(id) }
       const record: ProbeRoundRecord = {
-        round, status: out.status, calls: out.calls.map(c => c.id), entered, stale: begun.stale, units: begun.units,
+        round, status: out.status, calls: out.calls.map(c => c.id), entered, stale: begun.stale, units: begun.units, ...(begun.gaps?.length ? { gaps_in: begun.gaps } : {}),
         covered: out.covered, uncheckable: out.uncheckable, uncovered: out.uncovered, dropped: out.dropped, cases: out.cases, ...(out.issues ? { issues: out.issues } : {}),
       }
       s.probe_rounds.push(record)
@@ -299,7 +302,7 @@ export class Exp2Store {
   }
 
   /** Judges one program's runs of active probes; verdicts already kept for the same output are reused. */
-  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number; concurrency?: number } = {}): Promise<Finding[]> {
+  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number; concurrency?: number; sandbox?: ScriptSandbox } = {}): Promise<Finding[]> {
     // Asked outside the lock, committed in one transaction; the failed calls are kept before unavailability goes up.
     const s0 = this.inspect()
     let r: Awaited<ReturnType<typeof judgeRuns>> | RoleUnavailable

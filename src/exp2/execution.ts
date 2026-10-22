@@ -75,7 +75,12 @@ export interface ExecutionDeps {
    * item that broke is marked; `contests` the executor's objections.
    */
   detect?: {
-    run(program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>): Promise<{ items: CorrectionItem[]; findings: Finding[] }>
+    /**
+     * Runs probes on the cycle's program and judges them (BLOCK11 §1). `scope`: all of them (the round's first run
+     * on a built program, and the end-of-round check), or after a repair only the open items' probes, the probes of
+     * the objects the change touched, and probes not run yet this round. Returns the counts by reason.
+     */
+    run(program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>, scope?: ProbeScope): Promise<{ items: CorrectionItem[]; findings: Finding[]; counts?: ProbeRunCounts }>
     /** Pairs judged ok on the program at the start of the round. */
     passed: ReadonlySet<string>
     /** The program's name, for the calls in the correction list. */
@@ -93,6 +98,11 @@ export interface ExecutionDeps {
   checkTimeoutMs?: number
 }
 
+export type ProbeScope = { kind: "first" | "check" } | { kind: "scoped"; objects: string[]; open: string[] }
+
+/** Probes run in a cycle, by why: all on the first run, open items, objects the change touched, new this round, the end-of-round check. */
+export interface ProbeRunCounts { first: number; open: number; affected: number; new: number; check: number }
+
 export interface CycleRecord {
   id: string
   round: number
@@ -109,6 +119,8 @@ export interface CycleRecord {
   ambiguous: string[]
   /** Items wrong now that were judged ok earlier: a change broke them. */
   broke: string[]
+  /** Probes run in this cycle, by why (BLOCK11 §1). */
+  probe_runs?: ProbeRunCounts
   /** The discrimination measure, on the cycle it ran on. */
   measure?: { mutants: number; killed: number; survived: number; build_failed: number; score: number | null; weak_units: string[]; strengthened: string[]; still_weak: number }
   anchors: string[]
@@ -237,6 +249,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
   const taskSet = new Set(task)
   const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", task, sessions: [], cycles: [], kept: null, carried: [], open: [], links: [], usage: zero() }
   const okSoFar = new Set(deps.detect?.passed ?? [])
+  let ranFull = false, openProbes = new Set<string>()
   let measuredOnce = false
   const itemsOf = new Map<string, CorrectionItem[]>()
   const links = [...deps.links]
@@ -303,9 +316,23 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     let measured: CycleRecord["measure"]
     if (build.ok && deps.detect?.measure && !measuredOnce) { measuredOnce = true; measured = await deps.detect.measure(workdir, build.program!, [...links, ...linked.links]) }
     // Probes on this cycle's program, judged; what is wrong goes to the correction list.
-    const detected = build.ok && deps.detect ? await deps.detect.run(build.program!, okSoFar, probeContests) : { items: [] as CorrectionItem[], findings: [] as Finding[] }
+    // The first run on a built program covers every probe; after a repair, what the change can affect and the open
+    // items. When that is clean, all probes once more on the same program: what the change broke elsewhere is caught
+    // before the round ends. Verdicts of probes not rerun carry forward.
+    const changedSet = new Set(changed)
+    const touchedObjects = [...new Set([...links, ...linked.links].filter(l => changedSet.has(l.anchor)).map(l => l.object))]
+    const scope: ProbeScope = !ranFull ? { kind: "first" } : { kind: "scoped", objects: touchedObjects, open: [...openProbes] }
+    let detected = build.ok && deps.detect ? await deps.detect.run(build.program!, okSoFar, probeContests, scope) : { items: [] as CorrectionItem[], findings: [] as Finding[], counts: undefined }
+    const counts: ProbeRunCounts = { first: 0, open: 0, affected: 0, new: 0, check: 0, ...detected.counts }
+    if (build.ok && deps.detect) ranFull = true
+    if (build.ok && deps.detect && scope.kind === "scoped" && !detected.items.length && !failing.length) {
+      const check = await deps.detect.run(build.program!, okSoFar, new Map(), { kind: "check" })
+      counts.check = check.counts?.check ?? 0
+      detected = { items: check.items, findings: [...detected.findings, ...check.findings], counts }
+    }
     for (const f of detected.findings) if (f.verdict === "ok") okSoFar.add(pairKey(f.probe, f.unit))
     const corrections = detected.items
+    openProbes = new Set(corrections.map(c => c.probe))
     const trailers: [string, string][] = [
       ["IC-Round", String(round)], ["IC-Cycle", id], ["IC-Session", session.id],
       ...task.map(o => ["IC-Object", `${o}@v${deps.registry.objects.get(o)!.version}`] as [string, string]),
@@ -322,7 +349,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
       runs: runs.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null })),
       failing, contests: contests.map(c => ({ check: c.check, claim: c.claim, verdict: settled.wrong.has(c.check) ? "check_wrong" : settled.right.has(c.check) ? "check_right" : "unsettled" })),
       anchors: changed, note: clip(reply.note, 4000), usage: reply.usage,
-      ...(measured ? { measure: measured } : {}),
+      ...(measured ? { measure: measured } : {}), ...(build.ok && deps.detect ? { probe_runs: counts } : {}),
       corrections: corrections.map(c => c.key), ambiguous: detected.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: corrections.filter(c => c.passed_before).map(c => c.key),
     })
     itemsOf.set(id, corrections)

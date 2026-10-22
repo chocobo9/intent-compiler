@@ -37,6 +37,10 @@ export interface RoundReport {
     carried_in: number; open_at_end: string[]; ambiguous_at_end: string[]; broke: string[]
     /** Case-level coverage of this round's units (BLOCK10 §7.3). */
     cases: { total: number; covered: number; excused: number; open: string[] } | null
+    /** Probes run per cycle and why (BLOCK11 §1). */
+    runs_by_cycle: { cycle: string; first: number; open: number; affected: number; new: number; check: number }[]
+    /** Units (or cases) no probe exercises yet, carried into this round's writing, and those still open at its end (BLOCK11 §2). */
+    gaps: { carried_in: string[]; open: string[] }
     /** Whether the probes tell the round's program from mutants of it, measured by code; null when not run. */
     discrimination: null | { mutants: number; killed: number; survived: number; build_failed: number; score: number | null; weak_units: string[]; strengthened: string[]; still_weak: number }
   }
@@ -135,6 +139,8 @@ export function buildReport(i: ReportInput): RoundReport {
         carried_in: p.carried_in, open_at_end: p.findings.filter(f => f.verdict === "wrong").map(f => pairKey(f.probe, f.unit)),
         ambiguous_at_end: p.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: kept?.broke ?? [],
         cases: p.record?.cases ?? null, discrimination: e.cycles.find(c => c.measure)?.measure ?? null,
+        runs_by_cycle: e.cycles.filter(c => c.probe_runs).map(c => ({ cycle: c.id, ...c.probe_runs! })),
+        gaps: { carried_in: p.record?.gaps_in ?? [], open: [...(p.record?.uncovered ?? []), ...(p.record?.cases?.open ?? [])] },
       }
     })() : null,
     objects: i.statuses.map(s => ({ object: s.object, name: name(s.object), status: s.status, reasons: s.reasons, passing_strong: s.passing_strong, not_landed: s.not_landed, unknown: s.unknown })),
@@ -167,6 +173,7 @@ export function renderReport(r: RoundReport): string {
     `Execution: ${r.execution.status}; ${r.execution.cycles} cycles (${r.execution.repairs} repairs), kept ${r.execution.kept ?? "none"} with ${r.execution.failing_at_end} failing; ${r.execution.contests} contests; carried ${r.execution.carried_objects.length}; sessions ${r.execution.sessions} (${r.execution.broken_sessions} broken).`,
     ...(r.probes ? [
       `Probes: ${r.probes.written} written for ${r.probes.units} units (${r.probes.uncovered.length} not exercised, ${r.probes.dropped} dropped), ${r.probes.stale} stale, ${r.probes.active} active. Carried in ${r.probes.carried_in}; open at the end ${r.probes.open_at_end.length}; ambiguous ${r.probes.ambiguous_at_end.length}; broke ${r.probes.broke.length}.`,
+      `Probe runs: ${r.probes.runs_by_cycle.map(c => `${c.cycle} ${c.first ? `all ${c.first}` : `open ${c.open}, affected ${c.affected}, new ${c.new}${c.check ? `, end check ${c.check}` : ""}`}`).join("; ") || "none"}. Gaps carried in ${r.probes.gaps.carried_in.length}, open ${r.probes.gaps.open.length}.`,
       `Cases: ${r.probes.cases ? `${r.probes.cases.covered}/${r.probes.cases.total} reached, ${r.probes.cases.excused} uncheckable, ${r.probes.cases.open.length} open` : "n/a"}. Discrimination: ${r.probes.discrimination ? `${r.probes.discrimination.killed} of ${r.probes.discrimination.killed + r.probes.discrimination.survived} mutants told apart (${r.probes.discrimination.build_failed} did not build); weak units ${r.probes.discrimination.weak_units.length}, probes added ${r.probes.discrimination.strengthened.length}, still not told apart ${r.probes.discrimination.still_weak}` : "not run"}.`,
       `Probe writer (${r.probes.models.writer.join(", ") || "?"}): ${r.probes.writer.calls} calls, ${tok(r.probes.writer.tokens)}. Judge (${r.probes.models.judge.join(", ") || "?"}): ${r.probes.judge.calls} calls, ${tok(r.probes.judge.tokens)}. Share of coding tokens: ${r.probes.share.all ?? "n/a"} (uncached ${r.probes.share.uncached ?? "n/a"}).`,
     ] : []),

@@ -4,7 +4,7 @@ import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
 import { AuthInvalid, QuotaExhausted, RoleUnavailable, type AttributionTransport, type ModelReply } from "./attribution.js"
 import { codeFacts, type ChecksTransport } from "./checks.js"
-import { executeRound, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
+import { executeRound, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor, type ProbeRunCounts, type ProbeScope } from "./execution.js"
 import { head, initRepo, resetTo } from "./git.js"
 import { buildReport, codingCost, renderReport, type RoundReport, type StageCost } from "./report.js"
 import { EnvironmentBlocked } from "./platform.js"
@@ -21,6 +21,7 @@ import { discriminate, remeasure } from "./discrimination.js"
 import type { MeasureRecord } from "./store.js"
 import type { PlatformOptions } from "./platform.js"
 import type { AnchorLink } from "./workorder.js"
+import type { Registry } from "./registry.js"
 
 /**
  * The end-to-end serial (DESIGN §9, §14). Each round, from the previous round's checkpoint:
@@ -291,11 +292,13 @@ export class Serial {
     // 4. Execution.
     const passing = start.runs.filter(r => r.outcome === "pass").map(r => r.check)
     const passed = new Set(carried.findings.filter(f => f.verdict === "ok").map(f => pairKey(f.probe, f.unit)))
+    const ranThisRound = new Set<string>()
     const execution = await executeRound(workdir, workorder, renderWorkOrder(workorder) + carried.text, this.c.executor(round), {
       registry, library: state.checks, events: state.check_events, links, anchors: this.c.anchors, build: this.c.build, runner: this.c.runner,
       facts: codeFacts(registry, round), passing, checkTimeoutMs: limits.checkTimeoutMs, onProgress: r => { this.progress = r },
       upheld: check => upheldKinds(store.inspect(), check),
-      ...(probing ? { detect: { passed, program: programName(baseline.kind === "null" ? { command: [this.c.binary ?? "program"] } as ProgramRef : baseline), run: async (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => { await ready(); const r = await this.probe(round, this.activeProbes(), program, before, contests); return { items: r.items, findings: r.findings } },
+      ...(probing ? { detect: { passed, program: programName(baseline.kind === "null" ? { command: [this.c.binary ?? "program"] } as ProgramRef : baseline), run: (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>, scope?: ProbeScope) => this.scoped(round, program, before, contests, scope ?? { kind: "first" }, ready, ranThisRound),
+
         ...((limits.mutants ?? 20) > 0 ? { measure: async (wd: string, program: ProgramRef, known: readonly AnchorLink[]) => { await ready(); return this.timed("measurement", () => this.measure(round, wd, program, known, new Set(workorder.task.map(t => t.object)))) } } : {}) } } : {}),
       time: (stage: string, a: number, b: number) => { this.spans.push({ stage, start: a, end: b }) },
       ...(this.c.adjudicate ? { settle: (disputes: Parameters<Exp2Store["settle"]>[1]) => store.settle(round, disputes, this.c.adjudicate!) } : {}),
@@ -369,6 +372,17 @@ export class Serial {
     return { mutants: d.mutants.length, ...d.counts, score: d.score, weak_units: [...new Set(d.weak.flatMap(w => w.units))], strengthened: strengthen?.entered ?? [], still_weak: after ? after.still.length : d.counts.survived }
   }
 
+  /**
+   * A cycle's probe run (BLOCK11 §1): all active probes, or those in scope after a repair (open items, the touched
+   * objects' probes, probes not run yet this round), judged; with the counts by reason.
+   */
+  private async scoped(round: number, program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>, scope: ProbeScope, ready: () => Promise<void>, ran: Set<string>) {
+    await ready()
+    const { pick, counts } = pickProbes(this.activeProbes(), scope, this.c.store.registry(), ran)
+    const r = await this.probe(round, pick, program, before, contests)
+    return { items: r.items, findings: r.findings, counts }
+  }
+
   private activeProbes(): ProbeRecord[] {
     const s = this.c.store.inspect()
     return activeProbes(s.probes, s.probe_events)
@@ -377,7 +391,7 @@ export class Serial {
   /** Runs probes on a program and judges the runs (kept verdicts reused): the findings and the correction items. */
   private async probe(round: number, probes: readonly ProbeRecord[], program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) {
     const runs = await this.timed("probe runs", () => runProbes(probes, program, this.c.runner, this.c.limits.checkTimeoutMs, this.c.limits.probeConcurrency))
-    const findings = (await this.timed("judging", () => this.c.store.judge(round, runs, withWatchdog(this.c.judge!, this.c.limits.managementTimeoutMs), { contests }))).filter(f => probes.some(p => p.id === f.probe))
+    const findings = (await this.timed("judging", () => this.c.store.judge(round, runs, withWatchdog(this.c.judge!, this.c.limits.managementTimeoutMs), { contests, sandbox: this.c.sandbox }))).filter(f => probes.some(p => p.id === f.probe))
     return { findings, items: correctionItems(this.c.store.registry(), probes, runs, findings, before) }
   }
 
@@ -389,6 +403,28 @@ export class Serial {
     }
     return nullBaseline(join(this.c.checkpoints, "null-baseline"))
   }
+}
+
+/**
+ * Which probes a cycle runs (BLOCK11 §1): all, or after a repair the open items' probes, the probes of the objects
+ * the change touched, and probes not run yet this round; each counted under the first reason that applies. Marks
+ * the picked probes as run this round.
+ */
+export function pickProbes(all: readonly ProbeRecord[], scope: ProbeScope, registry: Registry, ran: Set<string>): { pick: ProbeRecord[]; counts: ProbeRunCounts } {
+  const counts: ProbeRunCounts = { first: 0, open: 0, affected: 0, new: 0, check: 0 }
+  let pick: ProbeRecord[]
+  if (scope.kind !== "scoped") { pick = [...all]; counts[scope.kind] = all.length }
+  else {
+    const objects = new Set(scope.objects), open = new Set(scope.open)
+    const owners = (p: ProbeRecord) => p.covers.map(c => registry.coverOf(c.unit)?.owner)
+    pick = all.filter(p => {
+      const why = open.has(p.id) ? "open" : owners(p).some(o => o && objects.has(o)) ? "affected" : !ran.has(p.id) ? "new" : null
+      if (why) counts[why]++
+      return !!why
+    })
+  }
+  for (const p of pick) ran.add(p.id)
+  return { pick, counts }
 }
 
 export interface Span { stage: string; start: number; end: number }

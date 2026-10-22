@@ -92,6 +92,8 @@ export interface ProbeRoundRecord {
   uncovered: string[]
   /** Probes left out when the repairs ran out, with their problems. */
   dropped: { key: string; problems: string[] }[]
+  /** Units or cases left unexercised by earlier rounds, written for again in this one (BLOCK11 §2). */
+  gaps_in?: string[]
   /** Case-level coverage (BLOCK10 §7.3): cases code found in the units, reached, declared uncheckable, still open. */
   cases?: { total: number; covered: number; excused: number; open: string[] }
   issues?: { code: string; message: string }[]
@@ -293,6 +295,23 @@ export function activeProbes(probes: readonly ProbeRecord[], events: readonly Pr
   return probes.filter(p => !gone.has(p.id))
 }
 
+/**
+ * Units no probe exercises yet (BLOCK11 §2): unexercised units and units with open cases of earlier rounds, until
+ * a later round covers them or declares them uncheckable; only text still in force.
+ */
+export function openGaps(registry: Registry, rounds: readonly ProbeRoundRecord[]): string[] {
+  const open = new Set<string>()
+  const unitOf = (id: string) => id.includes("#") ? id.split("#")[0] : registry.block(id)?.parent ?? id
+  for (const r of [...rounds].filter(x => x.status === "accepted").sort((a, b) => a.round - b.round)) {
+    for (const u of r.covered) open.delete(u)
+    // A unit declared uncheckable is closed; a case declared so already lets its unit count as covered.
+    for (const u of r.uncheckable) open.delete(u.unit)
+    for (const u of r.uncovered) open.add(u)
+    for (const c of r.cases?.open ?? []) open.add(unitOf(c))
+  }
+  return [...open].filter(u => live(registry, u))
+}
+
 const live = (registry: Registry, unit: string) => {
   const own = registry.ownership(unit)
   return !!registry.block(unit) && (!own || LIVE_STATES.has(own.state))
@@ -432,7 +451,8 @@ export async function strengthenProbes(registry: Registry, round: number, weak: 
 /** stopped: the controller stopped the program at a limit on this input (memory, time, output), and how. */
 export interface ProbeOutput { exit_code: number | null; timed_out: boolean; stdout: string; stderr: string; files: Record<string, string>; stopped?: string }
 
-export interface ProbeRun { probe: string; output: ProbeOutput }
+/** files: everything the run left, uncut (for a computation the judge asks for; never judged as such). */
+export interface ProbeRun { probe: string; output: ProbeOutput; files?: Record<string, string> }
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…(${s.length - n} more chars)` : s
 
@@ -447,5 +467,9 @@ export function normalizeOutput(out: RunOutput, inputs: readonly { path: string;
 export const PROBE_CONCURRENCY = 4
 
 export async function runProbes(probes: readonly ProbeRecord[], program: ProgramRef, runner: CheckRunner, timeoutMs: number, concurrency = PROBE_CONCURRENCY): Promise<ProbeRun[]> {
-  return mapPool(probes, concurrency, async p => ({ probe: p.id, output: normalizeOutput(await runner.run(program, { args: p.args, files: p.files }, timeoutMs), p.files) }))
+  // A batch runner runs the set in few containers; otherwise the runs go side by side, one each.
+  const outs = runner.runBatch
+    ? await runner.runBatch(program, probes.map(p => ({ args: p.args, files: p.files })), timeoutMs)
+    : await mapPool(probes, concurrency, p => runner.run(program, { args: p.args, files: p.files }, timeoutMs))
+  return probes.map((p, i) => ({ probe: p.id, output: normalizeOutput(outs[i], p.files), files: outs[i].files }))
 }

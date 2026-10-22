@@ -12,7 +12,7 @@ import { commitStep, git, head, initRepo } from "./git.js"
 import { correctionItems, pairKey, probeStatuses, renderCorrections, type CorrectionItem, type Finding, type JudgeTransport } from "./judge.js"
 import { activeProbes, runProbes, type ProbeRoundRecord, type ProbeTransport } from "./probes.js"
 import { addUsage } from "./report.js"
-import type { CheckRunner, ProgramRef } from "./runner.js"
+import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import { Exp2Store } from "./store.js"
 import { buildWorkOrder } from "./workorder.js"
 
@@ -80,6 +80,8 @@ export const REPAIR_INTRO = "The Go program in this directory was built from the
 
 export interface HarnessDeps {
   store: Exp2Store
+  /** Where computations the judge asks for run (BLOCK11 §4). */
+  sandbox?: ScriptSandbox
   judge: JudgeTransport
   build: (dir: string, label: string) => BuildResult
   runner: CheckRunner
@@ -138,7 +140,7 @@ export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport; 
     const s = store.inspect(), probes = activeProbes(s.probes, s.probe_events).filter(x => x.round <= p.round)
     const runs = await runProbes(probes, b.program!, deps.runner, deps.timeoutMs)
     const before = store.inspect().judge_calls.length
-    const findings = await store.judge(p.round, runs, deps.judge)
+    const findings = await store.judge(p.round, runs, deps.judge, { sandbox: deps.sandbox })
     const calls = store.inspect().judge_calls.slice(before)
     out.push({
       product: p, built: true, findings, items: correctionItems(store.registry(), probes, runs, findings), ambiguous: findings.filter(f => f.verdict === "ambiguous"),
@@ -187,7 +189,7 @@ export async function repairProducts(deps: HarnessDeps & { storeFor?: (product: 
     const s = store.inspect(), probes = activeProbes(s.probes, s.probe_events).filter(x => x.round <= p.round)
     const detect = async (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => {
       const runs = await runProbes(probes, program, deps.runner, deps.timeoutMs)
-      const findings = await store.judge(p.round, runs, deps.judge, { contests })
+      const findings = await store.judge(p.round, runs, deps.judge, { contests, sandbox: deps.sandbox })
       return { findings, items: correctionItems(store.registry(), probes, runs, findings, before) }
     }
     const b = deps.build(workdir, `repair-${p.name}-base`)

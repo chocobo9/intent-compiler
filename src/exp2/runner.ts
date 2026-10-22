@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, wr
 import { tmpdir } from "node:os"
 import { dirname, extname, join, relative, resolve, sep } from "node:path"
 import { spawn as nodeSpawn } from "node:child_process"
+import { mapPool } from "./pool.js"
 import { ENVIRONMENT_TRIES, EnvironmentBlocked, isEnvironmentBlock, minimalEnv, scriptCommand, scriptFile, type PlatformOptions } from "./platform.js"
 
 /**
@@ -49,6 +50,8 @@ export const DEFAULT_RESOURCE_LIMITS: ResourceLimits = { memoryMb: 1024, outputB
 
 export interface CheckRunner {
   run(program: ProgramRef, input: CheckInput, timeoutMs: number): Promise<RunOutput>
+  /** Many runs of one program at once (BLOCK11 §1): one container for a batch instead of one per run. */
+  runBatch?(program: ProgramRef, inputs: readonly CheckInput[], timeoutMs: number): Promise<RunOutput[]>
   /** The string literals in the program's source: the code fact behind "this command or option is not there". */
   literals(program: ProgramRef): Set<string>
 }
@@ -164,6 +167,10 @@ export class LocalProcessRunner implements CheckRunner {
   }
   literals(program: ProgramRef): Set<string> {
     return program.source_dir ? sourceLiterals(program.source_dir) : new Set()
+  }
+  /** Local processes cost no container start: the runs go side by side. */
+  async runBatch(program: ProgramRef, inputs: readonly CheckInput[], timeoutMs: number): Promise<RunOutput[]> {
+    return mapPool(inputs, 4, input => this.run(program, input, timeoutMs))
   }
 }
 

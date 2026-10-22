@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { BuildResult } from "./execution.js"
@@ -91,8 +91,62 @@ export function withContainerLimit<T extends ScriptResult>(r: T, memoryMb: numbe
   return { ...r, exit_code: null, limit: { kind: "memory", detail: `killed at the ${memoryMb} MiB memory limit` } }
 }
 
+/** Runs per container in a batch (BLOCK11 §1). */
+export const BATCH_SIZE = 100
+
+const quote = (s: string) => `'${s.replace(/'/gu, `'\\''`)}'`
+
+/**
+ * The shell script of a batch: each run in its own directory, one after another, with its own time limit (timeout),
+ * output limit (ulimit -f, 512-byte blocks) and the container's memory limit; exit code, stdout, stderr and elapsed
+ * milliseconds kept per run. Exits 99 at once when the image has no `timeout`, so the caller falls back to one
+ * container per run.
+ */
+export function batchScript(command: readonly string[], inputs: readonly CheckInput[], timeoutMs: number, outputBytes: number, work = "/work"): string {
+  const secs = Math.max(1, Math.ceil(timeoutMs / 1000)), blocks = Math.max(1, Math.ceil(outputBytes / 512))
+  return [
+    "command -v timeout >/dev/null 2>&1 || exit 99",
+    `mkdir -p ${work}/__out`,
+    ...inputs.map((input, i) => {
+      const o = `${work}/__out/r${i}`
+      return `cd ${work}/r${i} && s=$(date +%s%N) && ( ulimit -f ${blocks}; exec timeout -k 1 ${secs} ${[...command, ...input.args].map(quote).join(" ")} ) >${o}.out 2>${o}.err; echo $? >${o}.code; e=$(date +%s%N); echo $(( (e - s) / 1000000 )) >${o}.ms 2>/dev/null`
+    }),
+  ].join("\n") + "\n"
+}
+
+/** One run of a batch, read back: exit 124 (or 137 past the time) is the time limit, 153 the output limit, 137 within time memory. */
+export function batchResult(code: number | null, stdout: string, stderr: string, ms: number, timeoutMs: number, files: Record<string, string>, memoryMb: number): RunOutput {
+  const overTime = code === 124 || (code === 137 && Number.isFinite(ms) && ms >= timeoutMs)
+  if (overTime) return { exit_code: null, stdout, stderr, files, timed_out: true, limit: { kind: "time", detail: `no exit within ${timeoutMs} ms` } }
+  if (code === 153) return { exit_code: null, stdout, stderr, files, timed_out: false, limit: { kind: "output", detail: "output passed the size limit" } }
+  if (code === 137) return { exit_code: null, stdout, stderr, files, timed_out: false, limit: { kind: "memory", detail: `killed at the ${memoryMb} MiB memory limit` } }
+  return { exit_code: code, stdout, stderr, files, timed_out: false }
+}
+
 export class DockerRunner implements CheckRunner {
   constructor(private readonly o: DockerOptions) {}
+  /** Up to BATCH_SIZE runs in one container (no network, the program read-only, the container's limits). */
+  async runBatch(program: ProgramRef, inputs: readonly CheckInput[], timeoutMs: number): Promise<RunOutput[]> {
+    if (program.kind === "null") return inputs.map(nullRun)
+    const limits = { ...DEFAULT_RESOURCE_LIMITS, ...this.o.limits }
+    const out: RunOutput[] = []
+    for (let at = 0; at < inputs.length; at += BATCH_SIZE) {
+      const chunk = inputs.slice(at, at + BATCH_SIZE)
+      const dir = mkdtempSync(join(tmpdir(), "exp2-batch-"))
+      try {
+        chunk.forEach((input, i) => { mkdirSync(join(dir, `r${i}`)); writeInputs(join(dir, `r${i}`), input.files) })
+        writeFileSync(join(dir, "__batch.sh"), batchScript(program.command, chunk, timeoutMs, limits.outputBytes, this.o.workdir ?? "/work"), "utf8")
+        const r = await runInContainer(this.o, dir, ["sh", `${this.o.workdir ?? "/work"}/__batch.sh`], chunk.length * (timeoutMs + 1000), program.mount ? [program.mount] : [])
+        if (r.exit_code === 99) { for (const input of chunk) out.push(await this.run(program, input, timeoutMs)); continue }
+        const read = (f: string) => { try { return readFileSync(join(dir, "__out", f), "utf8") } catch { return "" } }
+        chunk.forEach((_, i) => {
+          const code = read(`r${i}.code`).trim()
+          out.push(batchResult(code === "" ? null : Number(code), read(`r${i}.out`), read(`r${i}.err`), Number(read(`r${i}.ms`).trim()), timeoutMs, collect(join(dir, `r${i}`)), limits.memoryMb))
+        })
+      } finally { rmSync(dir, { recursive: true, force: true }) }
+    }
+    return out
+  }
   async run(program: ProgramRef, input: CheckInput, timeoutMs: number): Promise<RunOutput> {
     if (program.kind === "null") return nullRun(input)
     const dir = mkdtempSync(join(tmpdir(), "exp2-check-"))

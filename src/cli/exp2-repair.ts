@@ -28,7 +28,7 @@ async function main(argv: string[]): Promise<number> {
   const products = parseProducts(readFileSync(resolve(list), "utf8")).map(p => ({ ...p, path: resolve(p.path) }))
   const score = local.scoring ? (commit: string, repo: string, round: number) => officialScore(local.scoring!.command, round, commit, repo) : undefined
   const results = await repairProducts({
-    store, storeFor: p => existsSync(join(resolve(detectDir), "products", p.name, "store", "exp2-state.json")) ? productStore(store, resolve(detectDir), p.name) : store, judge: c.judge, build: c.build, runner: c.runner, timeoutMs: c.limits.checkTimeoutMs, executor: () => c.executor(1), anchors: c.anchors,
+    store, storeFor: p => existsSync(join(resolve(detectDir), "products", p.name, "store", "exp2-state.json")) ? productStore(store, resolve(detectDir), p.name) : store, judge: c.judge, sandbox: c.sandbox, build: c.build, runner: c.runner, timeoutMs: c.limits.checkTimeoutMs, executor: () => c.executor(1), anchors: c.anchors,
     limits: c.limits.execution, binary: c.binary ?? "app", text: c.text, ...(score ? { score } : {}),
   }, products, resolve(outDir))
   const lines = ["# Repair from correction lists", "", "| product | items | official before → after | fixed | broke | still failing | cycles | open after | coding tokens (in / cache / out) |", "|---|---|---|---|---|---|---|---|---|"]
