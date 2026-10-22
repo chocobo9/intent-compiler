@@ -24,6 +24,7 @@
 | 5.6 medium 不开 fast，15 轮 ×3 | 诊断分 R15 失分 20、12、13；3 次里有 1 次引入外部库 | `exp2-bare15-luna56-nofast-medium-rep{1,2,3}-*` | OBSERVATIONS §13 |
 | luna6 low，15 轮 ×3（2026-10-22） | 诊断通过率 R15 63.8% / 0% / 90.1%；官方分 3 次中 2 次 R5 起为 0（其中 1 次需要 Go 1.26，诊断分也是 0）；15 轮编码 14–27 分钟 | `exp2-bare15-luna6-low-rep{1,2,3}-dpipe-20261022` | OBSERVATIONS §14 |
 | 5.6 low，15 轮 ×3（2026-10-22） | 诊断通过率 R15 93.9% / 97.8% / 64.1%（均值 85.2%）；官方分 3 次中 2 次 R5 起为 0（联网）；15 轮编码 14–22 分钟 | `exp2-bare15-luna56-low-rep{1,2,3}-dpipe-20261022`（rep2、rep3 暂停过，见 PAUSED.txt） | OBSERVATIONS §15 |
+| luna6 medium，15 轮 ×3（2026-10-22） | 诊断通过率 R15 0% / 89.4% / 77.0%；官方分 3 次都是 0（1 次 R1 起写了 go 1.23，2 次 R5 起联网）；15 轮编码 15–17 分钟 | `exp2-bare15-luna6-medium-rep{1,2,3}-dpipe-20261022` | OBSERVATIONS §16 |
 | 5.6 medium，R1 ×3 | 201、208、219 | `exp2-bare-r1-luna56-medium*` | ANALYSIS §1 |
 | secsentinel、eventq，5.6 medium ×1 | 99.8%；逐轮均值 88.7%（R6、R7 偏低） | `exp2-bare-luna56-medium-{secsentinel,eventq}-*` | OBSERVATIONS §12 |
 
