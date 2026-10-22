@@ -20,6 +20,7 @@
 | luna6 high，R1 ×5 | 219、218、218、218、191 | `exp2-bare-r1rep{2,3,4}-luna-*`、shell R1 | OBSERVATIONS §2.2 |
 | 5.6 medium fast，15 轮 ×4 | 诊断分 R15 失分 13、3、28、30；官方分 4 次都是 R5 起为 0 | `exp2-bare15b-*`、`exp2-bare15-luna56-medium-rep{2,3,4}-*` | OBSERVATIONS §9、§11 |
 | 5.6 medium 不开 fast，15 轮 ×3 | 诊断分 R15 失分 20、12、13；3 次里有 1 次引入外部库 | `exp2-bare15-luna56-nofast-medium-rep{1,2,3}-*` | OBSERVATIONS §13 |
+| luna6 low，15 轮 ×3（2026-10-22） | 诊断通过率 R15 63.8% / 0% / 90.1%；官方分 3 次中 2 次 R5 起为 0（其中 1 次需要 Go 1.26，诊断分也是 0）；15 轮编码 14–27 分钟 | `exp2-bare15-luna6-low-rep{1,2,3}-dpipe-20261022` | OBSERVATIONS §14 |
 | 5.6 medium，R1 ×3 | 201、208、219 | `exp2-bare-r1-luna56-medium*` | ANALYSIS §1 |
 | secsentinel、eventq，5.6 medium ×1 | 99.8%；逐轮均值 88.7%（R6、R7 偏低） | `exp2-bare-luna56-medium-{secsentinel,eventq}-*` | OBSERVATIONS §12 |
 
