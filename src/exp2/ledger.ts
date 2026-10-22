@@ -2,6 +2,8 @@ import { contestsIn, type ExecutionRecord, type ItemSighting } from "./execution
 import { libraryCovers, type CheckEvent, type CheckRecord } from "./checks.js"
 import { gapState, type ProbeEvent, type ProbeRecord, type ProbeRoundRecord } from "./probes.js"
 import type { Registry } from "./registry.js"
+import { pairKey, type Judgment } from "./judge.js"
+import type { Ruling } from "./adjudication.js"
 
 /**
  * The ledger (DESIGN §12h E2): every open item of the acceptance in one place, with one id, on the text it rests on.
@@ -38,10 +40,19 @@ export interface LedgerEntry {
   rounds: number[]
   /** The digest of its output when last seen (an item listed only stays so while this does not change). */
   digest: string | null
+  /**
+   * An independent ruling confirmed the item as the program's (a probe pair's ruled verdict wrong, a library check
+   * upheld), and no later ruling changed that: from that round on it does not expire (it ends fixed, superseded, or by
+   * a later ruling).
+   */
+  confirmed: null | { round: number }
   end: null | { round: number; how: LedgerEnd; detail: string }
 }
 
-/** An item open at the end of this many rounds in a row with the same output, sent in between, is listed only. */
+/**
+ * An item open at the end of this many rounds in a row with the same output, sent in between, is listed only, unless
+ * a ruling confirmed it.
+ */
 export const EXPIRE_ROUNDS = 2
 
 export interface LedgerInput {
@@ -52,6 +63,9 @@ export interface LedgerInput {
   probe_rounds: readonly ProbeRoundRecord[]
   checks: readonly CheckRecord[]
   check_events: readonly CheckEvent[]
+  /** The independent session's verdicts on probe pairs (judgments marked ruled), and the rulings on library checks. */
+  judgments?: readonly Pick<Judgment, "probe" | "unit" | "verdict" | "round" | "ruled">[]
+  rulings?: readonly Pick<Ruling, "check" | "verdict" | "round">[]
 }
 
 const failingVerdict = (v: string) => v === "wrong" || v === "not_landed"
@@ -68,7 +82,7 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
     const kase = probe ? probeOf.get(probe)?.covers.find(c => c.unit === unit)?.case ?? null : null
     e = {
       id, source: probe ? "probe" : check ? "check" : "coverage", unit: unit ?? check?.blocks[0] ?? id.split("#")[0], case: kase ?? (id.includes("#") ? id : null), units: unit ? [unit] : check ? [...check.blocks] : [id.split("#")[0]],
-      reason, state: "open", opened: { round, cycle }, sent: [], held: [], replies: [], verdicts: [], rounds: [], digest: null, end: null, ends: [],
+      reason, state: "open", opened: { round, cycle }, sent: [], held: [], replies: [], verdicts: [], rounds: [], digest: null, confirmed: null, end: null, ends: [],
     }
     entries.set(id, e)
     return e
@@ -88,6 +102,12 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
   const note = (e: LedgerEntry, round: number, cycle: string | null, verdict: string, by: LedgerEntry["verdicts"][number]["by"]) => {
     if (e.verdicts.at(-1)?.verdict !== verdict || by === "ruling") e.verdicts.push({ round, cycle, verdict, by })
   }
+  // The independent session's last word on an item up to a round: confirmed (the program's) or not.
+  const rulingsOf = new Map<string, { round: number; confirms: boolean }[]>()
+  const ruling = (id: string, round: number, confirms: boolean) => rulingsOf.set(id, [...(rulingsOf.get(id) ?? []), { round, confirms }])
+  for (const j of i.judgments ?? []) if (j.ruled) ruling(pairKey(j.probe, j.unit), j.round, j.verdict === "wrong")
+  for (const k of i.rulings ?? []) ruling(k.check, k.round, k.verdict === "check_right")
+  const confirmedBy = (id: string, round: number) => { const last = (rulingsOf.get(id) ?? []).filter(x => x.round <= round).at(-1); return last?.confirms ? last : null }
   const rounds = [...i.executions].sort((a, b) => a.round - b.round)
   for (const x of rounds) {
     const r = x.round
@@ -133,9 +153,12 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
       e.ends.push({ round: r, digest: s.digest })
       if (s.digest) e.lastDigest = s.digest
       note(e, r, null, s.verdict, "round end")
-      // No progress over rounds: the same output at the end of EXPIRE_ROUNDS rounds in a row, sent in between.
+      const c = confirmedBy(id, r)
+      e.confirmed = c ? { round: e.confirmed?.round ?? c.round } : null
+      // No progress over rounds: the same output at the end of EXPIRE_ROUNDS rounds in a row, sent in between; an item
+      // a ruling confirmed stays, sent once a round, until it is fixed, superseded or ruled otherwise.
       const last = e.ends.slice(-EXPIRE_ROUNDS)
-      if (!e.end && last.length === EXPIRE_ROUNDS && last.every((y, k) => y.digest && y.digest === last[0].digest && (k === 0 || y.round === last[k - 1].round + 1)) && e.sent.length) close(e, r, "expired", `the same output at the end of rounds ${last.map(y => y.round).join(", ")}`)
+      if (!e.end && !e.confirmed && last.length === EXPIRE_ROUNDS && last.every((y, k) => y.digest && y.digest === last[0].digest && (k === 0 || y.round === last[k - 1].round + 1)) && e.sent.length) close(e, r, "expired", `the same output at the end of rounds ${last.map(y => y.round).join(", ")}`)
     }
     if (kept) {
       for (const e of entries.values()) if (!e.end && e.source !== "coverage" && e.reason === "program_wrong" && !failingAtEnd.has(e.id) && e.opened.round <= r) close(e, r, "fixed", `no longer failing on ${x.kept}`)
@@ -161,13 +184,15 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
 }
 
 /** The ledger from a state (DESIGN §12h E2). */
-export function ledgerOf(state: { executions: readonly ExecutionRecord[]; probes: readonly ProbeRecord[]; probe_events: readonly ProbeEvent[]; probe_rounds: readonly ProbeRoundRecord[]; checks: readonly CheckRecord[]; check_events: readonly CheckEvent[] }, registry: Registry): LedgerEntry[] {
-  return buildLedger({ registry, executions: state.executions, probes: state.probes, probe_events: state.probe_events, probe_rounds: state.probe_rounds, checks: state.checks, check_events: state.check_events })
+export function ledgerOf(state: { executions: readonly ExecutionRecord[]; probes: readonly ProbeRecord[]; probe_events: readonly ProbeEvent[]; probe_rounds: readonly ProbeRoundRecord[]; checks: readonly CheckRecord[]; check_events: readonly CheckEvent[]; judgments?: LedgerInput["judgments"]; rulings?: LedgerInput["rulings"] }, registry: Registry): LedgerEntry[] {
+  return buildLedger({ registry, executions: state.executions, probes: state.probes, probe_events: state.probe_events, probe_rounds: state.probe_rounds, checks: state.checks, check_events: state.check_events, judgments: state.judgments ?? [], rulings: state.rulings ?? [] })
 }
 
 /** The report's projection of the ledger for one round (DESIGN §12h E2): open by reason, listed only, and how items ended. */
 export interface LedgerSummary {
   open: Record<"program_wrong" | "uncovered" | "reference_pending", string[]>
+  /** Open program-wrong items a ruling confirmed: still sent once a round, never listed only. */
+  confirmed: string[]
   report_only: { id: string; how: LedgerEnd; detail: string }[]
   ended: { id: string; how: LedgerEnd; cycles: number }[]
   /** Cycles items were sent in this round, and items held back. */
@@ -180,6 +205,7 @@ export function ledgerSummary(entries: readonly LedgerEntry[], round: number): L
   for (const e of entries.filter(x => x.state === "open" && x.reason !== "ambiguous")) open[e.reason as keyof typeof open].push(e.id)
   return {
     open,
+    confirmed: entries.filter(e => e.state === "open" && e.confirmed).map(e => e.id),
     report_only: entries.filter(e => e.state === "report_only").map(e => ({ id: e.id, how: e.end!.how, detail: e.end!.detail })),
     ended: entries.filter(e => e.end?.round === round).map(e => ({ id: e.id, how: e.end!.how, cycles: e.sent.filter(s => s.startsWith(`C${round}.`)).length })),
     sends: entries.reduce((n, e) => n + e.sent.filter(s => s.startsWith(`C${round}.`)).length, 0),
@@ -190,8 +216,8 @@ export function ledgerSummary(entries: readonly LedgerEntry[], round: number): L
 /** Renders the ledger as a table, one line per item (DESIGN §12h E2). */
 export function renderLedger(entries: readonly LedgerEntry[]): string {
   return [
-    "| item | rests on | reason | state | opened | cycles sent | replies | verdicts | end |",
-    "|---|---|---|---|---|---|---|---|---|",
-    ...entries.map(e => `| ${e.id} | ${e.case ?? e.unit} | ${e.reason} | ${e.state} | R${e.opened.round}${e.opened.cycle ? ` ${e.opened.cycle}` : ""} | ${e.sent.length}${e.sent.length ? ` (${e.sent.join(", ")})` : ""} | ${e.replies.filter(r => r.contest).length} contest(s) | ${e.verdicts.map(v => `${v.cycle ?? `R${v.round}`}:${v.verdict}${v.by === "ruling" ? " (ruling)" : ""}`).join(" → ")} | ${e.end ? `R${e.end.round} ${e.end.how}` : ""} |`),
+    "| item | rests on | reason | state | confirmed | opened | cycles sent | replies | verdicts | end |",
+    "|---|---|---|---|---|---|---|---|---|---|",
+    ...entries.map(e => `| ${e.id} | ${e.case ?? e.unit} | ${e.reason} | ${e.state} | ${e.confirmed ? `R${e.confirmed.round}` : ""} | R${e.opened.round}${e.opened.cycle ? ` ${e.opened.cycle}` : ""} | ${e.sent.length}${e.sent.length ? ` (${e.sent.join(", ")})` : ""} | ${e.replies.filter(r => r.contest).length} contest(s) | ${e.verdicts.map(v => `${v.cycle ?? `R${v.round}`}:${v.verdict}${v.by === "ruling" ? " (ruling)" : ""}`).join(" → ")} | ${e.end ? `R${e.end.round} ${e.end.how}` : ""} |`),
   ].join("\n")
 }

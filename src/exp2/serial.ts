@@ -263,6 +263,7 @@ export class Serial {
     const atStart = store.inspect()
     const ledger = ledgerOf(atStart, store.registry(atStart))
     const quiet = new Map(ledger.filter(e => e.state === "report_only" && e.end?.how === "expired" && e.digest).map(e => [e.id, e.digest!]))
+    const confirmed = new Set(ledger.filter(e => e.state === "open" && e.confirmed).map(e => e.id))
     let units: string[] = coverage(store.registry(atStart), round, EMPTY_CHECKS, [], []).units
     // The round's probes are written in the background (BLOCK10 §9.1): they need the text, not the program, so coding
     // does not wait for them. Stale probes are marked first, so the carry-over below never runs one.
@@ -278,7 +279,7 @@ export class Serial {
         const digest = new Map(r.runs.map(x => [x.probe, x.digest]))
         // Items the ledger lists only, at the same output, are not carried (DESIGN §12h E3).
         const items = r.items.filter(it => quiet.get(it.key) !== digest.get(it.probe))
-        carried = { findings: r.findings, text: items.length ? `\n${CARRIED_HEADER}\n${renderCorrections(items, programName(baseline))}\n` : "", items: new Map(items.map(it => [it.key, digest.get(it.probe) ?? ""])) }
+        carried = { findings: r.findings, text: items.length ? `\n${CARRIED_HEADER}\n${renderCorrections(items.map(it => confirmed.has(it.key) ? { ...it, upheld: true as const } : it), programName(baseline))}\n` : "", items: new Map(items.map(it => [it.key, digest.get(it.probe) ?? ""])) }
       }
     }
     // What needs the round's probes waits for them here, and a writer that failed stops the round.
@@ -311,7 +312,7 @@ export class Serial {
       // Targeted runs (DESIGN §12h E4): the round's changed text, the ledger's open items, and what the previous round's
       // full run recorded each check and probe executing.
       target: {
-        units: new Set(units), open: new Set(ledger.filter(e => e.state === "open" && e.source !== "coverage").map(e => e.id)), quiet,
+        units: new Set(units), open: new Set(ledger.filter(e => e.state === "open" && e.source !== "coverage").map(e => e.id)), quiet, confirmed,
         seen: seenFrom(state.executions.filter(x => x.round < round).sort((a, b) => a.round - b.round).at(-1)?.coverage),
         probes: async () => { await ready(); return this.activeProbes() },
       },

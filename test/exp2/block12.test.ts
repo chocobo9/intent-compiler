@@ -9,10 +9,10 @@ import { goBuilder } from "../../src/exp2/build.js"
 import { codeFacts } from "../../src/exp2/checks.js"
 import { changeScope, coveredFunctions, ranOnly } from "../../src/exp2/coverage.js"
 import { batchScript } from "../../src/exp2/docker.js"
-import { executeRound, DEFAULT_LIMITS, NO_PROGRESS, type ExecutionDeps } from "../../src/exp2/execution.js"
+import { executeRound, DEFAULT_LIMITS, NO_PROGRESS, type ExecutionDeps, type Executor } from "../../src/exp2/execution.js"
 import { initRepo } from "../../src/exp2/git.js"
 import { computedAgrees, correctionItems, judgeRuns, pairKey, type JudgeRequest } from "../../src/exp2/judge.js"
-import { ledgerOf } from "../../src/exp2/ledger.js"
+import { ledgerOf, ledgerSummary } from "../../src/exp2/ledger.js"
 import { activeProbes, deriveProbes, runProbes, type ProbeRecord } from "../../src/exp2/probes.js"
 import { replayAcceptance, scoreTexts } from "../../src/exp2/acceptance.js"
 import { acceptanceFromLedger, renderReport } from "../../src/exp2/report.js"
@@ -177,6 +177,7 @@ describe("exp2 block 12 E3: an item a repair does not change goes to the indepen
     // The ledger alone tells the item's story: opened in R1 on the first cycle, sent once, ended by the ruling.
     const e = ledgerOf({ ...s, executions: [record] }, store.registry(s)).find(x => x.id === key)!
     assert.deepEqual([e.opened.round, e.opened.cycle, e.sent.length, e.end?.how], [1, "C1.1", 1, "ruled_program_right"])
+    assert.equal(e.confirmed, null, "ruled program right: nothing confirmed, no cycle more")
     assert.ok(e.replies.length === 1 && e.replies[0].contest === (said === "contests"))
   })
 })
@@ -244,17 +245,29 @@ describe("exp2 block 12 E4: each cycle runs what the round's text, the ledger an
   })
 })
 
+/** The stand-in executor, which compares as text in its sort until round `round`, whose work message fixes it. */
+function fixesSortIn(round: number): (r: number) => Executor {
+  const inner = serialExecutor()
+  return r => {
+    const e = inner(r)
+    return { open: async ctx => { const x = await e.open(ctx); let first = true; return { ...x, id: x.id, close: () => x.close(), send: async (m: string) => { const reply = await x.send(m); if (r === round && first) write(ctx.workdir, { "op_sort.go": SORT_NUM }); first = false; return reply } } } }
+  }
+}
+
+/** The independent session, a stand-in that reads the sort and filter for real (DESIGN §12h E3). */
+const rulingSession = stubJudge()
+
 describe("exp2 block 12 E2, E4, E5: the serial's report and ledger", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-b12s-"))
   const store = new Exp2Store(join(dir, "store"), "b12s", { checks: false })
   before(async () => {
     const serial = new Serial({
       store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
-      executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe", true), binary: "dpipe",
-      probes: stubProbeWriter(), judge: stubJudge(),
+      executor: fixesSortIn(4), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe", true), binary: "dpipe",
+      probes: stubProbeWriter(), judge: stubJudge(), ruling: rulingSession,
       limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 2 } },
     })
-    assert.equal((await serial.run({ to: 3 })).status, "done")
+    assert.equal((await serial.run({ to: 4 })).status, "done")
   })
 
   it("each cycle says what it selected and why; the full run, its omissions and the cache share are in the report", () => {
@@ -267,27 +280,34 @@ describe("exp2 block 12 E2, E4, E5: the serial's report and ledger", () => {
       assert.match(text, /selected checks \d+.*, probes \d+ \(/u)
       assert.match(text, /Selection: full run before delivery on C\d+\.\d+ \(checks \d+, probes \d+, found \d+\); selection omissions \d+/u)
       assert.match(text, /Cache reads of input: writer (?:[\d.]+|n\/a), judge (?:[\d.]+|n\/a)/u)
-      assert.match(text, /Ledger: open program wrong \d+, uncovered \d+, reference pending \d+; listed only \d+/u)
+      assert.match(text, /Ledger: open program wrong \d+ \(confirmed by a ruling \d+\), uncovered \d+, reference pending \d+; listed only \d+/u)
     }
     // R2's text changed few units: its first cycle selects by the R1 full run's coverage, not everything.
     const c = r2.probes!.runs_by_cycle[0]
     assert.ok((c.selected!.probes["changed text"] ?? 0) + (c.selected!.probes["executed a changed function"] ?? 0) + (c.selected!.probes.everything ?? 0) > 0, JSON.stringify(c.selected))
   })
 
-  it("the ledger alone answers when an item opened, how many cycles it took and how it ended; the checkpoint holds it", () => {
+  it("a real defect the executor leaves for three rounds, confirmed by the ruling: carried and sent once every round, never listed only; fixed in R4", () => {
     const s = store.inspect()
     const ledger = ledgerOf(s, store.registry(s))
-    // The stand-in executor's sort compares as text and it never fixes what the probes find.
+    // The stand-in executor's sort compares as text until R4.
     const sort = s.probes.find(p => p.key.endsWith("sort-asc"))!
-    const e = ledger.find(x => x.id === pairKey(sort.id, sort.covers[0].unit))!
-    assert.equal(e.opened.round, 1)
-    assert.equal(e.opened.cycle, "C1.1")
-    assert.ok(e.sent.length >= 2 && e.sent.includes("R2 work order"), JSON.stringify(e.sent))
-    assert.ok(e.held.length >= 1, "held after a ruling upheld it and nothing changed")
-    assert.deepEqual([e.end?.how, e.state], ["expired", "report_only"], JSON.stringify(e.end))
-    assert.ok(!s.executions[2].carried_in?.some(c => c.id === e.id), "an item listed only is not carried into R3")
+    const id = pairKey(sort.id, sort.covers[0].unit)
+    const e = ledger.find(x => x.id === id)!
+    assert.deepEqual([e.opened.round, e.opened.cycle], [1, "C1.1"])
+    assert.deepEqual(e.confirmed, { round: 1 }, "the ruling on the unchanged output in R1 upheld it")
+    for (const r of [2, 3, 4]) assert.ok(s.executions[r - 1].carried_in?.some(c => c.id === id), `in R${r}'s work order`)
+    // One send a round: the first cycle in R1, the work order from R2 on; held while it does not change.
+    const sends = (r: number) => e.sent.filter(x => x === `R${r} work order` || x.startsWith(`C${r}.`)).length
+    assert.deepEqual([1, 2, 3, 4].map(sends), [1, 1, 1, 1], JSON.stringify(e.sent))
+    assert.ok(["C1.2", "C2.1", "C3.1"].every(c => e.held.includes(c)), JSON.stringify(e.held))
+    assert.deepEqual(e.rounds, [1, 2, 3])
+    assert.deepEqual([e.end?.how, e.end?.round, e.state], ["fixed", 4, "closed"], JSON.stringify(e.end))
+    assert.equal(rulingSession.requests.filter(q => q.items.some(it => it.units.some(u => u.id === sort.covers[0].unit) && it.contest)).length, 1, "ruled once: the same output keeps the ruling")
+    for (const r of [2, 3]) assert.ok(s.reports[r - 1].ledger!.confirmed.includes(id) && !s.reports[r - 1].ledger!.report_only.some(x => x.id === id), `R${r}: shown as confirmed, not as listed only`)
+    assert.match(renderReport(s.reports[1]), /open program wrong \d+ \(confirmed by a ruling [1-9]\d*\)/u)
     const saved = JSON.parse(readFileSync(join(dir, "checkpoints", "round-02", "ledger.json"), "utf8")) as typeof ledger
-    assert.ok(saved.some(x => x.id === e.id))
+    assert.ok(saved.some(x => x.id === id && x.confirmed && x.state === "open"))
     assert.ok(existsSync(join(dir, "checkpoints", "round-02", "ledger.md")))
   })
 })
@@ -372,5 +392,27 @@ describe("exp2 block 12 E2: the report's open items are the ledger's", () => {
     assert.deepEqual([fixed.state, fixed.end?.how, fixed.sent], ["closed", "fixed", ["C1.1"]])
     const summary = acceptanceFromLedger({ A: 0, B: 0, C: 2 }, ledger)
     assert.deepEqual([summary.open.ambiguous, summary.open.program_wrong], [["P1/R1.S3.P9.s2"], []])
+  })
+
+  it("no ruling confirmed it: the same output at two round ends, sent in between, and it is listed only; a confirmed one stays open, and a ruling of program right ends it", async () => {
+    const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b12x-")), "b12x")
+    await store.ingestRound(1, roundText(1), stubTransport())
+    const zero = { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 }
+    const [A, B, C] = ["P1/R1.S3.P2.s4", "P2/R1.S3.P9.s2", "P3/R1.S3.P9.s3"]
+    const round = (r: number) => {
+      // C is ruled program right in R1: its kept verdict keeps it from failing again.
+      const items = (r === 1 ? [A, B, C] : [A, B]).map(id => ({ id, digest: "d", verdict: "wrong", action: (r === 1 ? "send" : "hold") as "send" | "hold" }))
+      const ruled = r === 1 ? [{ id: C, verdict: "ok", reason: "the program follows the text" }] : []
+      const c = { id: `C${r}.1`, round: r, session: "s", message: "work" as const, commit: "", build: { ok: true, output: "" }, runs: [], failing: [], contests: [], corrections: [A, B], ambiguous: [], broke: [], items, ...(ruled.length ? { ruled } : {}), anchors: [], note: "", usage: zero }
+      return { round: r, base: "", head: "", status: "done" as const, task: [], sessions: [], cycles: [c], kept: c.id, carried: [], open: [], links: [], usage: zero, ...(r > 1 ? { carried_in: [{ id: A, digest: "d" }, { id: B, digest: "d" }] } : {}), final: [A, B].map(id => ({ id, digest: "d", verdict: "wrong", action: "none" as const })) }
+    }
+    const s = store.inspect()
+    const ledger = ledgerOf({ ...s, executions: [1, 2, 3].map(round), judgments: [{ probe: "P2", unit: "R1.S3.P9.s2", verdict: "wrong", round: 1, ruled: true }] }, store.registry(s))
+    const get = (id: string) => ledger.find(e => e.id === id)!
+    assert.deepEqual([get(A).state, get(A).end?.how, get(A).end?.round, get(A).confirmed], ["report_only", "expired", 2, null], "unconfirmed: listed only after R2")
+    assert.deepEqual([get(B).state, get(B).end, get(B).confirmed, get(B).rounds], ["open", null, { round: 1 }, [1, 2, 3]], "confirmed: still open after three rounds")
+    assert.deepEqual([get(C).state, get(C).end?.how], ["closed", "ruled_program_right"], "a false positive ruled right ends")
+    const sum = ledgerSummary(ledger, 3)
+    assert.deepEqual([sum.confirmed, sum.report_only.map(x => [x.id, x.how])], [[B], [[A, "expired"]]])
   })
 })

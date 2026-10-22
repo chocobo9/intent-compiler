@@ -80,8 +80,10 @@ export interface AcceptanceSummary {
     program_wrong: string[]; uncovered: string[]; reference_pending: string[]; ambiguous: string[]
     /** Closed by code: left unexercised by two writings in a row. Reported, no longer written for. */
     uncheckable: { unit: string; reason: string }[]
-    /** Listed only: open at the end of rounds in a row with no progress (DESIGN §12h E3). */
+    /** Listed only: open at the end of rounds in a row with no progress, no ruling confirming them (DESIGN §12h E3). */
     expired?: string[]
+    /** Program wrong, confirmed by a ruling: sent once a round until fixed, superseded or ruled otherwise. */
+    confirmed?: string[]
   }
 }
 
@@ -94,6 +96,7 @@ export function acceptanceFromLedger(by_kind: AcceptanceSummary["by_kind"], entr
     open: {
       program_wrong: open("program_wrong"), uncovered: open("uncovered"), reference_pending: open("reference_pending"),
       ambiguous: listed("ruled_ambiguous").map(e => e.id), uncheckable: listed("uncheckable").map(e => ({ unit: e.id, reason: e.end!.detail })), expired: listed("expired").map(e => e.id),
+      confirmed: entries.filter(e => e.state === "open" && e.reason === "program_wrong" && e.confirmed).map(e => e.id),
     },
   }
 }
@@ -250,10 +253,10 @@ export function renderReport(r: RoundReport): string {
     ...(r.wall ? [`Wall time ${(r.wall.round_ms / 1000).toFixed(0)} s. ${r.wall.stages.map(x => `${x.stage} ${(x.ms / 1000).toFixed(1)} s (${x.spans}×, ${(x.first_start_ms / 1000).toFixed(0)}–${(x.last_end_ms / 1000).toFixed(0)} s)`).join("; ")}.`] : []),
     ...(r.acceptance ? [
       `Determinations on the final program: ${r.acceptance.by_kind.A} stated values (A), ${r.acceptance.by_kind.B} by a reference (B), ${r.acceptance.by_kind.C} by judgment (C), all A and B compared by code.`,
-      `Open: program wrong ${r.acceptance.open.program_wrong.length}, uncovered ${r.acceptance.open.uncovered.length}, reference disagreement pending ${r.acceptance.open.reference_pending.length}, ambiguous ${r.acceptance.open.ambiguous.length}; closed as uncheckable ${r.acceptance.open.uncheckable.length}${r.acceptance.open.uncheckable.length ? ` (${r.acceptance.open.uncheckable.map(u => u.unit).join(", ")})` : ""}.`,
+      `Open: program wrong ${r.acceptance.open.program_wrong.length}, uncovered ${r.acceptance.open.uncovered.length}, reference disagreement pending ${r.acceptance.open.reference_pending.length}, ambiguous ${r.acceptance.open.ambiguous.length}; closed as uncheckable ${r.acceptance.open.uncheckable.length}${r.acceptance.open.confirmed?.length ? `; confirmed by a ruling ${r.acceptance.open.confirmed.length}` : ""}${r.acceptance.open.uncheckable.length ? ` (${r.acceptance.open.uncheckable.map(u => u.unit).join(", ")})` : ""}.`,
     ] : []),
     ...(r.selection ? [`Selection: full run before delivery on ${r.selection.sweep?.cycle ?? "none"}${r.selection.sweep ? ` (checks ${r.selection.sweep.checks}, probes ${r.selection.sweep.probes}, found ${r.selection.sweep.found.length})` : ""}; selection omissions ${r.selection.omissions.length}${r.selection.omissions.length ? ` (${r.selection.omissions.map(o => `${o.id} since ${o.since}`).join(", ")})` : ""}.`] : []),
-    ...(r.ledger ? [`Ledger: open program wrong ${r.ledger.open.program_wrong.length}, uncovered ${r.ledger.open.uncovered.length}, reference pending ${r.ledger.open.reference_pending.length}; listed only ${r.ledger.report_only.length}${r.ledger.report_only.length ? ` (${tallyBy(r.ledger.report_only.map(x => x.how))})` : ""}; ended this round ${r.ledger.ended.length}${r.ledger.ended.length ? ` (${tallyBy(r.ledger.ended.map(x => x.how))})` : ""}; sent ${r.ledger.sends} times; held ${r.ledger.held.length}.`] : []),
+    ...(r.ledger ? [`Ledger: open program wrong ${r.ledger.open.program_wrong.length} (confirmed by a ruling ${r.ledger.confirmed?.length ?? 0}), uncovered ${r.ledger.open.uncovered.length}, reference pending ${r.ledger.open.reference_pending.length}; listed only ${r.ledger.report_only.length}${r.ledger.report_only.length ? ` (${tallyBy(r.ledger.report_only.map(x => x.how))})` : ""}; ended this round ${r.ledger.ended.length}${r.ledger.ended.length ? ` (${tallyBy(r.ledger.ended.map(x => x.how))})` : ""}; sent ${r.ledger.sends} times; held ${r.ledger.held.length}.`] : []),
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,
     "",

@@ -116,6 +116,8 @@ export interface ExecutionDeps {
     open: ReadonlySet<string>
     /** Items the ledger lists only (no progress over rounds), with the output they were stuck at: never sent while it stays. */
     quiet?: ReadonlyMap<string, string>
+    /** Items an independent ruling confirmed as the program's: sent once a round, never ruled on again, never listed only. */
+    confirmed?: ReadonlySet<string>
     /** Per check or probe id: the functions its last run executed and its output's digest (the previous round's full run). */
     seen: ReadonlyMap<string, { functions?: readonly string[]; digest: string }>
     /** The active probes, once the round's are written. */
@@ -311,29 +313,30 @@ export const NO_PROGRESS = "This item was sent for repair, and the program's out
 
 /**
  * What the round does with an item it found failing (DESIGN §12h E3): sent while it is new or its output changed;
- * once sent, an unchanged output is ruled on (`ruled` is set to the digest it was ruled at) and, upheld, sent once
- * more; after that, or where no ruling is possible, held: listed, no more cycles spent on it.
+ * once sent, an unchanged output is ruled on (`ruled` is set to the digest it was ruled at), then held: listed, no
+ * more cycles spent on it this round. An item a ruling already confirmed (`confirmed`) is not ruled on again: it is
+ * sent once a round (the work order carries it, or its first failing cycle sends it) and held while it does not change.
  */
 export class Sends {
   private readonly sent = new Map<string, string>()
   private readonly ruledAt = new Map<string, string>()
-  private readonly again = new Set<string>()
   /** quiet: items the ledger lists only (no progress over rounds), with the output they were stuck at. */
-  constructor(carried: ReadonlyMap<string, string> = new Map(), private readonly quiet: ReadonlyMap<string, string> = new Map()) { for (const [id, d] of carried) this.sent.set(id, d) }
+  private readonly confirmed: Set<string>
+  constructor(carried: ReadonlyMap<string, string> = new Map(), private readonly quiet: ReadonlyMap<string, string> = new Map(), confirmed: ReadonlySet<string> = new Set()) { for (const [id, d] of carried) this.sent.set(id, d); this.confirmed = new Set(confirmed) }
+  /** A ruling in this round confirmed the item as the program's. */
+  confirm(id: string): void { this.confirmed.add(id) }
   /** Sent before and unchanged since, not yet ruled on at this output: to be ruled on. */
-  stuck(id: string, digest: string): boolean { return this.sent.get(id) === digest && this.ruledAt.get(id) !== digest }
+  stuck(id: string, digest: string): boolean { return this.sent.get(id) === digest && this.ruledAt.get(id) !== digest && !this.confirmed.has(id) }
   ruled(id: string, digest: string): void { this.ruledAt.set(id, digest) }
   /** What would be done with the item now; nothing is recorded until `mark`. */
   plan(id: string, digest: string): { action: "send" | "hold"; why?: string } {
     if (this.quiet.get(id) === digest) return { action: "hold", why: "listed only: no progress over rounds" }
     if (this.sent.get(id) !== digest) return { action: "send" }
-    if (this.ruledAt.get(id) === digest && !this.again.has(id)) return { action: "send", why: "a ruling upheld it" }
+    if (this.confirmed.has(id)) return { action: "hold", why: "confirmed by a ruling; sent once this round, no progress" }
     return { action: "hold", why: this.ruledAt.get(id) === digest ? "no progress after a ruling" : "no progress, and no ruling possible" }
   }
   mark(id: string, digest: string, plan: { action: "send" | "hold"; why?: string }): void {
-    if (plan.action !== "send") return
-    if (plan.why) this.again.add(id)
-    else { this.sent.set(id, digest); this.again.delete(id) }
+    if (plan.action === "send") this.sent.set(id, digest)
   }
 }
 
@@ -355,7 +358,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
   const seen = new Map<string, { functions?: readonly string[]; digest: string; at: string }>([...(target?.seen ?? [])].map(([id, v]) => [id, { ...v, at: "start" }]))
   const snapshots = new Map<string, Map<string, { digest: string; at: string }>>()
   const programs = new Map<string, ProgramRef>()
-  const sends = new Sends(deps.carried, target?.quiet)
+  const sends = new Sends(deps.carried, target?.quiet, target?.confirmed)
   // Items of the ledger this round: open at its start, carried in, or found failing in it.
   const tracked = new Set<string>([...(target?.open ?? []), ...(deps.carried?.keys() ?? [])])
   const trackedProbe = (probe: string) => [...tracked].some(t => t.startsWith(`${probe}/`))
@@ -438,6 +441,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     const settled = disputes.length && deps.settle ? await deps.settle(disputes) : { wrong: new Set<string>(), right: new Set<string>() }
     if (deps.settle) for (const r of [...stuckChecks, ...runs.filter(x => contests.some(c => c.check === x.check))]) sends.ruled(r.check, runDigest(r))
     for (const k of settled.wrong) retired.add(k)
+    for (const k of settled.right) sends.confirm(k)
     if (settled.wrong.size || settled.right.size) runs = build.ok ? await runLibrary(build.program!, new Set(runs.map(r => r.check).filter(c => !retired.has(c))), after, id) : []
     const ruled: NonNullable<CycleRecord["ruled"]> = [...settled.wrong, ...settled.right].filter(k => stuckChecks.some(r => r.check === k)).map(k => ({ id: k, verdict: settled.wrong.has(k) ? "check_wrong" : "check_right", reason: NO_PROGRESS }))
     const library = deps.library
@@ -469,6 +473,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
         }
       }
     }
+    for (const f of detected.findings) if (f.ruled && f.verdict === "wrong") sends.confirm(pairKey(f.probe, f.unit))
     let regressions = new Set(runs.filter(r => r.outcome === "fail" && passing.has(r.check)).map(r => r.check))
     // Against the round's work: not landed on a task object or its conventions, or a regression; contested checks
     // still unsettled do not count.
@@ -539,7 +544,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     if (n === limits.repairCycles + 1) { record.status = "cycles_spent"; break }
     const sendFailing = failing.filter(k => send.has(k)), sendItems = corrections.filter(c => send.has(c.key))
     const checkEvidence = build.ok && sendFailing.length ? renderEvidence(runs, sendFailing, library, deps.registry, regressions) : ""
-    const list = build.ok && sendItems.length ? renderCorrections(sendItems.map(c => items.find(i => i.id === c.key)?.why === "a ruling upheld it" ? { ...c, upheld: true } : c), deps.detect!.program) : ""
+    const list = build.ok && sendItems.length ? renderCorrections(sendItems.map(c => target?.confirmed?.has(c.key) ? { ...c, upheld: true } : c), deps.detect!.program) : ""
     evidence = [checkEvidence, list].filter(Boolean).join("\n")
     message = repairMessage(checkEvidence, build, list)
     kind = "repair"

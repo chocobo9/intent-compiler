@@ -313,17 +313,18 @@ export async function judgeRuns(registry: Registry, round: number, probes: reado
     const mine = [...first.answered.entries()].filter(([k]) => k.startsWith(`${x.item.item}\u0000`)).map(([k, v]) => ({ unit: k.split("\u0000")[1], v }))
     for (const u of x.item.units) if (!mine.some(m => m.unit === u.id)) findings.push({ probe: x.probe, unit: u.id, verdict: "cannot_tell", reason: "no verdict came back", cached: false })
     for (const { unit, v } of mine) {
-      let verdict = v.verdict, reason = v.reason, call = v.call, computed = false
+      let verdict = v.verdict, reason = v.reason, call = v.call, computed = false, disagreed = false
       if (verdict === "compute") {
         const c = computedItems.find(ci => ci.of === x && ci.unit === unit)
         const again = c && second?.answered.get(`${c.item}\u0000${unit}`)
         const same = agreed.get(`${x.item.item}\u0000${unit}`)
         if (same) { verdict = "ok"; reason = same; computed = true }
-        else if (again) { verdict = again.verdict; reason = again.verdict === "ok" ? `the reference was wrong: ${again.reason}` : again.reason; call = again.call; computed = true }
+        else if (again) { verdict = again.verdict; reason = again.verdict === "ok" ? `the reference was wrong: ${again.reason}` : again.reason; call = again.call; computed = true; disagreed = true }
         else { verdict = "cannot_tell"; reason = options.sandbox ? "the computation gave no verdict" : "a value to compute, and no sandbox to compute it"; findings.push({ probe: x.probe, unit, verdict, reason, cached: false, kind: "B" }); continue }
       }
       const final = verdict as Verdict
-      const ruled = x.ruling && !!options.ruling
+      // The independent session's verdict: on an objection, or on a disagreement with an independent computation.
+      const ruled = (x.ruling || disagreed) && !!options.ruling
       findings.push({ probe: x.probe, unit, verdict: final, reason, cached: false, kind: computed ? "B" : "C", ...(ruled ? { ruled: true as const } : {}) })
       const key = x.keys.get(unit) ?? judgmentKey(x.probe, unit, registry.block(unit)?.text ?? "", x.run.output)
       judgments.push({ key, probe: x.probe, unit, verdict: final, reason, round, call: ids.get(call)!, digest: x.digest, ...(v.also ? { also: true as const } : {}), ...(computed ? { computed: true as const } : {}), ...(x.item.contest ? { contested: true } : {}), ...(ruled ? { ruled: true as const } : {}) })
@@ -406,7 +407,7 @@ export interface CorrectionItem {
   finding: string
   /** Judged ok at the start of this round or earlier in it: a repair broke it. */
   passed_before?: boolean
-  /** Sent again after the independent session upheld it on an unchanged output (DESIGN §12h E3). */
+  /** An independent ruling confirmed it as the program's (DESIGN §12h E3). */
   upheld?: true
 }
 
@@ -419,7 +420,7 @@ export function correctionItems(registry: Registry, probes: readonly ProbeRecord
 }
 
 export function renderCorrections(items: readonly CorrectionItem[], program: string): string {
-  return JSON.stringify(items.map((it, n) => ({ n: n + 1, id: it.key, rule: it.rule, call: [program, ...it.call], input_files: it.input_files, actual: it.actual, finding: it.finding, ...(it.passed_before ? { note: "this followed the requirements before; a change in this round broke it" } : it.upheld ? { note: "the output did not change after the last repair request, and an independent ruling upheld this finding" } : {}) })), null, 1)
+  return JSON.stringify(items.map((it, n) => ({ n: n + 1, id: it.key, rule: it.rule, call: [program, ...it.call], input_files: it.input_files, actual: it.actual, finding: it.finding, ...(it.passed_before ? { note: "this followed the requirements before; a change in this round broke it" } : it.upheld ? { note: "an independent ruling confirmed this finding against the requirements" } : {}) })), null, 1)
 }
 
 /** Object statuses from the findings: wrong makes an object not landed; all its judged units ok, landed. */

@@ -335,7 +335,7 @@ describe("exp2 block 11 §6: the round report shows determinations by kind, open
     const r1 = store.inspect().reports[0]
     const a = r1.acceptance!
     assert.ok(a.by_kind.A > 0 && a.by_kind.B > 0 && a.by_kind.C > 0, JSON.stringify(a.by_kind))
-    assert.deepEqual(Object.keys(a.open).sort(), ["ambiguous", "expired", "program_wrong", "reference_pending", "uncheckable", "uncovered"])
+    assert.deepEqual(Object.keys(a.open).sort(), ["ambiguous", "confirmed", "expired", "program_wrong", "reference_pending", "uncheckable", "uncovered"])
     const cycles = r1.probes!.runs_by_cycle
     assert.ok(cycles.length > 0 && cycles.every(c => c.checks > 0 && c.probes > 0), JSON.stringify(cycles))
     const text = renderReport(r1)
