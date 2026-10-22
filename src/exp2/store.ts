@@ -301,7 +301,7 @@ export class Exp2Store {
   }
 
   /** Judges one program's runs of active probes; verdicts already kept for the same output are reused. */
-  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number; concurrency?: number; sandbox?: ScriptSandbox; ruling?: JudgeTransport } = {}): Promise<Finding[]> {
+  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number; concurrency?: number; sandbox?: ScriptSandbox; ruling?: JudgeTransport; judgeIf?: (probe: string, unit: string) => boolean } = {}): Promise<Finding[]> {
     // Asked outside the lock, committed in one transaction; the failed calls are kept before unavailability goes up.
     const s0 = this.inspect()
     let r: Awaited<ReturnType<typeof judgeRuns>> | RoleUnavailable

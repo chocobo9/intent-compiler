@@ -76,6 +76,11 @@ export interface LocalConfig {
    * gpt-6-sol-fast low and gpt-5.6-luna-fast medium, with the management server's provider. null switches them off.
    */
   roles?: null | { probes?: RoleConfig; judge?: RoleConfig; checks?: RoleConfig; adjudicate?: RoleConfig }
+  /**
+   * Builds record which functions each run executes (`go build -cover`), so a cycle runs only the checks and probes a
+   * change can affect (DESIGN §12h E4). Default true; with false nothing has coverage, so every cycle runs everything.
+   */
+  coverage?: boolean
   /** Ablation switches (DESIGN §12b item 14); all default true. Kept in the state: an ablation run needs its own state. */
   ablation?: { zoning?: boolean; checks?: boolean; clauses?: boolean }
   /**
@@ -198,7 +203,8 @@ const pad = (n: number) => String(n).padStart(2, "0")
 export function assembleSerial(c: LocalConfig & { base: string }): { serial: Serial; config: SerialConfig } {
   const at = (p: string) => (absolute(p) ? p : join(c.base, p))
   const platform: PlatformOptions = { python: c.tools?.python, go: c.tools?.go }
-  const docker = c.runner.kind === "docker" ? { ...c.runner } as DockerOptions : null
+  const cover = c.coverage !== false
+  const docker = c.runner.kind === "docker" ? { ...c.runner, cover } as DockerOptions : null
   const management = { client: openCodeHttpClient(c.management), directory: c.management.directory, providerId: c.management.provider, modelId: c.management.model, variant: c.management.variant, timeoutMs: c.management.request_timeout_ms }
   const coding = openCodeHttpClient(c.coding)
   const rateLimit = c.rate_limit ? { delaysMs: c.rate_limit.delays_ms } : undefined
@@ -225,7 +231,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
     anchors: new GoAnchorExtractor(undefined, platform),
     runner: docker ? new DockerRunner(docker) : new LocalProcessRunner(platform, { ...DEFAULT_RESOURCE_LIMITS, ...c.runner.limits }),
     sandbox: docker ? new DockerScriptSandbox(docker) : new LocalScriptSandbox(platform),
-    build: docker ? dockerGoBuilder(at(c.builds_dir), docker, undefined, binary) : goBuilder(at(c.builds_dir), platform, binary),
+    build: docker ? dockerGoBuilder(at(c.builds_dir), docker, undefined, binary) : goBuilder(at(c.builds_dir), platform, binary, cover),
     buildAsync: docker ? dockerGoBuilderAsync(at(c.builds_dir), docker, undefined, binary) : goBuilderAsync(at(c.builds_dir), platform, binary),
     limits: {
       attributionRepairs: c.limits?.attribution_repairs ?? 2,

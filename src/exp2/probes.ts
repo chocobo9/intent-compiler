@@ -406,6 +406,16 @@ function admit(answer: ProbesAnswer, checked: ReturnType<typeof probeProblems>, 
   }
 }
 
+/**
+ * A transport whose first reply (or failure) settles `warm`: calls that share its opening wait for it, so a provider
+ * that caches prompt prefixes has the prefix when they arrive (DESIGN §12h E5).
+ */
+export function warmFirst<R, A>(transport: (request: R) => Promise<A>): { transport: (request: R) => Promise<A>; warm: Promise<void> } {
+  let opened!: () => void
+  const warm = new Promise<void>(r => { opened = r })
+  return { warm, transport: async request => { try { return await transport(request) } finally { opened() } } }
+}
+
 /** Groups asked side by side; each group's requests are what they would be one after another. */
 export const GROUP_CONCURRENCY = 3
 
@@ -417,9 +427,13 @@ export async function deriveProbes(registry: Registry, round: number, units: rea
   for (let i = 0; i < units.length; i += GROUP_SIZE) groups.push(units.slice(i, i + GROUP_SIZE).map(id => groupUnit(registry, id)))
   const failures: { n: number; last?: string } = { n: 0 }
   // Each group keeps its own calls (provisional ids); ids in the record follow group order, as one after another.
+  // The other groups wait for the first group's first reply: they open with the same system prompt and sources, so
+  // they can read the prefix it wrote to the provider's cache (DESIGN §12h E5).
+  const first = warmFirst(transport)
   const asked = await mapPool(groups, options.concurrency ?? GROUP_CONCURRENCY, async (group, gi) => {
     const calls: ProbeCallRecord[] = []
-    const r = await askGroup(transport, round, sources, group, gi, { kind: "write" }, { ...options, callId: n => `~g${gi}.${n}` }, calls, failures)
+    if (gi > 0) await first.warm
+    const r = await askGroup(gi === 0 ? first.transport : transport, round, sources, group, gi, { kind: "write" }, { ...options, callId: n => `~g${gi}.${n}` }, calls, failures)
     return { r, calls }
   })
   const calls = asked.flatMap(a => a.calls)
@@ -467,8 +481,12 @@ export async function strengthenProbes(registry: Registry, round: number, weak: 
 /** stopped: the controller stopped the program at a limit on this input (memory, time, output), and how. */
 export interface ProbeOutput { exit_code: number | null; timed_out: boolean; stdout: string; stderr: string; files: Record<string, string>; stopped?: string }
 
-/** files: everything the run left, uncut (for a computation the judge asks for; never judged as such). */
-export interface ProbeRun { probe: string; output: ProbeOutput; files?: Record<string, string> }
+/**
+ * files, stdout, stderr: what the run left, uncut (for a computation the judge asks for and the comparison of its value;
+ * never judged as such). coverage: the functions of the program the run executed, where the program was built to
+ * record it (DESIGN §12h E4).
+ */
+export interface ProbeRun { probe: string; output: ProbeOutput; files?: Record<string, string>; stdout?: string; stderr?: string; coverage?: string }
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…(${s.length - n} more chars)` : s
 
@@ -487,5 +505,5 @@ export async function runProbes(probes: readonly ProbeRecord[], program: Program
   const outs = runner.runBatch
     ? await runner.runBatch(program, probes.map(p => ({ args: p.args, files: p.files })), timeoutMs)
     : await mapPool(probes, concurrency, p => runner.run(program, { args: p.args, files: p.files }, timeoutMs))
-  return probes.map((p, i) => ({ probe: p.id, output: normalizeOutput(outs[i], p.files), files: outs[i].files }))
+  return probes.map((p, i) => ({ probe: p.id, output: normalizeOutput(outs[i], p.files), files: outs[i].files, stdout: outs[i].stdout, stderr: outs[i].stderr, ...(outs[i].coverage !== undefined ? { coverage: outs[i].coverage } : {}) }))
 }

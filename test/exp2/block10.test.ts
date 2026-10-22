@@ -243,7 +243,10 @@ describe("exp2 block 10: repairs from correction lists in the execution session"
     const spent = await round("spent", [wd => everything(wd, false), wd => { everything(wd, false); noSort(wd) }], undefined)
     assert.equal(spent.record.status, "done", "nothing to repair after the first cycle")
     const worse = await round("worse", [wd => everything(wd, true), wd => { everything(wd, true); noSort(wd) }, wd => { everything(wd, true); noSort(wd) }, wd => { everything(wd, true); noSort(wd) }])
-    assert.equal(worse.record.status, "cycles_spent")
+    // A wrong item the repairs leave unchanged is ruled on, sent once more, then held (DESIGN §12h E3): the round
+    // ends with cycles left rather than spending them.
+    assert.equal(worse.record.status, "done")
+    assert.deepEqual(worse.record.cycles.map(c => c.held?.length ?? 0), [0, 0, 1, 2], "filter held from the third cycle, the broken sort from the fourth")
     assert.equal(worse.record.kept, worse.record.cycles[0].id)
     assert.equal(worse.record.open.length, 1)
     assert.deepEqual(worse.record.carried, [store.registry().objectByName("filter")!.id])

@@ -187,7 +187,7 @@ describe("exp2 block 11 §4: a value that needs computing is ruled on an indepen
   // The stand-in judge does not read digests: it asks for one, and compares what the script printed.
   const judge = async (r: JudgeRequest) => ({ stub: true, text: JSON.stringify({ verdicts: r.items.flatMap(it => it.units.map(u => it.computed
     ? { item: it.item, unit: u.id, verdict: it.computed.stdout.trim() === (it.result.files["out.csv.sha256"] ?? "").trim() ? "ok" : "wrong", reason: `computed ${it.computed.stdout.trim()}, the program wrote ${(it.result.files["out.csv.sha256"] ?? "").trim()}`, compute: null }
-    : { item: it.item, unit: u.id, verdict: "compute", reason: "a digest", compute: "import hashlib\nprint(hashlib.sha256(open('out.csv','rb').read()).hexdigest())" })) }) })
+    : { item: it.item, unit: u.id, verdict: "compute", reason: "a digest", compute: "import hashlib\nprint(hashlib.sha256(open('out.csv','rb').read()).hexdigest())", where: { kind: "file", path: "out.csv.sha256", line: null, pointer: null, column: null } })) }) })
   before(async () => { await store.ingestRound(1, roundText(1), stubTransport()) })
 
   it("a wrong digest is ruled wrong, a right one ok, both resting on the computation; without a sandbox it is cannot_tell", async () => {
@@ -335,12 +335,12 @@ describe("exp2 block 11 §6: the round report shows determinations by kind, open
     const r1 = store.inspect().reports[0]
     const a = r1.acceptance!
     assert.ok(a.by_kind.A > 0 && a.by_kind.B > 0 && a.by_kind.C > 0, JSON.stringify(a.by_kind))
-    assert.deepEqual(Object.keys(a.open).sort(), ["ambiguous", "program_wrong", "reference_pending", "uncheckable", "uncovered"])
+    assert.deepEqual(Object.keys(a.open).sort(), ["ambiguous", "expired", "program_wrong", "reference_pending", "uncheckable", "uncovered"])
     const cycles = r1.probes!.runs_by_cycle
     assert.ok(cycles.length > 0 && cycles.every(c => c.checks > 0 && c.probes > 0), JSON.stringify(cycles))
     const text = renderReport(r1)
     assert.match(text, /Determinations on the final program: \d+ stated values \(A\), \d+ by a reference \(B\), \d+ by judgment \(C\)/u)
     assert.match(text, /Open: program wrong \d+, uncovered \d+, reference disagreement pending \d+, ambiguous \d+; closed as uncheckable \d+/u)
-    assert.match(text, /Runs per cycle \(every check and probe, in batches\): \S+ checks \d+, probes \d+: judged \d+ \(output changed\), cached \d+, by code \d+/u)
+    assert.match(text, /Runs per cycle \(in batches\): \S+ checks \d+, probes \d+: judged \d+ \(output changed\), cached \d+, by code \d+/u)
   })
 })

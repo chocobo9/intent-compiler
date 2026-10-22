@@ -54,7 +54,9 @@ describe("exp2 block 10c: coding does not wait for probe writing", () => {
     assert.ok(coding.first_start_ms < writing.last_end_ms, `coding started at ${coding.first_start_ms} ms, probe writing ended at ${writing.last_end_ms} ms`)
     // Three groups at a time over six groups, 1.5 s a call: writing takes at least 3 s; the first message went out before.
     assert.ok(writing.ms >= 3000)
-    for (const s of ["attribution", "probe writing", "coding", "build", "probe runs", "judging", "waiting for probes", "final probes"]) assert.ok(r1.wall!.stages.some(x => x.stage === s), `stage ${s}`)
+    for (const s of ["attribution", "probe writing", "coding", "build", "probe runs", "judging", "waiting for probes"]) assert.ok(r1.wall!.stages.some(x => x.stage === s), `stage ${s}`)
+    // The full run before delivery is the round's final run (DESIGN §12h E4): no second "final probes" run.
+    assert.ok(r1.selection?.sweep && !r1.wall!.stages.some(x => x.stage === "final probes"))
     assert.match(renderReport(r1), /Wall time \d+ s\. attribution .*probe writing \d+\.\d s \(1×, \d+–\d+ s\).*coding \d+\.\d s/u)
   })
 

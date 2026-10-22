@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { activeChecks, DEFAULT_TOLERANCE, sameValue, type Assertion, type CheckEvent, type CheckRecord, type CodeFacts, type Strength, type Target } from "./checks.js"
 import type { Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef, RunOutput } from "./runner.js"
@@ -112,6 +113,12 @@ export function actualOf(target: Target, out: RunOutput): unknown {
   }
 }
 
+/** The value a target reads, or that there is none (for a value computed elsewhere, DESIGN §12h E1). */
+export function valueAt(target: Target, out: RunOutput): { found: boolean; value: unknown } {
+  const v = actualOf(target, out)
+  return v === MISSING ? { found: false, value: null } : { found: true, value: v }
+}
+
 export function compare(assertions: readonly Assertion[], out: RunOutput): AssertionResult[] {
   return assertions.map(a => {
     const actual = actualOf(a.target, out)
@@ -220,10 +227,15 @@ export async function runCheck(check: CheckRecord, program: ProgramRef, runner: 
  * Many checks on one program (BLOCK11 §5): run as one batch where the runner can (a container per batch, not per
  * check), each then compared and classified by code as one alone would be.
  */
-export async function runChecks(checks: readonly CheckRecord[], program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, timeoutMs: number, upheld: (check: string) => ReadonlySet<DisputeKind> = () => new Set()): Promise<CheckRun[]> {
-  if (!runner.runBatch) return Promise.all(checks.map(c => runCheck(c, program, runner, round, registry, facts, timeoutMs, upheld(c.id))))
-  const outs = await runner.runBatch(program, checks.map(c => c.input), timeoutMs)
+export async function runChecks(checks: readonly CheckRecord[], program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, timeoutMs: number, upheld: (check: string) => ReadonlySet<DisputeKind> = () => new Set(), seen?: (check: string, out: RunOutput) => void): Promise<CheckRun[]> {
+  const outs = runner.runBatch ? await runner.runBatch(program, checks.map(c => c.input), timeoutMs) : await Promise.all(checks.map(c => runner.run(program, c.input, timeoutMs)))
+  checks.forEach((c, i) => seen?.(c.id, outs[i]))
   return checks.map((c, i) => checkRun(c, outs[i], program, runner, round, registry, facts, upheld(c.id)))
+}
+
+/** What a check's run showed, as a digest: an unchanged digest after a repair is no progress (DESIGN §12h E3). */
+export function runDigest(run: Pick<CheckRun, "outcome" | "assertions" | "exit_code" | "failure">): string {
+  return createHash("sha256").update(JSON.stringify([run.outcome, run.exit_code, run.assertions.map(a => [a.id, a.ok, a.actual]), run.failure ? `${run.failure.class}/${run.failure.reason}` : null])).digest("hex")
 }
 
 function checkRun(check: CheckRecord, out: RunOutput, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, upheld: ReadonlySet<DisputeKind>): CheckRun {

@@ -4,15 +4,18 @@ import { discriminate, remeasure } from "./discrimination.js"
 import type { PlatformOptions } from "./platform.js"
 import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
-import { AuthInvalid, QuotaExhausted, RoleUnavailable, type TokenUsage } from "./attribution.js"
-import { codeFacts } from "./checks.js"
+import { AuthInvalid, QuotaExhausted, RoleUnavailable, type AttributionTransport, type TokenUsage } from "./attribution.js"
+import { codeFacts, type ChecksTransport } from "./checks.js"
+import type { AdjudicationTransport } from "./adjudication.js"
+import { ledgerOf, type LedgerEntry } from "./ledger.js"
+import { runDigest } from "./verdict.js"
 import type { Product } from "./detect.js"
-import { executeRound, repairMessage, type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
+import { executeRound, repairMessage, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
 import { commitStep, git, head, initRepo } from "./git.js"
-import { correctionItems, pairKey, probeStatuses, renderCorrections, type CorrectionItem, type Finding, type JudgeTransport } from "./judge.js"
+import { correctionItems, outputDigest, pairKey, probeStatuses, renderCorrections, type CorrectionItem, type Finding, type JudgeTransport } from "./judge.js"
 import { activeProbes, runProbes, type ProbeRoundRecord, type ProbeTransport } from "./probes.js"
 import { addUsage } from "./report.js"
-import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
+import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import { Exp2Store } from "./store.js"
 import { buildWorkOrder } from "./workorder.js"
 
@@ -222,3 +225,104 @@ export async function repairProducts(deps: HarnessDeps & { storeFor?: (product: 
 }
 
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
+
+// ---------------------------------------------------------------- acceptance-only replay (DESIGN §12h E6)
+
+/** Hits per defect over any texts of a product's items, from library checks and probes alike (DESIGN §12h E6). */
+export function scoreTexts(table: DefectTable, lists: readonly { product: string; texts: readonly string[] }[]): ReturnType<typeof scoreDefects> {
+  const by = new Map(lists.map(l => [l.product, l]))
+  const rows = table.defects.map(d => {
+    const re = new RegExp(d.pattern, "iu")
+    return { name: d.name, of: d.products, hit: d.products.filter(p => by.get(p)?.texts.some(t => re.test(t)) ?? false) }
+  })
+  return { rows, hits: rows.reduce((n, r) => n + r.hit.length, 0), total: rows.reduce((n, r) => n + r.of.length, 0), clean: table.clean.map(p => ({ product: p, items: by.get(p)?.texts.length ?? NaN })) }
+}
+
+export interface ReplayDeps {
+  store: Exp2Store
+  text: (round: number) => string
+  attribution: AttributionTransport
+  checks: ChecksTransport
+  probes: ProbeTransport
+  judge: JudgeTransport
+  ruling?: JudgeTransport
+  adjudicate?: AdjudicationTransport
+  sandbox: ScriptSandbox
+  runner: CheckRunner
+  build: (dir: string, label: string) => BuildResult
+  timeoutMs: number
+  root: string
+  attributionRepairs?: number
+  checkRepairs?: number
+  probeRepairs?: number
+}
+
+export interface ReplayedProduct {
+  product: Product
+  built: boolean
+  build_output?: string
+  ledger: LedgerEntry[]
+  /** The texts the defect table is matched against, per item failing on the program: check and probe items alike. */
+  texts: { id: string; text: string }[]
+  calls: { judge: number; adjudication: number }
+}
+
+/**
+ * Acceptance only, no coding (DESIGN §12h E6): builds the checks and probes of rounds 1..N once (attribution, library
+ * checks against the null program, probes: whatever the state does not have yet), then, for each frozen program on
+ * its own copy of the state, runs the library and the probes of its round on it, rules on disagreements, and folds
+ * the result into a ledger. Nothing is changed in any program.
+ */
+export async function replayAcceptance(d: ReplayDeps, products: readonly Product[]): Promise<ReplayedProduct[]> {
+  const last = Math.max(...products.map(p => p.round))
+  const nullProgram = nullBaseline(join(d.root, "null-baseline"))
+  for (let r = 1; r <= last; r++) {
+    const s = d.store.inspect()
+    if (!s.rounds.some(x => x.round === r && x.status === "accepted")) {
+      const a = await d.store.ingestRound(r, d.text(r), d.attribution, { maxRepairs: d.attributionRepairs ?? 2 })
+      if (a.status !== "accepted") throw new Error(`attribution of round ${r} did not pass (${a.status})`)
+    }
+    if (d.store.ablation.checks !== false && !d.store.inspect().check_rounds.some(x => x.round === r && x.status === "accepted")) {
+      const c = await d.store.deriveRoundChecks(r, d.checks, { sandbox: d.sandbox, runner: d.runner, baseline: nullProgram, maxRepairs: d.checkRepairs ?? 2, timeoutMs: d.timeoutMs })
+      if (c.status === "interrupted") throw new RoleUnavailable("check derivation", c.issues?.[0]?.message ?? "interrupted")
+    }
+    if (!d.store.inspect().probe_rounds.some(x => x.round === r && x.status === "accepted")) {
+      const w = await d.store.deriveRoundProbes(r, d.probes, { maxRepairs: d.probeRepairs ?? 2 })
+      if (w.status === "interrupted") throw new RoleUnavailable("probe writing", w.issues?.[0]?.message ?? "interrupted")
+    }
+  }
+  const out: ReplayedProduct[] = []
+  for (const p of products) {
+    const b = d.build(p.path, `replay-${p.name}`)
+    if (!b.ok) { out.push({ product: p, built: false, build_output: b.output.slice(0, 2000), ledger: [], texts: [], calls: { judge: 0, adjudication: 0 } }); continue }
+    const store = productStore(d.store, d.root, p.name)
+    const s0 = store.inspect()
+    const verdict = await store.runRoundChecks(p.round, b.program!, d.runner, { verdict: true, timeoutMs: d.timeoutMs, ...(d.adjudicate ? { adjudicate: d.adjudicate } : {}) })
+    const s1 = store.inspect()
+    const probes = activeProbes(s1.probes.filter(x => x.round <= p.round), s1.probe_events.filter(e => e.round <= p.round))
+    const runs = await runProbes(probes, b.program!, d.runner, d.timeoutMs)
+    const findings = await store.judge(p.round, runs, d.judge, { sandbox: d.sandbox, ...(d.ruling ? { ruling: d.ruling } : {}) })
+    const items = correctionItems(store.registry(), probes, runs, findings)
+    const s = store.inspect()
+    const digest = new Map(runs.map(r => [r.probe, outputDigest(r.output)]))
+    const failing = verdict.runs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed")
+    // The program as one cycle that sends nothing: the round's end in the ledger is what fails on it.
+    const cycle = {
+      id: `replay-R${p.round}`, round: p.round, session: "replay", message: "work", commit: "", build: { ok: true, output: "" },
+      runs: verdict.runs.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null })),
+      failing: failing.map(r => r.check), contests: [], corrections: items.map(i => i.key), ambiguous: findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: [],
+      items: [...failing.map(r => ({ id: r.check, digest: runDigest(r), verdict: "not_landed", action: "none" as const })), ...items.map(i => ({ id: i.key, digest: digest.get(i.probe) ?? "", verdict: "wrong", action: "none" as const }))],
+      anchors: [], note: "", usage: zero(),
+    } as CycleRecord
+    const execution = { round: p.round, base: "", head: "", status: "done", task: [], sessions: [], cycles: [cycle], kept: cycle.id, carried: [], open: cycle.corrections, links: [], usage: zero(), final: cycle.items } as ExecutionRecord
+    const ledger = ledgerOf({ ...s, executions: [execution] }, store.registry(s))
+    const checkOf = new Map(s.checks.map(k => [k.id, k]))
+    const probeKey = (id: string) => s.probes.find(x => x.id === id)?.key ?? id
+    const texts = [
+      ...failing.map(r => ({ id: r.check, text: `${checkOf.get(r.check)?.key ?? r.check} ${checkOf.get(r.check)?.blocks.join(" ") ?? ""} ${r.failure?.detail ?? ""}` })),
+      ...items.map(i => ({ id: i.key, text: `${probeKey(i.probe)} ${i.rule.id} ${i.finding}` })),
+    ]
+    out.push({ product: p, built: true, ledger, texts, calls: { judge: s.judge_calls.length - s0.judge_calls.length, adjudication: s.adjudication_calls.length - s0.adjudication_calls.length } })
+  }
+  return out
+}

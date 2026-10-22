@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { dirname, extname, join, relative, resolve, sep } from "node:path"
 import { spawn as nodeSpawn } from "node:child_process"
 import { mapPool } from "./pool.js"
+import { readCoverage } from "./coverage.js"
 import { ENVIRONMENT_TRIES, EnvironmentBlocked, isEnvironmentBlock, minimalEnv, scriptCommand, scriptFile, type PlatformOptions } from "./platform.js"
 
 /**
@@ -24,6 +25,8 @@ export interface ProgramRef {
   kind?: "program" | "null"
   /** Docker: a host directory holding the program, mounted read-only at this container path. */
   mount?: { host: string; container: string }
+  /** Built with `go build -cover`: each run records the functions it executed (DESIGN §12h E4). */
+  cover?: boolean
 }
 
 export interface RunOutput {
@@ -35,6 +38,8 @@ export interface RunOutput {
   timed_out: boolean
   /** The run was stopped at a resource limit (BLOCK10 §9.2): what the program did on this input, not a failure of the run. */
   limit?: StoppedAt
+  /** A program built to record coverage: the text profile of the blocks the run executed (DESIGN §12h E4). */
+  coverage?: string
 }
 
 /** Which limit stopped a run, and how it read. */
@@ -159,11 +164,14 @@ export class LocalProcessRunner implements CheckRunner {
   async run(program: ProgramRef, input: CheckInput, timeoutMs: number): Promise<RunOutput> {
     if (program.kind === "null") return nullRun(input)
     const dir = mkdtempSync(join(tmpdir(), "exp2-check-"))
+    // Coverage counters go to a directory of their own, outside the run directory, so they are never an output.
+    const cov = program.cover ? mkdtempSync(join(tmpdir(), "exp2-cov-")) : null
     try {
       writeInputs(dir, input.files)
-      const result = await execute([...program.command, ...input.args], dir, timeoutMs, minimalEnv(tmpdir(), this.platform), nodeSpawn, { ...this.limits, watchMemory: true })
-      return { ...result, files: collect(dir) }
-    } finally { rmSync(dir, { recursive: true, force: true }) }
+      const result = await execute([...program.command, ...input.args], dir, timeoutMs, { ...minimalEnv(tmpdir(), this.platform), ...(cov ? { GOCOVERDIR: cov } : {}) }, nodeSpawn, { ...this.limits, watchMemory: true })
+      const coverage = cov ? readCoverage(cov, this.platform) : undefined
+      return { ...result, files: collect(dir), ...(coverage !== undefined ? { coverage } : {}) }
+    } finally { rmSync(dir, { recursive: true, force: true }); if (cov) rmSync(cov, { recursive: true, force: true }) }
   }
   literals(program: ProgramRef): Set<string> {
     return program.source_dir ? sourceLiterals(program.source_dir) : new Set()

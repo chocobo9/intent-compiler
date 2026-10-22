@@ -6,6 +6,8 @@ import type { CheckRun, ObjectStatus } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
 import type { ProbeRoundRecord } from "./probes.js"
 import { pairKey, type Finding } from "./judge.js"
+import type { SweepRecord } from "./execution.js"
+import type { LedgerEntry, LedgerSummary } from "./ledger.js"
 
 /**
  * The round report (DESIGN §14), built by code from the round's records: official score (filled in locally only,
@@ -38,8 +40,10 @@ export interface RoundReport {
     carried_in: number; open_at_end: string[]; ambiguous_at_end: string[]; broke: string[]
     /** Case-level coverage of this round's units (BLOCK10 §7.3). */
     cases: { total: number; covered: number; excused: number; open: string[] } | null
-    /** Probes run per cycle and why (BLOCK11 §1). */
-    runs_by_cycle: { cycle: string; checks: number; probes: number; judged: number; cached: number; by_code: number }[]
+    /** Probes run per cycle and why (BLOCK11 §1; DESIGN §12h E4: how many were selected for which reason, and the full run). */
+    runs_by_cycle: { cycle: string; checks: number; probes: number; judged: number; cached: number; by_code: number; selected?: NonNullable<import("./execution.js").CheckRunCounts["selected"]>; sweep?: SweepRecord }[]
+    /** Cache reads over all input read, per role (DESIGN §12h E5): input plus cache reads in the denominator. */
+    cache?: { writer: number | null; judge: number | null }
     /** Units (or cases) no probe exercises yet, carried into this round's writing, and those still open at its end (BLOCK11 §2). */
     gaps: { carried_in: string[]; open: string[] }
     /** Whether the probes tell the round's program from mutants of it, measured by code; null when not run. */
@@ -64,6 +68,10 @@ export interface RoundReport {
    * compared by code, B a reference's value or property compared by code, C a model judgment), and open items by reason.
    */
   acceptance?: AcceptanceSummary
+  /** The ledger's projection for the round (DESIGN §12h E2). */
+  ledger?: LedgerSummary
+  /** The full run before delivery and what the cycles' selection missed (DESIGN §12h E4). */
+  selection?: { sweep: SweepRecord | null; omissions: { id: string; since: string }[] }
 }
 
 export interface AcceptanceSummary {
@@ -72,6 +80,21 @@ export interface AcceptanceSummary {
     program_wrong: string[]; uncovered: string[]; reference_pending: string[]; ambiguous: string[]
     /** Closed by code: left unexercised by two writings in a row. Reported, no longer written for. */
     uncheckable: { unit: string; reason: string }[]
+    /** Listed only: open at the end of rounds in a row with no progress (DESIGN §12h E3). */
+    expired?: string[]
+  }
+}
+
+/** The open items of the acceptance as the ledger has them (DESIGN §12h E2): the report is a projection of it. */
+export function acceptanceFromLedger(by_kind: AcceptanceSummary["by_kind"], entries: readonly LedgerEntry[]): AcceptanceSummary {
+  const open = (reason: LedgerEntry["reason"]) => entries.filter(e => e.state === "open" && e.reason === reason).map(e => e.id)
+  const listed = (how: string) => entries.filter(e => e.state === "report_only" && e.end?.how === how)
+  return {
+    by_kind,
+    open: {
+      program_wrong: open("program_wrong"), uncovered: open("uncovered"), reference_pending: open("reference_pending"),
+      ambiguous: listed("ruled_ambiguous").map(e => e.id), uncheckable: listed("uncheckable").map(e => ({ unit: e.id, reason: e.end!.detail })), expired: listed("expired").map(e => e.id),
+    },
   }
 }
 
@@ -125,6 +148,7 @@ export interface ReportInput {
   checks: RoundReport["checks"]
   wall?: RoundReport["wall"]
   summary?: AcceptanceSummary
+  ledger?: LedgerSummary
   probes?: null | {
     calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
     judge_calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
@@ -174,7 +198,8 @@ export function buildReport(i: ReportInput): RoundReport {
         carried_in: p.carried_in, open_at_end: p.findings.filter(f => f.verdict === "wrong").map(f => pairKey(f.probe, f.unit)),
         ambiguous_at_end: p.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: kept?.broke ?? [],
         cases: p.record?.cases ?? null, discrimination: e.cycles.find(c => c.measure)?.measure ?? null,
-        runs_by_cycle: e.cycles.filter(c => c.probe_runs).map(c => ({ cycle: c.id, ...c.probe_runs! })),
+        runs_by_cycle: e.cycles.filter(c => c.probe_runs).map(c => ({ cycle: c.id, ...c.probe_runs!, ...(c.sweep ? { sweep: c.sweep } : {}) })),
+        cache: { writer: cacheShare(writer.tokens), judge: cacheShare(judge.tokens) },
         gaps: { carried_in: p.record?.gaps_in ?? [], open: [...(p.record?.uncovered ?? []), ...(p.record?.cases?.open ?? [])] },
       }
     })() : null,
@@ -183,10 +208,18 @@ export function buildReport(i: ReportInput): RoundReport {
     management_calls: i.understand.length + i.acceptance.length,
     ...(i.wall ? { wall: i.wall } : {}),
     ...(i.summary ? { acceptance: i.summary } : {}),
+    ...(i.ledger ? { ledger: i.ledger } : {}),
+    ...(e.sweep || e.cycles.some(c => c.sweep) ? { selection: { sweep: e.sweep ?? null, omissions: dedupe([...e.cycles.flatMap(c => c.sweep?.omissions ?? []), ...(e.sweep && !e.cycles.some(c => c.sweep === e.sweep) ? e.sweep.omissions : [])]) } } : {}),
   }
 }
 
+const dedupe = (list: { id: string; since: string }[]) => [...new Map(list.map(x => [x.id, x])).values()]
+/** Cache reads over everything read as input (DESIGN §12h E5); null with nothing read. */
+const cacheShare = (u: TokenUsage) => ratio(u.cache_read_tokens, u.input_tokens + u.cache_read_tokens)
+
 const tok = (u: TokenUsage) => `in ${u.input_tokens}, cache read ${u.cache_read_tokens}, out ${u.output_tokens}`
+const reasons = (m: Partial<Record<string, number>>) => { const e = Object.entries(m).filter(([, n]) => n); return e.length ? `${e.reduce((t, [, n]) => t + n!, 0)} (${e.map(([k, n]) => `${k} ${n}`).join(", ")})` : "0" }
+const tallyBy = (list: string[]) => [...list.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>())].map(([k, n]) => `${k} ${n}`).join(", ")
 
 export function renderReport(r: RoundReport): string {
   const line = (label: string, c: StageCost) => `| ${label} | ${c.calls} | ${tok(c.tokens)}${c.unknown_usage_calls ? ` (+ ${c.unknown_usage_calls} calls unknown)` : ""} | ${c.stub_calls} |`
@@ -209,7 +242,8 @@ export function renderReport(r: RoundReport): string {
     `Execution: ${r.execution.status}; ${r.execution.cycles} cycles (${r.execution.repairs} repairs), kept ${r.execution.kept ?? "none"} with ${r.execution.failing_at_end} failing; ${r.execution.contests} contests; carried ${r.execution.carried_objects.length}; sessions ${r.execution.sessions} (${r.execution.broken_sessions} broken).`,
     ...(r.probes ? [
       `Probes: ${r.probes.written} written for ${r.probes.units} units (${r.probes.uncovered.length} not exercised, ${r.probes.dropped} dropped), ${r.probes.stale} stale, ${r.probes.active} active. Carried in ${r.probes.carried_in}; open at the end ${r.probes.open_at_end.length}; ambiguous ${r.probes.ambiguous_at_end.length}; broke ${r.probes.broke.length}.`,
-      `Runs per cycle (every check and probe, in batches): ${r.probes.runs_by_cycle.map(c => `${c.cycle} checks ${c.checks}, probes ${c.probes}: judged ${c.judged} (output changed), cached ${c.cached}, by code ${c.by_code}`).join("; ") || "none"}.`,
+      `Runs per cycle (in batches): ${r.probes.runs_by_cycle.map(c => `${c.cycle} checks ${c.checks}, probes ${c.probes}: judged ${c.judged} (output changed), cached ${c.cached}, by code ${c.by_code}${c.selected ? `; selected checks ${reasons(c.selected.checks)}, probes ${reasons(c.selected.probes)}${c.selected.all ? ` (everything: ${c.selected.all})` : `, ${c.selected.changed_functions} changed functions`}` : ""}${c.sweep ? `; full run: checks ${c.sweep.checks}, probes ${c.sweep.probes}, judged ${c.sweep.judged}, cached ${c.sweep.cached}, by code ${c.sweep.by_code}, found ${c.sweep.found.length}, omissions ${c.sweep.omissions.length}` : ""}`).join("; ") || "none"}.`,
+      ...(r.probes.cache ? [`Cache reads of input: writer ${r.probes.cache.writer ?? "n/a"}, judge ${r.probes.cache.judge ?? "n/a"}.`] : []),
       `Cases: ${r.probes.cases ? `${r.probes.cases.covered}/${r.probes.cases.total} reached, ${r.probes.cases.excused} uncheckable, ${r.probes.cases.open.length} open` : "n/a"}. Discrimination: ${r.probes.discrimination ? `${r.probes.discrimination.killed} of ${r.probes.discrimination.killed + r.probes.discrimination.survived} mutants told apart (${r.probes.discrimination.build_failed} did not build); weak units ${r.probes.discrimination.weak_units.length}, probes added ${r.probes.discrimination.strengthened.length}, still not told apart ${r.probes.discrimination.still_weak}` : "not run"}.`,
       `Probe writer (${r.probes.models.writer.join(", ") || "?"}): ${r.probes.writer.calls} calls, ${tok(r.probes.writer.tokens)}. Judge (${r.probes.models.judge.join(", ") || "?"}): ${r.probes.judge.calls} calls, ${tok(r.probes.judge.tokens)}. Share of coding tokens: ${r.probes.share.all ?? "n/a"} (uncached ${r.probes.share.uncached ?? "n/a"}).`,
     ] : []),
@@ -218,6 +252,8 @@ export function renderReport(r: RoundReport): string {
       `Determinations on the final program: ${r.acceptance.by_kind.A} stated values (A), ${r.acceptance.by_kind.B} by a reference (B), ${r.acceptance.by_kind.C} by judgment (C), all A and B compared by code.`,
       `Open: program wrong ${r.acceptance.open.program_wrong.length}, uncovered ${r.acceptance.open.uncovered.length}, reference disagreement pending ${r.acceptance.open.reference_pending.length}, ambiguous ${r.acceptance.open.ambiguous.length}; closed as uncheckable ${r.acceptance.open.uncheckable.length}${r.acceptance.open.uncheckable.length ? ` (${r.acceptance.open.uncheckable.map(u => u.unit).join(", ")})` : ""}.`,
     ] : []),
+    ...(r.selection ? [`Selection: full run before delivery on ${r.selection.sweep?.cycle ?? "none"}${r.selection.sweep ? ` (checks ${r.selection.sweep.checks}, probes ${r.selection.sweep.probes}, found ${r.selection.sweep.found.length})` : ""}; selection omissions ${r.selection.omissions.length}${r.selection.omissions.length ? ` (${r.selection.omissions.map(o => `${o.id} since ${o.since}`).join(", ")})` : ""}.`] : []),
+    ...(r.ledger ? [`Ledger: open program wrong ${r.ledger.open.program_wrong.length}, uncovered ${r.ledger.open.uncovered.length}, reference pending ${r.ledger.open.reference_pending.length}; listed only ${r.ledger.report_only.length}${r.ledger.report_only.length ? ` (${tallyBy(r.ledger.report_only.map(x => x.how))})` : ""}; ended this round ${r.ledger.ended.length}${r.ledger.ended.length ? ` (${tallyBy(r.ledger.ended.map(x => x.how))})` : ""}; sent ${r.ledger.sends} times; held ${r.ledger.held.length}.`] : []),
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,
     "",

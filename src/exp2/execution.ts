@@ -1,12 +1,13 @@
-import { diffAnchors, touched, type AnchorExtractor } from "./anchors.js"
+import { diffAnchors, touched, type Anchor, type AnchorExtractor } from "./anchors.js"
 import type { TokenUsage } from "./attribution.js"
 import { activeChecks, type CheckEvent, type CheckRecord, type CodeFacts } from "./checks.js"
 import { commitStep, head, readTrailers, resetTo } from "./git.js"
 import type { Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef } from "./runner.js"
-import { runChecks, type CheckRun, type DisputeKind } from "./verdict.js"
+import { runChecks, runDigest, type CheckRun, type DisputeKind } from "./verdict.js"
 import type { AnchorLink, WorkOrder } from "./workorder.js"
 import { pairKey, renderCorrections, type CorrectionItem, type Finding } from "./judge.js"
+import { changeScope, coveredFunctions, selectRuns, type Candidate, type SelectReason } from "./coverage.js"
 
 /**
  * The execution layer (DESIGN §7 as changed by BLOCK9 §2.4). One session gets the round's work order and does it.
@@ -54,6 +55,17 @@ export const DEFAULT_LIMITS: ExecutionLimits = { repairCycles: 3, maxSessions: 3
 
 export interface BuildResult { ok: boolean; output: string; program: ProgramRef | null }
 
+/** What a detection run covers (DESIGN §12h E4). */
+export interface DetectScope {
+  /** The probes to run, by id; null: every active probe. */
+  probes: ReadonlySet<string> | null
+  /** The round's full run before delivery: a changed output is judged only where a regression is suspected. */
+  full?: boolean
+}
+
+/** A probe's run as the selection keeps it: the output's digest, and the coverage profile where the program records it. */
+export interface DetectedRun { probe: string; digest: string; coverage?: string }
+
 export interface ExecutionDeps {
   registry: Registry
   library: readonly CheckRecord[]
@@ -70,16 +82,18 @@ export interface ExecutionDeps {
   /** Rules on disputes (evidence code saw, or a contest); absent offline, disputed checks then just do not count. */
   settle?: (disputes: { check: string; run: CheckRun; kind: DisputeKind; detail: string }[]) => Promise<{ wrong: Set<string>; right: Set<string> }>
   /**
-   * Probes and judge (BLOCK10 §1.5): runs every active probe on the cycle's program, judges what changed, and returns
+   * Probes and judge (BLOCK10 §1.5): runs active probes on the cycle's program, judges what changed, and returns
    * the correction items (wrong only) and all findings. `before` holds the probe/unit pairs judged ok earlier, so an
-   * item that broke is marked; `contests` the executor's objections.
+   * item that broke is marked; `contests` the objections (the executor's, and the code's own on an item a repair did
+   * not change), which the independent session rules on.
    */
   detect?: {
     /**
-     * Runs every active probe on the cycle's program in a batch and judges what needs judging (BLOCK11, DESIGN §12g):
-     * a judgment is redone only where the output changed. Returns the counts.
+     * Runs the probes `scope` names (all when it is absent or null) on the cycle's program in a batch and judges what
+     * needs judging: a judgment is redone only where the output changed. Returns the counts and, per probe run, the
+     * output's digest and coverage.
      */
-    run(program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>): Promise<{ items: CorrectionItem[]; findings: Finding[]; counts?: Partial<CheckRunCounts> }>
+    run(program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>, scope?: DetectScope): Promise<{ items: CorrectionItem[]; findings: Finding[]; counts?: Partial<CheckRunCounts>; runs?: DetectedRun[] }>
     /** Pairs judged ok on the program at the start of the round. */
     passed: ReadonlySet<string>
     /** The program's name, for the calls in the correction list. */
@@ -90,6 +104,25 @@ export interface ExecutionDeps {
      */
     measure?: (workdir: string, program: ProgramRef, links: readonly AnchorLink[]) => Promise<CycleRecord["measure"]>
   }
+  /**
+   * Targeted runs (DESIGN §12h E4). With it, a cycle runs only the checks and probes on the round's changed text, the
+   * ledger's open items, and those whose last run executed a function the cycle changed; before the round ends,
+   * everything runs once on the program it delivers. Without it, every cycle runs everything (DESIGN §12g).
+   */
+  target?: {
+    /** Units of the round's changed text (and the units written for again). */
+    units: ReadonlySet<string>
+    /** Ledger items open at the start of the round: probe/unit pairs and check ids. */
+    open: ReadonlySet<string>
+    /** Items the ledger lists only (no progress over rounds), with the output they were stuck at: never sent while it stays. */
+    quiet?: ReadonlyMap<string, string>
+    /** Per check or probe id: the functions its last run executed and its output's digest (the previous round's full run). */
+    seen: ReadonlyMap<string, { functions?: readonly string[]; digest: string }>
+    /** The active probes, once the round's are written. */
+    probes: () => Promise<readonly { id: string; round: number; covers: readonly { unit: string }[] }[]>
+  }
+  /** Items the work order carried in from earlier rounds, with their output's digest then: they count as sent (E3). */
+  carried?: ReadonlyMap<string, string>
   /** Called after every cycle with the record so far (for the record of an interrupted round). */
   onProgress?: (record: ExecutionRecord) => void
   /** Wall time of each stage (BLOCK10 §9.1): coding (the work message), repair (repair and resume messages), build. */
@@ -98,10 +131,21 @@ export interface ExecutionDeps {
 }
 
 /**
- * What a cycle ran (DESIGN §12g): every library check and every probe, each set in one batch; and how many verdicts
- * were new because an output changed (the rest came from the cache or from code).
+ * What a cycle ran (DESIGN §12g, §12h E4): the library checks and probes it selected, each set in one batch; and how
+ * many verdicts were new because an output changed (the rest came from the cache or from code). selected: how many
+ * of each were chosen for which reason.
  */
-export interface CheckRunCounts { checks: number; probes: number; judged: number; cached: number; by_code: number }
+export interface CheckRunCounts { checks: number; probes: number; judged: number; cached: number; by_code: number; selected?: { checks: Partial<Record<SelectReason, number>>; probes: Partial<Record<SelectReason, number>>; all: string | null; changed_functions: number } }
+
+/**
+ * The full run before delivery (DESIGN §12h E4): every check and probe on one cycle's program. omissions: runs whose
+ * output changed since they were last run although no cycle selected them (with where they were last run); found:
+ * items failing in it that the cycle's targeted run had not shown.
+ */
+export interface SweepRecord { cycle: string; checks: number; probes: number; judged: number; cached: number; by_code: number; omissions: { id: string; since: string }[]; found: string[] }
+
+/** An item of the ledger as a cycle saw it (DESIGN §12h E2, E3): its output's digest, the verdict, and what the cycle did. */
+export interface ItemSighting { id: string; digest: string; verdict: string; action: "send" | "hold" | "none"; why?: string }
 
 export interface CycleRecord {
   id: string
@@ -119,8 +163,16 @@ export interface CycleRecord {
   ambiguous: string[]
   /** Items wrong now that were judged ok earlier: a change broke them. */
   broke: string[]
-  /** What this cycle ran and how its verdicts were reached (DESIGN §12g). */
+  /** Failing checks and wrong items not sent again: no progress after a ruling, or none possible (DESIGN §12h E3). */
+  held?: string[]
+  /** The ledger's items as this cycle saw them (DESIGN §12h E2). */
+  items?: ItemSighting[]
+  /** Rulings this cycle asked for on items that did not change after a repair, or that the executor contested. */
+  ruled?: { id: string; verdict: string; reason: string }[]
+  /** What this cycle ran and how its verdicts were reached (DESIGN §12g, §12h E4). */
   probe_runs?: CheckRunCounts
+  /** The full run on this cycle's program, when the cycle had nothing left to send (DESIGN §12h E4). */
+  sweep?: SweepRecord
   /** The discrimination measure, on the cycle it ran on. */
   measure?: { mutants: number; killed: number; survived: number; build_failed: number; score: number | null; weak_units: string[]; strengthened: string[]; still_weak: number }
   anchors: string[]
@@ -145,6 +197,14 @@ export interface ExecutionRecord {
   open: string[]
   links: AnchorLink[]
   usage: TokenUsage
+  /** Items the work order carried in, as sent with the work message (DESIGN §12h E3). */
+  carried_in?: { id: string; digest: string }[]
+  /** The full run on the kept cycle's program (DESIGN §12h E4). */
+  sweep?: SweepRecord
+  /** Items failing on the kept cycle's program after the full run: the round's end in the ledger (DESIGN §12h E2). */
+  final?: ItemSighting[]
+  /** What each check and probe executed on the kept program, for the next round's selection: function ids, then by id indexes into them and the output digest. */
+  coverage?: { functions: string[]; ids: Record<string, { f?: number[]; d: string }> }
 }
 
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
@@ -243,11 +303,46 @@ export function repairMessage(evidence: string, build: { ok: boolean; output: st
   ].join("\n")
 }
 
+/**
+ * The objection the code makes for an item a repair did not change (DESIGN §12h E3): the item goes to the independent
+ * session with the earlier finding, instead of to the executor again.
+ */
+export const NO_PROGRESS = "This item was sent for repair, and the program's output on this call did not change. Rule on it again from the text."
+
+/**
+ * What the round does with an item it found failing (DESIGN §12h E3): sent while it is new or its output changed;
+ * once sent, an unchanged output is ruled on (`ruled` is set to the digest it was ruled at) and, upheld, sent once
+ * more; after that, or where no ruling is possible, held: listed, no more cycles spent on it.
+ */
+export class Sends {
+  private readonly sent = new Map<string, string>()
+  private readonly ruledAt = new Map<string, string>()
+  private readonly again = new Set<string>()
+  /** quiet: items the ledger lists only (no progress over rounds), with the output they were stuck at. */
+  constructor(carried: ReadonlyMap<string, string> = new Map(), private readonly quiet: ReadonlyMap<string, string> = new Map()) { for (const [id, d] of carried) this.sent.set(id, d) }
+  /** Sent before and unchanged since, not yet ruled on at this output: to be ruled on. */
+  stuck(id: string, digest: string): boolean { return this.sent.get(id) === digest && this.ruledAt.get(id) !== digest }
+  ruled(id: string, digest: string): void { this.ruledAt.set(id, digest) }
+  /** What would be done with the item now; nothing is recorded until `mark`. */
+  plan(id: string, digest: string): { action: "send" | "hold"; why?: string } {
+    if (this.quiet.get(id) === digest) return { action: "hold", why: "listed only: no progress over rounds" }
+    if (this.sent.get(id) !== digest) return { action: "send" }
+    if (this.ruledAt.get(id) === digest && !this.again.has(id)) return { action: "send", why: "a ruling upheld it" }
+    return { action: "hold", why: this.ruledAt.get(id) === digest ? "no progress after a ruling" : "no progress, and no ruling possible" }
+  }
+  mark(id: string, digest: string, plan: { action: "send" | "hold"; why?: string }): void {
+    if (plan.action !== "send") return
+    if (plan.why) this.again.add(id)
+    else { this.sent.set(id, digest); this.again.delete(id) }
+  }
+}
+
 export async function executeRound(workdir: string, workorder: WorkOrder, text: string, executor: Executor, deps: ExecutionDeps, limits: ExecutionLimits = DEFAULT_LIMITS): Promise<ExecutionRecord> {
   const round = workorder.round
   const task = workorder.task.map(t => t.object)
   const taskSet = new Set(task)
   const record: ExecutionRecord = { round, base: head(workdir), head: "", status: "done", task, sessions: [], cycles: [], kept: null, carried: [], open: [], links: [], usage: zero() }
+  if (deps.carried?.size) record.carried_in = [...deps.carried].map(([id, digest]) => ({ id, digest }))
   const okSoFar = new Set(deps.detect?.passed ?? [])
   let measuredOnce = false
   const itemsOf = new Map<string, CorrectionItem[]>()
@@ -255,13 +350,42 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
   const passing = new Set(deps.passing ?? [])
   const retired = new Set<string>()
   const names = (id: string) => deps.registry.objects.get(id)?.name ?? id
+  const target = deps.target
+  // What each check and probe showed when it last ran (and what it executed): the selection and the omissions read it.
+  const seen = new Map<string, { functions?: readonly string[]; digest: string; at: string }>([...(target?.seen ?? [])].map(([id, v]) => [id, { ...v, at: "start" }]))
+  const snapshots = new Map<string, Map<string, { digest: string; at: string }>>()
+  const programs = new Map<string, ProgramRef>()
+  const sends = new Sends(deps.carried, target?.quiet)
+  // Items of the ledger this round: open at its start, carried in, or found failing in it.
+  const tracked = new Set<string>([...(target?.open ?? []), ...(deps.carried?.keys() ?? [])])
+  const trackedProbe = (probe: string) => [...tracked].some(t => t.startsWith(`${probe}/`))
   let session = await executor.open({ round, workdir, workorder, text, resume: null })
   record.sessions.push({ id: session.id, opened_for: "work", closed: "normally" })
   let message = text, kind: CycleRecord["message"] = "work", evidence = ""
   let sessionsLeft = limits.maxSessions - 1
   let lastCommit = record.base
-  // Every library check, every cycle, in one batch: no model is involved, so nothing is gained by leaving any out.
-  const runAll = (program: ProgramRef) => runChecks(activeChecks(deps.library, deps.events).filter(c => !retired.has(c.id)), program, deps.runner, round, deps.registry, deps.facts, deps.checkTimeoutMs ?? 10_000, id => deps.upheld?.(id) ?? new Set())
+  const live = () => activeChecks(deps.library, deps.events).filter(c => !retired.has(c.id))
+  // Library checks on a program, `ids` of them or all; what each run executed is kept for the selection.
+  const runLibrary = async (program: ProgramRef, ids: ReadonlySet<string> | null, anchors: readonly Anchor[], at: string) => {
+    const covered = new Map<string, string[] | undefined>()
+    const runs = await runChecks(live().filter(c => !ids || ids.has(c.id)), program, deps.runner, round, deps.registry, deps.facts, deps.checkTimeoutMs ?? 10_000, id => deps.upheld?.(id) ?? new Set(), (id, out) => covered.set(id, out.coverage !== undefined ? coveredFunctions(out.coverage, anchors) : undefined))
+    for (const r of runs) seen.set(r.check, { functions: covered.get(r.check) ?? seen.get(r.check)?.functions, digest: runDigest(r), at })
+    return runs
+  }
+  const noteProbes = (runs: readonly DetectedRun[] | undefined, anchors: readonly Anchor[], at: string) => {
+    for (const r of runs ?? []) seen.set(r.probe, { functions: r.coverage !== undefined ? coveredFunctions(r.coverage, anchors) : seen.get(r.probe)?.functions, digest: r.digest, at })
+  }
+  const digestOf = (id: string) => seen.get(id.split("/")[0])?.digest ?? ""
+  /** The full run on one cycle's program: everything, the omissions against what was last seen (`known`), the failures. */
+  const sweep = async (cycle: string, program: ProgramRef, anchors: readonly Anchor[], ranHere: ReadonlySet<string>, known: ReadonlyMap<string, { digest: string; at: string }>) => {
+    const runs = await runLibrary(program, null, anchors, `${cycle} full run`)
+    const detected = deps.detect ? await deps.detect.run(program, okSoFar, new Map(), { probes: null, full: true }) : { items: [] as CorrectionItem[], findings: [] as Finding[], counts: undefined, runs: [] as DetectedRun[] }
+    noteProbes(detected.runs, anchors, `${cycle} full run`)
+    const now = [...runs.map(r => ({ id: r.check, digest: runDigest(r) })), ...(detected.runs ?? []).map(r => ({ id: r.probe, digest: r.digest }))]
+    const omissions = now.filter(x => !ranHere.has(x.id) && known.has(x.id) && known.get(x.id)!.digest !== x.digest).map(x => ({ id: x.id, since: known.get(x.id)!.at }))
+    const counts = { judged: 0, cached: 0, by_code: 0, ...detected.counts }
+    return { runs, detected, record: { cycle, checks: runs.length, probes: detected.runs?.length ?? detected.counts?.probes ?? 0, judged: counts.judged, cached: counts.cached, by_code: counts.by_code, omissions, found: [] as string[] } as SweepRecord }
+  }
   for (let n = 1; n <= limits.repairCycles + 1; n++) {
     const before = deps.anchors.extract(workdir)
     let reply: ExecutorReply
@@ -287,37 +411,107 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     const builtAt = Date.now()
     const build = deps.build(workdir, id)
     deps.time?.("build", builtAt, Date.now())
-    const changed = touched(diffAnchors(before, deps.anchors.extract(workdir)))
-    let runs = build.ok ? await runAll(build.program!) : []
-    // Disputes: evidence code saw against a check, and the session's contests. Settled once each, against the text.
+    const after = deps.anchors.extract(workdir)
+    const changed = touched(diffAnchors(before, after))
+    if (build.ok) programs.set(id, build.program!)
+    // What this cycle runs (DESIGN §12h E4): chosen by code; everything when there is no target.
+    const known = new Map([...seen].map(([k, v]) => [k, { digest: v.digest, at: v.at }]))
+    let checkSel: Map<string, SelectReason> | null = null, probeSel: Map<string, SelectReason> | null = null, scope: ReturnType<typeof changeScope> | null = null
+    if (build.ok && target) {
+      scope = changeScope(before, after)
+      const functions = (k: string) => seen.get(k)?.functions
+      checkSel = selectRuns(live().map(c => ({ id: c.id, units: c.round === round ? [...c.blocks, FRESH] : c.blocks })), { units: new Set([...target.units, FRESH]), open: k => tracked.has(k), functions, scope })
+      probeSel = selectRuns((await target.probes()).map((p): Candidate => ({ id: p.id, units: p.round === round ? [...p.covers.map(c => c.unit), FRESH] : p.covers.map(c => c.unit) })), { units: new Set([...target.units, FRESH]), open: trackedProbe, functions, scope })
+    }
+    let runs = build.ok ? await runLibrary(build.program!, checkSel ? new Set(checkSel.keys()) : null, after, id) : []
+    // Disputes: evidence code saw against a check, the session's contests, and failures a repair did not change.
+    // Settled once each, against the text.
     const claimed = contestsIn(reply.note)
     const contests = claimed.filter(c => runs.some(r => r.check === c.check && r.outcome === "fail"))
     const probeContests = new Map(claimed.filter(c => c.check.startsWith("P")).map(c => [c.check, c.claim]))
+    const stuckChecks = runs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed" && sends.stuck(r.check, runDigest(r)) && !contests.some(c => c.check === r.check))
     const disputes = [
       ...runs.filter(r => r.failure?.class === "disputed").map(r => ({ check: r.check, run: r, kind: r.failure!.reason as DisputeKind, detail: r.failure!.detail })),
       ...contests.map(c => ({ check: c.check, run: runs.find(r => r.check === c.check)!, kind: "contested" as const, detail: c.claim })),
+      ...(deps.settle ? stuckChecks.map(r => ({ check: r.check, run: r, kind: "contested" as const, detail: NO_PROGRESS })) : []),
     ]
     const settled = disputes.length && deps.settle ? await deps.settle(disputes) : { wrong: new Set<string>(), right: new Set<string>() }
+    if (deps.settle) for (const r of [...stuckChecks, ...runs.filter(x => contests.some(c => c.check === x.check))]) sends.ruled(r.check, runDigest(r))
     for (const k of settled.wrong) retired.add(k)
-    if (settled.wrong.size || settled.right.size) runs = build.ok ? await runAll(build.program!) : []
+    if (settled.wrong.size || settled.right.size) runs = build.ok ? await runLibrary(build.program!, new Set(runs.map(r => r.check).filter(c => !retired.has(c))), after, id) : []
+    const ruled: NonNullable<CycleRecord["ruled"]> = [...settled.wrong, ...settled.right].filter(k => stuckChecks.some(r => r.check === k)).map(k => ({ id: k, verdict: settled.wrong.has(k) ? "check_wrong" : "check_right", reason: NO_PROGRESS }))
     const library = deps.library
     const objectOf = (check: string) => library.find(c => c.id === check)!
-    const regressions = new Set(runs.filter(r => r.outcome === "fail" && passing.has(r.check)).map(r => r.check))
-    // Against the round's work: not landed on a task object or its conventions, or a regression; contested checks
-    // still unsettled do not count.
-    const unsettled = new Set(contests.filter(c => !settled.wrong.has(c.check) && !settled.right.has(c.check)).map(c => c.check))
-    const failing = runs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed" && !unsettled.has(r.check)
-      && (regressions.has(r.check) || taskSet.has(objectOf(r.check).object) || objectOf(r.check).uses.some(u => taskSet.has(u)))).map(r => r.check)
+    const ranHere = new Set<string>(runs.map(r => r.check))
     const linked = linkStepAnchors({ id, objects: task.map(object => ({ object })) }, changed, undefined, names, round)
     let measured: CycleRecord["measure"]
     if (build.ok && deps.detect?.measure && !measuredOnce) { measuredOnce = true; measured = await deps.detect.measure(workdir, build.program!, [...links, ...linked.links]) }
-    // Probes on this cycle's program, judged; what is wrong goes to the correction list.
-    // Every probe, every cycle, in one batch: what a repair broke anywhere is seen in the same cycle. Only outputs that
-    // changed go to the judge; the rest come from the cache.
-    const detected = build.ok && deps.detect ? await deps.detect.run(build.program!, okSoFar, probeContests) : { items: [] as CorrectionItem[], findings: [] as Finding[], counts: undefined }
+    // Probes on this cycle's program, judged; what is wrong goes to the correction list. Only outputs that changed
+    // go to the judge; the rest come from the cache.
+    let detected = build.ok && deps.detect ? await deps.detect.run(build.program!, okSoFar, probeContests, { probes: probeSel ? new Set(probeSel.keys()) : null }) : { items: [] as CorrectionItem[], findings: [] as Finding[], counts: undefined, runs: undefined as DetectedRun[] | undefined }
+    if (build.ok) noteProbes(detected.runs, after, id)
+    for (const r of detected.runs ?? []) ranHere.add(r.probe)
+    // Items a repair did not change go to the independent session with the earlier finding (DESIGN §12h E3).
+    if (build.ok && deps.detect) {
+      for (const it of detected.items.filter(x => probeContests.has(x.key))) sends.ruled(it.key, digestOf(it.key))
+      for (const f of detected.findings.filter(x => probeContests.has(pairKey(x.probe, x.unit)))) ruled.push({ id: pairKey(f.probe, f.unit), verdict: f.verdict, reason: f.reason })
+      const stuck = detected.items.filter(it => !probeContests.has(it.key) && sends.stuck(it.key, digestOf(it.key)))
+      if (stuck.length) {
+        const again = await deps.detect.run(build.program!, okSoFar, new Map(stuck.map(it => [it.key, `${NO_PROGRESS} The earlier finding: ${it.finding}`])), { probes: new Set(stuck.map(it => it.probe)) })
+        for (const it of stuck) sends.ruled(it.key, digestOf(it.key))
+        const redone = new Set(stuck.map(it => it.key))
+        const byKey = new Map(again.findings.map(f => [pairKey(f.probe, f.unit), f]))
+        ruled.push(...stuck.map(it => ({ id: it.key, verdict: byKey.get(it.key)?.verdict ?? "cannot_tell", reason: byKey.get(it.key)?.reason ?? "no verdict came back" })))
+        detected = {
+          ...detected,
+          items: [...detected.items.filter(it => !redone.has(it.key)), ...again.items.filter(it => redone.has(it.key))],
+          findings: [...detected.findings.filter(f => !redone.has(pairKey(f.probe, f.unit))), ...again.findings.filter(f => redone.has(pairKey(f.probe, f.unit)))],
+        }
+      }
+    }
+    let regressions = new Set(runs.filter(r => r.outcome === "fail" && passing.has(r.check)).map(r => r.check))
+    // Against the round's work: not landed on a task object or its conventions, or a regression; contested checks
+    // still unsettled do not count.
+    const unsettled = new Set(contests.filter(c => !settled.wrong.has(c.check) && !settled.right.has(c.check)).map(c => c.check))
+    const failingOf = (rs: readonly CheckRun[]) => rs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed" && !unsettled.has(r.check)
+      && (regressions.has(r.check) || taskSet.has(objectOf(r.check).object) || objectOf(r.check).uses.some(u => taskSet.has(u)))).map(r => r.check)
+    let failing = failingOf(runs)
+    let corrections = detected.items
+    let swept: SweepRecord | undefined
+    const decide = () => {
+      const items: ItemSighting[] = []
+      const runOf = new Map(runs.map(r => [r.check, r]))
+      for (const k of failing) { const d = runDigest(runOf.get(k)!); items.push({ id: k, digest: d, verdict: "not_landed", ...sends.plan(k, d) }) }
+      for (const it of corrections) { const d = digestOf(it.key); items.push({ id: it.key, digest: d, verdict: "wrong", ...sends.plan(it.key, d) }) }
+      // Tracked items this cycle ran that are no longer failing: the ledger sees them pass.
+      for (const r of runs) if (tracked.has(r.check) && !failing.includes(r.check)) items.push({ id: r.check, digest: runDigest(r), verdict: r.outcome === "pass" ? "pass" : `${r.failure?.class}`, action: "none" })
+      for (const f of detected.findings) { const k = pairKey(f.probe, f.unit); if (tracked.has(k) && !corrections.some(it => it.key === k)) items.push({ id: k, digest: digestOf(k), verdict: f.verdict, action: "none" }) }
+      return items
+    }
+    let items = decide()
+    const toSend = () => items.filter(i => i.action === "send").map(i => i.id)
     const counts: CheckRunCounts = { checks: runs.length, probes: 0, judged: 0, cached: 0, by_code: 0, ...detected.counts }
+    if (checkSel && probeSel && scope) counts.selected = { checks: tally(checkSel), probes: tally(probeSel), all: scope.all, changed_functions: scope.changed_functions.length }
+    // Nothing left to send: before the round ends, everything runs once on this program (DESIGN §12h E4). What it
+    // finds failing that this cycle's selection did not show is sent like any item, while cycles are left.
+    if (build.ok && target && !toSend().length) {
+      const s = await sweep(id, build.program!, after, ranHere, known)
+      swept = s.record
+      runs = s.runs
+      regressions = new Set(runs.filter(r => r.outcome === "fail" && passing.has(r.check)).map(r => r.check))
+      const shown = new Set([...failing, ...corrections.map(c => c.key)])
+      detected = { ...detected, items: s.detected.items, findings: s.detected.findings }
+      failing = failingOf(runs)
+      corrections = s.detected.items
+      swept.found = [...failing, ...corrections.map(c => c.key)].filter(k => !shown.has(k))
+      items = decide()
+    }
     for (const f of detected.findings) if (f.verdict === "ok") okSoFar.add(pairKey(f.probe, f.unit))
-    const corrections = detected.items
+    // Only a program that built has items to send.
+    if (!build.ok) items = items.map(i => ({ ...i, action: "none" as const, why: undefined }))
+    for (const i of items) { if (i.verdict === "not_landed" || i.verdict === "wrong") tracked.add(i.id); if (i.action !== "none") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}) }) }
+    const send = new Set(toSend())
+    const held = items.filter(i => i.action === "hold").map(i => i.id)
     const trailers: [string, string][] = [
       ["IC-Round", String(round)], ["IC-Cycle", id], ["IC-Session", session.id],
       ...task.map(o => ["IC-Object", `${o}@v${deps.registry.objects.get(o)!.version}`] as [string, string]),
@@ -336,13 +530,16 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
       anchors: changed, note: clip(reply.note, 4000), usage: reply.usage,
       ...(measured ? { measure: measured } : {}), ...(build.ok && deps.detect ? { probe_runs: counts } : {}),
       corrections: corrections.map(c => c.key), ambiguous: detected.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: corrections.filter(c => c.passed_before).map(c => c.key),
+      items, ...(held.length ? { held } : {}), ...(ruled.length ? { ruled } : {}), ...(swept ? { sweep: swept } : {}),
     })
+    snapshots.set(id, new Map([...seen].map(([k, v]) => [k, { digest: v.digest, at: v.at }])))
     itemsOf.set(id, corrections)
     deps.onProgress?.(record)
-    if (build.ok && !failing.length && !corrections.length) break
+    if (build.ok && !send.size) break
     if (n === limits.repairCycles + 1) { record.status = "cycles_spent"; break }
-    const checkEvidence = build.ok && failing.length ? renderEvidence(runs, failing, library, deps.registry, regressions) : ""
-    const list = build.ok && corrections.length ? renderCorrections(corrections, deps.detect!.program) : ""
+    const sendFailing = failing.filter(k => send.has(k)), sendItems = corrections.filter(c => send.has(c.key))
+    const checkEvidence = build.ok && sendFailing.length ? renderEvidence(runs, sendFailing, library, deps.registry, regressions) : ""
+    const list = build.ok && sendItems.length ? renderCorrections(sendItems.map(c => items.find(i => i.id === c.key)?.why === "a ruling upheld it" ? { ...c, upheld: true } : c), deps.detect!.program) : ""
     evidence = [checkEvidence, list].filter(Boolean).join("\n")
     message = repairMessage(checkEvidence, build, list)
     kind = "repair"
@@ -355,14 +552,50 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
   if (best) {
     record.kept = best.id
     if (best.commit !== head(workdir)) resetTo(workdir, best.commit)
+    // The full run on the program the round delivers, if that cycle had none (DESIGN §12h E4).
+    if (target && !best.sweep && programs.has(best.id)) {
+      const anchorsNow = deps.anchors.extract(workdir)
+      const ranThere = new Set(best.runs.map(r => r.check))
+      const known = snapshots.get(best.id) ?? new Map()
+      for (const [k, v] of known) if (v.at === best.id) ranThere.add(k)
+      const s = await sweep(best.id, programs.get(best.id)!, anchorsNow, ranThere, known)
+      const failingNow = s.runs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed" && (passing.has(r.check) || taskSet.has(deps.library.find(c => c.id === r.check)!.object) || deps.library.find(c => c.id === r.check)!.uses.some(u => taskSet.has(u)))).map(r => r.check)
+      s.record.found = [...failingNow, ...s.detected.items.map(c => c.key)].filter(k => !best.failing.includes(k) && !best.corrections.includes(k))
+      record.sweep = s.record
+      best.failing = failingNow
+      best.runs = s.runs.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null }))
+      best.ambiguous = s.detected.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit))
+      itemsOf.set(best.id, s.detected.items)
+      best.corrections = s.detected.items.map(c => c.key)
+      const runOf = new Map(s.runs.map(r => [r.check, r]))
+      record.final = [...failingNow.map(k => ({ id: k, digest: runDigest(runOf.get(k)!), verdict: "not_landed", action: "none" as const })), ...s.detected.items.map(c => ({ id: c.key, digest: digestOf(c.key), verdict: "wrong", action: "none" as const }))]
+    } else if (target) {
+      record.sweep = best.sweep
+      record.final = (best.items ?? []).filter(i => i.verdict === "not_landed" || i.verdict === "wrong").map(i => ({ ...i, action: "none" as const }))
+    }
     const failingObjects = new Set(best.failing.flatMap(k => { const c = deps.library.find(x => x.id === k)!; return [c.object, ...c.uses] }))
     for (const it of itemsOf.get(best.id) ?? []) { const owner = deps.registry.coverOf(it.rule.id)?.owner; if (owner && owner !== "none") failingObjects.add(owner) }
     record.open = best.corrections
     record.carried = task.filter(o => failingObjects.has(o))
   } else record.carried = task
+  if (target) {
+    // What each check and probe executed, for the next round's selection: from the full run where there was one.
+    const functions = [...new Set([...seen.values()].flatMap(v => v.functions ?? []))].sort()
+    const index = new Map(functions.map((f, i) => [f, i]))
+    record.coverage = { functions, ids: Object.fromEntries([...seen].map(([k, v]) => [k, { ...(v.functions ? { f: v.functions.map(f => index.get(f)!) } : {}), d: v.digest }])) }
+  }
   record.links = links.slice(deps.links.length)
   record.head = head(workdir)
   return record
+}
+
+/** A marker unit: a check or probe that entered this round is on its changed text. */
+const FRESH = "\u0000fresh"
+
+function tally(sel: ReadonlyMap<string, SelectReason>): Partial<Record<SelectReason, number>> {
+  const out: Partial<Record<SelectReason, number>> = {}
+  for (const r of sel.values()) out[r] = (out[r] ?? 0) + 1
+  return out
 }
 
 /** Reads back what the code committed, from the trailers alone. */

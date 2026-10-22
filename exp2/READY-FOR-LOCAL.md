@@ -195,7 +195,20 @@ new Serial({
 
 - **每个周期全部运行**：全部有效库检查一批、全部有效探针一批，docker 下每批一个容器（每批最多 1000 次运行）。镜像需要有 `timeout`（coreutils）和支持 `%N` 的 `date`。没有 `timeout` 时自动退回到每次运行一个容器；没有 `%N` 时，超时只能靠退出码 124 来识别。判断只在输出变化时重做。按锚点挑选和轮末检查已删除。
 - **库检查默认打开**：示例配置去掉了 `ablation.checks: false`。已有 state 里记着 `checks: false` 的运行需要新的 state。
-- **角色**：`roles` 有 `probes`、`judge`、`checks`、`adjudicate` 四项，默认都是 `gpt-6-sol-fast` low（与 executor 不同的来源）。
+- **角色**：`roles` 有 `probes`、`judge`、`checks`、`adjudicate` 四项。前三项默认 `gpt-6-sol-fast` low（与 executor 不同的来源），`adjudicate` 默认 `gpt-5.6-luna-fast` medium（`local-config.ts` 的 `DEFAULT_ROLES`）。
 - **变异体度量默认关闭**；要打开，设 `limits.mutants`。
 - **报告**：新增两行。"Determinations on the final program" 给出 A/B/C 三类各多少；"Open" 按原因给出程序错、未覆盖、参考不一致待裁决、有歧义的条目数，以及由代码关闭为不可测的单位。"Runs per cycle" 给出每个周期的库检查数、探针数，以及判断重做、沿用缓存、由代码判定的数目。
 - **判断要求计算时**，用配置里的脚本沙箱（docker 下是 `runner.python`）。离线检出和修复工具也会传入这个沙箱。
+
+## 15. 第 12 块之后的变化（台账、无效修补、定向运行、回放，见 BLOCK12-NOTES）
+
+- **每个周期定向运行，每轮全量兜底**，取代第 14 节"每个周期全部运行"：
+  - 周期里只运行本轮原文改动的、台账里开放的、以及上次运行执行到了本周期改动过的函数的那些检查和探针；
+  - 没有要送的东西时，在该周期的程序上全部运行一次，输出变了而定向时没选中的记为选择遗漏；
+  - 这次全量就是本轮最终的探针结论。
+- **覆盖构建**：配置项 `coverage` 默认 true，构建用 `go build -cover`，每次运行用自己的 GOCOVERDIR。docker 镜像里要有 `go`（covdata）；没有的话每个周期全部运行，结果不变，只是更慢。
+- **不做无效修补**：同一条目送过一次、输出没变，就交 `adjudicate` 角色裁决（执行方写 CONTEST 也一样），不再重送；裁为程序对或有歧义即结束；连续两轮轮末输出相同的条目只列在报告里。
+- **判断的计算**：`compute` 必须给出 `where`，代码比较程序在该处的值；依据计算的"错"不接受，退回改为计算。
+- **台账**：每轮检查点里有 `ledger.json`、`ledger.md`；报告新增 "Selection"、"Ledger"、"Cache reads of input" 三行，"Runs per cycle" 里有每个周期的选择理由和全量。
+- **回放**：`intent-exp2-replay --config <配置> --products <list.tsv> --out <目录> [--state <state>] [--defects <表>]`。不编码，逐轮建出检查和探针，在冻结程序上运行，每份程序输出台账；带 `--defects` 时，库检查和探针合并计分。产物路径可以写成 `<repo>@<commit>`。
+

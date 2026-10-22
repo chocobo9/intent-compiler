@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { BuildResult } from "./execution.js"
 import { guardedSync, isEnvironmentBlock, scriptCommand, scriptFile } from "./platform.js"
+import { ranOnly } from "./coverage.js"
 import { collect, DEFAULT_RESOURCE_LIMITS, execute, nullRun, sourceLiterals, writeInputs, type ResourceLimits, type CheckInput, type CheckRunner, type InputFile, type ProgramRef, type RunOutput, type ScriptResult, type ScriptSandbox } from "./runner.js"
 
 /**
@@ -39,6 +40,8 @@ export interface DockerOptions {
   limits?: Partial<ResourceLimits>
   /** Memory for a build container, MiB (default 2048). */
   buildMemoryMb?: number
+  /** Builds record coverage (`go build -cover`), read back after each batched run with the image's covdata (DESIGN §12h E4). */
+  cover?: boolean
 }
 
 /** `docker run` flags for a memory limit (no swap beyond it) and a process limit. */
@@ -102,14 +105,19 @@ const quote = (s: string) => `'${s.replace(/'/gu, `'\\''`)}'`
  * milliseconds kept per run. Exits 99 at once when the image has no `timeout`, so the caller falls back to one
  * container per run.
  */
-export function batchScript(command: readonly string[], inputs: readonly CheckInput[], timeoutMs: number, outputBytes: number, work = "/work"): string {
+export function batchScript(command: readonly string[], inputs: readonly CheckInput[], timeoutMs: number, outputBytes: number, work = "/work", coverage = false): string {
   const secs = Math.max(1, Math.ceil(timeoutMs / 1000)), blocks = Math.max(1, Math.ceil(outputBytes / 512))
   return [
     "command -v timeout >/dev/null 2>&1 || exit 99",
     `mkdir -p ${work}/__out`,
+    // A program built to record coverage writes its counters per run outside the run directory; the image's covdata
+    // turns them into the text profile after the run (none without Go in the image: the selection then runs everything).
+    ...(coverage ? ["T=$(HOME=/tmp go env GOTOOLDIR 2>/dev/null)"] : []),
     ...inputs.map((input, i) => {
       const o = `${work}/__out/r${i}`
-      return `cd ${work}/r${i} && s=$(date +%s%N) && ( ulimit -f ${blocks}; exec timeout -k 1 ${secs} ${[...command, ...input.args].map(quote).join(" ")} ) >${o}.out 2>${o}.err; echo $? >${o}.code; e=$(date +%s%N); echo $(( (e - s) / 1000000 )) >${o}.ms 2>/dev/null`
+      const cov = coverage ? `mkdir -p ${o}.c && export GOCOVERDIR=${o}.c && ` : ""
+      const read = coverage ? `; [ -n "$T" ] && "$T/covdata" textfmt -i=${o}.c -o=${o}.cov >/dev/null 2>&1` : ""
+      return `cd ${work}/r${i} && ${cov}s=$(date +%s%N) && ( ulimit -f ${blocks}; exec timeout -k 1 ${secs} ${[...command, ...input.args].map(quote).join(" ")} ) >${o}.out 2>${o}.err; echo $? >${o}.code; e=$(date +%s%N); echo $(( (e - s) / 1000000 )) >${o}.ms 2>/dev/null${read}`
     }),
   ].join("\n") + "\n"
 }
@@ -135,13 +143,15 @@ export class DockerRunner implements CheckRunner {
       const dir = mkdtempSync(join(tmpdir(), "exp2-batch-"))
       try {
         chunk.forEach((input, i) => { mkdirSync(join(dir, `r${i}`)); writeInputs(join(dir, `r${i}`), input.files) })
-        writeFileSync(join(dir, "__batch.sh"), batchScript(program.command, chunk, timeoutMs, limits.outputBytes, this.o.workdir ?? "/work"), "utf8")
+        writeFileSync(join(dir, "__batch.sh"), batchScript(program.command, chunk, timeoutMs, limits.outputBytes, this.o.workdir ?? "/work", program.cover === true), "utf8")
         const r = await runInContainer(this.o, dir, ["sh", `${this.o.workdir ?? "/work"}/__batch.sh`], chunk.length * (timeoutMs + 1000), program.mount ? [program.mount] : [])
         if (r.exit_code === 99) { for (const input of chunk) out.push(await this.run(program, input, timeoutMs)); continue }
         const read = (f: string) => { try { return readFileSync(join(dir, "__out", f), "utf8") } catch { return "" } }
         chunk.forEach((_, i) => {
           const code = read(`r${i}.code`).trim()
-          out.push(batchResult(code === "" ? null : Number(code), read(`r${i}.out`), read(`r${i}.err`), Number(read(`r${i}.ms`).trim()), timeoutMs, collect(join(dir, `r${i}`)), limits.memoryMb))
+          const run = batchResult(code === "" ? null : Number(code), read(`r${i}.out`), read(`r${i}.err`), Number(read(`r${i}.ms`).trim()), timeoutMs, collect(join(dir, `r${i}`)), limits.memoryMb)
+          const cov = program.cover ? read(`r${i}.cov`) : ""
+          out.push(cov ? { ...run, coverage: ranOnly(cov) } : run)
         })
       } finally { rmSync(dir, { recursive: true, force: true }) }
     }
@@ -152,7 +162,9 @@ export class DockerRunner implements CheckRunner {
     const dir = mkdtempSync(join(tmpdir(), "exp2-check-"))
     try {
       writeInputs(dir, input.files)
-      const result = await runInContainer(this.o, dir, [...program.command, ...input.args], timeoutMs, program.mount ? [program.mount] : [])
+      // One run alone records no coverage, but a program built to record it needs somewhere to write (or it warns on stderr).
+      const command = program.cover ? ["env", "GOCOVERDIR=/tmp", ...program.command, ...input.args] : [...program.command, ...input.args]
+      const result = await runInContainer(this.o, dir, command, timeoutMs, program.mount ? [program.mount] : [])
       return { ...result, files: collect(dir) }
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }
@@ -187,13 +199,13 @@ export function dockerGoBuilder(outRoot: string, o: DockerOptions, timeoutMs = 1
     mkdirSync(out, { recursive: true })
     const name = containerName()
     // The output directory is the writable mount; the work tree is mounted read-only, so the build cannot change it.
-    const args = dockerRunArgs({ ...o, workdir: "/out", extra: [...limitFlags(o.buildMemoryMb ?? 2048, (o.limits?.pids ?? DEFAULT_RESOURCE_LIMITS.pids) * 4), ...(o.extra ?? [])] }, name, out, ["sh", "-c", `cd /src && GOFLAGS=-mod=readonly GOCACHE=${o.buildCache ? "/gocache" : "/tmp/gocache"} go build -o /out/${binary} ./...`], [{ host: workdir, container: "/src" }, ...(o.buildCache ? [{ host: o.buildCache, container: "/gocache", readonly: false }] : [])])
+    const args = dockerRunArgs({ ...o, workdir: "/out", extra: [...limitFlags(o.buildMemoryMb ?? 2048, (o.limits?.pids ?? DEFAULT_RESOURCE_LIMITS.pids) * 4), ...(o.extra ?? [])] }, name, out, ["sh", "-c", `cd /src && GOFLAGS=-mod=readonly GOCACHE=${o.buildCache ? "/gocache" : "/tmp/gocache"} go build${o.cover ? " -cover" : ""} -o /out/${binary} ./...`], [{ host: workdir, container: "/src" }, ...(o.buildCache ? [{ host: o.buildCache, container: "/gocache", readonly: false }] : [])])
     const [cmd, ...pre] = docker(o)
     const r = guardedSync("docker", () => spawnSync(cmd, [...pre, ...args], { encoding: "utf8", timeout: timeoutMs }), r => isEnvironmentBlock(r.error) ? String(r.error) : null)
     if (r.error && (r.error as NodeJS.ErrnoException).code === "ETIMEDOUT") removeContainer(o, name)
     const output = `${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? String(r.error) : ""}`
     if (r.status !== 0) return { ok: false, output, program: null }
-    return { ok: true, output, program: { id: label, label: `build of ${label} (docker)`, command: [`/prog/${binary}`], source_dir: workdir, mount: { host: out, container: "/prog" } } }
+    return { ok: true, output, program: { id: label, label: `build of ${label} (docker)`, command: [`/prog/${binary}`], source_dir: workdir, mount: { host: out, container: "/prog" }, ...(o.cover ? { cover: true } : {}) } }
   }
 }
 
