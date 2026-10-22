@@ -244,18 +244,36 @@ export class Exp2Store {
    * of the probes that just went stale. Each admitted probe gets the next P id.
    */
   async deriveRoundProbes(round: number, transport: ProbeTransport, options: { maxRepairs?: number } = {}): Promise<ProbeRoundRecord> {
-    return this.transaction(async s => {
+    return this.writeRoundProbes(round, await this.beginRoundProbes(round), transport, options)
+  }
+
+  /**
+   * The first, short part of a round's probe writing (BLOCK10 §9.1): probes whose text changed are marked stale at
+   * once, so nothing run from here on uses them, and the units to write for are fixed. No model call.
+   */
+  async beginRoundProbes(round: number): Promise<{ units: string[]; stale: string[] }> {
+    return this.transaction(s => {
       const registry = this.registry(s)
       if (s.probe_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Probes of round ${round} are already written`)
       const stale = staleProbes(registry, s.probes, s.probe_events, round)
       s.probe_events.push(...stale)
-      const units = probeUnits(registry, round, s.probes.filter(p => stale.some(e => e.probe === p.id)))
-      const out = await deriveProbes(registry, round, units, transport, { maxRepairs: options.maxRepairs ?? 2, callId: n => `W${s.probe_calls.length + n}` })
+      // Stale this round, by now or an earlier attempt of the round: their live units are written again.
+      const now = s.probe_events.filter(e => e.round === round).map(e => e.probe)
+      return { units: probeUnits(registry, round, s.probes.filter(p => now.includes(p.id))), stale: now }
+    })
+  }
+
+  /** The model part of probe writing, outside the store's lock (coding and judging go on meanwhile); one commit at the end. */
+  async writeRoundProbes(round: number, begun: { units: string[]; stale: string[] }, transport: ProbeTransport, options: { maxRepairs?: number } = {}): Promise<ProbeRoundRecord> {
+    const out = await deriveProbes(this.registry(), round, begun.units, transport, { maxRepairs: options.maxRepairs ?? 2, callId: n => `~W${n}` })
+    return this.transaction(s => {
+      if (s.probe_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Probes of round ${round} are already written`)
+      const ids = renumber(out.calls, "W", s.probe_calls.length)
       s.probe_calls.push(...out.calls)
       const entered: string[] = []
-      if (out.status === "accepted") for (const p of out.probes) { const id = `P${s.probes.length + 1}`; s.probes.push({ id, ...p }); entered.push(id) }
+      if (out.status === "accepted") for (const p of out.probes) { const id = `P${s.probes.length + 1}`; s.probes.push({ id, ...p, call: ids.get(p.call) ?? p.call }); entered.push(id) }
       const record: ProbeRoundRecord = {
-        round, status: out.status, calls: out.calls.map(c => c.id), entered, stale: stale.map(e => e.probe), units,
+        round, status: out.status, calls: out.calls.map(c => c.id), entered, stale: begun.stale, units: begun.units,
         covered: out.covered, uncheckable: out.uncheckable, uncovered: out.uncovered, dropped: out.dropped, cases: out.cases, ...(out.issues ? { issues: out.issues } : {}),
       }
       s.probe_rounds.push(record)
@@ -265,11 +283,13 @@ export class Exp2Store {
 
   /** Adds probes where the measure found the probes weak; the additions pass the same checks and repairs (BLOCK10 §7.3). */
   async strengthen(round: number, weak: readonly { units: string[]; message: string }[], transport: ProbeTransport, options: { maxRepairs?: number } = {}): Promise<NonNullable<MeasureRecord["strengthen"]> & { issues?: { code: string; message: string }[] }> {
-    return this.transaction(async s => {
-      const out = await strengthenProbes(this.registry(s), round, weak, activeProbes(s.probes, s.probe_events), transport, { maxRepairs: options.maxRepairs ?? 2, callId: n => `W${s.probe_calls.length + n}` })
+    const s0 = this.inspect()
+    const out = await strengthenProbes(this.registry(s0), round, weak, activeProbes(s0.probes, s0.probe_events), transport, { maxRepairs: options.maxRepairs ?? 2, callId: n => `~W${n}` })
+    return this.transaction(s => {
+      const ids = renumber(out.calls, "W", s.probe_calls.length)
       s.probe_calls.push(...out.calls)
       const entered: string[] = []
-      if (out.status === "accepted") for (const p of out.probes) { const id = `P${s.probes.length + 1}`; s.probes.push({ id, ...p }); entered.push(id) }
+      if (out.status === "accepted") for (const p of out.probes) { const id = `P${s.probes.length + 1}`; s.probes.push({ id, ...p, call: ids.get(p.call) ?? p.call }); entered.push(id) }
       return { status: out.status, calls: out.calls.map(c => c.id), entered, dropped: out.dropped, ...(out.issues ? { issues: out.issues } : {}) }
     })
   }
@@ -279,22 +299,23 @@ export class Exp2Store {
   }
 
   /** Judges one program's runs of active probes; verdicts already kept for the same output are reused. */
-  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number } = {}): Promise<Finding[]> {
-    const out = await this.transaction(async s => {
-      const registry = this.registry(s)
-      let r: Awaited<ReturnType<typeof judgeRuns>>
-      try { r = await judgeRuns(registry, round, activeProbes(s.probes, s.probe_events), runs, s.judgments, transport, { callId: n => `J${s.judge_calls.length + n}`, ...options }) } catch (e) {
-        // The failed calls are kept; the judge's being unavailable goes up once they are saved.
-        if (!(e instanceof RoleUnavailable)) throw e
-        s.judge_calls.push(...(e.calls as JudgeCallRecord[]))
-        return e
-      }
-      s.judge_calls.push(...r.calls)
-      s.judgments.push(...r.judgments)
-      return r.findings
+  async judge(round: number, runs: readonly ProbeRun[], transport: JudgeTransport, options: { contests?: ReadonlyMap<string, string>; batchSize?: number; concurrency?: number } = {}): Promise<Finding[]> {
+    // Asked outside the lock, committed in one transaction; the failed calls are kept before unavailability goes up.
+    const s0 = this.inspect()
+    let r: Awaited<ReturnType<typeof judgeRuns>> | RoleUnavailable
+    try { r = await judgeRuns(this.registry(s0), round, activeProbes(s0.probes, s0.probe_events), runs, s0.judgments, transport, { callId: n => `~J${n}`, ...options }) } catch (e) {
+      if (!(e instanceof RoleUnavailable)) throw e
+      r = e
+    }
+    const done = r
+    await this.transaction(s => {
+      const calls = done instanceof RoleUnavailable ? done.calls as JudgeCallRecord[] : done.calls
+      const ids = renumber(calls, "J", s.judge_calls.length)
+      s.judge_calls.push(...calls)
+      if (!(done instanceof RoleUnavailable)) s.judgments.push(...done.judgments.map(j => ({ ...j, call: ids.get(j.call) ?? j.call })))
     })
-    if (out instanceof RoleUnavailable) throw out
-    return out
+    if (done instanceof RoleUnavailable) throw done
+    return done.findings
   }
 
   async settle(round: number, disputes: readonly Dispute[], transport: AdjudicationTransport): Promise<{ wrong: Set<string>; right: Set<string> }> {
@@ -361,7 +382,15 @@ export class Exp2Store {
     writing("the state", this.file, () => { writeFileSync(temp, JSON.stringify(after, null, 2) + "\n", "utf8"); renameSync(temp, this.file) })
   }
 
-  private async transaction<T>(action: (s: Exp2State) => Promise<T> | T): Promise<T> {
+  /** Transactions on one state file run one at a time within the process (BLOCK10 §9.1); other processes see the lock. */
+  private transaction<T>(action: (s: Exp2State) => Promise<T> | T): Promise<T> {
+    const prev = queues.get(this.file) ?? Promise.resolve()
+    const next = prev.catch(() => {}).then(() => this.locked(action))
+    queues.set(this.file, next.catch(() => {}))
+    return next
+  }
+
+  private async locked<T>(action: (s: Exp2State) => Promise<T> | T): Promise<T> {
     const lock = `${this.file}.lock`
     // A live owner blocks concurrent mutation; a lock left by a dead process is cleared.
     if (existsSync(lock)) {
@@ -387,6 +416,15 @@ export class Exp2Store {
 /** The kinds of dispute a ruling has upheld the check against: its failures of that kind count against the program. */
 export function upheldKinds(s: Pick<Exp2State, "rulings">, check: string): Set<DisputeKind> {
   return new Set((s.rulings ?? []).filter(r => r.check === check && r.verdict === "check_right").map(r => r.kind))
+}
+
+const queues = new Map<string, Promise<unknown>>()
+
+/** Gives calls made outside a transaction their ids in the state (<prefix><n> after `count`); returns old id → new. */
+function renumber(calls: { id: string }[], prefix: string, count: number): Map<string, string> {
+  const ids = new Map<string, string>()
+  calls.forEach((c, i) => { const id = `${prefix}${count + i + 1}`; ids.set(c.id, id); c.id = id })
+  return ids
 }
 
 function emptyChecks() {

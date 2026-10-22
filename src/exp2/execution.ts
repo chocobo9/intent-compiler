@@ -88,6 +88,8 @@ export interface ExecutionDeps {
   }
   /** Called after every cycle with the record so far (for the record of an interrupted round). */
   onProgress?: (record: ExecutionRecord) => void
+  /** Wall time of each stage (BLOCK10 §9.1): coding (the work message), repair (repair and resume messages), build. */
+  time?: (stage: string, startedAt: number, endedAt: number) => void
   checkTimeoutMs?: number
 }
 
@@ -254,7 +256,9 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
   for (let n = 1; n <= limits.repairCycles + 1; n++) {
     const before = deps.anchors.extract(workdir)
     let reply: ExecutorReply
+    const sentAt = Date.now()
     try { reply = await withTimeout(session.send(message), limits.callTimeoutMs) } catch (e) {
+      deps.time?.(kind === "work" ? "coding" : "repair", sentAt, Date.now())
       if (!(e instanceof SessionBroken) && !(e instanceof CallTimeout)) throw e
       // The session is gone: back to the last checkpoint, and a new session with the work order and the evidence.
       record.sessions.find(s => s.id === session.id)!.closed = "broken"
@@ -270,7 +274,10 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     }
     record.usage = plus(record.usage, reply.usage)
     const id = `C${round}.${record.cycles.length + 1}`
+    deps.time?.(kind === "work" ? "coding" : "repair", sentAt, Date.now())
+    const builtAt = Date.now()
     const build = deps.build(workdir, id)
+    deps.time?.("build", builtAt, Date.now())
     const changed = touched(diffAnchors(before, deps.anchors.extract(workdir)))
     let runs = build.ok ? await runAll(build.program!) : []
     // Disputes: evidence code saw against a check, and the session's contests. Settled once each, against the text.

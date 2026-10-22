@@ -92,7 +92,9 @@ describe("exp2 block 10: probes are written for every rule unit, checked by code
     assert.deepEqual([record.cases!.total, record.cases!.covered, record.cases!.open], [155, 155, []])
     // 131 units in groups of 22: six groups, each first answer sent back once.
     assert.equal(record.calls.length, 12)
-    assert.match(writer.requests[1].problems!.join("\n"), /trigger value\(s\) "not-in-the-probe" do not occur[\s\S]*serves 5 units; at most 4/u)
+    // Groups are asked side by side: the repair of the first group is the one that carries its problems.
+    const repair = writer.requests.find(r => r.previous_answer && r.units[0].id === units[0])!
+    assert.match(repair.problems!.join("\n"), /trigger value\(s\) "not-in-the-probe" do not occur[\s\S]*serves 5 units; at most 4/u)
     const s = store.inspect()
     assert.deepEqual(s.probes.map(p => p.id), record.entered)
     assert.equal(s.probes[0].id, "P1")

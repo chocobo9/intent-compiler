@@ -32,7 +32,20 @@ export interface RunOutput {
   /** Every file in the run directory afterwards, by relative path ("/"-separated). */
   files: Record<string, string>
   timed_out: boolean
+  /** The run was stopped at a resource limit (BLOCK10 §9.2): what the program did on this input, not a failure of the run. */
+  limit?: StoppedAt
 }
+
+/** Which limit stopped a run, and how it read. */
+export interface StoppedAt { kind: "memory" | "time" | "output"; detail: string }
+
+/**
+ * Limits on a run of the program under test (BLOCK10 §9.2), so one program cannot exhaust the host: memory (resident,
+ * MiB), output (bytes kept of stdout and stderr each), processes. Time is the run's own timeout.
+ */
+export interface ResourceLimits { memoryMb: number; outputBytes: number; pids: number }
+
+export const DEFAULT_RESOURCE_LIMITS: ResourceLimits = { memoryMb: 1024, outputBytes: 8 * 1024 * 1024, pids: 256 }
 
 export interface CheckRunner {
   run(program: ProgramRef, input: CheckInput, timeoutMs: number): Promise<RunOutput>
@@ -40,7 +53,7 @@ export interface CheckRunner {
   literals(program: ProgramRef): Set<string>
 }
 
-export interface ScriptResult { exit_code: number | null; stdout: string; stderr: string; timed_out: boolean }
+export interface ScriptResult { exit_code: number | null; stdout: string; stderr: string; timed_out: boolean; limit?: StoppedAt }
 
 export interface ScriptSandbox {
   run(language: "python" | "node", code: string, files: InputFile[], timeoutMs: number): Promise<ScriptResult>
@@ -75,15 +88,23 @@ export function collect(dir: string): Record<string, string> {
 }
 
 /** Runs a command; a start the host blocks is tried again, then raised as EnvironmentBlocked (never a result). */
-export async function execute(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv, spawnImpl: typeof nodeSpawn = nodeSpawn): Promise<ScriptResult> {
+export async function execute(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv, spawnImpl: typeof nodeSpawn = nodeSpawn, limits?: Partial<ResourceLimits> & { watchMemory?: boolean }): Promise<ScriptResult> {
   for (let n = 1; ; n++) {
-    const r = await executeOnce(command, cwd, timeoutMs, env, spawnImpl)
+    const r = await executeOnce(command, cwd, timeoutMs, env, spawnImpl, limits)
     if (!r.blocked) return r.result
     if (n >= ENVIRONMENT_TRIES) throw new EnvironmentBlocked(`the host blocked ${command[0]} ${n} times: ${r.blocked}`)
   }
 }
 
-function executeOnce(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv, spawnImpl: typeof nodeSpawn): Promise<{ result: ScriptResult; blocked?: string }> {
+/** Resident memory of a process in MiB, from /proc (Linux); null where that is not available. */
+export function residentMb(pid: number): number | null {
+  try {
+    const m = /^VmRSS:\s+(\d+)\s+kB/mu.exec(readFileSync(`/proc/${pid}/status`, "utf8"))
+    return m ? Number(m[1]) / 1024 : null
+  } catch { return null }
+}
+
+function executeOnce(command: string[], cwd: string, timeoutMs: number, env: NodeJS.ProcessEnv, spawnImpl: typeof nodeSpawn, limits?: Partial<ResourceLimits> & { watchMemory?: boolean }): Promise<{ result: ScriptResult; blocked?: string }> {
   return new Promise((done, fail) => {
     // On Windows a blocked start throws "spawn UNKNOWN" here instead of emitting 'error': the same path either way.
     let child: ReturnType<typeof nodeSpawn>
@@ -93,14 +114,34 @@ function executeOnce(command: string[], cwd: string, timeoutMs: number, env: Nod
       return
     }
     let stdout = "", stderr = "", timedOut = false
-    child.stdout!.on("data", d => { stdout += d })
-    child.stderr!.on("data", d => { stderr += d })
+    let stopped: StoppedAt | undefined
+    const stop = (at: StoppedAt) => { if (!stopped) { stopped = at; child.kill("SIGKILL") } }
+    // Output past the cap is not kept: the run is stopped there, as a program that floods its output.
+    const cap = limits?.outputBytes
+    const take = (kept: string, d: Buffer | string, stream: string) => {
+      const more = kept + d
+      if (cap && Buffer.byteLength(more) > cap) { stop({ kind: "output", detail: `${stream} passed ${cap} bytes` }); return more.slice(0, cap) }
+      return more
+    }
+    child.stdout!.on("data", d => { stdout = take(stdout, d, "stdout") })
+    child.stderr!.on("data", d => { stderr = take(stderr, d, "stderr") })
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL") }, timeoutMs)
+    // A local run is watched for resident memory where the system shows it (Linux); a container has its own limit.
+    const mb = limits?.memoryMb
+    const watch = mb && limits?.watchMemory && child.pid ? setInterval(() => {
+      const now = residentMb(child.pid!)
+      if (now !== null && now > mb) stop({ kind: "memory", detail: `resident memory passed the ${mb} MiB limit` })
+    }, 50) : undefined
+    const end = () => { clearTimeout(timer); if (watch) clearInterval(watch) }
     child.on("error", e => {
-      clearTimeout(timer)
+      end()
       done({ result: { exit_code: null, stdout, stderr: stderr + String(e), timed_out: false }, ...(isEnvironmentBlock(e) ? { blocked: String(e) } : {}) })
     })
-    child.on("close", code => { clearTimeout(timer); done({ result: { exit_code: timedOut ? null : code, stdout, stderr, timed_out: timedOut } }) })
+    child.on("close", code => {
+      end()
+      const limit = stopped ?? (timedOut ? { kind: "time" as const, detail: `no exit within ${timeoutMs} ms` } : undefined)
+      done({ result: { exit_code: timedOut || stopped ? null : code, stdout, stderr, timed_out: timedOut, ...(limit ? { limit } : {}) } })
+    })
   })
 }
 
@@ -111,13 +152,13 @@ export function nullRun(input: CheckInput): RunOutput {
 
 /** Runs the program as a local process in a fresh temporary directory, removed afterwards. */
 export class LocalProcessRunner implements CheckRunner {
-  constructor(private readonly platform: PlatformOptions = {}) {}
+  constructor(private readonly platform: PlatformOptions = {}, private readonly limits: ResourceLimits = DEFAULT_RESOURCE_LIMITS) {}
   async run(program: ProgramRef, input: CheckInput, timeoutMs: number): Promise<RunOutput> {
     if (program.kind === "null") return nullRun(input)
     const dir = mkdtempSync(join(tmpdir(), "exp2-check-"))
     try {
       writeInputs(dir, input.files)
-      const result = await execute([...program.command, ...input.args], dir, timeoutMs, minimalEnv(tmpdir(), this.platform))
+      const result = await execute([...program.command, ...input.args], dir, timeoutMs, minimalEnv(tmpdir(), this.platform), nodeSpawn, { ...this.limits, watchMemory: true })
       return { ...result, files: collect(dir) }
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }

@@ -47,6 +47,11 @@ export interface RoundReport {
    * task zone). executor: the work order was right, the executor did not get it done.
    */
   loss: { boundary: string[]; ic: string[]; executor: string[] }
+  /**
+   * Wall time (BLOCK10 §9.1): the round's, and per stage the time its spans cover, with when it first started and
+   * last ended (ms from the round's start). Stages overlap (probe writing beside coding).
+   */
+  wall?: { round_ms: number; stages: { stage: string; ms: number; spans: number; first_start_ms: number; last_end_ms: number }[] }
   /** Calls into the management stages (attribution, checks) this round, by stage, for the per-round budget. */
   management_calls: number
 }
@@ -80,6 +85,7 @@ export interface ReportInput {
   workorder: WorkOrder
   statuses: readonly ObjectStatus[]
   checks: RoundReport["checks"]
+  wall?: RoundReport["wall"]
   probes?: null | {
     calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
     judge_calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
@@ -134,6 +140,7 @@ export function buildReport(i: ReportInput): RoundReport {
     objects: i.statuses.map(s => ({ object: s.object, name: name(s.object), status: s.status, reasons: s.reasons, passing_strong: s.passing_strong, not_landed: s.not_landed, unknown: s.unknown })),
     loss,
     management_calls: i.understand.length + i.acceptance.length,
+    ...(i.wall ? { wall: i.wall } : {}),
   }
 }
 
@@ -163,6 +170,7 @@ export function renderReport(r: RoundReport): string {
       `Cases: ${r.probes.cases ? `${r.probes.cases.covered}/${r.probes.cases.total} reached, ${r.probes.cases.excused} uncheckable, ${r.probes.cases.open.length} open` : "n/a"}. Discrimination: ${r.probes.discrimination ? `${r.probes.discrimination.killed} of ${r.probes.discrimination.killed + r.probes.discrimination.survived} mutants told apart (${r.probes.discrimination.build_failed} did not build); weak units ${r.probes.discrimination.weak_units.length}, probes added ${r.probes.discrimination.strengthened.length}, still not told apart ${r.probes.discrimination.still_weak}` : "not run"}.`,
       `Probe writer (${r.probes.models.writer.join(", ") || "?"}): ${r.probes.writer.calls} calls, ${tok(r.probes.writer.tokens)}. Judge (${r.probes.models.judge.join(", ") || "?"}): ${r.probes.judge.calls} calls, ${tok(r.probes.judge.tokens)}. Share of coding tokens: ${r.probes.share.all ?? "n/a"} (uncached ${r.probes.share.uncached ?? "n/a"}).`,
     ] : []),
+    ...(r.wall ? [`Wall time ${(r.wall.round_ms / 1000).toFixed(0)} s. ${r.wall.stages.map(x => `${x.stage} ${(x.ms / 1000).toFixed(1)} s (${x.spans}×, ${(x.first_start_ms / 1000).toFixed(0)}–${(x.last_end_ms / 1000).toFixed(0)} s)`).join("; ")}.`] : []),
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,
     "",

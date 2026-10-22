@@ -14,7 +14,7 @@ import type { Exp2State, Exp2Store } from "./store.js"
 import { buildWorkOrder, nameLinks, renderWorkOrder, type PreviousStep, type WorkOrder } from "./workorder.js"
 import type { AdjudicationTransport } from "./adjudication.js"
 import { upheldKinds } from "./store.js"
-import { activeProbes, runProbes, type ProbeRecord, type ProbeTransport } from "./probes.js"
+import { activeProbes, runProbes, type ProbeRecord, type ProbeRoundRecord, type ProbeTransport } from "./probes.js"
 import { correctionItems, pairKey, probeStatuses, renderCorrections, type Finding, type JudgeTransport } from "./judge.js"
 import type { ObjectStatus } from "./verdict.js"
 import { discriminate, remeasure } from "./discrimination.js"
@@ -44,6 +44,8 @@ export interface SerialLimits {
   probeRepairs?: number
   /** Mutants the discrimination measure runs a round at most (default 20; 0 switches the measure off). */
   mutants?: number
+  /** Probe runs side by side (default PROBE_CONCURRENCY). */
+  probeConcurrency?: number
   execution: ExecutionLimits
 }
 
@@ -68,6 +70,8 @@ export interface SerialConfig {
   binary?: string
   /** Where the local Go tool is, for the mutation helper. */
   platform?: PlatformOptions
+  /** A non-blocking build, so mutants are built side by side (BLOCK10 §9.1). */
+  buildAsync?: (workdir: string, label: string) => Promise<BuildResult>
   /** Probe writer and judge (BLOCK10): with both, probes are written every round and drive the repairs. */
   probes?: ProbeTransport
   judge?: JudgeTransport
@@ -114,6 +118,14 @@ export function withWatchdog<R, A>(transport: (request: R) => Promise<A>, ms: nu
 
 export class Serial {
   private progress: ExecutionRecord | null = null
+  /** Wall-time spans of the round being run (BLOCK10 §9.1). */
+  private spans: Span[] = []
+
+  /** Runs `f` and keeps its wall time under `stage`. */
+  private async timed<T>(stage: string, f: () => Promise<T>): Promise<T> {
+    const start = Date.now()
+    try { return await f() } finally { this.spans.push({ stage, start, end: Date.now() }) }
+  }
   constructor(private readonly c: SerialConfig) {
     mkdirSync(join(c.checkpoints, "interrupted"), { recursive: true })
   }
@@ -224,8 +236,10 @@ export class Serial {
   async runRound(round: number): Promise<RoundOutcome> {
     const { store, workdir, limits } = this.c
     this.progress = null
+    this.spans = []
+    const roundStart = Date.now()
     // 1. Attribution.
-    const attribution = await store.ingestRound(round, this.c.text(round), withWatchdog(this.c.attribution, limits.managementTimeoutMs), { maxRepairs: limits.attributionRepairs })
+    const attribution = await this.timed("attribution", () => store.ingestRound(round, this.c.text(round), withWatchdog(this.c.attribution, limits.managementTimeoutMs), { maxRepairs: limits.attributionRepairs }))
     if (attribution.status === "interrupted") throw stopping(attribution.issues ?? [], `attribution, round ${round}`)
     if (attribution.status === "failed") return { status: "stopped", reason: "attribution did not pass within its repair limit", issues: attribution.issues ?? [] }
 
@@ -233,22 +247,32 @@ export class Serial {
     const baseline = this.program(round === 1 ? null : `R${round - 1}-final`)
     // With the check library switched off (ablation), no checks are derived: every status stays unknown.
     if (store.ablation.checks !== false) {
-      const derived = await store.deriveRoundChecks(round, withWatchdog(this.c.checks, limits.managementTimeoutMs), { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs })
+      const derived = await this.timed("checks", () => store.deriveRoundChecks(round, withWatchdog(this.c.checks, limits.managementTimeoutMs), { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs }))
       if (derived.status === "interrupted") throw stopping(derived.issues ?? [], `checks, round ${round}`)
     }
-    const start = await store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate })
+    const start = await this.timed("checks", () => store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate }))
 
     // 2b. Probes for this round's text; earlier probes run on the baseline, so what is still wrong is carried.
     const probing = this.c.probes && this.c.judge
     let carried: { findings: Finding[]; text: string } = { findings: [], text: "" }
+    // The round's probes are written in the background (BLOCK10 §9.1): they need the text, not the program, so coding
+    // does not wait for them. Stale probes are marked first, so the carry-over below never runs one.
+    let writing: Promise<ProbeRoundRecord> | null = null
     if (probing) {
-      const written = await store.deriveRoundProbes(round, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 })
-      if (written.status === "interrupted") throw stopping(written.issues ?? [], `probes, round ${round}`)
+      const begun = await store.beginRoundProbes(round)
+      writing = this.timed("probe writing", () => store.writeRoundProbes(round, begun, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 }))
+      writing.catch(() => {})
       const old = this.activeProbes().filter(p => p.round < round)
       if (old.length && baseline.kind !== "null") {
-        const r = await this.probe(round, old, baseline, new Set(), new Map())
+        const r = await this.timed("carry-over", () => this.probe(round, old, baseline, new Set(), new Map()))
         carried = { findings: r.findings, text: r.items.length ? `\n${CARRIED_HEADER}\n${renderCorrections(r.items, programName(baseline))}\n` : "" }
       }
+    }
+    // What needs the round's probes waits for them here, and a writer that failed stops the round.
+    const ready = async () => {
+      if (!writing) return
+      const w = await this.timed("waiting for probes", () => writing!)
+      if (w.status === "interrupted") throw stopping(w.issues ?? [], `probes, round ${round}`)
     }
 
     // 3. The work order.
@@ -271,20 +295,23 @@ export class Serial {
       registry, library: state.checks, events: state.check_events, links, anchors: this.c.anchors, build: this.c.build, runner: this.c.runner,
       facts: codeFacts(registry, round), passing, checkTimeoutMs: limits.checkTimeoutMs, onProgress: r => { this.progress = r },
       upheld: check => upheldKinds(store.inspect(), check),
-      ...(probing ? { detect: { passed, program: programName(baseline.kind === "null" ? { command: [this.c.binary ?? "program"] } as ProgramRef : baseline), run: (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => this.probe(round, this.activeProbes(), program, before, contests).then(r => ({ items: r.items, findings: r.findings })),
-        ...((limits.mutants ?? 20) > 0 ? { measure: (wd: string, program: ProgramRef, known: readonly AnchorLink[]) => this.measure(round, wd, program, known, new Set(workorder.task.map(t => t.object))) } : {}) } } : {}),
+      ...(probing ? { detect: { passed, program: programName(baseline.kind === "null" ? { command: [this.c.binary ?? "program"] } as ProgramRef : baseline), run: async (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => { await ready(); const r = await this.probe(round, this.activeProbes(), program, before, contests); return { items: r.items, findings: r.findings } },
+        ...((limits.mutants ?? 20) > 0 ? { measure: async (wd: string, program: ProgramRef, known: readonly AnchorLink[]) => { await ready(); return this.timed("measurement", () => this.measure(round, wd, program, known, new Set(workorder.task.map(t => t.object)))) } } : {}) } } : {}),
+      time: (stage: string, a: number, b: number) => { this.spans.push({ stage, start: a, end: b }) },
       ...(this.c.adjudicate ? { settle: (disputes: Parameters<Exp2Store["settle"]>[1]) => store.settle(round, disputes, this.c.adjudicate!) } : {}),
     }, limits.execution)
 
+    // The probes of the round are in before the verdict, even when no cycle built a program.
+    await ready()
     // 5. Verdict on the final program, report, checkpoint.
     const final = this.program(`R${round}-final`)
     const verdict = await store.runRoundChecks(round, final, this.c.runner, { verdict: true, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate })
-    const finalProbes = probing && final.kind !== "null" ? await this.probe(round, this.activeProbes(), final, passed, new Map()) : null
+    const finalProbes = probing && final.kind !== "null" ? await this.timed("final probes", () => this.probe(round, this.activeProbes(), final, passed, new Map())) : null
     state = store.inspect()
     const interrupted = this.interruptedAttempts(round)
     const events = state.check_events.filter(e => e.round === round)
     const report = buildReport({
-      round, registry, workorder, execution, executorIsStub: this.c.executorIsStub, statuses: finalProbes ? mergeStatuses(verdict.statuses, probeStatuses(registry, finalProbes.findings)) : verdict.statuses,
+      round, registry, workorder, execution, executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: finalProbes ? mergeStatuses(verdict.statuses, probeStatuses(registry, finalProbes.findings)) : verdict.statuses,
       probes: probing ? {
         calls: state.probe_calls.filter(c => c.round === round), judge_calls: state.judge_calls.filter(c => c.round === round), record: state.probe_rounds.find(r => r.round === round && r.status === "accepted") ?? null,
         active: this.activeProbes().length, findings: finalProbes?.findings ?? [], carried_in: carried.findings.filter(f => f.verdict === "wrong").length,
@@ -329,11 +356,11 @@ export class Serial {
    */
   private async measure(round: number, workdir: string, program: ProgramRef, links: readonly AnchorLink[], objects: ReadonlySet<string>): Promise<NonNullable<CycleRecord["measure"]>> {
     const { store, limits } = this.c
-    const deps = { build: this.c.build, runner: this.c.runner, registry: store.registry(), anchors: this.c.anchors.extract(workdir), links, timeoutMs: limits.checkTimeoutMs, max: limits.mutants ?? 20, objects, platform: this.c.platform }
+    const deps = { build: this.c.build, ...(this.c.buildAsync ? { buildAsync: this.c.buildAsync } : {}), runner: this.c.runner, registry: store.registry(), anchors: this.c.anchors.extract(workdir), links, timeoutMs: limits.checkTimeoutMs, max: limits.mutants ?? 20, objects, platform: this.c.platform }
     const d = await discriminate(workdir, program, this.activeProbes(), deps)
     let strengthen: MeasureRecord["strengthen"] = null, after: MeasureRecord["after"] = null
     if (d.weak.length) {
-      const s = await store.strengthen(round, d.weak, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 })
+      const s = await this.timed("strengthening", () => store.strengthen(round, d.weak, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 }))
       if (s.status === "interrupted") throw stopping(s.issues ?? [], `probes (strengthening), round ${round}`)
       strengthen = { status: s.status, calls: s.calls, entered: s.entered, dropped: s.dropped }
       if (s.entered.length) after = await remeasure(workdir, program, this.activeProbes(), d, { ...deps, registry: store.registry() })
@@ -349,8 +376,8 @@ export class Serial {
 
   /** Runs probes on a program and judges the runs (kept verdicts reused): the findings and the correction items. */
   private async probe(round: number, probes: readonly ProbeRecord[], program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) {
-    const runs = await runProbes(probes, program, this.c.runner, this.c.limits.checkTimeoutMs)
-    const findings = (await this.c.store.judge(round, runs, withWatchdog(this.c.judge!, this.c.limits.managementTimeoutMs), { contests })).filter(f => probes.some(p => p.id === f.probe))
+    const runs = await this.timed("probe runs", () => runProbes(probes, program, this.c.runner, this.c.limits.checkTimeoutMs, this.c.limits.probeConcurrency))
+    const findings = (await this.timed("judging", () => this.c.store.judge(round, runs, withWatchdog(this.c.judge!, this.c.limits.managementTimeoutMs), { contests }))).filter(f => probes.some(p => p.id === f.probe))
     return { findings, items: correctionItems(this.c.store.registry(), probes, runs, findings, before) }
   }
 
@@ -361,6 +388,28 @@ export class Serial {
       if (b.ok && b.program) return b.program
     }
     return nullBaseline(join(this.c.checkpoints, "null-baseline"))
+  }
+}
+
+export interface Span { stage: string; start: number; end: number }
+
+/**
+ * Wall time per stage: the time covered by its spans (overlaps within a stage counted once), and the round's whole
+ * wall time. Stages overlap one another (probe writing runs beside coding), so they need not add up to the round.
+ */
+export function wallTimes(spans: readonly Span[], start: number, end: number): { round_ms: number; stages: { stage: string; ms: number; spans: number; first_start_ms: number; last_end_ms: number }[] } {
+  const by = new Map<string, Span[]>()
+  for (const s of spans) by.set(s.stage, [...(by.get(s.stage) ?? []), s])
+  const covered = (list: Span[]) => {
+    const sorted = [...list].sort((a, b) => a.start - b.start)
+    let total = 0, at = -Infinity
+    for (const s of sorted) { const from = Math.max(s.start, at); if (s.end > from) total += s.end - from; at = Math.max(at, s.end) }
+    return total
+  }
+  return {
+    round_ms: end - start,
+    // In the order the stages first started.
+    stages: [...by.entries()].map(([stage, list]) => ({ stage, ms: covered(list), spans: list.length, first_start_ms: Math.min(...list.map(s => s.start)) - start, last_end_ms: Math.max(...list.map(s => s.end)) - start })).sort((a, b) => a.first_start_ms - b.first_start_ms),
   }
 }
 

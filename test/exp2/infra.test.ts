@@ -42,13 +42,14 @@ describe("exp2 block 10b: infrastructure failures stop the run with their cause"
     const { serial, store } = serialIn(dir, { probes: refused })
     const out = await serial.run({ to: 1, wait: async () => assert.fail("not waited out") })
     assert.deepEqual([out.status, out.last_checkpoint, out.stopped?.round], ["stopped", 0, 1])
-    assert.match(out.stopped!.reason, /^unavailable: probes, round 1: 3 probe-writer calls failed; last: connect ECONNREFUSED/u)
+    // Groups are asked side by side: past the third failure no call is started, those in flight still fail.
+    assert.match(out.stopped!.reason, /^unavailable: probes, round 1: [3-9] probe-writer calls failed; last: connect ECONNREFUSED/u)
     const stop = JSON.parse(readFileSync(join(dir, "checkpoints", "stopped-round-01.json"), "utf8")) as { reason: string }
     assert.equal(stop.reason, out.stopped!.reason)
     assert.equal(store.inspect().reports.length, 0)
     // The failed calls are on record with the attempt (the checkpoint itself is restored without them).
     const attempt = serial.interruptedAttempts(1)[0]
-    assert.equal(attempt.probe_calls!.length, 3)
+    assert.ok(attempt.probe_calls!.length >= 3)
     assert.ok(attempt.probe_calls!.every(c => /ECONNREFUSED/u.test(c.error ?? "")))
   })
 
@@ -58,8 +59,8 @@ describe("exp2 block 10b: infrastructure failures stop the run with their cause"
     const { serial, store } = serialIn(dir, { judge: async () => { n++; throw new Error("socket hang up") } })
     const out = await serial.run({ to: 1, wait: async () => assert.fail("not waited out") })
     assert.equal(out.status, "stopped")
-    assert.match(out.stopped!.reason, /^unavailable: judge: 3 judge calls failed; last: socket hang up/u)
-    assert.equal(n, 3)
+    assert.match(out.stopped!.reason, /^unavailable: judge: [3-9] judge calls failed; last: socket hang up/u)
+    assert.ok(n >= 3 && n <= 3 + 3, `${n} calls`)
     assert.equal(store.inspect().reports.length, 0)
   })
 
@@ -105,7 +106,7 @@ describe("exp2 block 10b: infrastructure failures stop the run with their cause"
     const cli = resolve(".test-dist/src/cli/exp2-probe-detect.js")
     const r = spawnSync(process.execPath, [cli, "--config", join(dir, "config.json"), "--state", join(dir, "src-store", "exp2-state.json"), "--products", join(dir, "products.tsv"), "--out", join(dir, "out")], { encoding: "utf8" })
     assert.notEqual(r.status, 0)
-    assert.match(r.stderr, /probe writing: 3 probe-writer calls failed; last: .*(ECONNREFUSED|fetch failed|connect)/su)
+    assert.match(r.stderr, /probe writing: [3-9] probe-writer calls failed; last: .*(ECONNREFUSED|fetch failed|connect)/su)
     assert.ok(!existsSync(join(dir, "out", "detect.md")), "no result file")
     assert.ok(existsSync(join(dir, "rec", "deep", "cassette.json")), "the recording's directory was made")
     // An unwritable recording stops it before any call.

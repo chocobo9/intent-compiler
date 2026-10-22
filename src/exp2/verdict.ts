@@ -136,6 +136,8 @@ function hasLiteral(literals: Set<string>, name: string): boolean {
 
 /** A Go panic or runtime error with its goroutine trace, or a run ended by a signal: the program broke. */
 export function crashed(out: RunOutput): string | null {
+  // Stopped at a memory or output limit: the program's doing on this input, as a crash is (a time limit is a timeout).
+  if (out.limit && out.limit.kind !== "time") return `stopped: ${out.limit.detail}`
   const text = `${out.stderr}\n${out.stdout}`
   const m = /^(panic: .*|fatal error: .*)$/mu.exec(text)
   if (m && /goroutine \d+ \[/u.test(text)) return m[1].slice(0, 200)

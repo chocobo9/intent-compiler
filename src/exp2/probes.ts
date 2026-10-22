@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
 import { AuthInvalid, QuotaExhausted, ReplayMiss, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
 import { EnvironmentBlocked } from "./platform.js"
+import { mapPool } from "./pool.js"
 import { coverage, EMPTY_CHECKS, replacedBasis } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef, RunOutput } from "./runner.js"
@@ -323,11 +324,13 @@ type GroupAsk = { kind: "write" } | { kind: "strengthen"; weak: string[]; existi
  * problems code found. A transport failure is retried without using up a repair (TRANSPORT_RETRIES per call of
  * this function's caller); a strengthening request says what the measure found weak and gives the existing probes.
  */
-async function askGroup(transport: ProbeTransport, round: number, sources: string, group: GroupUnit[], gi: number, ask: GroupAsk, options: { maxRepairs: number; callId: (n: number) => string }, calls: ProbeCallRecord[], failures: { n: number }): Promise<{ answer: ProbesAnswer | null; checked: ReturnType<typeof probeProblems> | null; call: string } | { interrupted: { code: string; message: string } }> {
+async function askGroup(transport: ProbeTransport, round: number, sources: string, group: GroupUnit[], gi: number, ask: GroupAsk, options: { maxRepairs: number; callId: (n: number) => string }, calls: ProbeCallRecord[], failures: { n: number; last?: string }): Promise<{ answer: ProbesAnswer | null; checked: ReturnType<typeof probeProblems> | null; call: string } | { interrupted: { code: string; message: string } }> {
   const units = group.map(u => ({ id: u.id, text: u.text, ...(u.cases.length ? { cases: u.cases.map(c => ({ id: c.id, text: c.text })) } : {}) }))
   const strengthen = ask.kind === "strengthen"
   let answer: ProbesAnswer | null = null, checked: ReturnType<typeof probeProblems> | null = null, call = "", lastBad = ""
   for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
+    // Another group already found the writer unavailable: no new call is started.
+    if (failures.n > TRANSPORT_RETRIES) return { interrupted: { code: "unavailable", message: `${failures.n} probe-writer calls failed; last: ${failures.last}` } }
     const opening = strengthen ? { existing: ask.existing, problems: ask.weak, task: "Add probes so that each listed weakness is removed; return only the new probes." } : {}
     const repair = answer && checked ? { previous_answer: answer, problems: [...(strengthen ? ask.weak : []), ...checked.problems.map(p => p.message)], task: strengthen ? "Fix exactly these problems and return the whole set of new probes." : "Fix exactly these problems and return the whole answer for this group." } : lastBad ? { problems: [lastBad], task: "Return one JSON object matching the schema." } : {}
     const request: ProbeRequest = { round, sources, units, ...opening, ...repair }
@@ -339,7 +342,8 @@ async function askGroup(transport: ProbeTransport, round: number, sources: strin
       calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
       if (e instanceof QuotaExhausted || e instanceof AuthInvalid) return { interrupted: { code: e instanceof AuthInvalid ? "auth" : "quota", message: (e as Error).message } }
       // A transport failure is no answer: retried without using up a repair, and past the limit the writer is unavailable.
-      if (++failures.n > TRANSPORT_RETRIES) return { interrupted: { code: "unavailable", message: `${failures.n} probe-writer calls failed; last: ${(e as Error).message}` } }
+      failures.last = (e as Error).message
+      if (++failures.n > TRANSPORT_RETRIES) return { interrupted: { code: "unavailable", message: `${failures.n} probe-writer calls failed; last: ${failures.last}` } }
       attempt--
       continue
     }
@@ -367,19 +371,30 @@ function admit(answer: ProbesAnswer, checked: ReturnType<typeof probeProblems>, 
   }
 }
 
+/** Groups asked side by side; each group's requests are what they would be one after another. */
+export const GROUP_CONCURRENCY = 3
+
 /** Writes the probes for `units`, a group of GROUP_SIZE at a time, each with up to `maxRepairs` repairs. */
-export async function deriveProbes(registry: Registry, round: number, units: readonly string[], transport: ProbeTransport, options: { maxRepairs: number; callId: (n: number) => string }): Promise<DerivedProbes> {
+export async function deriveProbes(registry: Registry, round: number, units: readonly string[], transport: ProbeTransport, options: { maxRepairs: number; callId: (n: number) => string; concurrency?: number }): Promise<DerivedProbes> {
   const sources = sourcesUpTo(registry, round)
-  const calls: ProbeCallRecord[] = []
   const out: Omit<DerivedProbes, "status" | "calls"> = { probes: [], covered: [], uncheckable: [], uncovered: [], dropped: [], cases: { total: 0, covered: 0, excused: 0, open: [] } }
   const groups: GroupUnit[][] = []
   for (let i = 0; i < units.length; i += GROUP_SIZE) groups.push(units.slice(i, i + GROUP_SIZE).map(id => groupUnit(registry, id)))
-  const failures = { n: 0 }
+  const failures: { n: number; last?: string } = { n: 0 }
+  // Each group keeps its own calls (provisional ids); ids in the record follow group order, as one after another.
+  const asked = await mapPool(groups, options.concurrency ?? GROUP_CONCURRENCY, async (group, gi) => {
+    const calls: ProbeCallRecord[] = []
+    const r = await askGroup(transport, round, sources, group, gi, { kind: "write" }, { ...options, callId: n => `~g${gi}.${n}` }, calls, failures)
+    return { r, calls }
+  })
+  const calls = asked.flatMap(a => a.calls)
+  const ids = new Map(calls.map((c, i) => [c.id, options.callId(i + 1)]))
+  for (const c of calls) c.id = ids.get(c.id)!
   for (const [gi, group] of groups.entries()) {
     out.cases.total += group.reduce((n, u) => n + u.cases.length, 0)
-    const r = await askGroup(transport, round, sources, group, gi, { kind: "write" }, options, calls, failures)
+    const r = asked[gi].r
     if ("interrupted" in r) return { status: "interrupted", ...out, calls, issues: [r.interrupted] }
-    const { answer, checked, call } = r
+    const { answer, checked } = r, call = ids.get(r.call) ?? r.call
     if (!answer || !checked) { out.uncovered.push(...group.map(u => u.id)); out.cases.open.push(...group.flatMap(u => u.cases.map(c => c.id))); continue }
     admit(answer, checked, round, gi, call, "g", out)
     out.covered.push(...group.filter(u => checked.covered.has(u.id)).map(u => u.id))
@@ -401,7 +416,7 @@ export async function strengthenProbes(registry: Registry, round: number, weak: 
   const sources = sourcesUpTo(registry, round)
   const calls: ProbeCallRecord[] = []
   const out = { probes: [] as Omit<ProbeRecord, "id">[], dropped: [] as { key: string; problems: string[] }[] }
-  const failures = { n: 0 }
+  const failures: { n: number; last?: string } = { n: 0 }
   for (const [gi, w] of weak.entries()) {
     const group = w.units.map(id => groupUnit(registry, id))
     const mine = existing.filter(p => p.covers.some(c => w.units.includes(c.unit))).map(p => ({ id: p.key, args: p.args, files: p.files, invalid_on_purpose: p.invalid_on_purpose, covers: p.covers }))
@@ -414,7 +429,8 @@ export async function strengthenProbes(registry: Registry, round: number, weak: 
 
 // ---------------------------------------------------------------- running
 
-export interface ProbeOutput { exit_code: number | null; timed_out: boolean; stdout: string; stderr: string; files: Record<string, string> }
+/** stopped: the controller stopped the program at a limit on this input (memory, time, output), and how. */
+export interface ProbeOutput { exit_code: number | null; timed_out: boolean; stdout: string; stderr: string; files: Record<string, string>; stopped?: string }
 
 export interface ProbeRun { probe: string; output: ProbeOutput }
 
@@ -424,11 +440,12 @@ const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…(${s.l
 export function normalizeOutput(out: RunOutput, inputs: readonly { path: string; content: string }[]): ProbeOutput {
   const given = new Map(inputs.map(f => [f.path, f.content]))
   const files = Object.fromEntries(Object.entries(out.files).filter(([p, c]) => !p.startsWith("__") && given.get(p) !== c).sort(([a], [b]) => a < b ? -1 : 1).map(([p, c]) => [p, clip(c.replace(/\r/gu, ""), 1500)]))
-  return { exit_code: out.exit_code, timed_out: out.timed_out, stdout: clip(out.stdout.replace(/\r/gu, ""), 1500), stderr: clip(out.stderr.replace(/\r/gu, ""), 1500), files }
+  return { exit_code: out.exit_code, timed_out: out.timed_out, stdout: clip(out.stdout.replace(/\r/gu, ""), 1500), stderr: clip(out.stderr.replace(/\r/gu, ""), 1500), files, ...(out.limit ? { stopped: `${out.limit.kind} limit: ${out.limit.detail}` } : {}) }
 }
 
-export async function runProbes(probes: readonly ProbeRecord[], program: ProgramRef, runner: CheckRunner, timeoutMs: number): Promise<ProbeRun[]> {
-  const runs: ProbeRun[] = []
-  for (const p of probes) runs.push({ probe: p.id, output: normalizeOutput(await runner.run(program, { args: p.args, files: p.files }, timeoutMs), p.files) })
-  return runs
+/** Probes run side by side (each in its own directory or container, within its resource limits), results in probe order. */
+export const PROBE_CONCURRENCY = 4
+
+export async function runProbes(probes: readonly ProbeRecord[], program: ProgramRef, runner: CheckRunner, timeoutMs: number, concurrency = PROBE_CONCURRENCY): Promise<ProbeRun[]> {
+  return mapPool(probes, concurrency, async p => ({ probe: p.id, output: normalizeOutput(await runner.run(program, { args: p.args, files: p.files }, timeoutMs), p.files) }))
 }

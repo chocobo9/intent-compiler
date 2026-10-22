@@ -5,19 +5,19 @@ import { existsSync, readFileSync } from "node:fs"
 import { isAbsolute, join, posix, relative, resolve, win32 } from "node:path"
 import type { OpenCodeModelClient } from "../model/opencode-transport.js"
 import { GoAnchorExtractor } from "./anchors.js"
-import { binaryFromSource, goBuilder } from "./build.js"
-import { dockerGoBuilder, DockerRunner, DockerScriptSandbox, type DockerOptions } from "./docker.js"
+import { binaryFromSource, goBuilder, goBuilderAsync } from "./build.js"
+import { dockerGoBuilder, dockerGoBuilderAsync, DockerRunner, DockerScriptSandbox, type DockerOptions } from "./docker.js"
 import { DEFAULT_LIMITS, type ExecutionLimits } from "./execution.js"
 import { OpenCodeExecutor, type OpenCodeCodingClient } from "./opencode-executor.js"
 import type { PlatformOptions } from "./platform.js"
-import { LocalProcessRunner, LocalScriptSandbox } from "./runner.js"
+import { DEFAULT_RESOURCE_LIMITS, LocalProcessRunner, LocalScriptSandbox, type ResourceLimits } from "./runner.js"
 import { Serial, type SerialConfig } from "./serial.js"
 import { Exp2Store } from "./store.js"
 import type { AttributionTransport } from "./attribution.js"
 import type { ChecksTransport } from "./checks.js"
 import type { AdjudicationTransport } from "./adjudication.js"
 import { emptyCassette, loadCassette, recordingTransports, saveCassette } from "./recording.js"
-import type { ProbeTransport } from "./probes.js"
+import { PROBE_CONCURRENCY, type ProbeTransport } from "./probes.js"
 import type { JudgeTransport } from "./judge.js"
 import { createOpenCodeJudgeTransport, createOpenCodeProbesTransport, createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
 
@@ -56,9 +56,12 @@ export interface LocalConfig {
     probe_repairs?: number
     /** Mutants the discrimination measure runs a round at most (default 20; 0 switches it off). */
     mutants?: number
+    /** Probe runs side by side (default 4); each run is within the runner's resource limits. */
+    probe_concurrency?: number
     execution?: Partial<ExecutionLimits>
   }
-  runner: { kind: "local" } | ({ kind: "docker"; docker?: string[] } & Omit<DockerOptions, "docker">)
+  /** `limits`: resource limits on the program under test (BLOCK10 §9.2; defaults DEFAULT_RESOURCE_LIMITS). */
+  runner: { kind: "local"; limits?: Partial<ResourceLimits> } | ({ kind: "docker"; docker?: string[] } & Omit<DockerOptions, "docker">)
   tools?: { python?: string; go?: string }
   resume?: { wait_ms?: number; max_resumes?: number }
   /** Waits before retrying a rate-limited call; when they run out the call counts as a spent quota. */
@@ -214,9 +217,10 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
     executor: () => new OpenCodeExecutor({ client: coding, providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant, agent: c.coding.agent, rateLimit }),
     executorIsStub: false,
     anchors: new GoAnchorExtractor(undefined, platform),
-    runner: docker ? new DockerRunner(docker) : new LocalProcessRunner(platform),
+    runner: docker ? new DockerRunner(docker) : new LocalProcessRunner(platform, { ...DEFAULT_RESOURCE_LIMITS, ...c.runner.limits }),
     sandbox: docker ? new DockerScriptSandbox(docker) : new LocalScriptSandbox(platform),
     build: docker ? dockerGoBuilder(at(c.builds_dir), docker, undefined, binary) : goBuilder(at(c.builds_dir), platform, binary),
+    buildAsync: docker ? dockerGoBuilderAsync(at(c.builds_dir), docker, undefined, binary) : goBuilderAsync(at(c.builds_dir), platform, binary),
     limits: {
       attributionRepairs: c.limits?.attribution_repairs ?? 2,
       checkRepairs: c.limits?.check_repairs ?? 2,
@@ -224,6 +228,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       checkTimeoutMs: c.limits?.check_timeout_ms ?? 60_000,
       probeRepairs: c.limits?.probe_repairs ?? 2,
       mutants: c.limits?.mutants ?? 20,
+      probeConcurrency: c.limits?.probe_concurrency ?? PROBE_CONCURRENCY,
       execution: { ...DEFAULT_LIMITS, ...c.limits?.execution },
     },
     ...(c.scoring ? { score: scoringHook(c.scoring.command, at(c.repo_dir)) } : {}),

@@ -51,8 +51,8 @@ function serialIn(dir: string, faults: Faults = {}, fired = new Set<string>()) {
 const reports = (dir: string, round: number): RoundReport => JSON.parse(readFileSync(join(dir, "checkpoints", `round-${String(round).padStart(2, "0")}`, "report.json"), "utf8")) as RoundReport
 const meta = (dir: string, round: number) => JSON.parse(readFileSync(join(dir, "checkpoints", `round-${String(round).padStart(2, "0")}`, "meta.json"), "utf8")) as { head: string }
 const tree = (dir: string, commit: string) => git(join(dir, "work"), ["rev-parse", `${commit}^{tree}`]).trim()
-/** The state without what only an interrupted run has (its reports count the interrupted attempts). */
-const comparable = (state: Exp2State) => ({ ...state, reports: state.reports.map(r => ({ ...r, interrupted: null })) })
+/** The state without what only an interrupted run has (its reports count the interrupted attempts), and wall times. */
+const comparable = (state: Exp2State) => ({ ...state, reports: state.reports.map(r => ({ ...r, interrupted: null, wall: null })) })
 
 describe("exp2 block 5: the serial R1–R15 with stand-in model and executor", () => {
   const a = mkdtempSync(join(tmpdir(), "exp2-serial-a-"))

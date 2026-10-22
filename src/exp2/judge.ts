@@ -2,6 +2,7 @@ import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
 import { AuthInvalid, QuotaExhausted, ReplayMiss, RoleUnavailable, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
 import { EnvironmentBlocked } from "./platform.js"
+import { mapPool } from "./pool.js"
 import type { ProbeOutput, ProbeRecord, ProbeRun } from "./probes.js"
 import { sourcesUpTo } from "./probes.js"
 import type { Registry } from "./registry.js"
@@ -76,7 +77,7 @@ export const JUDGE_SCHEMA = {
 }
 
 export const JUDGE_SYSTEM_PROMPT = [
-  "You judge whether a command-line program follows its requirements. Each item is one run: the requirement units it exercises (exact text, with ids), the call and its input files, and what the program actually did (exit code, stdout, stderr, and the files it created or changed). `sources` holds the whole requirements for context, annotated with block ids; newer text overrides older text.",
+  "You judge whether a command-line program follows its requirements. Each item is one run: the requirement units it exercises (exact text, with ids), the call and its input files, and what the program actually did (exit code, stdout, stderr, the files it created or changed, and `stopped` when the controller stopped it at a memory, time or output limit on this input). `sources` holds the whole requirements for context, annotated with block ids; newer text overrides older text.",
   "For every unit of every item decide:",
   "- ok: the output follows the unit as far as this run shows;",
   "- wrong: the output contradicts what the unit's text requires; say what the text requires and what happened;",
@@ -115,9 +116,13 @@ export function judgeProblems(answer: unknown, items: readonly JudgeItem[]): { p
   return { problems, verdicts }
 }
 
+/** Judge batches asked side by side. */
+export const JUDGE_CONCURRENCY = 3
+
 export interface JudgeOptions {
   callId: (n: number) => string
   batchSize?: number
+  concurrency?: number
   /** Objections to earlier "wrong" verdicts, by probe/unit: those pairs are judged again with the objection. */
   contests?: ReadonlyMap<string, string>
 }
@@ -151,38 +156,49 @@ export async function judgeRuns(registry: Registry, round: number, probes: reado
   }
   const sources = pending.length ? sourcesUpTo(registry, round) : ""
   const size = options.batchSize ?? 25
-  let transportFailures = 0
-  for (let i = 0; i < pending.length; i += size) {
-    const batch = pending.slice(i, i + size)
-    let ask = batch.map(b => b.item)
+  const failures = { n: 0 }
+  const batches: (typeof pending)[] = []
+  for (let i = 0; i < pending.length; i += size) batches.push(pending.slice(i, i + size))
+  // Batches are asked side by side, each in its own session; a batch still never holds two outputs of one probe.
+  const results: { calls: JudgeCallRecord[]; answered: Map<string, { verdict: Verdict; reason: string; call: string }> }[] = new Array(batches.length)
+  let unavailable: RoleUnavailable | null = null
+  await mapPool(batches, options.concurrency ?? JUDGE_CONCURRENCY, async (batch, bi) => {
+    const mine: JudgeCallRecord[] = []
     const answered = new Map<string, { verdict: Verdict; reason: string; call: string }>()
-    for (let attempt = 1; attempt <= 2 && ask.length; attempt++) {
+    results[bi] = { calls: mine, answered }
+    let ask = batch.map(b => b.item)
+    for (let attempt = 1; attempt <= 2 && ask.length && !unavailable; attempt++) {
       const request: JudgeRequest = { round, sources, items: ask, ...(attempt > 1 ? { problems: [`Answer only these items; earlier verdicts were missing or invalid.`] } : {}) }
       const text = requestJson(request)
-      const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "judge" as const, items: ask.length, request_sha256: createHash("sha256").update(text).digest("hex"), request_chars: text.length }
+      const base = { id: `~b${bi}.${mine.length + 1}`, round, stage: "acceptance" as const, step: "judge" as const, items: ask.length, request_sha256: createHash("sha256").update(text).digest("hex"), request_chars: text.length }
       let reply: ModelReply
       try { reply = await transport(request) } catch (e) {
         if (e instanceof ReplayMiss || e instanceof QuotaExhausted || e instanceof AuthInvalid || e instanceof EnvironmentBlocked) throw e
-        calls.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
+        mine.push({ ...base, response_text: "", problems: [], usage: zero(), stub: false, error: (e as Error).message })
         // No verdict is no "cannot tell": retried without using up an attempt, then the judge is unavailable.
-        if (++transportFailures > TRANSPORT_RETRIES) throw new RoleUnavailable("judge", `${transportFailures} judge calls failed; last: ${(e as Error).message}`, calls)
+        if (++failures.n > TRANSPORT_RETRIES) { unavailable ??= new RoleUnavailable("judge", `${failures.n} judge calls failed; last: ${(e as Error).message}`); return }
         attempt--
         continue
       }
       let parsed: unknown = null
       try { parsed = JSON.parse(reply.text) } catch { parsed = null }
       const checked = parsed === null ? { problems: ["the reply is not JSON"], verdicts: new Map<string, { verdict: Verdict; reason: string }>() } : judgeProblems(parsed, ask)
-      calls.push({ ...base, response_text: reply.text, problems: checked.problems, usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) })
+      mine.push({ ...base, response_text: reply.text, problems: checked.problems, usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) })
       for (const [k, v] of checked.verdicts) answered.set(k, { ...v, call: base.id })
       // Ask again for what is still missing, each item with only its unanswered units.
       ask = ask.map(it => ({ ...it, units: it.units.filter(u => !answered.has(`${it.item}\u0000${u.id}`)) })).filter(it => it.units.length)
     }
-    for (const b of batch) for (const u of b.item.units) {
-      const v = answered.get(`${b.item.item}\u0000${u.id}`)
-      if (!v) { findings.push({ probe: b.probe, unit: u.id, verdict: "cannot_tell", reason: "no verdict came back", cached: false }); continue }
-      findings.push({ probe: b.probe, unit: u.id, verdict: v.verdict, reason: v.reason, cached: false })
-      judgments.push({ key: b.keys.get(u.id)!, probe: b.probe, unit: u.id, verdict: v.verdict, reason: v.reason, round, call: v.call, ...(b.item.contest ? { contested: true } : {}) })
-    }
+  })
+  // Call ids follow batch order, as when the batches were asked one after another.
+  calls.push(...results.flatMap(r => r?.calls ?? []))
+  const ids = new Map(calls.map((c, i) => [c.id, options.callId(i + 1)]))
+  for (const c of calls) c.id = ids.get(c.id)!
+  if (unavailable) throw new RoleUnavailable("judge", (unavailable as RoleUnavailable).message.replace(/^judge: /u, ""), calls)
+  for (const [bi, batch] of batches.entries()) for (const b of batch) for (const u of b.item.units) {
+    const v = results[bi].answered.get(`${b.item.item}\u0000${u.id}`)
+    if (!v) { findings.push({ probe: b.probe, unit: u.id, verdict: "cannot_tell", reason: "no verdict came back", cached: false }); continue }
+    findings.push({ probe: b.probe, unit: u.id, verdict: v.verdict, reason: v.reason, cached: false })
+    judgments.push({ key: b.keys.get(u.id)!, probe: b.probe, unit: u.id, verdict: v.verdict, reason: v.reason, round, call: ids.get(v.call)!, ...(b.item.contest ? { contested: true } : {}) })
   }
   return { findings, judgments, calls }
 }

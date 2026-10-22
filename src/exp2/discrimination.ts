@@ -2,6 +2,7 @@ import { rmSync } from "node:fs"
 import { anchorNames } from "./execution.js"
 import type { Anchor } from "./anchors.js"
 import type { BuildResult } from "./execution.js"
+import { mapPool } from "./pool.js"
 import { applyMutation, mutationSites, type MutationSite } from "./mutation.js"
 import type { PlatformOptions } from "./platform.js"
 import { runProbes, type ProbeOutput, type ProbeRecord } from "./probes.js"
@@ -40,6 +41,9 @@ export interface Discrimination {
 
 export interface DiscriminationDeps {
   build: (dir: string, label: string) => BuildResult
+  /** A non-blocking build: with it, mutants are built and run `concurrency` at a time (default MUTANT_CONCURRENCY). */
+  buildAsync?: (dir: string, label: string) => Promise<BuildResult>
+  concurrency?: number
   runner: CheckRunner
   registry: Registry
   anchors: readonly Anchor[]
@@ -55,6 +59,12 @@ export interface DiscriminationDeps {
 const TIME = /\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?/gu
 /** An output as compared: timestamps blanked, as the judge's kept verdicts are. */
 const steady = (o: ProbeOutput) => JSON.stringify(o).replace(TIME, "<time>")
+
+/** Mutants built and run side by side, and probes per mutant at a time: at most 2 × 2 programs under test at once. */
+export const MUTANT_CONCURRENCY = 2
+const PROBES_PER_MUTANT = 2
+
+const buildOf = (deps: DiscriminationDeps) => deps.buildAsync ?? (async (dir: string, label: string) => deps.build(dir, label))
 
 /** How a mutant changed the program, in words the writer can use without seeing the code. */
 export function describeSite(site: MutationSite): string {
@@ -88,17 +98,16 @@ export async function discriminate(source: string, program: ProgramRef, probes: 
   for (let k = 0; chosen.length < deps.max && [...queues.values()].some(q => q.length > k); k++) for (const q of queues.values()) if (q[k] && chosen.length < deps.max) chosen.push(q[k])
   const relevant = (objects: string[]) => [...new Set(objects.flatMap(o => probesOf.get(o) ?? []))]
   const baseline = new Map((await runProbes(relevant([...queues.keys()]), program, deps.runner, deps.timeoutMs)).map(r => [r.probe, steady(r.output)]))
-  const mutants: MutantOutcome[] = []
-  for (const x of chosen) {
+  const mutants: MutantOutcome[] = await mapPool(chosen, deps.buildAsync ? deps.concurrency ?? MUTANT_CONCURRENCY : 1, async x => {
     const dir = applyMutation(source, x.site)
     try {
-      const built = deps.build(dir, `mutant-${x.site.id}`)
-      if (!built.ok) { mutants.push({ site: x.site, anchor: x.anchor?.id ?? null, objects: x.objects, status: "build_failed", killed_by: [] }); continue }
-      const runs = await runProbes(relevant(x.objects), built.program!, deps.runner, deps.timeoutMs)
+      const built = await buildOf(deps)(dir, `mutant-${x.site.id}`)
+      if (!built.ok) return { site: x.site, anchor: x.anchor?.id ?? null, objects: x.objects, status: "build_failed" as const, killed_by: [] }
+      const runs = await runProbes(relevant(x.objects), built.program!, deps.runner, deps.timeoutMs, PROBES_PER_MUTANT)
       const killed_by = runs.filter(r => steady(r.output) !== baseline.get(r.probe)).map(r => r.probe)
-      mutants.push({ site: x.site, anchor: x.anchor?.id ?? null, objects: x.objects, status: killed_by.length ? "killed" : "survived", killed_by })
+      return { site: x.site, anchor: x.anchor?.id ?? null, objects: x.objects, status: killed_by.length ? "killed" as const : "survived" as const, killed_by }
     } finally { rmSync(dir, { recursive: true, force: true }) }
-  }
+  })
   const counts = { killed: mutants.filter(m => m.status === "killed").length, survived: mutants.filter(m => m.status === "survived").length, build_failed: mutants.filter(m => m.status === "build_failed").length }
   const weak: WeakSpot[] = []
   for (const object of [...new Set(mutants.filter(m => m.status === "survived").flatMap(m => m.objects))]) {
@@ -121,15 +130,14 @@ export async function remeasure(source: string, program: ProgramRef, probes: rea
   if (!survivors.length) return { still: [], killed: [] }
   const relevant = (objects: string[]) => probes.filter(p => p.covers.some(c => objects.includes(owner(c.unit) ?? "")))
   const baseline = new Map((await runProbes(relevant([...new Set(survivors.flatMap(m => m.objects))]), program, deps.runner, deps.timeoutMs)).map(r => [r.probe, steady(r.output)]))
-  const still: string[] = [], killed: string[] = []
-  for (const m of survivors) {
+  const told = await mapPool(survivors, deps.buildAsync ? deps.concurrency ?? MUTANT_CONCURRENCY : 1, async m => {
     const dir = applyMutation(source, m.site)
     try {
-      const built = deps.build(dir, `mutant-${m.site.id}-again`)
-      if (!built.ok) continue
-      const runs = await runProbes(relevant(m.objects), built.program!, deps.runner, deps.timeoutMs)
-      ;(runs.some(r => steady(r.output) !== baseline.get(r.probe)) ? killed : still).push(m.site.id)
+      const built = await buildOf(deps)(dir, `mutant-${m.site.id}-again`)
+      if (!built.ok) return null
+      const runs = await runProbes(relevant(m.objects), built.program!, deps.runner, deps.timeoutMs, PROBES_PER_MUTANT)
+      return runs.some(r => steady(r.output) !== baseline.get(r.probe))
     } finally { rmSync(dir, { recursive: true, force: true }) }
-  }
-  return { still, killed }
+  })
+  return { still: survivors.filter((_, i) => told[i] === false).map(m => m.site.id), killed: survivors.filter((_, i) => told[i] === true).map(m => m.site.id) }
 }

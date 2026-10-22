@@ -104,7 +104,7 @@ export interface DetectedProduct {
  * the discrimination measure on the product and the strengthening it calls for (when `mutants` > 0), and the runs
  * and the judge. A product never benefits from another's mutants or verdicts, as a round has only its own program.
  */
-export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport; root: string; anchors?: AnchorExtractor; mutants?: number; platform?: PlatformOptions; maxRepairs?: number }, products: readonly Product[], round = 1): Promise<{ written: ProbeRoundRecord | null; products: DetectedProduct[] }> {
+export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport; root: string; anchors?: AnchorExtractor; mutants?: number; platform?: PlatformOptions; maxRepairs?: number; buildAsync?: (dir: string, label: string) => Promise<BuildResult> }, products: readonly Product[], round = 1): Promise<{ written: ProbeRoundRecord | null; products: DetectedProduct[] }> {
   const base = deps.store
   const written = base.inspect().probe_rounds.some(r => r.round === round && r.status === "accepted") ? null : await base.deriveRoundProbes(round, deps.probes)
   // A writer that could not be reached, or wrote nothing usable, is no result: the harness stops with the cause.
@@ -121,7 +121,7 @@ export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport; 
     let measure: DetectedProduct["measure"] = null
     if ((deps.mutants ?? 0) > 0 && deps.anchors) {
       const calls0 = store.inspect().probe_calls.length
-      const md = { build: deps.build, runner: deps.runner, registry: store.registry(), anchors: deps.anchors.extract(p.path), links: [], timeoutMs: deps.timeoutMs, max: deps.mutants!, platform: deps.platform }
+      const md = { build: deps.build, ...(deps.buildAsync ? { buildAsync: deps.buildAsync } : {}), runner: deps.runner, registry: store.registry(), anchors: deps.anchors.extract(p.path), links: [], timeoutMs: deps.timeoutMs, max: deps.mutants!, platform: deps.platform }
       const s0 = store.inspect()
       const d = await discriminate(p.path, b.program!, activeProbes(s0.probes, s0.probe_events).filter(x => x.round <= p.round), md)
       let entered: string[] = [], after: { still: string[]; killed: string[] } | null = null
