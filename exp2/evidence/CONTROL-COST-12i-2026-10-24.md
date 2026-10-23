@@ -13,7 +13,7 @@ is the reviewer. Token cells in §17 are rounded to 0.01M, so each figure carrie
 §12i compares IC (exec low) with L: use L rep1 and rep2, mean 8.15 M for R5–R15. Verdict: IC/control ≤ 0.5 (≤ 4.1 M) and
 R15 ≥ 948/960 → win; ≥ 0.8 (≥ 6.5 M) or below the threshold → fail; between → unproven.
 
-For scale: the all-scope ic15 run (fe6562d) spent, per round, R1 0.56 M, R2 0.67 M, R3 0.70 M non-executor (reviewer +
+For scale: the all-scope ic15 run (fe6562d) spent, per round, R1 0.49 M, R2 0.60 M, R3 0.69 M non-executor (reviewer +
 formalizer + checks + attribution; adjudication's 115k over three rounds not included) against the control's
 0.5–0.6 M per round in R1–R4. The delta-scope run is expected to lower the reviewer's and formalizer's share.
 
