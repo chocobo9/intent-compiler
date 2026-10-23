@@ -178,7 +178,7 @@
 
 （修正块起按本节；旧版的四步并入下面。）
 
-1. **构建与离线测试**：拉取本分支到新工作树，`npm ci && npm test`。预期 946 项、939 通过、6 跳过、1 失败（原有的 `repair-batch`）。
+1. **构建与离线测试**：拉取本分支到新工作树，`npm ci && npm test`。预期（批 1 收尾之后，22.9）：954 项、952 通过、1 跳过、1 失败（原有的 `repair-batch`，缺 `development/validation/2026-09-24-repair-batch/` 下的文件）。这是 Linux 上的预期，本地尚未在 Linux 上实测。Windows 本机不能当门禁：Go 要在 PATH 上（不在时 70 项失败），即使在，智能应用控制也会随机拦新建的 exe（TEMP 改到 D 盘也拦），另有写死 `python3`、`sh`、内存上限、CRLF 的环境失败，见 22.9。
 2. **配置**：照 `exp2/local-config.example.json`。`coding.variant` 按比较口径设 low；`roles.review`、`roles.formalize` 为 gpt-5.6-luna-fast medium。`acceptance` 里修正块的项，默认即修正块的行为，不写也一样：
    - `premise_block: ["unit_not_in_force", "not_reproduced", "input_claim_false"]`（A3）
    - `fallback: "items"`（A1；`off` 是 29158c1 的行为，`review` 是 A1 字面）
@@ -196,7 +196,7 @@
    - **对照材料**：本次的审查会话可以从 OpenCode 导出，与 `exp2/evidence/replay-2026-10-23/sessions/` 对照：`materials.files` 应能覆盖审查员写过的全部文件。
 4. **冻结产物的离线回放（A3 验收）**：
    ```
-   intent-exp2-replay --config <配置> --products <list.tsv> --out <目录-k> --mode review --defects <缺陷表>
+   intent-exp2-replay --config <配置> --products <list.tsv> --out <目录-k> --defects <缺陷表>
    ```
    `replay.md` 的总表并列 strict（每个前提都挡，第 12 块）和 tiers（档位加退化）；缺陷表一节有 raw / strict / tiers 三列命中数，以及干净产物上三列的条目数。判定：tiers 命中数等于 raw，干净产物条目数 tiers < raw。每份产物 `products/<name>/review.md` 有逐条的 tiers 结局、strict 前提、挡下或记日志的原因。
 5. **15 轮 ×2**：每次 `intent-exp2-serial --config <配置>`（各用自己的 state、checkpoints、OpenCode 服务和缓存键），跑完后
@@ -791,3 +791,67 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 5. 未做、留给批 2：回放的 strict 列（前提降为记录）。
 
 **新的配置项**：`acceptance.workorder_scope`（delta/all）、`review_scope`（delta/full）、`coverage_obligation`（默认 false）；`resume.environment_wait_ms`（批 4）。
+
+### 22.9 批 1 收尾（本地，2026-10-24）
+
+只动了测试、固定材料和本文件，`src` 未改。
+
+**1. 全量 `npm test`（bcb3fbb，Windows 本机）**
+- Go 不在 PATH：950 项，879 通过，1 跳过，70 失败。绝大多数是 `spawnSync go ENOENT`。
+- Go 在 PATH：950 项，938 通过，1 跳过，11 失败。逐项归类：
+
+| 失败 | 原因 | 类别 |
+|---|---|---|
+| block11 §4、block12 E1 两项 | 测试写死 `python3`，Windows 上是应用商店占位程序 | 环境 |
+| block11 §1 批量脚本、block12 E4 docker 批量覆盖 | 测试用 `sh` 跑 batch.sh | 环境 |
+| block10c 内存上限 | Windows 上没有常驻内存上限，20 秒超时先到 | 环境 |
+| batch C effect 1 "the model hears what the script printed" | Windows 上 python 输出 `\r\n`，断言写的是 `\n` | 环境 |
+| batch 4 "a review copy that cannot be made" | 路径的父级是文件：Linux 上 rmSync 报 ENOTDIR（"cannot be made"），Windows 上 rmSync 静默、mkdir 报 EEXIST（"cannot be cloned"）。两种都抛 `EnvironmentUnavailable`，只有消息不同 | 环境 |
+| block12 E4 "selection omission" | 云端 Linux 上通过（会话结果 exp2 261/1）；本机与覆盖率构建有关 | 环境 |
+| repair-batch "R3 original counterexample" | 缺 `development/validation/2026-09-24-repair-batch/turn-2-finding-counterexample.json` | 原有 |
+| serial "interrupted by spent quotas and a crash" | 测试本身，见下 | 修了 |
+
+- 另外，智能应用控制会随机拦截新建的 exe（`spawn UNKNOWN`），每次跑结果不同；把 TEMP 改到 D 盘也一样拦。所以本机的数只用来归类，门禁要看 Linux。
+
+**2. serial 中断续跑测试**
+- 现象：中断续跑的状态与不中断的状态比较时，有两处不同：
+  - `reports[].measures` 的 tokens、`non_executor_cost`、`wall_ms`、`stages_ms`；
+  - `review_calls[].session`。
+- 原因：
+  - 批 1 把额度注入挪到 R1 之后，R1 有了 measures。measures 按 §12i 计入被中断尝试的花费（`interrupted_management`、执行方多出的 1 次调用），时间本来就不同。这是设计如此。
+  - 替身审查员的会话编号是每个进程的计数器，第二个进程从 1 重新数。
+- 做法：`comparable` 把这些字段置空，其余逐字比较。中断花费的去向由同一测试后面的断言单独核对（R6、R12 的 `interrupted`）。
+- 验证：dump 两份状态逐行 diff（4.8 MB JSON），除了上面两处没有别的差异。修好之后，本机重跑时出现第三种差异：R13 替身审查员报 2 条、而不是 1 条。原因是替身审查员在 Temp 里跑新建的 exe 被拦，退出 1，于是多报了一条，被 not_reproduced 挡下。这是环境问题，Linux 上应当不出现，**尚未在 Linux 上实测**。
+
+**3. G77 的真实重放**（`test/exp2/g77-replay.test.ts`）
+- 材料：`exp2/evidence/replay-2026-10-23/g77-ic15-r3/`，取自 origin/exp2-pure-ic 上 ic15-all-scope 的 R3（运行 exp2-ic15-luna56-low-rep1-20261023，代码 fe6562d）。包括：
+  - R1–R3 的原文和归属（注册表由此重建）；
+  - R1–R3 的检查和检查事件；
+  - R1–R2 的 92 个守卫及其末状态；
+  - R3 三次审查和四次 formalizer 的真实回复；
+  - 四个真实程序：C3.1 work、C3.2–C3.4 三次修补的 main.go、go.mod，取自运行目录 app 仓库里的那些提交，被回退的提交也还在。
+- 验收（本机 4/4 通过，用本地 Go 构建，在主机上跑）：
+  - 材料就是那个案例：G77 在 R2 末尾是 passing；fe6562d 上三次修补都因 G77 回退。
+  - `changedTextBehind` 给出修订记录：`R2.S11.P5.s1` 和 `R2.S11.P6.s4` 被 R3.S3.P1–P3 部分修订。
+  - 在四个真实程序上跑 G77：pass、fail、fail、fail。
+  - 整轮重放：执行方按顺序写入四个真实程序，审查和 formalizer 用真实回复。结果：
+    - **reverted 0**，没有一个周期被回退；
+    - G77 在 C3.2 翻转，记为 `flipped_changed_text`，事件里带着上面两条修订记录；
+    - 执行方没有收到"reverted by the controller"；
+    - 下一次审查请求里有 G77 的问题；
+    - 本轮保留 C3.4，fe6562d 上保留的是 C3.1。
+  - G77 在 C3.3、C3.4 上仍然失败。这时它已经处在"等审查员确认"的状态，不再算翻转。真实回复里没有 SUPERSEDED G77，因为原运行从没问过审查员，所以它没有退役。
+- 同一次重放里的另一个观察：G84、G92 在首次交付 C3.1 翻转，记为 `flipped_disputed`。它们没有送修，也没有回退；原运行里是 `flipped_unchanged`。见 22.10。
+- 边界：第 2、3 次审查的真实回复，原本是对 C3.1 写的（原运行回退了）。这里拿来用在 C3.2、C3.3 上，只作为条目的来源，不评价审查员。
+
+**4. 第 14 节**：第 1 步的预期数字已回写；第 4 步的回放命令去掉了 `--mode review`。
+
+### 22.10 与 DESIGN §6b（30724cd）的出入（待定，未改实现）
+
+§6b 的权威表和守卫三条规则，对照批 1 现在的实现，有两处不一致：
+1. **`changedTextBehind` 自己补判断**。除了修订记录，它还认两条：
+   - 守卫依据的单位的对象本轮有改动（G77 的事件里第三条就是这个："O51 … changed this round"）；
+   - 对象名出现在守卫的输入里。
+
+   §6b 的权威表定了：句子有没有被取代，只读归属的修订记录。这两条属于"读的一方补判断"。G77 只靠修订记录就能分对。
+2. **原文未改、只有派生值不符的翻转记为 disputed**：不送修，也不回退，只作线索交给审查员。§6b 守卫规则 1 写的是：句子没改、守卫翻了，就是退化，必须修回；派生值守卫的退役同样只走修订记录。按规则 1，ic15 R3 的 G84、G92 应当送修，在修补周期里翻转时应当回退。

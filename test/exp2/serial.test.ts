@@ -53,7 +53,9 @@ const reports = (dir: string, round: number): RoundReport => JSON.parse(readFile
 const meta = (dir: string, round: number) => JSON.parse(readFileSync(join(dir, "checkpoints", `round-${String(round).padStart(2, "0")}`, "meta.json"), "utf8")) as { head: string }
 const tree = (dir: string, commit: string) => git(join(dir, "work"), ["rev-parse", `${commit}^{tree}`]).trim()
 /** The state without what only an interrupted run has (its reports count the interrupted attempts), and wall times. */
-const comparable = (state: Exp2State) => ({ ...state, reports: state.reports.map(r => ({ ...r, interrupted: null, wall: null })) })
+// Time, and the measures' tokens and cost, count the interrupted attempts too (§12i): they differ by design. The
+// stand-in reviewer numbers its sessions per process, so the resumed process starts again at 1.
+const comparable = (state: Exp2State) => ({ ...state, review_calls: state.review_calls.map(r => ({ ...r, session: null })), reports: state.reports.map(r => ({ ...r, interrupted: null, wall: null, ...(r.measures ? { measures: { ...r.measures, wall_ms: null, stages_ms: null, tokens: null, non_executor_cost: null } } : {}) })) })
 
 describe("exp2 block 5: the serial R1–R15 with stand-in model and executor", () => {
   const a = mkdtempSync(join(tmpdir(), "exp2-serial-a-"))
