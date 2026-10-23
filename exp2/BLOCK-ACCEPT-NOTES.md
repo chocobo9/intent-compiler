@@ -390,3 +390,61 @@ replay 工具（`intent-exp2-replay --mode review`）复用到 A3 的离线回�
 - B1：同一输出连续三轮的复现条目：默认不到期、三轮都在带入；`expire_reproduced` 时到期。依据单位在 R5 被撤回：`notInForce` R4 为空、R5 写明撤回；台账以 superseded 结束。
 - B2：R2 改动的对象，只依据其 R1 未改动文字的检查被退回为 `unit_unchanged`；依据 R2 新文字的不退回；开关关时不退回。
 - B3/B4：替身串行 R1–R2（检查替身每次调用延迟 400 ms）：每轮 `check writing` 在编码结束之前开始；R1 的库检查在后台写成后照样成为守卫；检查调用在 state 里编号为 M<n>；`measures.jsonl` 每轮一行，各角色 token 字段齐全，`non_executor_cost` 等于按口径重算的值；报告有 `§12i measures` 一行；`summarizeMeasures` 的四种判定（胜、比值过高失败、未证明、不过门槛失败）。
+
+---
+
+# 批次 C 第二阶段：修（2026-10-23）
+
+依据：`exp2/evidence/DIAGNOSIS-R1-REP1D-REP1E-2026-10-23.md`（下称"诊断"）和 `origin/exp2-pure-ic` 2250130 的 `exp2/evidence/real-runs-2026-10-23/`。不改审查请求和修补消息的原文、执行方的消息、前提档位。执行方拒做的问题不在本批。
+
+## 18. 审查与方案摘要（动手之前推送）
+
+### 18.1 审查：每个效果会碰到什么
+
+**效果 1（检查输出认不出就退回）**
+- 现状：准入（`methodB`）在三次写检查调用之后才做，失败只进 `admission_reason`（诊断第 3 题）；`expect_json` 未加引号的检查被退回，但修补用完后丢弃（rep1e 5 条）；参数以程序名开头没有任何规则（rep1e 21/22）。
+- 验收要求用**真实回复重放**达到准入 ≥ 20/22。重放时模型的回复是录好的（rep1e 的 M2、M3、M4），不会因为新的退回而改写。所以要过线，只能靠代码对"能唯一读出含义"的形状直接读出，退回只用于读不出的情况：
+  - 输出是 Python 字面量（`print({...})`，rep1e 21/21）：用 Python 的 `ast.literal_eval` 读，在同一个脚本沙箱里跑一个固定的转换脚本；多行时每行一个字典，合并。
+  - `expect_json` 不是 JSON：与 formalizer 侧（A6）同一条规则，按字符串读。
+  - 参数以程序名开头：去掉这一个参数。程序名由原文给出（`binaryFromSource`），不是 dpipe 专用规则。
+  这三种读法都记进检查记录的 `normalized`，可以审计。
+- 读不出的（脚本退出码非 0、输出既不是 JSON 也不是字面量、缺某个断言的值、计算占位符没有值、A/B 值不一致）变成问题，**在写检查的修补循环里**退回给模型，说明是哪条检查、哪个断言、脚本实际输出了什么。修补用完后仍有这类问题的：只要该检查的这类问题曾经退回过，就保留已解析的断言、记下未解析的；如果问题是最后一次调用才出现、从未退回过，就整条丢弃，在报告里按原因计数。这样状态里不会有"unknown 且无反馈"的检查。
+- 冲突：准入要在循环里做，`deriveChecks` 需要沙箱，`writeRoundChecks` 的模型调用和准入要合并；已有的"先 `checkChecks`、后准入"的顺序不变。
+
+**效果 2（守卫要求程序实际执行了要测的命令）**
+- "程序拒绝了这次调用"必须由代码确定性地判断，不能按 dpipe 的报错文字判断。做法：每个程序记一份**拒绝指纹**：用一个不可能存在的子命令（`__ic_unknown_command__`）运行一次，记下退出码、stdout、stderr。检查运行时，把输出里检查自己的第一个参数换成同一个占位符后，如果与指纹完全相同，就说明程序把它当作未知命令拒绝了：这次运行不能判通过（改判失败，原因 `refused_call`），也就不会成为守卫。
+  - 指纹本身退出码为 0 时（程序对未知命令不报错），这项判定不启用。
+  - 指纹在每批运行里多跑一次，库检查、守卫、条目检查、复现、强度用同一个函数。
+- rep1e 的程序不在材料里。验收用仓库里的 Go 替身程序做：rep1e 的 K12 原样（`dpipe transform …`）运行，指纹相同，不通过、不成为守卫；归一后（第一参数是 `transform`），实际执行了子命令。
+- 已知边界：程序对"缺参数"和"未知命令"给出完全相同的输出时，测缺参数的检查也会判为拒绝。会在报告里计数，不会静默。
+
+**效果 3（输入在 IC 手里就必须落成检查）**
+- 三处材料：
+  1. 给这次审查的线索：库检查的完整输入，不截断；
+  2. 审查会话里审查员写过的文件：从 `apply_patch`（Add/Update，按顺序应用 V4A 补丁）和 `write`/`edit` 工具调用的 input 取内容，删除操作不理会，所以会话末删除文件不影响；
+  3. 会话里前一条命令的输出：某个参数文件不在 1、2 里，但会话里有一条更早的程序调用产生了它，就在当前程序上重跑那条调用，取它产生的文件。
+- 这三样交给 formalizer（请求里新增 `materials`；`input.files[].content` 可以为 null，并用 `from` 指明来源，由代码填入）。formalizer 仍然写 `input: null` 的条目，由代码确定性地补：
+  - 条目文字点到的线索编号（rep1d 的 "K8 case"）：输入和断言都取那条库检查（已准入、已解析）；
+  - 条目文字里反引号中、调用了程序的命令：去掉程序调用部分，余下的就是 args，文件取会话里写过的同名文件，并按文件内容里出现的文件名递归带上（例如 recipe 里的 right.csv）；
+  - 断言用 formalizer 给的（真实回复里 input 为 null 的条目也都写了断言）。
+  只有三处都找不到时才是 `no_input`，`detail` 写明查过什么、缺什么。
+- 冲突：formalizer 的 schema 变了（`content` 可空、新增 `from`），要在 A6 的 pattern 之外再加一条描述；真实回复重放时这些字段不存在，按缺省处理。
+- 验收：第 4 次重放（真实 formalizer 回复 + 真实线索），引用线索编号的 6 条 0 `no_input`；第 5 次重放（真实回复 + 三份会话导出），`no_input` ≤ 2，余下的逐条写明。verify 的两条要用前一条 ingest 的输出；重放里没有 rep1e 的程序可以重跑，如果它们剩下，原因就是这个。
+
+**效果 4（发现守恒）**
+- 现状：整段退化记为 1 条（诊断第 1 题 J）；formalizer 漏写的条目按位置补上了，但计数分散在 `reported`、`sent`、`fallback` 各处。
+- 做法：以审查回复的列表项（`reviewEntries`）为单位，每一项恰好得到一个结局：送修、记日志送出、退化送出、挡下。整段退化时，每一项各记一条（台账按项列出，送出的消息仍是整段原话）。每次审查由代码核对"项数 = 四类之和"，不等就记 `conservation_error` 并在报告里写出。
+- 验收：五次运行的真实回复（rep1b、rep1c ×2、rep1d ×2、rep1e ×3），每份各做五种故障注入（编号带 hash、PowerShell 调用、只叙述不给输入、脚本输出非 JSON、参数带程序名），全部守恒。第 5 次重放的报告显示 reported 20、entered 20。
+
+### 18.2 复用
+
+| 效果 | 复用 | 新增 |
+|---|---|---|
+| 1 | `deriveChecks` 的修补循环与 `CheckIssue`；`methodB`；`ScriptSandbox` | 准入问题码（`reference_output`、`reference_value_missing`、`methods_disagree`、`computed_missing`）；`normalized` 字段；Python 字面量读取 |
+| 2 | `runChecks`/`runCheck`/`runBatch`；`classify` 的 `not_landed` 失败类 | 拒绝指纹与 `refused_call` 原因 |
+| 3 | `programRunsIn` 读会话的同一份消息；`invokesProgram` 认程序调用的规则；`renderEvidence` 给线索时用的库检查 | `ReviewMaterials`（线索、文件、命令）；补丁应用；命令转 args；输入解析 |
+| 4 | `reviewEntries`；`ReviewItemRecord.disposition` | 每项一条记录、守恒核对 |
+
+### 18.3 顺序
+
+效果 1 → 2 → 3 → 4，最后做真实回复重放和故障注入的测试。每项 `npm test` 通过后推送；NOTES 第 19 节逐项写做法、依据的运行和验收结果。
