@@ -14,12 +14,18 @@
 
 ## Q1 裸模型基线：不加管理能做到多好，波动多大
 
+汇总表（所有裸模型并排对比）：`BARE-BASELINES-2026-10-22.md`。
+
 | 设置 | 结果 | 运行目录 | 结论文档 |
 |---|---|---|---|
 | luna6 high，15 轮 ×1 | 诊断分 R15 958/960；官方分 R5 起为 0（联网） | `runs/exp2-bare-luna-dpipe-20261021-b8b33675` | OBSERVATIONS §2 |
 | luna6 high，R1 ×5 | 219、218、218、218、191 | `exp2-bare-r1rep{2,3,4}-luna-*`、shell R1 | OBSERVATIONS §2.2 |
 | 5.6 medium fast，15 轮 ×4 | 诊断分 R15 失分 13、3、28、30；官方分 4 次都是 R5 起为 0 | `exp2-bare15b-*`、`exp2-bare15-luna56-medium-rep{2,3,4}-*` | OBSERVATIONS §9、§11 |
 | 5.6 medium 不开 fast，15 轮 ×3 | 诊断分 R15 失分 20、12、13；3 次里有 1 次引入外部库 | `exp2-bare15-luna56-nofast-medium-rep{1,2,3}-*` | OBSERVATIONS §13 |
+| luna6 low，15 轮 ×3（2026-10-22） | 诊断通过率 R15 63.8% / 0% / 90.1%；官方分 3 次中 2 次 R5 起为 0（其中 1 次需要 Go 1.26，诊断分也是 0）；15 轮编码 14–27 分钟 | `exp2-bare15-luna6-low-rep{1,2,3}-dpipe-20261022` | OBSERVATIONS §14 |
+| 5.6 low，15 轮 ×3（2026-10-22） | 诊断通过率 R15 93.9% / 97.8% / 64.1%（均值 85.2%）；官方分 3 次中 2 次 R5 起为 0（联网）；15 轮编码 14–22 分钟 | `exp2-bare15-luna56-low-rep{1,2,3}-dpipe-20261022`（rep2、rep3 暂停过，见 PAUSED.txt） | OBSERVATIONS §15 |
+| luna6 medium，15 轮 ×3（2026-10-22） | 诊断通过率 R15 0% / 89.4% / 77.0%；官方分 3 次都是 0（1 次 R1 起写了 go 1.23，2 次 R5 起联网）；15 轮编码 15–17 分钟 | `exp2-bare15-luna6-medium-rep{1,2,3}-dpipe-20261022` | OBSERVATIONS §16 |
+| 5.6 medium fast + 原文写明目标环境，15 轮 ×3（2026-10-22） | 官方 = 诊断，R15 95.9% / 97.0% / 95.5%；0/3 交付失败（基线 4/4） | `exp2-bare15-luna56-medium-envnote-rep{1,2,3}-dpipe-20261022` | BARE-BASELINES 对照一节 |
 | 5.6 medium，R1 ×3 | 201、208、219 | `exp2-bare-r1-luna56-medium*` | ANALYSIS §1 |
 | secsentinel、eventq，5.6 medium ×1 | 99.8%；逐轮均值 88.7%（R6、R7 偏低） | `exp2-bare-luna56-medium-{secsentinel,eventq}-*` | OBSERVATIONS §12 |
 
@@ -45,6 +51,13 @@
 |---|---|---|---|
 | 5.6 medium，R1 ×3 | 201、208、219（均值 209.3；1.52M） | **219、219、219**（2.23M） | 完成，BLOCK10-ACCEPTANCE |
 | 5.6 medium，15 轮 | 4 次，见 Q1 | **×1 运行中**（R1 215） | `exp2-ic15-luna56-medium-*` |
+
+
+**对照组新模型组合（2026-10-22/23）**：执行方 5.6 low（L）或 5.6 medium（M），审查员 5.6 medium，其余同 rep2b。
+- rep1 官方 R15：L 950/960（99.0%），M 960/960（100%）；rep2 进行中；
+- 运行目录：`exp2-review15-luna56-{low,medium}-revmed-rep{1,2}-dpipe-20261022`；
+- 3 个审查员并行的试跑：`*-revmed-par3-rep1-*`，各只跑完 R1，已停止；
+- 详细数据见 OBSERVATIONS §17。
 
 ## Q4 IC 的增益来自结构，还是只是"多加了模型和回路"
 
