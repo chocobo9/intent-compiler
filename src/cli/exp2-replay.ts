@@ -75,17 +75,20 @@ async function reviewReplay(c: ReturnType<typeof assembleSerial>["config"], stor
   const result = await replayReview({
     store, text: c.text, attribution: c.attribution, checks: c.checks, sandbox: c.sandbox, runner: c.runner, build: c.build, timeoutMs: c.limits.checkTimeoutMs, root: out,
     attributionRepairs: c.limits.attributionRepairs, checkRepairs: c.limits.checkRepairs, reviewer: c.reviewer!, formalize: c.formalize!, binary: c.binary ?? "app", reviews,
+    ...(c.acceptance?.premiseBlock ? { premiseBlock: c.acceptance.premiseBlock } : {}), ...(c.acceptance?.fallback ? { fallback: c.acceptance.fallback } : {}), ...(c.acceptance?.voidWithoutRuns !== undefined ? { voidWithoutRuns: c.acceptance.voidWithoutRuns } : {}),
   }, products)
-  const lines = ["# Acceptance-only replay under DESIGN §12i (reviewer, formalizer, premises)", "", "| product | round | official | built | reviews (void) | raw items | blocked by premise | would be sent | library failing / passing | reviewer tokens (in / cache / out) | formalizer tokens |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+  const tally = (list: (string | null | undefined)[]) => [...list.reduce((m, k) => k ? m.set(k, (m.get(k) ?? 0) + 1) : m, new Map<string, number>())].map(([k, n]) => `${k} ${n}`).join(", ")
+  const lines = ["# Acceptance-only replay under DESIGN §12i (reviewer, formalizer, premises)", "", "Strict: every premise blocks (block 12). Tiers: the blocking tier stops an item, other premises are logged, items code cannot verify go out in the reviewer's words (fix block A1, A3).", "", "| product | round | official | built | reviews (void) | entries | strict: blocked | strict: sent | tiers: blocked | tiers: sent (verified / logged / fallback) | library failing / passing | reviewer tokens (in / cache / out) | formalizer tokens |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
   for (const r of result) {
-    const blocked = r.items.filter(i => i.premise)
-    const by = [...blocked.reduce((m, i) => m.set(i.premise!, (m.get(i.premise!) ?? 0) + 1), new Map<string, number>())].map(([k, n]) => `${k} ${n}`).join(", ")
-    lines.push(`| ${r.product.name} | ${r.product.round} | ${r.product.official ?? ""} | ${r.built ? "yes" : "**no**"} | ${r.reviews.length} (${r.voided})${r.reviews.some(x => x.no_issues) ? ", NO ISSUES" : ""} | ${r.items.length + r.malformed.length} | ${blocked.length}${by ? ` (${by})` : ""} | ${r.items.filter(i => !i.premise).length} | ${r.library.failing.length} / ${r.library.passing.length} | ${tok(r.usage.reviewer)} | ${tok(r.usage.formalizer)} |`)
+    const strict = r.items.filter(i => i.strict), blocked = r.items.filter(i => i.premise)
+    const sentBy = (d: string) => r.items.filter(i => !i.premise && i.disposition === d).length
+    lines.push(`| ${r.product.name} | ${r.product.round} | ${r.product.official ?? ""} | ${r.built ? "yes" : "**no**"} | ${r.reviews.length} (${r.voided})${r.reviews.some(x => x.no_issues) ? ", NO ISSUES" : ""} | ${r.items.length} | ${strict.length}${strict.length ? ` (${tally(strict.map(i => i.strict))})` : ""} | ${r.items.length - strict.length} | ${blocked.length}${blocked.length ? ` (${tally(blocked.map(i => i.premise))})` : ""} | ${r.items.length - blocked.length} (${sentBy("sent")} / ${sentBy("logged")} / ${sentBy("fallback")}) | ${r.library.failing.length} / ${r.library.passing.length} | ${tok(r.usage.reviewer)} | ${tok(r.usage.formalizer)} |`)
     const dir = join(out, "products", r.product.name)
     mkdirSync(dir, { recursive: true })
     const md = [`# Review replay: ${r.product.name} (round ${r.product.round})`, ""]
     for (const v of r.reviews) md.push(`## Review ${v.n}${v.valid ? "" : " (void: the program never ran)"}${v.model ? ` — ${v.model}` : ""}`, "", `Program runs seen: ${v.program_runs}; attempts ${v.attempts}; tokens ${tok(v.usage)}.`, "", v.text, "")
-    md.push("## Items", "", "| id | premise | detail | units | text |", "|---|---|---|---|---|", ...r.items.map(i => `| ${i.id} | ${i.premise ?? "(sent)"} | ${(i.detail ?? "").replace(/\|/gu, "\\|").replace(/\n/gu, " ")} | ${i.units.join(" ")} | ${i.text.replace(/\|/gu, "\\|").replace(/\n/gu, " ")} |`))
+    const cell = (t: string) => t.replace(/\|/gu, "\\|").replace(/\n/gu, " ")
+    md.push("## Items", "", "| id | tiers | strict | blocked by / logged | units | text |", "|---|---|---|---|---|---|", ...r.items.map(i => `| ${i.id} | ${i.premise ? "blocked" : `sent (${i.disposition})`} | ${i.strict ?? "sent"} | ${cell([i.premise ? `${i.premise}: ${i.detail ?? ""}` : "", ...(i.logged ?? []).map(l => `${l.premise}: ${l.detail}`)].filter(Boolean).join("; "))} | ${i.units.join(" ")} | ${cell(i.text)} |`))
     if (r.malformed.length) md.push("", "Malformed (not formalized):", ...r.malformed.map(m => `- review ${m.review_n}: ${m.message}`))
     md.push("", `Library checks failing (leads): ${r.library.failing.join(", ") || "none"}; passing: ${r.library.passing.length}.`)
     writeFileSync(join(dir, "review.md"), md.join("\n") + "\n", "utf8")
@@ -95,9 +98,10 @@ async function reviewReplay(c: ReturnType<typeof assembleSerial>["config"], stor
     const table = JSON.parse(readFileSync(resolve(defects), "utf8")) as DefectTable
     const texts = (f: (i: ReviewedItem) => boolean) => result.map(r => ({ product: r.product.name, texts: r.items.filter(f).map(i => `${i.units.join(" ")} ${i.text}`) }))
     const raw = scoreTexts(table, result.map(r => ({ product: r.product.name, texts: [...r.items.map(i => `${i.units.join(" ")} ${i.text}`), ...r.reviews.map(v => v.text)] })))
+    const strict = scoreTexts(table, texts(i => !i.strict))
     const sent = scoreTexts(table, texts(i => !i.premise))
-    lines.push("", `## Defect table: reviewer's raw list ${raw.hits}/${raw.total}; after the premises ${sent.hits}/${sent.total}`, "", "| defect | raw | after premises | of |", "|---|---|---|---|", ...raw.rows.map((r, k) => `| ${r.name} | ${r.hit.join(", ") || "—"} | ${sent.rows[k].hit.join(", ") || "—"} | ${r.of.length} |`))
-    lines.push("", `Items on the clean products: raw ${raw.clean.map(x => `${x.product} ${x.items}`).join(", ")}; after premises ${sent.clean.map(x => `${x.product} ${x.items}`).join(", ")}`)
+    lines.push("", `## Defect table: reviewer's raw list ${raw.hits}/${raw.total}; strict premises ${strict.hits}/${strict.total}; tiers ${sent.hits}/${sent.total}`, "", "| defect | raw | strict | tiers | of |", "|---|---|---|---|---|", ...raw.rows.map((r, k) => `| ${r.name} | ${r.hit.join(", ") || "—"} | ${strict.rows[k].hit.join(", ") || "—"} | ${sent.rows[k].hit.join(", ") || "—"} | ${r.of.length} |`))
+    lines.push("", `Items on the clean products (all of them are false): raw ${raw.clean.map(x => `${x.product} ${x.items}`).join(", ")}; strict ${strict.clean.map(x => `${x.product} ${x.items}`).join(", ")}; tiers ${sent.clean.map(x => `${x.product} ${x.items}`).join(", ")}`)
   }
   writeFileSync(join(out, "replay.md"), lines.join("\n") + "\n", "utf8")
   writeFileSync(join(out, "replay.json"), JSON.stringify(result, null, 1) + "\n", "utf8")

@@ -22,9 +22,9 @@ export const NO_ISSUES = "NO ISSUES"
 
 export const roundHeading = (round: number) => `# Round ${round} requirements`
 
-/** The requirements as the reviewer gets them: every round so far, each under its heading. */
+/** The requirements as the reviewer gets them, as the control group joins them: each round under its heading and a blank line, rounds apart by a blank line. */
 export function requirementsText(sources: readonly { round: number; text: string }[]): string {
-  return [...sources].sort((a, b) => a.round - b.round).map(s => `${roundHeading(s.round)}\n${s.text.endsWith("\n") ? s.text : `${s.text}\n`}`).join("")
+  return [...sources].sort((a, b) => a.round - b.round).map(s => `${roundHeading(s.round)}\n\n${s.text}`).join("\n\n")
 }
 
 /** The base request, word for word: the two instructions, a blank line, the requirements. */
@@ -74,7 +74,7 @@ export function reviewAppendix(f: ReviewFocus): string {
 
 /** The whole request: the base text word for word, then the appendix as separate paragraphs. */
 export function reviewRequest(sources: readonly { round: number; text: string }[], focus: ReviewFocus): string {
-  return `${reviewBaseText(sources)}\n${reviewAppendix(focus)}\n`
+  return `${reviewBaseText(sources)}\n\n${reviewAppendix(focus)}\n`
 }
 
 /** The repair message: the base text word for word, then the list, then (separately) what else the executor must know. */
@@ -92,9 +92,32 @@ export function supersededIn(text: string): { guard: string; reason: string }[] 
   return [...text.matchAll(/^\s*[-*]?\s*`?SUPERSEDED\s+(G\d+)`?\s*:\s*(.*)$/gmu)].map(m => ({ guard: m[1], reason: m[2].trim() }))
 }
 
+const ENTRY_START = /^(?:\d+[.)]|[-*•])\s+\S/u
+
 /** A rough count of list entries in a reply (numbered or bulleted top-level lines); the formalizer's count is the one reported. */
 export function listEntries(text: string): number {
-  return [...text.matchAll(/^(?:\d+[.)]|[-*•])\s+\S/gmu)].length
+  return reviewEntries(text).length
+}
+
+/**
+ * The reply's top-level list entries in the reviewer's words: each from a line that opens an entry (unindented
+ * number or bullet) to the next; text before the first entry and SUPERSEDED lines are left out. A reply with no list
+ * is one entry.
+ */
+export function reviewEntries(text: string): string[] {
+  const out: string[][] = []
+  for (const line of text.split(/\r?\n/u)) {
+    if (/^\s*[-*]?\s*`?SUPERSEDED\s+G\d+/u.test(line)) continue
+    if (ENTRY_START.test(line)) out.push([line])
+    else if (out.length) out.at(-1)!.push(line)
+  }
+  if (!out.length) { const rest = replyAsList(text); return rest && !isNoIssues(rest) ? [rest] : [] }
+  return out.map(l => l.join("\n").trim())
+}
+
+/** The reply as a repair list in the reviewer's words (the control group's list): SUPERSEDED lines left out. */
+export function replyAsList(text: string): string {
+  return text.split(/\r?\n/u).filter(l => !/^\s*[-*]?\s*`?SUPERSEDED\s+G\d+/u.test(l)).join("\n").trim()
 }
 
 export interface ProgramRun { command: string; exit_code: number | null }

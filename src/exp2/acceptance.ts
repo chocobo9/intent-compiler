@@ -18,8 +18,8 @@ import { addUsage } from "./report.js"
 import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import { Exp2Store } from "./store.js"
 import { buildWorkOrder } from "./workorder.js"
-import { copyProgram, discardCopy, isNoIssues, listEntries, reviewRanProgram, reviewRequest, type Reviewer, type ReviewFocus } from "./review.js"
-import { checkPremises, formalizeReview, itemCheckRecord, reproduces, type FormalItem, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
+import { copyProgram, discardCopy, isNoIssues, reviewEntries, reviewRanProgram, reviewRequest, type Reviewer, type ReviewFocus } from "./review.js"
+import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalItem, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
 import { renderEvidence, type ReviewItemRecord } from "./execution.js"
 import { coverage, EMPTY_CHECKS } from "./checks.js"
 
@@ -340,6 +340,10 @@ export interface ReviewReplayDeps extends Omit<ReplayDeps, "probes" | "judge"> {
   binary: string
   /** Reviews per product (default 1: one sample of the reviewer per run; the comparison runs the tool several times). */
   reviews?: number
+  /** The blocking tier and the fallback, as the serial has them (fix block A1, A3). */
+  premiseBlock?: readonly Premise[]
+  fallback?: "items" | "review" | "off"
+  voidWithoutRuns?: boolean
 }
 
 export interface ReviewedProduct {
@@ -348,8 +352,12 @@ export interface ReviewedProduct {
   build_output?: string
   reviews: { n: number; attempts: number; valid: boolean; no_issues: boolean; text: string; usage: TokenUsage; model?: string; program_runs: number }[]
   voided: number
-  /** Every item the formalizer read in the reviews, with the premise that stopped it (null: it would be sent). */
-  items: (ReviewItemRecord & { review_n: number })[]
+  /**
+   * Every entry of the reviews: the formalizer's items and the entries it could not write. `premise` is what stops
+   * it under the blocking tier (null: it would be sent, with `disposition`); `strict` is the first premise that fails
+   * when every premise blocks (the block-12 rule, for the comparison).
+   */
+  items: (ReviewItemRecord & { review_n: number; strict: Premise | null })[]
   malformed: { review_n: number; message: string }[]
   /** Library checks failing on the product (leads given to the reviewer), and those passing (guards it would have). */
   library: { failing: string[]; passing: string[] }
@@ -386,6 +394,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
     }
   }
   const out: ReviewedProduct[] = []
+  const block = new Set<Premise>(d.premiseBlock ?? DEFAULT_PREMISE_BLOCK)
   const zeroUsage = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
   for (const p of products) {
     const b = d.build(p.path, `review-${p.name}`)
@@ -412,7 +421,8 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
         usage = addUsage(usage, o.usage)
         model = o.model
         runs = o.runs.length
-        if (reviewRanProgram(o.runs)) text = o.text
+        // Whether the program ran is a soft signal (fix block A2) unless configured to void.
+        if (reviewRanProgram(o.runs) || !d.voidWithoutRuns) text = o.text
         else result.voided++
       }
       result.usage.reviewer = addUsage(result.usage.reviewer, usage)
@@ -422,22 +432,46 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
       await store.recordFormalizeCalls(f.calls as FormalizeCallRecord[])
       result.calls.formalize += f.calls.length
       for (const c of f.calls) result.usage.formalizer = addUsage(result.usage.formalizer, c.usage)
-      if (f.unavailable) throw new RoleUnavailable("formalize", f.unavailable, f.calls)
+      if (f.unavailable && (d.fallback ?? "items") === "off") throw new RoleUnavailable("formalize", f.unavailable, f.calls)
       result.malformed.push(...f.malformed.map(m => ({ review_n: n, message: m.message })))
-      for (const it of f.items) await classify(it, n)
-      if (!f.items.length && listEntries(text) > 0 && !f.malformed.length) result.malformed.push({ review_n: n, message: `the review lists ${listEntries(text)} entries and the formalizer read none` })
+      const entries = reviewEntries(text)
+      const own: (ReviewItemRecord & { review_n: number; strict: Premise | null })[] = []
+      const ownItem = (k: number, t: string, premise: Premise, detail: string) => own.push({ id: `V${p.round}.${n}.${k}`, round: p.round, review: `${p.name}.${n}`, review_n: n, item: k, text: t, units: [], premise: null, strict: premise, logged: [{ premise, detail }] })
+      const handled = new Set<number>()
+      if (f.unavailable) entries.forEach((t, k) => ownItem(k + 1, t, "formalize_failed", f.unavailable!))
+      else {
+        const bad = new Map<number, string[]>()
+        for (const m of f.malformed) if (m.item !== null) bad.set(m.item, [...(bad.get(m.item) ?? []), m.message])
+        for (const [k, msgs] of bad) { handled.add(k); ownItem(k, entries[k - 1] ?? f.texts.find(x => x.item === k)?.text ?? "", "malformed", msgs.join("; ")) }
+        for (const it of f.items) { handled.add(it.item); await classify(it, n) }
+        entries.forEach((t, k) => { if (!handled.has(k + 1)) ownItem(k + 1, t, "not_formalized", "the formalizer wrote no item for this entry of the review") })
+      }
+      // Code's own failures under the fallback (the serial's rule): sent in the reviewer's words, or blocked.
+      const mode = d.fallback ?? "items"
+      const fromThis = result.items.filter(i => i.review_n === n)
+      const open = mode === "items" || (mode === "review" && !fromThis.some(i => i.premise === null) && !fromThis.some(i => i.disposition === "blocked"))
+      for (const o of [...own, ...fromThis.filter(i => i.disposition === "fallback")]) {
+        if (open) { o.disposition = "fallback"; o.premise = null } else { o.disposition = "blocked"; o.premise = o.logged?.at(-1)?.premise ?? "malformed" }
+      }
+      result.items.push(...own)
     }
     async function classify(it: FormalItem, n: number) {
       const id = `V${p.round}.${n}.${it.item}`
-      const rec: ReviewItemRecord & { review_n: number } = { id, round: p.round, review: `${p.name}.${n}`, review_n: n, item: it.item, text: it.text, units: it.units, premise: null }
-      const pr = await checkPremises(registry, p.round, it, d.sandbox, d.timeoutMs)
-      let failure: { premise: Premise; detail: string } | null = pr.ok ? null : pr.failure
-      if (pr.ok) {
-        const rep = await reproduces(itemCheckRecord(id, p.round, it, pr.check), b.program!, d.runner, p.round, registry, facts, d.timeoutMs)
-        if (!rep.reproduced) failure = { premise: "not_reproduced", detail: `the check passes on the program (exit ${rep.run.exit_code})` }
-        else rec.check = pr.check
+      const rec: ReviewItemRecord & { review_n: number; strict: Premise | null } = { id, round: p.round, review: `${p.name}.${n}`, review_n: n, item: it.item, text: it.text, units: it.units, premise: null, strict: null }
+      const a = await assessPremises(registry, p.round, it, d.sandbox, d.timeoutMs)
+      const failures = [...a.failures]
+      if (a.check) {
+        const rep = await reproduces(itemCheckRecord(id, p.round, it, a.check), b.program!, d.runner, p.round, registry, facts, d.timeoutMs)
+        if (!rep.reproduced) failures.push({ premise: "not_reproduced", detail: `the check passes on the program (exit ${rep.run.exit_code})` })
+        else rec.check = a.check
       }
-      if (failure) { rec.premise = failure.premise; rec.detail = failure.detail }
+      const order: Premise[] = ["unit_not_in_force", "no_input", "input_claim_false", "value_not_computed", "value_not_stated", "reference_failed", "not_reproduced"]
+      rec.strict = order.find(x => failures.some(y => y.premise === x)) ?? null
+      const stop = failures.find(x => block.has(x.premise))
+      const logged = failures.filter(x => !block.has(x.premise))
+      if (logged.length) rec.logged = logged
+      if (stop) { rec.premise = stop.premise; rec.detail = stop.detail; rec.disposition = "blocked" }
+      else rec.disposition = logged.some(x => OWN_FAILURES.has(x.premise)) ? "fallback" : logged.length ? "logged" : "sent"
       result.items.push(rec)
     }
     out.push(result)

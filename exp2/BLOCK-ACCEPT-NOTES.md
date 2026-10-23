@@ -245,3 +245,76 @@ replay 工具（`intent-exp2-replay --mode review`）复用到 A3 的离线回�
 ### 15.5 开发顺序
 
 第一批：A5、A6、A4（先有真实回复的测试），再 A2、A3、A1（A1 依赖 A3 的档位）。第二批：B1、B4、B2、B3。每批 `npm test` 通过后推送。
+
+## 16. 第一批：保住分数（A1–A6）
+
+### A5 与对照组逐字一致
+
+**做法**：`requirementsText` 改为每轮 `# Round N requirements\n\n` 加原文、轮间 `\n\n`（`review.ts`）；附加段落与原文之间空一行。试跑失败消息 `trialMessage` 换成消息里给的原文，`dpipe` 处填程序名，`<输出>` 是试跑输出去掉末尾空白（超过 2 万字符才截断）。为了让消息不说假话，试跑本身也改成那条命令：`dockerTrial` 把只读挂载的源码复制到 `/app`，在那里 `go build -o <binary> ./... && go test ./...`，不再 echo 命令名；本机的 `goTrial` 同样是一条 build 加一条 test。主机构建失败时也跑试跑，执行方拿到的是目标环境的输出，和对照组一样。
+**证据**：消息给的原文。
+**新增**：无新部件，只换常量和命令。
+
+### A6 formalizer 接口自身
+
+**做法**（`formalize.ts`）：`UNIT_ID_PATTERN`（`R<n>(.S<n>)+(.H|.P<n>(.s<n>(.c<n>)?)?)?`，与 source.ts 的编号一致）写进 schema 的 `units[]` 和 `source.block`；系统提示里加一句编号语法和例子（`⟦R1.S3.P12#f683eb75⟧` 是 R1.S3.P12，hash 不是编号的一部分，`‹s10.c1›` 是 R1.S3.P12.s10.c1）。退回消息分两种：形状不对说"not in the unit id format"并给语法，形状对但不存在才说"does not exist"。一个条目里有认得的单位时，认不得的单位丢掉，不算问题。
+
+真实回复暴露的其他机械问题，按唯一可能的读法在代码里处理，不退回：未 JSON 编码的 `expect_json` 当字符串；verbatim 断言的单位缺失或不存在时置空，由前提核验在条目自己的单位里找这个值；`input: null` 的条目不再核断言和脚本（建不成检查，核了只会多一次退回调用）。
+**证据**：rep1b F1 的 25 个问题、F2 的 14 个问题全部属于这三类加编号格式。
+**新增**：pattern 常量。现有的 canonicalUnit 只在代码侧容错，模型侧没有任何地方告诉它编号长什么样。
+
+### A4 真实回复回归（`test/exp2/block-accept-fix.test.ts`）
+
+| 验收 | 结果 |
+|---|---|
+| canonicalUnit 对真实编号全部命中注册表 | 28 个编号（units 和 source.block），归一后全部符合 pattern、全部在 R1 原文切出的注册表里（切分是确定性的，编号与真实运行相同） |
+| programRunsIn 在真实 tool parts 上计出 ≥1 次运行 | rep1b V1.1.1：30；rep1c V1.1.1：16（全是 `dpipe-review.exe`）；rep1c V1.1.2：19 |
+| formalizeProblems 对真实回复 0 条 malformed | F1、F2 都是 0 个问题，各 8 条，全部 `input: null` |
+| `no_input` 不能静默丢弃 | 8 条进入前提核验时都是 `no_input`、没有一条被拦截档挡下；回放整轮时 8 条全部送修（见 A1） |
+
+替身测试保留；接口测试以真实回复为准。rep1b 的 F1/F2 以"回放的 formalizer"原样喂回，审查员用 rep1b 的真实回复和真实 tool parts。
+
+### A2 "审查未运行程序"降为软信号
+
+**做法**：会话返回了就是有效审查；`program_runs`（识别出的运行次数）照写进 `review_calls`，每次审查的 summary 有 `program_runs`，每轮 `program_runs_zero` 汇总进报告。作废重做留作 `acceptance.void_without_runs: true`（默认 false）。回放工具同样。
+**证据**：rep1c 两次真审查被作废；15.1 里 PowerShell 的退出码是外壳的，判定本来就不可靠。
+**验收**：rep1c 的两份真实回复、识别不到任何运行（`runs: []`，模拟识别规则再漏一次）：两次审查都有效，`program_runs` 0，两次各自整段送修；`void_without_runs` 打开时仍作废重做一次。
+
+### A3 前提核验分两档
+
+**做法**：`assessPremises` 逐条核完所有前提（不再在第一个失败处停），并用能解析的断言建检查；`checkPremises` 保留为它的包装（旧顺序、第一个失败），只供回放的 strict 列和旧测试用。档位：`acceptance.premise_block`，默认 `unit_not_in_force`、`not_reproduced`、`input_claim_false`。拦截档里有一条失败就挡下；其余前提失败记入 `ReviewItemRecord.logged`、条目照送：
+- 能建成检查的照常复现，仍失败才送（`not_reproduced` 默认在拦截档），修好后照常固化为守卫；
+- 建不成检查的（例如 `reference_failed` 没有一条断言能解析）带审查员原话送出，台账记 `unverified`。
+
+台账条目带 `disposition` 和 `logged`（`ledger.md` 不变，`ledger.json` 有）；报告分列 `premise_blocked`（拦截）和 `premise_logged`（记日志后送出）。
+**顺序/位置断言**：现有前提里本来就没有"位置由原文写明"这一条（第 12 节已知边界），所以它们既不挡也不额外记日志；记成日志需要新判定，不在本批。
+**证据**：证据 A 的误报分类；前提 3、4（值的陈述、参考脚本）挡下的是"formalizer 自己写的期望值"，挡下它等于用 IC 自己的产物否定审查员的发现。
+**验收（离线）**：替身测试里，原文没写的期望值：默认记日志并送修，检查保留并在修好后成为 G1；放进拦截档后挡下。冻结产物上的回放由本地做（第 14 节第 2 步）：`replay.md` 现在并列 strict（第 12 块：每个前提都挡）和档位两套"挡下/送出"，缺陷表也分 raw / strict / tiers 三列，干净产物上的条目（全是误报）三列各自计数。"只少送误报、不少送缺陷表命中的真缺陷"就是看 tiers 列命中数等于 raw 列、干净产物条目数小于 raw。
+
+### A1 失败即开放
+
+**做法**（`accept.ts`）：一次审查的条目按来源分四种结局：
+- `sent`：前提全部通过，检查在当前程序上失败；
+- `logged`：拦截档之外的前提失败，送出（A3）；
+- `fallback`：代码因为自己的原因没能核验，原因包括 formalizer 写坏（`malformed`，退回一次后仍坏）、`no_input`、formalizer 漏写了某条（`not_formalized`：审查回复的顶层列表项按位置没有对应条目）、formalizer 调用失败（`formalize_failed`，以前会抛 RoleUnavailable 停整轮）。用审查员原话送修；
+- `blocked`：拦截档里的前提失败。
+
+退化按条目做（15.2 第 1 条）。所有条目都退化、没有任何条目被核验时，修补消息是 `REPAIR_INTRO` 加审查员整段回复（去掉 `SUPERSEDED` 行），与对照组完全相同，台账记一条 `V<r>.<n>.0`（`unverified`）；否则每条按编号列出，文字取审查回复里对应的那一项（`reviewEntries` 按顶层列表项切，formalizer 的引文与那一项一致时用审查员的原文）。每次审查的 summary 有 `fallback`（条数）、`fallback_whole`、`fallback_reasons`；每轮汇总 `fallback: { reviews, whole, items, reasons }`。`acceptance.fallback`：`items`（默认）、`review`（A1 字面：仅当该次审查没有任何条目送出或被核验挡下）、`off`（第 12 块行为）。
+
+另外修了 15.1 里的计数错误：`reported` 是条目数（审查回复的列表项数与 formalizer 条目数取大），`malformed` 是写坏的条目数，不再是问题条数。
+**证据**：rep1b 8/8 `no_input`；第 4 次 R1 16/17 `no_input`、1 条送出（字面 A1 不触发）；29158c1 之前 rep1b 8/8 `malformed`。
+**验收**：
+- rep1b 的真实审查加两份真实 formalizer 回复重放：formalizer 只被调用一次（第一份回复已无问题），8 条 `no_input` 全部退化，执行方收到的第二条消息逐字等于 `REPAIR_INTRO + "\n\n" + 审查员回复`；`fallback: { reviews: 1, whole: 1, items: 8, reasons: { no_input: 8 } }`；台账 `V1.1.0` 为 review/unverified，sent C1.1。
+- 同一份 F1 回复把编号改成认不出的形状（复现 29158c1 之前的失败）：8 条 `malformed`，同样整段送修，`malformed` 计 8 而不是问题数。
+- formalizer 调用失败：整段送修（`formalize_failed` 8）；`fallback: off` 时仍抛 RoleUnavailable。
+- 第 4 次 R1 的形状（1 条能复现、1 条 `no_input`）：两条都送，编号列出，原话；`off` 和 `review` 时只送能复现的那条，`no_input` 挡下。
+- 全部 `not_reproduced`：不退化，什么都不送。
+
+### 本批新增部件为什么现有机制不够
+
+- `assessPremises`：`checkPremises` 在第一个失败处返回，分档需要知道全部失败，还要在记日志时照样建检查。
+- `reviewEntries` / `replyAsList`：退化送修要审查员原话，formalizer 的引文不保证逐字（它可能把两项合成一条），只有代码按列表项切才是审查员的原文。
+- 条目结局 `disposition` 和 `unverified` 台账结局：没有检查的条目，代码不能判断"修好"，原来的结局里没有"送出但不可核验"，会被轮末规则误记为 fixed。
+
+### 离线验证
+
+`npm test`：922 项，915 通过，6 项跳过，失败 1 项仍是原有的 `repair-batch`（"R3 original counterexample…"），与 29158c1 相同。新增 19 项在 `block-accept-fix.test.ts`；`block-accept.test.ts` 改了 3 处：审查请求的拼接（A5）、作废重做的测试显式打开 `voidWithoutRuns`（A2）。所有模型调用都是替身或真实回复的重放；没有运行真实模型。

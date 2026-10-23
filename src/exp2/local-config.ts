@@ -21,7 +21,7 @@ import { PROBE_CONCURRENCY, type ProbeTransport } from "./probes.js"
 import type { JudgeTransport } from "./judge.js"
 import { createOpenCodeFormalizeTransport, createOpenCodeJudgeTransport, createOpenCodeProbesTransport, createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
 import { OpenCodeReviewer } from "./review.js"
-import type { FormalizeTransport } from "./formalize.js"
+import type { FormalizeTransport, Premise } from "./formalize.js"
 
 /**
  * The local run's configuration file and its assembly into a Serial (READY-FOR-LOCAL §0). Paths are resolved
@@ -82,8 +82,13 @@ export interface LocalConfig {
    * The acceptance (DESIGN §12i). mode review (default): the reviewer finds, code guards. probes (default false): under
    * mode review, probes are still written once per unit and judged as leads. stale_by_reference (default false): the
    * reference, reading and convention staleness rules. reviews (3), trial_fixes (2), review_agent ("build").
+   * premise_block (default unit_not_in_force, not_reproduced, input_claim_false): premises that stop a reviewer's item;
+   * any other failing is logged and the item sent. fallback ("items"): items code cannot verify for its own reasons
+   * (formalizer malformed or no input, entries it left out, the call failing) go out in the reviewer's words; "review"
+   * only when nothing else of that review was sent or verified; "off" blocks them. void_without_runs (false): void and
+   * redo a review in which no run of the program was seen.
    */
-  acceptance?: { mode?: "review" | "probes"; probes?: boolean; stale_by_reference?: boolean; reviews?: number; trial_fixes?: number; review_agent?: string }
+  acceptance?: { mode?: "review" | "probes"; probes?: boolean; stale_by_reference?: boolean; reviews?: number; trial_fixes?: number; review_agent?: string; premise_block?: string[]; fallback?: "items" | "review" | "off"; void_without_runs?: boolean }
   /**
    * Builds record which functions each run executes (`go build -cover`), so a cycle runs only the checks and probes a
    * change can affect (DESIGN §12h E4). Default true; with false nothing has coverage, so every cycle runs everything.
@@ -138,6 +143,9 @@ export function localConfigProblems(c: LocalConfig): string[] {
   if (c.rate_limit && (!Array.isArray(c.rate_limit.delays_ms) || !c.rate_limit.delays_ms.every(d => Number.isFinite(d) && d >= 0))) p.push("rate_limit.delays_ms must be an array of non-negative numbers")
   if (c.scoring && (!Array.isArray(c.scoring.command) || !c.scoring.command.length)) p.push("scoring.command must be a non-empty array")
   if (c.acceptance?.mode !== undefined && c.acceptance.mode !== "review" && c.acceptance.mode !== "probes") p.push("acceptance.mode must be review or probes")
+  const premises = ["unit_not_in_force", "input_claim_false", "value_not_stated", "value_not_computed", "reference_failed", "no_input", "not_reproduced", "malformed", "not_formalized", "formalize_failed"]
+  if (c.acceptance?.premise_block !== undefined && (!Array.isArray(c.acceptance.premise_block) || c.acceptance.premise_block.some(x => !premises.includes(x)))) p.push(`acceptance.premise_block must list premises among ${premises.join(", ")}`)
+  if (c.acceptance?.fallback !== undefined && !["items", "review", "off"].includes(c.acceptance.fallback)) p.push("acceptance.fallback must be items, review or off")
   if (c.acceptance?.mode !== "probes" && c.roles === null) p.push("acceptance mode review needs the roles (the reviewer and the formalizer); set acceptance.mode to probes with roles null")
   // Checkpoints and builds outside the work tree: restoring a checkpoint cleans the work tree.
   const inside = (parent: string, child: string) => { const r = relative(resolve(parent), resolve(child)); return r === "" || (!r.startsWith("..") && !isAbsolute(r)) }
@@ -230,10 +238,10 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
     workdir: at(c.repo_dir),
     checkpoints: at(c.checkpoints_dir),
     copies: join(at(c.builds_dir), "review-copies"),
-    acceptance: { mode, probes: c.acceptance?.probes === true, staleByReference: c.acceptance?.stale_by_reference === true, ...(c.acceptance?.reviews !== undefined ? { reviews: c.acceptance.reviews } : {}), ...(c.acceptance?.trial_fixes !== undefined ? { trialFixes: c.acceptance.trial_fixes } : {}) },
+    acceptance: { mode, probes: c.acceptance?.probes === true, staleByReference: c.acceptance?.stale_by_reference === true, ...(c.acceptance?.reviews !== undefined ? { reviews: c.acceptance.reviews } : {}), ...(c.acceptance?.trial_fixes !== undefined ? { trialFixes: c.acceptance.trial_fixes } : {}), ...(c.acceptance?.premise_block ? { premiseBlock: c.acceptance.premise_block as Premise[] } : {}), ...(c.acceptance?.fallback ? { fallback: c.acceptance.fallback } : {}), ...(c.acceptance?.void_without_runs !== undefined ? { voidWithoutRuns: c.acceptance.void_without_runs === true } : {}) },
     // The reviewer runs on the coding server (tools on), in a copy of the program; the formalizer on the management server.
     ...(mode === "review" ? { reviewer: new OpenCodeReviewer({ client: coding, providerId: reviewRole.providerId, modelId: reviewRole.modelId, variant: reviewRole.variant, agent: c.acceptance?.review_agent ?? c.coding.agent ?? "build", binary, rateLimit }) } : {}),
-    trial: docker ? dockerTrial(docker) : goTrial(platform),
+    trial: docker ? dockerTrial(docker, binary) : goTrial(platform, binary),
     text: round => {
       const file = join(at(c.inputs_dir), `round-${pad(round)}.md`)
       if (!existsSync(file)) throw new Error(`No requirement text for round ${round}: ${file}`)

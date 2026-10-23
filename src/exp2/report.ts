@@ -89,6 +89,10 @@ export interface ReviewReport {
   /** Reviewer's items over the round, and how many entered a repair list. */
   items: { reported: number; sent: number; malformed: number }
   premise_blocked: Record<string, number>
+  /** Fix block A1–A3: items sent although a premise outside the blocking tier failed; the fallback; reviews with no run seen. */
+  premise_logged: Record<string, number>
+  fallback: { reviews: number; whole: number; items: number; reasons: Record<string, number> }
+  program_runs_zero: number
   guards: AcceptRoundRecord["guards"]
   reverted: number
   trial: { runs: number; failures: number }
@@ -256,7 +260,7 @@ function reviewReport(r: NonNullable<ReportInput["review"]>): ReviewReport {
     first_delivery: r.first_delivery, reviews: a.reviews, voided: a.voided, reviewer, formalizer,
     models: { reviewer: [...new Set(r.review_calls.flatMap(c => c.model ? [c.model] : []))], formalizer: [...new Set(r.formalize_calls.flatMap(c => c.model ? [c.model] : []))] },
     items: { reported: a.reviews.reduce((n, x) => n + x.reported, 0), sent: a.reviews.reduce((n, x) => n + x.sent, 0), malformed: a.reviews.reduce((n, x) => n + x.malformed, 0) },
-    premise_blocked: a.premise_blocked, guards: a.guards, reverted: a.reverted, trial: a.trial, leads: a.leads, coverage: r.coverage,
+    premise_blocked: a.premise_blocked, premise_logged: a.premise_logged ?? {}, fallback: a.fallback ?? { reviews: 0, whole: 0, items: 0, reasons: {} }, program_runs_zero: a.program_runs_zero ?? 0, guards: a.guards, reverted: a.reverted, trial: a.trial, leads: a.leads, coverage: r.coverage,
     cache: { reviewer: cacheShare(reviewer.tokens), formalizer: cacheShare(formalizer.tokens) },
   }
 }
@@ -272,8 +276,8 @@ const tallyBy = (list: string[]) => [...list.reduce((m, x) => m.set(x, (m.get(x)
 function renderReview(v: ReviewReport, firstScore: null | { passed: number; total: number }): string[] {
   const by = (m: Record<string, number>) => Object.entries(m).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"
   return [
-    `Review acceptance: first delivery ${v.first_delivery ? `${v.first_delivery.cycle} ${v.first_delivery.commit.slice(0, 8)}` : "none"}${firstScore ? ` (official ${firstScore.passed}/${firstScore.total})` : ""}; trial runs ${v.trial.runs} (${v.trial.failures} failed); reviews ${v.reviews.length} (void sessions ${v.voided}): ${v.reviews.map(x => `#${x.n} on ${x.cycle}${x.valid ? "" : " void"}${x.no_issues ? " NO ISSUES" : ""}: reported ${x.reported}, blocked ${x.blocked}, malformed ${x.malformed}, sent ${x.sent}${x.superseded.length ? `, superseded ${x.superseded.join(" ")}` : ""}, leads given ${x.leads}`).join("; ") || "none"}.`,
-    `Reviewer items: reported ${v.items.reported}, entered a repair list ${v.items.sent}; premise checks blocked ${Object.values(v.premise_blocked).reduce((a, b) => a + b, 0)} (${by(v.premise_blocked)}).`,
+    `Review acceptance: first delivery ${v.first_delivery ? `${v.first_delivery.cycle} ${v.first_delivery.commit.slice(0, 8)}` : "none"}${firstScore ? ` (official ${firstScore.passed}/${firstScore.total})` : ""}; trial runs ${v.trial.runs} (${v.trial.failures} failed); reviews ${v.reviews.length} (void sessions ${v.voided}): ${v.reviews.map(x => `#${x.n} on ${x.cycle}${x.valid ? "" : " void"}${x.no_issues ? " NO ISSUES" : ""}: reported ${x.reported}, blocked ${x.blocked}, malformed ${x.malformed}, sent ${x.sent}${x.fallback ? ` (fallback ${x.fallback}${x.fallback_whole ? ", the whole reply" : ""}: ${by(x.fallback_reasons ?? {})})` : ""}${x.logged ? `, logged ${x.logged}` : ""}${x.superseded.length ? `, superseded ${x.superseded.join(" ")}` : ""}, leads given ${x.leads}${x.program_runs !== undefined ? `, program runs seen ${x.program_runs}` : ""}`).join("; ") || "none"}.`,
+    `Reviewer items: reported ${v.items.reported}, entered a repair list ${v.items.sent}; premise checks blocked ${Object.values(v.premise_blocked).reduce((a, b) => a + b, 0)} (${by(v.premise_blocked)}), logged and sent ${Object.values(v.premise_logged).reduce((a, b) => a + b, 0)} (${by(v.premise_logged)}); fallback in ${v.fallback.reviews} review(s), ${v.fallback.items} item(s), whole reply ${v.fallback.whole} (${by(v.fallback.reasons)}); reviews with no program run seen ${v.program_runs_zero}.`,
     `Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}${v.guards.born.length ? ` (${v.guards.born.join(", ")})` : ""}; flips on changed text ${v.guards.flipped_changed_text.length}${v.guards.flipped_changed_text.length ? ` (${v.guards.flipped_changed_text.join(", ")})` : ""}, on unchanged text ${v.guards.flipped_unchanged.length}${v.guards.flipped_unchanged.length ? ` (${v.guards.flipped_unchanged.join(", ")})` : ""}; retired as superseded ${v.guards.retired.length}${v.guards.retired.length ? ` (${v.guards.retired.map(x => x.id).join(", ")})` : ""}; repairs reverted ${v.reverted}.`,
     `Guard coverage: ${v.coverage ? `${v.coverage.covered}/${v.coverage.units} live units; uncovered ${v.coverage.uncovered.length}${v.coverage.uncovered.length ? ` (${v.coverage.uncovered.slice(0, 25).join(", ")}${v.coverage.uncovered.length > 25 ? ` and ${v.coverage.uncovered.length - 25} more; the full list is in report.json` : ""})` : ""}` : "n/a"}. Leads to the reviewer: library ${v.leads.library}, judgment ${v.leads.judgment}.`,
     `Reviewer (${v.models.reviewer.join(", ") || "?"}): ${v.reviewer.calls} sessions, ${tok(v.reviewer.tokens)}, cache share ${v.cache.reviewer ?? "n/a"}. Formalizer (${v.models.formalizer.join(", ") || "?"}): ${v.formalizer.calls} calls, ${tok(v.formalizer.tokens)}, cache share ${v.cache.formalizer ?? "n/a"}.`,

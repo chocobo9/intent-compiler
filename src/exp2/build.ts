@@ -1,5 +1,6 @@
 import { spawnSync, type SpawnSyncReturns } from "node:child_process"
-import { mkdirSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { BuildResult } from "./execution.js"
 import { exeName, goCommand, guardedSync, isEnvironmentBlock, type PlatformOptions } from "./platform.js"
@@ -48,15 +49,19 @@ export function goBuilderAsync(outRoot: string, platform: PlatformOptions = {}, 
 }
 
 /**
- * The target environment's trial as the control group does it (DESIGN §12i): `go build ./...` then `go test ./...`
- * in the work tree, here as local processes; the docker runner has its own (dockerTrial).
+ * The target environment's trial as the control group does it (DESIGN §12i): `go build -o <binary> ./...` then
+ * `go test ./...` in the work tree, here as local processes (the docker runner has its own, dockerTrial). The binary
+ * goes to a temporary directory so nothing built lands in the tree.
  */
-export function goTrial(platform: PlatformOptions = {}, timeoutMs = 10 * 60_000): (workdir: string, label: string) => Promise<{ ok: boolean; output: string }> {
+export function goTrial(platform: PlatformOptions = {}, binary = "app", timeoutMs = 10 * 60_000): (workdir: string, label: string) => Promise<{ ok: boolean; output: string }> {
   return async workdir => {
     const env = { ...process.env, GOFLAGS: "-mod=mod" }
-    const b = await execute([goCommand(platform), "build", "./..."], workdir, timeoutMs, env)
-    if (b.exit_code !== 0) return { ok: false, output: `go build ./...\n${b.stdout}${b.stderr}` }
-    const t = await execute([goCommand(platform), "test", "./..."], workdir, timeoutMs, env)
-    return { ok: t.exit_code === 0, output: `go test ./...\n${t.stdout}${t.stderr}` }
+    const out = mkdtempSync(join(tmpdir(), "exp2-trial-"))
+    try {
+      const b = await execute([goCommand(platform), "build", "-o", join(out, exeName(binary, platform)), "./..."], workdir, timeoutMs, env)
+      if (b.exit_code !== 0) return { ok: false, output: `${b.stdout}${b.stderr}` }
+      const t = await execute([goCommand(platform), "test", "./..."], workdir, timeoutMs, env)
+      return { ok: t.exit_code === 0, output: `${t.stdout}${t.stderr}` }
+    } finally { rmSync(out, { recursive: true, force: true }) }
   }
 }

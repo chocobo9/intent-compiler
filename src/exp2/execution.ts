@@ -179,7 +179,7 @@ export interface CycleRecord {
   /** This cycle's repair was reverted: it made passing guards fail; the leads it answered were discarded (§12i item 4). */
   reverted?: { to: string; guards: string[]; discarded: string[] }
   /** The review held on this cycle's program (§12i item 1). */
-  review?: { n: number; attempts: number; valid: boolean; no_issues: boolean; reported: number; malformed: number; blocked: number; sent: number; superseded: string[]; leads: number }
+  review?: Omit<ReviewSummary, "cycle">
   /** The target environment's trial (go build and go test) on this cycle's tree. */
   trial?: { ok: boolean; output: string }
   /** The full run on this cycle's program, when the cycle had nothing left to send (DESIGN §12h E4). */
@@ -233,9 +233,17 @@ export interface ReviewItemRecord {
   item: number
   text: string
   units: string[]
-  /** The premise it did not pass, or null when it was sent. */
+  /** The premise that stopped it (a premise of the blocking tier), or null when it was sent. */
   premise: string | null
   detail?: string
+  /**
+   * How it went (fix block, A1/A3): sent (its premises held and its check fails on the program), logged (premises
+   * outside the blocking tier failed; sent anyway, the failures kept in `logged`), fallback (code could not verify it
+   * for reasons of its own: the formalizer did not write it, gave no input; sent in the reviewer's words), blocked.
+   * Absent on records written before the fix block.
+   */
+  disposition?: "sent" | "logged" | "fallback" | "blocked"
+  logged?: { premise: string; detail: string }[]
   /** The check the code built (sent items), for later runs. */
   check?: { input: import("./runner.js").CheckInput; assertions: import("./checks.js").Assertion[]; reference_script: import("./checks.js").CheckDraft["reference_script"]; object: string | null }
   /** The guard it became once the executor fixed it. */
@@ -244,12 +252,25 @@ export interface ReviewItemRecord {
   same_as?: string
 }
 
+/**
+ * One review's outcome. program_runs: the reviewer's runs of the program the session's tool calls show (a soft signal,
+ * fix block A2); fallback: items sent in the reviewer's words because code could not verify them, and whether the whole
+ * reply went (A1); logged: items sent although a premise outside the blocking tier failed (A3).
+ */
+export interface ReviewSummary { n: number; cycle: string; attempts: number; valid: boolean; no_issues: boolean; reported: number; malformed: number; blocked: number; sent: number; superseded: string[]; leads: number; program_runs?: number; fallback?: number; fallback_whole?: boolean; fallback_reasons?: Record<string, number>; logged?: number }
+
 export interface AcceptRoundRecord {
-  reviews: { n: number; cycle: string; attempts: number; valid: boolean; no_issues: boolean; reported: number; malformed: number; blocked: number; sent: number; superseded: string[]; leads: number }[]
-  /** Review sessions in which the program never ran (done again). */
+  reviews: ReviewSummary[]
+  /** Review sessions voided because the program never ran in them (only with acceptance.void_without_runs). */
   voided: number
-  /** Items the premises stopped, by premise. */
+  /** Items the premises stopped, by premise (the blocking tier). */
   premise_blocked: Record<string, number>
+  /** Items sent although a premise outside the blocking tier failed, by premise (fix block A3). */
+  premise_logged?: Record<string, number>
+  /** Reviews with items sent in the reviewer's words, those items, and why code could not verify them (fix block A1). */
+  fallback?: { reviews: number; whole: number; items: number; reasons: Record<string, number> }
+  /** Valid reviews in whose session no run of the program was seen (fix block A2). */
+  program_runs_zero?: number
   guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; retired: { id: string; reason: string }[] }
   reverted: number
   trial: { runs: number; failures: number }

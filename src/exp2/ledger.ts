@@ -15,9 +15,11 @@ import type { Ruling } from "./adjudication.js"
  */
 
 /** premise_failed: a reviewer's item a premise stopped before it was sent (DESIGN §12i item 2). */
-export type LedgerReason = "program_wrong" | "uncovered" | "reference_pending" | "ambiguous" | "premise_failed"
+/** unverified: a reviewer's item sent with no check behind it (the fallback, or a logged premise with no check; fix block A1, A3). */
+export type LedgerReason = "program_wrong" | "uncovered" | "reference_pending" | "ambiguous" | "premise_failed" | "unverified"
 /** blocked: a premise did not hold; discarded: the repair it was sent in was reverted (DESIGN §12i items 2, 4). */
-export type LedgerEnd = "fixed" | "superseded" | "ruled_program_right" | "ruled_ambiguous" | "expired" | "uncheckable" | "blocked" | "discarded"
+/** unverified: sent in the round it was reported; code has no check to tell whether the repair fixed it. */
+export type LedgerEnd = "fixed" | "superseded" | "ruled_program_right" | "ruled_ambiguous" | "expired" | "uncheckable" | "blocked" | "discarded" | "unverified"
 
 export interface LedgerEntry {
   id: string
@@ -50,6 +52,9 @@ export interface LedgerEntry {
    */
   confirmed: null | { round: number }
   end: null | { round: number; how: LedgerEnd; detail: string }
+  /** A reviewer's item: how it went (sent, logged, fallback, blocked) and the premises that failed without stopping it (fix block A3). */
+  disposition?: string
+  logged?: { premise: string; detail: string }[]
 }
 
 /**
@@ -101,7 +106,7 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
   const close = (e: LedgerEntry, round: number, how: LedgerEnd, detail: string) => {
     if (e.end) return
     e.end = { round, how, detail }
-    e.state = how === "expired" || how === "ruled_ambiguous" || how === "uncheckable" || how === "blocked" || how === "discarded" ? "report_only" : "closed"
+    e.state = how === "expired" || how === "ruled_ambiguous" || how === "uncheckable" || how === "blocked" || how === "discarded" || how === "unverified" ? "report_only" : "closed"
     if (how === "ruled_ambiguous") e.reason = "ambiguous"
     if (how === "blocked") e.reason = "premise_failed"
   }
@@ -140,6 +145,8 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
         if (s.action === "blocked") { const e = make(s.id, r, c.id, "premise_failed"); note(e, r, c.id, s.verdict, "run"); close(e, r, "blocked", s.why ?? "a premise did not hold"); continue }
         // The repair it was sent in was reverted: the lead is dropped; a guard failing comes back when seen failing again.
         if (s.action === "discarded") { const e = entries.get(s.id); if (e) { note(e, r, c.id, s.verdict, "run"); close(e, r, "discarded", s.why ?? "the repair was reverted") } continue }
+        // Sent with no check behind it: listed, sent, and ended at the round's end as unverified.
+        if (s.verdict === "unverified") { const e = make(s.id, r, c.id, "unverified"); note(e, r, c.id, s.verdict, "run"); if (s.action === "send") { e.sent.push(c.id); next.add(s.id) } continue }
         const failing = failingVerdict(s.verdict)
         const e = failing ? make(s.id, r, c.id) : entries.get(s.id)
         if (!e) continue
@@ -179,6 +186,7 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
     }
     if (kept) {
       for (const e of entries.values()) if (!e.end && e.source !== "coverage" && e.reason === "program_wrong" && !failingAtEnd.has(e.id) && e.opened.round <= r) close(e, r, "fixed", `no longer failing on ${x.kept}`)
+      for (const e of entries.values()) if (!e.end && e.reason === "unverified" && e.opened.round <= r) close(e, r, "unverified", "sent in the reviewer's words; no check tells whether it was fixed")
       // Pairs judged ambiguous on the program the round delivers are listed, never sent.
       for (const id of kept.ambiguous) { const e = make(id, r, kept.id, "ambiguous"); if (!e.end) close(e, r, "ruled_ambiguous", "judged ambiguous: the text allows the output") }
       for (const run of kept.runs.filter(y => y.failure === "disputed/reference")) { const e = make(run.check, r, kept.id, "reference_pending"); if (e.reason !== "reference_pending" && !e.end) e.reason = "reference_pending"; if (!e.rounds.includes(r)) e.rounds.push(r) }
@@ -197,6 +205,7 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
   const firstRound = (u: string) => i.probe_rounds.filter(p => p.status === "accepted" && [...p.uncovered, ...(p.cases?.open ?? [])].some(x => x === u || x.split("#")[0] === u)).map(p => p.round).sort((a, b) => a - b)[0] ?? 0
   for (const u of gaps.open) make(u, firstRound(u), null, "uncovered")
   for (const c of gaps.closed) { const e = make(c.unit, firstRound(c.unit), null, "uncovered"); close(e, c.round, "uncheckable", c.reason) }
+  for (const e of entries.values()) { const rv = reviewOf.get(e.id); if (rv?.disposition) e.disposition = rv.disposition; if (rv?.logged?.length) e.logged = rv.logged }
   return [...entries.values()].map(({ lastDigest, ends: _e, ...e }) => ({ ...e, digest: lastDigest || null }))
 }
 
@@ -219,7 +228,7 @@ export interface LedgerSummary {
 
 export function ledgerSummary(entries: readonly LedgerEntry[], round: number): LedgerSummary {
   const open = { program_wrong: [] as string[], uncovered: [] as string[], reference_pending: [] as string[] }
-  for (const e of entries.filter(x => x.state === "open" && x.reason !== "ambiguous")) open[e.reason as keyof typeof open].push(e.id)
+  for (const e of entries.filter(x => x.state === "open" && x.reason in open)) open[e.reason as keyof typeof open].push(e.id)
   return {
     open,
     confirmed: entries.filter(e => e.state === "open" && e.confirmed).map(e => e.id),

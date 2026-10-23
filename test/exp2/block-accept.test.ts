@@ -62,7 +62,7 @@ const sidecarCheck = (id: string, object: string): CheckRecord => ({
 const noop = { review: async () => {}, formalize: async () => {}, guards: async () => {} }
 
 /** Runs one round with the review acceptance on a fresh work tree; the stand-ins and guards as given. */
-async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: string) => void)[], o: { library?: CheckRecord[]; guards?: GuardRecord[]; guardEvents?: GuardEvent[]; reviewer: AcceptDeps["reviewer"]; formalize: AcceptDeps["formalize"]; leads?: AcceptDeps["leads"]; reviews?: number; record?: AcceptDeps["record"]; carried?: AcceptDeps["carried"] }) {
+async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: string) => void)[], o: { library?: CheckRecord[]; guards?: GuardRecord[]; guardEvents?: GuardEvent[]; reviewer: AcceptDeps["reviewer"]; formalize: AcceptDeps["formalize"]; leads?: AcceptDeps["leads"]; reviews?: number; record?: AcceptDeps["record"]; carried?: AcceptDeps["carried"]; voidWithoutRuns?: boolean }) {
   const workdir = join(dir, `work-${r}-${Math.random().toString(36).slice(2, 6)}`)
   mkdirSync(workdir, { recursive: true })
   initRepo(workdir)
@@ -74,14 +74,14 @@ async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: s
     runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), anchors, build: goBuilder(join(dir, "builds"), {}, "dpipe"),
     reviewer: o.reviewer, formalize: o.formalize, binary: "dpipe", sources: store.inspect().sources.map(s => ({ round: s.round, text: s.text })),
     copyDir: label => join(dir, "copies", label), ...(o.leads ? { leads: o.leads } : {}), record: o.record ?? noop, ...(o.carried ? { carried: o.carried } : {}), checkTimeoutMs: 10_000,
-  }, { ...DEFAULT_LIMITS, repairCycles: 3, ...(o.reviews !== undefined ? { reviews: o.reviews } : {}) })
+  }, { ...DEFAULT_LIMITS, repairCycles: 3, ...(o.reviews !== undefined ? { reviews: o.reviews } : {}), ...(o.voidWithoutRuns ? { voidWithoutRuns: true } : {}) })
   return { record, executor, workdir, registry }
 }
 
 describe("exp2 acceptance block: the review request and the repair message are the control group's, word for word", () => {
   it("base texts, headings, NO ISSUES and SUPERSEDED lines, the program's runs in a session", () => {
     const text = reviewBaseText([{ round: 2, text: "R2 text\n" }, { round: 1, text: "R1 text" }])
-    assert.equal(text, `${REVIEW_INTRO}\n${REVIEW_REPLY}\n\n# Round 1 requirements\nR1 text\n# Round 2 requirements\nR2 text\n`)
+    assert.equal(text, `${REVIEW_INTRO}\n${REVIEW_REPLY}\n\n# Round 1 requirements\n\nR1 text\n\n# Round 2 requirements\n\nR2 text\n`)
     assert.equal(REPAIR_INTRO, "An independent review of the program against the requirements reported the following. Follow the requirements where an item seems to contradict them, and do not change behaviour the items do not concern.")
     assert.ok(isNoIssues("NO ISSUES") && isNoIssues(" **NO ISSUES**\n") && !isNoIssues("NO ISSUES except one") && !isNoIssues("1. something"))
     assert.deepEqual(supersededIn("1. x\nSUPERSEDED G3: round 5 removed the sidecar\n- SUPERSEDED G7: gone"), [{ guard: "G3", reason: "round 5 removed the sidecar" }, { guard: "G7", reason: "gone" }])
@@ -193,7 +193,7 @@ describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed ite
     assert.ok(executor.log.messages[1].text.startsWith(`${REPAIR_INTRO}\n\n1. ${FILTER_ITEM_TEXT}`), executor.log.messages[1].text.slice(0, 400))
     // The review request: base text word for word, the requirements, then the appendix.
     const req = reviewer.requests[0].request
-    assert.ok(req.startsWith(`${REVIEW_INTRO}\n${REVIEW_REPLY}\n\n# Round 1 requirements\n${roundText(1)}`), req.slice(0, 300))
+    assert.ok(req.startsWith(`${REVIEW_INTRO}\n${REVIEW_REPLY}\n\n# Round 1 requirements\n\n${roundText(1)}`), req.slice(0, 300))
     assert.match(req, /# Focus of this review\nRound 1 is the first round: all of the requirements are new\./u)
     assert.ok(invokesProgram("GOFLAGS=-mod=mod go run . transform --input a.csv", "dpipe") && invokesProgram("cd /tmp/x && ./dpipe transform", "dpipe") && invokesProgram("timeout 5 ./dpipe verify", "dpipe"))
     assert.ok(!req.includes("# Leads to verify"), "nothing to verify: no leads paragraph")
@@ -238,10 +238,10 @@ describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed ite
     assert.deepEqual(record.cycles[0].items, [])
   })
 
-  it("a review in which the program never ran is void and done again; its NO ISSUES does not count", async () => {
+  it("with acceptance.void_without_runs (off by default since the fix block): a review in which the program never ran is void and done again; its NO ISSUES does not count", async () => {
     const reviewer = scriptedReviewer([{ text: "NO ISSUES", runs: [] }, { text: "NO ISSUES", runs: [{ command: "./dpipe transform --input d.csv", exit_code: 0 }] }])
     const calls: { valid: boolean; no_issues: boolean }[] = []
-    const { record } = await round(dir, store, 1, [wd => write(wd, files())], { reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), record: { ...noop, review: async r => { calls.push({ valid: r.valid, no_issues: r.no_issues }) } } })
+    const { record } = await round(dir, store, 1, [wd => write(wd, files())], { reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), voidWithoutRuns: true, record: { ...noop, review: async r => { calls.push({ valid: r.valid, no_issues: r.no_issues }) } } })
     assert.equal(reviewer.requests.length, 2)
     assert.deepEqual(calls, [{ valid: false, no_issues: false }, { valid: true, no_issues: true }])
     assert.deepEqual([record.accept!.voided, record.accept!.reviews[0].attempts, record.accept!.reviews[0].valid], [1, 2, true])

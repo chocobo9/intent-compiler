@@ -2,12 +2,12 @@ import type { AnchorExtractor } from "./anchors.js"
 import { diffAnchors, touched } from "./anchors.js"
 import { RoleUnavailable, type TokenUsage } from "./attribution.js"
 import { activeChecks, coverage, EMPTY_CHECKS, type CheckEvent, type CheckRecord, type CodeFacts } from "./checks.js"
-import { renderEvidence, SessionBroken, Sends, type AcceptRoundRecord, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor, type ExecutorReply, type ItemSighting, type ReviewItemRecord } from "./execution.js"
-import { checkPremises, formalizeReview, itemCheckRecord, reproduces, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
+import { renderEvidence, SessionBroken, Sends, type AcceptRoundRecord, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor, type ExecutorReply, type ItemSighting, type ReviewItemRecord, type ReviewSummary } from "./execution.js"
+import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
 import { commitStep, head, resetTo } from "./git.js"
 import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, type GuardEvent, type GuardRecord } from "./guards.js"
 import type { Registry } from "./registry.js"
-import { copyProgram, discardCopy, isNoIssues, listEntries, repairFromReview, reviewRanProgram, reviewRequest, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
+import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import { runChecks, runDigest, type CheckRun } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
@@ -33,6 +33,15 @@ export interface AcceptLimits extends ExecutionLimits {
   reviews?: number
   /** Repairs of a failing build or test in the target environment, before the first review (default 2). */
   trialFixes?: number
+  /** Premises that stop an item (default DEFAULT_PREMISE_BLOCK); a failure of any other is logged and the item sent (fix block A3). */
+  premiseBlock?: readonly Premise[]
+  /**
+   * Items code cannot verify for reasons of its own (fix block A1): items (default) sends each in the reviewer's words;
+   * review does so only when nothing else from the review was sent or verified; off blocks them, as before.
+   */
+  fallback?: "items" | "review" | "off"
+  /** Void and redo a review in whose session no run of the program was seen (§12i item 7; default off, fix block A2). */
+  voidWithoutRuns?: boolean
 }
 
 export interface AcceptDeps {
@@ -71,6 +80,7 @@ export interface AcceptDeps {
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
 const plus = (a: TokenUsage, b: TokenUsage): TokenUsage => ({ input_tokens: a.input_tokens + b.input_tokens, cache_read_tokens: a.cache_read_tokens + b.cache_read_tokens, cache_write_tokens: a.cache_write_tokens + b.cache_write_tokens, output_tokens: a.output_tokens + b.output_tokens, reasoning_tokens: a.reasoning_tokens + b.reasoning_tokens })
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
+const squash = (s: string) => s.replace(/\s+/gu, " ").trim()
 
 class CallTimeout extends Error {}
 
@@ -79,10 +89,13 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   try { return await Promise.race([p, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new CallTimeout(`no answer in ${ms} ms`)), ms) })]) } finally { clearTimeout(timer) }
 }
 
-/** The message after a failed trial in the target environment. */
-export function trialMessage(build: BuildResult, trial: { ok: boolean; output: string } | null): string {
-  if (!build.ok) return `The program does not build:\n${clip(build.output.trim(), 3000)}\nFix it.`
-  return `In the target environment, \`go build ./...\` and \`go test ./...\` gave:\n${clip((trial?.output ?? "").trim(), 3000)}\nFix it.`
+/**
+ * The message after a failed trial in the target environment, the control group's word for word; the output is the
+ * trial's (or, with no trial configured, the build's), cut only when very long.
+ */
+export function trialMessage(build: BuildResult, trial: { ok: boolean; output: string } | null, binary: string): string {
+  const output = trial && !trial.ok ? trial.output : build.output
+  return `The program was built and its tests run in the target environment with \`go build -o ${binary} ./... && go test ./...\` in /app (a Linux container without network). It failed:\n\`\`\`\n${clip(output.trimEnd(), 20_000)}\n\`\`\`\nFix the code so that this passes there.`
 }
 
 /** A guard's failure as an item of the list the executor gets: the requirement, the command and input, what the program did. */
@@ -143,6 +156,23 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   let sentInRepair: string[] = []
   let voidedNote = ""
   const timed = async <T>(stage: string, f: () => Promise<T>): Promise<T> => { const a = Date.now(); try { return await f() } finally { deps.time?.(stage, a, Date.now()) } }
+  const block = new Set<Premise>(limits.premiseBlock ?? DEFAULT_PREMISE_BLOCK)
+  const fallbackMode = limits.fallback ?? "items"
+  accept.premise_logged = {}
+  accept.fallback = { reviews: 0, whole: 0, items: 0, reasons: {} }
+  accept.program_runs_zero = 0
+  // Items sent with no check behind them (fallback, or logged without a check): their text, in the reviewer's words.
+  const freeText = new Map<string, { text: string; whole: boolean }>()
+  let survivors: { id: string; text: string }[] = []
+  const sendFree = (rec: ReviewItemRecord, text: string, why: string, whole = false) => {
+    rec.disposition ??= "logged"
+    if (rec.disposition === "logged") for (const l of rec.logged ?? []) accept.premise_logged![l.premise] = (accept.premise_logged![l.premise] ?? 0) + 1
+    freeText.set(rec.id, { text, whole })
+    const plan = sends.plan(rec.id, "")
+    items.push({ id: rec.id, digest: "", verdict: "unverified", ...plan, why })
+    if (plan.action === "send") survivors.push({ id: rec.id, text })
+  }
+  let items: ItemSighting[] = []
 
   /** One review on `at`: a fresh copy and session; void when the program never ran, then done again once. */
   const review = async (at: { cycle: string; commit: string; program: ProgramRef }, focus: ReviewFocus, n: number) => {
@@ -160,7 +190,10 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         error = (e as Error).message
       }
       discardCopy(dir)
-      const valid = !!out && reviewRanProgram(out.runs)
+      // Whether the program ran is a soft signal (fix block A2): reported, and voids the review only when configured.
+      const ran = !!out && reviewRanProgram(out.runs)
+      const valid = !!out && (ran || !limits.voidWithoutRuns)
+      if (valid && !ran) accept.program_runs_zero!++
       const callRecord: ReviewCallRecord = {
         id: `V${round}.${n}.${attempts}`, round, stage: "acceptance", step: "review", review: n, attempt: attempts, cycle: at.cycle, commit: at.commit, request_chars: request.length,
         response_text: out?.text ?? "", usage: out?.usage ?? zero(), stub: out?.model?.startsWith("stub") === true, ...(out?.model ? { model: out.model } : {}), session: out?.session ?? "", program_runs: out?.runs.length ?? 0, valid, no_issues: !!out && valid && isNoIssues(out.text), ...(error ? { error } : {}),
@@ -199,18 +232,19 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     const after = deps.anchors.extract(workdir)
     const changed = touched(diffAnchors(before, after))
     let trial: { ok: boolean; output: string } | null = null
-    if (build.ok && deps.trial) { accept.trial.runs++; trial = await timed("trial", () => deps.trial!(workdir, id)); if (!trial.ok) accept.trial.failures++ }
+    // A host build that failed is tried in the target environment too: the executor gets that output, as the control group's does.
+    if (deps.trial) { accept.trial.runs++; trial = await timed("trial", () => deps.trial!(workdir, id)); if (!trial.ok) accept.trial.failures++ }
     const ok = build.ok && (trial?.ok ?? true)
     const commit = commitStep(workdir, `${id} ${kind}`, [["IC-Round", String(round)], ["IC-Cycle", id], ["IC-Session", session.id], ...task.map(o => ["IC-Object", `${o}@v${registry.objects.get(o)!.version}`] as [string, string]), ...(changed.length ? [["IC-Anchors", changed.join(", ")] as [string, string]] : []), ["IC-Build", build.ok ? "ok" : "failed"], ["IC-Trial", trial ? (trial.ok ? "ok" : "failed") : "none"]])
     lastCommit = commit
     const cycle: CycleRecord = { id, round, session: session.id, message: kind, commit, build: { ok: build.ok, output: build.ok ? "" : clip(build.output, 4000) }, runs: [], failing: [], contests: [], corrections: [], ambiguous: [], broke: [], anchors: changed, note: clip(reply.note, 4000), usage: reply.usage, items: [], ...(trial ? { trial: { ok: trial.ok, output: trial.ok ? "" : clip(trial.output, 4000) } } : {}) }
-    const items: ItemSighting[] = cycle.items!
+    items = cycle.items!
     if (!ok) {
       record.cycles.push(cycle)
       deps.onProgress?.(record)
       if (trialFixes >= trialMax) { record.status = "trial_spent"; break }
       trialFixes++
-      message = trialMessage(build, trial)
+      message = trialMessage(build, trial, deps.binary)
       kind = "trial"
       continue
     }
@@ -329,9 +363,9 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const focus: ReviewFocus = { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
       const r = await review(current, focus, n2)
       reviews++
-      const summary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length }
+      const summary: ReviewSummary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length, program_runs: r?.out?.runs.length ?? 0, fallback: 0, logged: 0 }
       for (const g of questions) asked.add(g.id)
-      const survivors: { id: string; text: string }[] = []
+      survivors = []
       if (r?.out) {
         // SUPERSEDED lines retire guards; a questioned guard not superseded is a regression from here on.
         const superseded = supersededIn(r.out.text)
@@ -353,59 +387,131 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
           itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry), record: guardCheck(g, library) })
         }
         if (!isNoIssues(r.out.text)) {
-          // The list as checks (one model call), then the premises and the reproduction, by code.
-          const f = await timed("formalize", () => formalizeReview(registry, round, r.out!.text, deps.binary, deps.formalize, { reviewId: `R${round}.${n2}`, callId: k => `F${round}.${n2}.${k}` }))
+          // The list as checks (one model call), then the premises and the reproduction, by code. What code cannot
+          // verify for reasons of its own goes out in the reviewer's words (fix block A1); premises outside the
+          // blocking tier are logged, the item sent (A3).
+          const reply = r.out.text
+          const entries = reviewEntries(reply)
+          const f = await timed("formalize", () => formalizeReview(registry, round, reply, deps.binary, deps.formalize, { reviewId: `R${round}.${n2}`, callId: k => `F${round}.${n2}.${k}` }))
           await deps.record.formalize(f.calls)
-          if (f.unavailable) throw new RoleUnavailable("formalize", f.unavailable, f.calls)
-          summary.reported = f.items.length + f.malformed.filter(m => m.item !== null).length
-          summary.malformed = f.malformed.length
-          if (!f.items.length && f.malformed.length === 0 && listEntries(r.out.text) > 0) summary.reported = listEntries(r.out.text)
-          for (const m of f.malformed) { accept.premise_blocked.malformed = (accept.premise_blocked.malformed ?? 0) + 1; items.push({ id: `V${round}.${n2}.${m.item ?? 0}`, digest: "", verdict: "malformed", action: "blocked", why: m.message }) }
+          if (f.unavailable && fallbackMode === "off") throw new RoleUnavailable("formalize", f.unavailable, f.calls)
+          const own: { n: number; text: string; units: string[]; failure: { premise: Premise; detail: string }; rec?: ReviewItemRecord }[] = []
+          // An item's text as the reviewer wrote it: its entry of the reply when the formalizer's quote is that entry (or
+          // holds it), else the quote when it is the reply's own words, else the entry.
+          const quoted = (n: number, q?: string) => {
+            const e = entries[n - 1]?.replace(/^(?:\d+[.)]|[-*•])\s+/u, "")
+            if (e && q && (squash(q).includes(squash(e)) || squash(e).includes(squash(q)))) return e
+            return q && squash(reply).includes(squash(q)) ? q : e ?? q ?? reply
+          }
+          const handled = new Set<number>()
+          let verified = 0
+          if (f.unavailable) {
+            entries.forEach((_t, k) => own.push({ n: k + 1, text: quoted(k + 1), units: [], failure: { premise: "formalize_failed", detail: f.unavailable! } }))
+            summary.reported = entries.length
+          } else {
+            const bad = new Map<number, string[]>()
+            for (const m of f.malformed) if (m.item !== null) bad.set(m.item, [...(bad.get(m.item) ?? []), m.message])
+            for (const [n, msgs] of bad) { handled.add(n); own.push({ n, text: quoted(n, f.texts.find(t => t.item === n)?.text), units: [], failure: { premise: "malformed", detail: msgs.join("; ") } }) }
+            for (const it of f.items) handled.add(it.item)
+            // A reply code could not read at all, or entries the formalizer left out: each entry as the reviewer wrote it.
+            const answerless = f.malformed.find(m => m.item === null)
+            entries.forEach((_t, k) => { if (!handled.has(k + 1)) own.push({ n: k + 1, text: quoted(k + 1), units: [], failure: answerless && !f.items.length && !bad.size ? { premise: "malformed", detail: answerless.message } : { premise: "not_formalized", detail: "the formalizer wrote no item for this entry of the review" } }) })
+            summary.reported = Math.max(entries.length, handled.size)
+            summary.malformed = bad.size + (answerless && !f.items.length && !bad.size ? entries.length : 0)
+          }
           await timed("premise checks", async () => {
             for (const it of f.items) {
               let vid = `V${round}.${n2}.${it.item}`
               const rec: ReviewItemRecord = { id: vid, round, review: `R${round}.${n2}`, item: it.item, text: it.text, units: it.units, premise: null }
               record.review_items!.push(rec)
-              const p = await checkPremises(registry, round, it, deps.sandbox, timeout)
-              let failure: { premise: Premise; detail: string } | null = p.ok ? null : p.failure
-              let checkRecord: CheckRecord | null = null
-              if (p.ok) {
-                checkRecord = itemCheckRecord(vid, round, it, p.check)
+              const a = await assessPremises(registry, round, it, deps.sandbox, timeout)
+              const logged = a.failures.filter(x => !block.has(x.premise) && !OWN_FAILURES.has(x.premise))
+              const ownFailure = a.failures.find(x => !block.has(x.premise) && OWN_FAILURES.has(x.premise))
+              let stop = a.failures.find(x => block.has(x.premise)) ?? null
+              if (logged.length) rec.logged = logged
+              if (!stop && a.check) {
+                let checkRecord = itemCheckRecord(vid, round, it, a.check)
                 // The same deviation reported again (same units, same call) is the item it was: the ledger goes on with it.
                 const key = keyOf(checkRecord)
                 const prior = [...itemChecks.entries()].find(([k, x]) => !k.startsWith("G") && x.key === key)
                 if (prior) { rec.same_as = prior[0]; vid = prior[0]; checkRecord = { ...checkRecord, id: vid } }
                 const rep = await reproduces(checkRecord, program, deps.runner, round, registry, deps.facts, timeout)
-                if (!rep.reproduced) failure = { premise: "not_reproduced", detail: `the check passes on the program as it stands (exit ${rep.run.exit_code})` }
-                else if (items.some(i => i.id === vid)) { /* seen in this cycle already (a carried item reported again): one sighting */ }
-                else {
-                  const d = runDigest(rep.run)
-                  rec.check = p.check
-                  itemChecks.set(vid, { text: it.text, record: checkRecord, item: prior?.[1].item ?? rec, key })
-                  const plan = sends.plan(vid, d)
-                  items.push({ id: vid, digest: d, verdict: "wrong", ...plan })
-                  if (plan.action === "send") survivors.push({ id: vid, text: it.text })
+                if (!rep.reproduced) {
+                  const nr = { premise: "not_reproduced" as const, detail: `the check passes on the program as it stands (exit ${rep.run.exit_code})` }
+                  if (block.has("not_reproduced")) stop = nr
+                  else { rec.logged = [...(rec.logged ?? []), nr]; sendFree(rec, quoted(it.item, it.text), `logged: ${nr.premise}`) }
+                } else {
+                  rec.disposition = rec.logged?.length ? "logged" : "sent"
+                  for (const l of rec.logged ?? []) accept.premise_logged![l.premise] = (accept.premise_logged![l.premise] ?? 0) + 1
+                  if (items.some(i => i.id === vid)) { /* seen in this cycle already (a carried item reported again): one sighting */ }
+                  else {
+                    const d = runDigest(rep.run)
+                    rec.check = a.check
+                    itemChecks.set(vid, { text: quoted(it.item, it.text), record: checkRecord, item: prior?.[1].item ?? rec, key })
+                    const plan = sends.plan(vid, d)
+                    items.push({ id: vid, digest: d, verdict: "wrong", ...plan })
+                    if (plan.action === "send") survivors.push({ id: vid, text: quoted(it.item, it.text) })
+                  }
                 }
-              }
-              if (failure) {
-                rec.premise = failure.premise
-                rec.detail = failure.detail
-                accept.premise_blocked[failure.premise] = (accept.premise_blocked[failure.premise] ?? 0) + 1
-                items.push({ id: rec.id, digest: "", verdict: "blocked", action: "blocked", why: `${failure.premise}: ${failure.detail}` })
+              } else if (!stop && ownFailure) own.push({ n: it.item, text: quoted(it.item, it.text), units: it.units, failure: ownFailure, rec })
+              else if (!stop) sendFree(rec, quoted(it.item, it.text), `logged: ${logged.map(l => l.premise).join(", ") || "no assertion could be resolved"}`)
+              if (stop) {
+                verified++
+                rec.premise = stop.premise
+                rec.detail = stop.detail
+                rec.disposition = "blocked"
+                accept.premise_blocked[stop.premise] = (accept.premise_blocked[stop.premise] ?? 0) + 1
+                items.push({ id: rec.id, digest: "", verdict: "blocked", action: "blocked", why: `${stop.premise}: ${stop.detail}` })
               }
             }
           })
-          summary.blocked = f.items.filter(it => record.review_items!.find(x => x.id === `V${round}.${n2}.${it.item}`)?.premise).length
+          // Code's own failures: the items go out in the reviewer's words, or (fallback off, or "review" when something
+          // else was sent or verified) are blocked as before.
+          if (own.length) {
+            const open = fallbackMode === "items" || (fallbackMode === "review" && !survivors.length && !verified)
+            const reasons: Record<string, number> = {}
+            for (const o of own) reasons[o.failure.premise] = (reasons[o.failure.premise] ?? 0) + 1
+            if (!open) for (const o of own) {
+              const rec = o.rec ?? (record.review_items!.push({ id: `V${round}.${n2}.${o.n}`, round, review: `R${round}.${n2}`, item: o.n, text: o.text, units: o.units, premise: null }), record.review_items!.at(-1)!)
+              rec.premise = o.failure.premise; rec.detail = o.failure.detail; rec.disposition = "blocked"
+              accept.premise_blocked[o.failure.premise] = (accept.premise_blocked[o.failure.premise] ?? 0) + 1
+              items.push({ id: rec.id, digest: "", verdict: o.failure.premise === "malformed" ? "malformed" : "blocked", action: "blocked", why: `${o.failure.premise}: ${o.failure.detail}` })
+            }
+            else {
+              // Nothing else from this review went out or was verified, and every entry is code's failure: the reply as the control group sends it.
+              const whole = !survivors.length && !verified && own.length >= entries.length
+              for (const o of own) {
+                const rec = o.rec ?? (record.review_items!.push({ id: `V${round}.${n2}.${o.n}`, round, review: `R${round}.${n2}`, item: o.n, text: o.text, units: o.units, premise: null }), record.review_items!.at(-1)!)
+                rec.disposition = "fallback"
+                rec.logged = [...(rec.logged ?? []), o.failure]
+              }
+              if (whole) {
+                const rec: ReviewItemRecord = { id: `V${round}.${n2}.0`, round, review: `R${round}.${n2}`, item: 0, text: replyAsList(reply), units: [...new Set(own.flatMap(o => o.units))], premise: null, disposition: "fallback", logged: Object.entries(reasons).map(([premise, k]) => ({ premise, detail: `${k} item(s)` })) }
+                record.review_items!.push(rec)
+                sendFree(rec, rec.text, `fallback, the whole reply: ${Object.entries(reasons).map(([k, v]) => `${k} ${v}`).join(", ")}`, true)
+              } else for (const o of own) sendFree(record.review_items!.find(x => x.id === (o.rec?.id ?? `V${round}.${n2}.${o.n}`))!, o.text, `fallback: ${o.failure.premise}: ${o.failure.detail}`)
+              summary.fallback = own.length
+              summary.fallback_whole = whole
+              summary.fallback_reasons = reasons
+              accept.fallback!.reviews++
+              if (whole) accept.fallback!.whole++
+              accept.fallback!.items += own.length
+              for (const [k, v] of Object.entries(reasons)) accept.fallback!.reasons[k] = (accept.fallback!.reasons[k] ?? 0) + v
+            }
+          }
+          summary.blocked = record.review_items!.filter(x => x.review === `R${round}.${n2}` && x.disposition === "blocked").length
+          summary.logged = record.review_items!.filter(x => x.review === `R${round}.${n2}` && x.disposition === "logged").length
         }
       }
       summary.sent = survivors.length
       lastReviewFound = survivors.length > 0
       accept.reviews.push(summary)
-      cycle.review = { n: summary.n, attempts: summary.attempts, valid: summary.valid, no_issues: summary.no_issues, reported: summary.reported, malformed: summary.malformed, blocked: summary.blocked, sent: summary.sent, superseded: summary.superseded, leads: summary.leads }
+      const { cycle: _c, ...ofCycle } = summary
+      cycle.review = ofCycle
     }
     // 6. What goes back to the executor: items the plan sends (regressions, review items, carried items not yet fixed).
     for (const i of items) if (i.action === "send" || i.action === "hold") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}) })
-    const toSend = items.filter(i => i.action === "send").map(i => ({ id: i.id, text: itemChecks.get(i.id)?.text ?? i.id }))
+    const toSend = items.filter(i => i.action === "send").map(i => ({ id: i.id, text: itemChecks.get(i.id)?.text ?? freeText.get(i.id)?.text ?? i.id }))
     cycle.failing = items.filter(i => i.verdict === "not_landed").map(i => i.id)
     cycle.corrections = items.filter(i => i.verdict === "wrong").map(i => i.id)
     const held = items.filter(i => i.action === "hold").map(i => i.id)
@@ -417,7 +523,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     if (repairs >= limits.repairCycles) { record.status = "cycles_spent"; break }
     repairs++
     sentInRepair = toSend.map(t => t.id)
-    const list = renderReviewList(toSend)
+    // The whole reply alone goes as the control group sends it: the reviewer's list as written.
+    const list = toSend.length === 1 && freeText.get(toSend[0].id)?.whole ? toSend[0].text : renderReviewList(toSend)
     evidence = list
     message = repairFromReview(list, voidedNote ? [voidedNote] : [])
     voidedNote = ""

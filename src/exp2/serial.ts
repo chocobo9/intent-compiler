@@ -28,6 +28,7 @@ import { guardCheck, guardCoverage, liveGuards, runGuards } from "./guards.js"
 import { itemCheckRecord, type FormalizeTransport } from "./formalize.js"
 import { runChecks, type CheckRun } from "./verdict.js"
 import type { Reviewer } from "./review.js"
+import type { Premise } from "./formalize.js"
 
 /**
  * The end-to-end serial (DESIGN §9, §14). Each round, from the previous round's checkpoint:
@@ -69,6 +70,10 @@ export interface AcceptanceConfig {
   /** Reviews a round at most (default 3), and repairs of a failing trial before the first review (default 2). */
   reviews?: number
   trialFixes?: number
+  /** Fix block A1–A3: the blocking tier of the premises, the fallback for items code cannot verify, voiding reviews without runs. */
+  premiseBlock?: readonly Premise[]
+  fallback?: "items" | "review" | "off"
+  voidWithoutRuns?: boolean
 }
 
 export interface SerialConfig {
@@ -498,7 +503,7 @@ export class Serial {
       ...(leads ? { leads } : {}),
       record: { review: r => store.recordReviewCall(r), formalize: c => store.recordFormalizeCalls(c), guards: (b, e) => store.recordGuards(b, e) },
       carried, quiet, time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
-    }, { ...limits.execution, ...(a.reviews !== undefined ? { reviews: a.reviews } : {}), ...(a.trialFixes !== undefined ? { trialFixes: a.trialFixes } : {}) })
+    }, { ...limits.execution, ...(a.reviews !== undefined ? { reviews: a.reviews } : {}), ...(a.trialFixes !== undefined ? { trialFixes: a.trialFixes } : {}), ...(a.premiseBlock ? { premiseBlock: a.premiseBlock } : {}), ...(a.fallback ? { fallback: a.fallback } : {}), ...(a.voidWithoutRuns !== undefined ? { voidWithoutRuns: a.voidWithoutRuns } : {}) })
     await ready()
     // 5. The library's verdict on the final program, the guard coverage, the ledger, the report, the checkpoint.
     const final = this.program(`R${round}-final`)
