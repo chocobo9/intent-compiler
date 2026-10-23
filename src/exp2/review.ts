@@ -127,11 +127,13 @@ export function reviewRanProgram(runs: readonly ProgramRun[]): boolean {
  */
 export function invokesProgram(command: string, binary: string): boolean {
   const b = binary.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
-  const runs = new RegExp(`(^|[\\s(])(?:[^\\s]*/)?\\.?/?${b}(\\.exe)?(\\s|$|[)])`, "u")
+  // Either path separator, and a binary the reviewer built under a longer name (dpipe-review.exe) count too.
+  const runs = new RegExp(`(^|[\\s(])(?:[^\\s]*[/\\\\])?\\.?[/\\\\]?${b}[-_A-Za-z0-9]*(\\.exe)?(\\s|$|[)])`, "u")
   return command.split(/&&|\|\||;|\|/u).map(seg => seg.trim()).some(seg => {
     if (/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*go\s+run\s/u.test(seg)) return true
     if (/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*go\s/u.test(seg)) return false
-    const body = seg.replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*/u, "").replace(/^(?:cd\s+\S+\s+)/u, "")
+    // PowerShell's call operator and a quoted path (`& ".\dpipe.exe"`) are not part of the command name.
+    const body = seg.replace(/^&\s+/u, "").replace(/^(["'])(\S+?)\1/u, "$2").replace(/^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*/u, "").replace(/^(?:cd\s+\S+\s+)/u, "")
     const first = body.split(/\s+/u)[0] ?? ""
     return runs.test(first) || /^(?:timeout|time|env|nice)\s/u.test(body) && runs.test(body)
   })
@@ -228,7 +230,8 @@ export function copyProgram(workdir: string, commit: string, dir: string): strin
   return dir
 }
 
-export function discardCopy(dir: string): void { rmSync(dir, { recursive: true, force: true }) }
+// Windows can keep a review copy locked (EPERM/EBUSY); like the control arm's script, leave it in place then.
+export function discardCopy(dir: string): void { try { rmSync(dir, { recursive: true, force: true }) } catch { /* left in place */ } }
 
 export interface ReviewCallRecord {
   id: string

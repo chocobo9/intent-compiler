@@ -158,10 +158,25 @@ export function buildFormalizeRequest(registry: Registry, round: number, review:
   return { round, sources: rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n"), review, program }
 }
 
+/**
+ * A unit id as the annotated sources show it, made canonical: the paragraph marker's content hash dropped
+ * (`R1.S3.P12#f683eb75` → `R1.S3.P12`) and a relative unit marker joined with a dot (`…#f683eb75:s10.c1` →
+ * `R1.S3.P12.s10.c1`). Ids that are already canonical are unchanged.
+ */
+export function canonicalUnit(u: string): string {
+  const m = /^([^#:]+)(?:#[0-9a-f]+)?(?::(.+))?$/u.exec(u.trim())
+  return m ? (m[2] ? `${m[1]}.${m[2]}` : m[1]) : u
+}
+
 /** Definite errors of an answer, per item (an item with problems is asked again once, then dropped as malformed). */
 export function formalizeProblems(registry: Registry, round: number, answer: unknown): { problems: { item: number | null; message: string }[]; items: FormalItem[] } {
   const a = answer as Partial<FormalizeAnswer> | null
   if (!a || typeof a !== "object" || !Array.isArray(a.items)) return { problems: [{ item: null, message: "the answer must have an items list" }], items: [] }
+  for (const raw of a.items as Partial<FormalItem>[]) {
+    if (!raw || typeof raw !== "object") continue
+    if (Array.isArray(raw.units)) raw.units = raw.units.map(u => typeof u === "string" ? canonicalUnit(u) : u)
+    for (const x of (Array.isArray(raw.assertions) ? raw.assertions : []) as Partial<AssertionDraft>[]) if (x?.source && typeof x.source.block === "string") x.source.block = canonicalUnit(x.source.block)
+  }
   const problems: { item: number | null; message: string }[] = []
   const items: FormalItem[] = []
   for (const [k, raw] of a.items.entries()) {
