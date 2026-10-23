@@ -3,7 +3,7 @@
 云端开发会话已停，最后提交 `ccr-992739b3-u5bcay` @ cd7fe03（批 4 已验证；批 1 未跑完整测试）。设计以 `origin/exp2-pure-ic` 的 DESIGN.md 为准：**§6a 原文的运行逻辑**、**§12j 收编**（12j.7 第 1–12 条是决定，12j.5 是去留表）。
 
 ## 先读
-1. DESIGN §6a、§12j（含 12j.7 决定）。
+1. DESIGN §6a（原文的运行逻辑）、**§6b（三句话、权威表、守卫三条规则）**、§12j（含 12j.7 决定）。任何涉及"给模型什么"或"谁判断什么"的改动，先对着 §6b 的权威表核。
 2. exp2/BLOCK-ACCEPT-NOTES.md §15–§22（云端各批的做法、依据、验收；§22.8 是批 1 的未完成清单）。
 3. exp2/evidence/real-runs-2026-10-23/README.md：七次真实 R1 和 15 轮 R1–R3 的状态与结论；ic15-all-scope 是 G77 重放材料。
 4. exp2/evidence/corpus-scan-2026-10-23/：26 题的原文扫描、修订标准答案集（revision-gold.json，193 句）、AUDIT（守卫期望值来源、裁决 token、归属召回）。
