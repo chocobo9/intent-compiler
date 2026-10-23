@@ -224,3 +224,21 @@ export function dockerGoBuilderAsync(outRoot: string, o: DockerOptions, timeoutM
     return { ok: true, output, program: { id: label, label: `build of ${label} (docker)`, command: [`/prog/${binary}`], source_dir: workdir, mount: { host: out, container: "/prog" } } }
   }
 }
+
+/**
+ * The trial in the image, no network, the work tree mounted read-only: `go build ./...` (into /tmp) and `go test ./...`.
+ * Its output is what the executor gets back when it fails.
+ */
+export function dockerTrial(o: DockerOptions, timeoutMs = 10 * 60_000): (workdir: string, label: string) => Promise<{ ok: boolean; output: string }> {
+  return async workdir => {
+    const dir = mkdtempSync(join(tmpdir(), "exp2-trial-"))
+    try {
+      const name = containerName()
+      const args = dockerRunArgs({ ...o, workdir: "/out", extra: [...limitFlags(o.buildMemoryMb ?? 2048, (o.limits?.pids ?? DEFAULT_RESOURCE_LIMITS.pids) * 4), ...(o.extra ?? [])] }, name, dir, ["sh", "-c", `cd /src && export GOFLAGS=-mod=readonly GOCACHE=${o.buildCache ? "/gocache" : "/tmp/gocache"} GOTMPDIR=/tmp && echo 'go build ./...' && go build -o /tmp/trial-bin ./... && echo 'go test ./...' && go test ./...`], [{ host: workdir, container: "/src" }, ...(o.buildCache ? [{ host: o.buildCache, container: "/gocache", readonly: false }] : [])])
+      const [cmd, ...pre] = docker(o)
+      const r = await execute([cmd, ...pre, ...args], dir, timeoutMs, process.env)
+      if (r.timed_out) removeContainer(o, name)
+      return { ok: r.exit_code === 0, output: `${r.stdout}${r.stderr}` }
+    } finally { rmSync(dir, { recursive: true, force: true }) }
+  }
+}

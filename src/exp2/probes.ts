@@ -276,12 +276,13 @@ export function probeProblems(answer: unknown, group: readonly GroupUnit[], opti
 const within = (registry: Registry, inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
 
 /** Probes whose units later text replaced or modified, or whose referred text did (the same rules as checks). */
-export function staleProbes(registry: Registry, probes: readonly ProbeRecord[], events: readonly ProbeEvent[], round: number): ProbeEvent[] {
+export function staleProbes(registry: Registry, probes: readonly ProbeRecord[], events: readonly ProbeEvent[], round: number, options: { byReference?: boolean } = {}): ProbeEvent[] {
   const gone = new Set(events.map(e => e.probe))
   return probes.filter(p => !gone.has(p.id)).flatMap((p): ProbeEvent[] => {
     const units = p.covers.map(c => c.unit)
     const own = replacedBasis(registry, units, p.round, round)
     if (own.length) return [{ probe: p.id, round, status: "stale", reason: `${own[0].unit}: ${own[0].parts.join(", ")} changed (${own[0].kind}) in round ${own[0].round} by ${own[0].by.join(", ")}` }]
+    if (options.byReference === false) return []
     for (const e of registry.references.filter(x => x.kind === "refers_to" && units.some(u => within(registry, x.from, u) || within(registry, u, x.from)))) {
       const hit = replacedBasis(registry, registry.referredText(e), p.round, round)
       if (hit.length) return [{ probe: p.id, round, status: "stale", reason: `${e.from} refers to ${e.to}, changed in round ${hit[0].round}` }]

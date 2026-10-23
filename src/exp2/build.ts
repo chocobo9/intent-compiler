@@ -46,3 +46,17 @@ export function goBuilderAsync(outRoot: string, platform: PlatformOptions = {}, 
     return { ok: true, output, program: { id: label, label: `build of ${label}`, command: [bin], source_dir: workdir } }
   }
 }
+
+/**
+ * The target environment's trial as the control group does it (DESIGN §12i): `go build ./...` then `go test ./...`
+ * in the work tree, here as local processes; the docker runner has its own (dockerTrial).
+ */
+export function goTrial(platform: PlatformOptions = {}, timeoutMs = 10 * 60_000): (workdir: string, label: string) => Promise<{ ok: boolean; output: string }> {
+  return async workdir => {
+    const env = { ...process.env, GOFLAGS: "-mod=mod" }
+    const b = await execute([goCommand(platform), "build", "./..."], workdir, timeoutMs, env)
+    if (b.exit_code !== 0) return { ok: false, output: `go build ./...\n${b.stdout}${b.stderr}` }
+    const t = await execute([goCommand(platform), "test", "./..."], workdir, timeoutMs, env)
+    return { ok: t.exit_code === 0, output: `go test ./...\n${t.stdout}${t.stderr}` }
+  }
+}

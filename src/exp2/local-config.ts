@@ -5,8 +5,8 @@ import { existsSync, readFileSync } from "node:fs"
 import { isAbsolute, join, posix, relative, resolve, win32 } from "node:path"
 import type { OpenCodeModelClient } from "../model/opencode-transport.js"
 import { GoAnchorExtractor } from "./anchors.js"
-import { binaryFromSource, goBuilder, goBuilderAsync } from "./build.js"
-import { dockerGoBuilder, dockerGoBuilderAsync, DockerRunner, DockerScriptSandbox, type DockerOptions } from "./docker.js"
+import { binaryFromSource, goBuilder, goBuilderAsync, goTrial } from "./build.js"
+import { dockerGoBuilder, dockerGoBuilderAsync, DockerRunner, DockerScriptSandbox, dockerTrial, type DockerOptions } from "./docker.js"
 import { DEFAULT_LIMITS, type ExecutionLimits } from "./execution.js"
 import { OpenCodeExecutor, type OpenCodeCodingClient } from "./opencode-executor.js"
 import type { PlatformOptions } from "./platform.js"
@@ -19,7 +19,9 @@ import type { AdjudicationTransport } from "./adjudication.js"
 import { emptyCassette, loadCassette, recordingTransports, saveCassette } from "./recording.js"
 import { PROBE_CONCURRENCY, type ProbeTransport } from "./probes.js"
 import type { JudgeTransport } from "./judge.js"
-import { createOpenCodeJudgeTransport, createOpenCodeProbesTransport, createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
+import { createOpenCodeFormalizeTransport, createOpenCodeJudgeTransport, createOpenCodeProbesTransport, createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
+import { OpenCodeReviewer } from "./review.js"
+import type { FormalizeTransport } from "./formalize.js"
 
 /**
  * The local run's configuration file and its assembly into a Serial (READY-FOR-LOCAL §0). Paths are resolved
@@ -75,7 +77,13 @@ export interface LocalConfig {
    * Probe writer and judge (BLOCK10 §1.2, §1.4) on the management server, each call a new session. Defaults:
    * gpt-6-sol-fast low and gpt-5.6-luna-fast medium, with the management server's provider. null switches them off.
    */
-  roles?: null | { probes?: RoleConfig; judge?: RoleConfig; checks?: RoleConfig; adjudicate?: RoleConfig }
+  roles?: null | { probes?: RoleConfig; judge?: RoleConfig; checks?: RoleConfig; adjudicate?: RoleConfig; review?: RoleConfig; formalize?: RoleConfig }
+  /**
+   * The acceptance (DESIGN §12i). mode review (default): the reviewer finds, code guards. probes (default false): under
+   * mode review, probes are still written once per unit and judged as leads. stale_by_reference (default false): the
+   * reference, reading and convention staleness rules. reviews (3), trial_fixes (2), review_agent ("build").
+   */
+  acceptance?: { mode?: "review" | "probes"; probes?: boolean; stale_by_reference?: boolean; reviews?: number; trial_fixes?: number; review_agent?: string }
   /**
    * Builds record which functions each run executes (`go build -cover`), so a cycle runs only the checks and probes a
    * change can affect (DESIGN §12h E4). Default true; with false nothing has coverage, so every cycle runs everything.
@@ -98,7 +106,9 @@ export interface RoleConfig { provider?: string; model?: string; variant?: strin
  * roles: probes and judge off.
  */
 const VERIFIER = { model: "gpt-6-sol-fast", variant: "low" } as const
-export const DEFAULT_ROLES = { probes: VERIFIER, judge: VERIFIER, checks: VERIFIER, adjudicate: { model: "gpt-5.6-luna-fast", variant: "medium" } } as const
+/** The reviewer is the control group's (gpt-5.6-luna-fast medium, DESIGN §12i); the formalizer uses the same model. */
+const REVIEWER = { model: "gpt-5.6-luna-fast", variant: "medium" } as const
+export const DEFAULT_ROLES = { probes: VERIFIER, judge: VERIFIER, checks: VERIFIER, adjudicate: { model: "gpt-5.6-luna-fast", variant: "medium" }, review: REVIEWER, formalize: REVIEWER } as const
 
 /** Absolute on either platform: the file is written for the Windows machine and checked anywhere. */
 const absolute = (p: string) => win32.isAbsolute(p) || posix.isAbsolute(p)
@@ -127,6 +137,8 @@ export function localConfigProblems(c: LocalConfig): string[] {
   if (c.runner?.kind === "docker" && !c.runner.image) p.push("runner.image is required for docker")
   if (c.rate_limit && (!Array.isArray(c.rate_limit.delays_ms) || !c.rate_limit.delays_ms.every(d => Number.isFinite(d) && d >= 0))) p.push("rate_limit.delays_ms must be an array of non-negative numbers")
   if (c.scoring && (!Array.isArray(c.scoring.command) || !c.scoring.command.length)) p.push("scoring.command must be a non-empty array")
+  if (c.acceptance?.mode !== undefined && c.acceptance.mode !== "review" && c.acceptance.mode !== "probes") p.push("acceptance.mode must be review or probes")
+  if (c.acceptance?.mode !== "probes" && c.roles === null) p.push("acceptance mode review needs the roles (the reviewer and the formalizer); set acceptance.mode to probes with roles null")
   // Checkpoints and builds outside the work tree: restoring a checkpoint cleans the work tree.
   const inside = (parent: string, child: string) => { const r = relative(resolve(parent), resolve(child)); return r === "" || (!r.startsWith("..") && !isAbsolute(r)) }
   if (c.repo_dir && c.checkpoints_dir && inside(c.repo_dir, c.checkpoints_dir)) p.push("checkpoints_dir must be outside repo_dir")
@@ -211,10 +223,17 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   // The program's name comes from the build command the requirements state.
   const texts = Array.from({ length: c.rounds }, (_, i) => join(at(c.inputs_dir), `round-${pad(i + 1)}.md`)).filter(existsSync).map(f => readFileSync(f, "utf8"))
   const binary = binaryFromSource(texts) ?? "app"
+  const mode = c.acceptance?.mode ?? "review"
+  const reviewRole = roleOptions({ providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant }, c, "review")
   const config: SerialConfig = {
     store: new Exp2Store(at(c.state_dir), c.run_id, c.ablation),
     workdir: at(c.repo_dir),
     checkpoints: at(c.checkpoints_dir),
+    copies: join(at(c.builds_dir), "review-copies"),
+    acceptance: { mode, probes: c.acceptance?.probes === true, staleByReference: c.acceptance?.stale_by_reference === true, ...(c.acceptance?.reviews !== undefined ? { reviews: c.acceptance.reviews } : {}), ...(c.acceptance?.trial_fixes !== undefined ? { trialFixes: c.acceptance.trial_fixes } : {}) },
+    // The reviewer runs on the coding server (tools on), in a copy of the program; the formalizer on the management server.
+    ...(mode === "review" ? { reviewer: new OpenCodeReviewer({ client: coding, providerId: reviewRole.providerId, modelId: reviewRole.modelId, variant: reviewRole.variant, agent: c.acceptance?.review_agent ?? c.coding.agent ?? "build", binary, rateLimit }) } : {}),
+    trial: docker ? dockerTrial(docker) : goTrial(platform),
     text: round => {
       const file = join(at(c.inputs_dir), `round-${pad(round)}.md`)
       if (!existsSync(file)) throw new Error(`No requirement text for round ${round}: ${file}`)
@@ -223,6 +242,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
     ...recorded(c, at, {
       attribution: createOpenCodeAttributionTransport(management, rateLimit), checks: createOpenCodeChecksTransport(roleOptions(management, c, "checks"), rateLimit), adjudicate: createOpenCodeAdjudicationTransport(roleOptions(management, c, "adjudicate"), rateLimit),
       ...(c.roles === null ? {} : { probes: createOpenCodeProbesTransport(roleOptions(management, c, "probes"), rateLimit), judge: createOpenCodeJudgeTransport(roleOptions(management, c, "judge"), rateLimit), ruling: createOpenCodeJudgeTransport(roleOptions(management, c, "adjudicate"), rateLimit) }),
+      ...(c.roles === null ? {} : { formalize: createOpenCodeFormalizeTransport(roleOptions(management, c, "formalize"), rateLimit) }),
     }),
     binary,
     platform,
@@ -248,14 +268,14 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   return { serial: new Serial(config), config }
 }
 
-function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport }) {
+function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport; formalize?: FormalizeTransport }) {
   if (!c.recording) return t
   const file = at(c.recording.cassette)
   const cassette = existsSync(file) ? loadCassette(file) : emptyCassette(c.recording.label)
   // Written now, so a path that cannot be written stops the run before any call is made.
   saveCassette(file, cassette)
   const r = recordingTransports(t, cassette, file)
-  return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate!, ...(r.probes ? { probes: r.probes, judge: r.judge!, ruling: r.ruling! } : {}) }
+  return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate!, ...(r.probes ? { probes: r.probes, judge: r.judge!, ruling: r.ruling! } : {}), ...(r.formalize ? { formalize: r.formalize } : {}) }
 }
 
 /** The management transport options with a role's model. */

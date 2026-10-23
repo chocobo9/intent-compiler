@@ -147,13 +147,14 @@ export interface CheckRunCounts { checks: number; probes: number; judged: number
 export interface SweepRecord { cycle: string; checks: number; probes: number; judged: number; cached: number; by_code: number; omissions: { id: string; since: string }[]; found: string[] }
 
 /** An item of the ledger as a cycle saw it (DESIGN §12h E2, E3): its output's digest, the verdict, and what the cycle did. */
-export interface ItemSighting { id: string; digest: string; verdict: string; action: "send" | "hold" | "none"; why?: string }
+/** blocked: a premise did not hold (DESIGN §12i item 2); discarded: the repair it was sent in broke a guard and was reverted (item 4). */
+export interface ItemSighting { id: string; digest: string; verdict: string; action: "send" | "hold" | "none" | "blocked" | "discarded"; why?: string }
 
 export interface CycleRecord {
   id: string
   round: number
   session: string
-  message: "work" | "repair" | "resume"
+  message: "work" | "repair" | "resume" | "trial"
   commit: string
   build: { ok: boolean; output: string }
   runs: { check: string; outcome: CheckRun["outcome"]; failure: string | null }[]
@@ -173,6 +174,14 @@ export interface CycleRecord {
   ruled?: { id: string; verdict: string; reason: string }[]
   /** What this cycle ran and how its verdicts were reached (DESIGN §12g, §12h E4). */
   probe_runs?: CheckRunCounts
+  /** The guards run on this cycle's program (DESIGN §12i items 3–4): counts, flips (passing before, failing now), guards born. */
+  guards?: { run: number; passed: number; failed: number; unknown: number; flipped: string[]; born: string[] }
+  /** This cycle's repair was reverted: it made passing guards fail; the leads it answered were discarded (§12i item 4). */
+  reverted?: { to: string; guards: string[]; discarded: string[] }
+  /** The review held on this cycle's program (§12i item 1). */
+  review?: { n: number; attempts: number; valid: boolean; no_issues: boolean; reported: number; malformed: number; blocked: number; sent: number; superseded: string[]; leads: number }
+  /** The target environment's trial (go build and go test) on this cycle's tree. */
+  trial?: { ok: boolean; output: string }
   /** The full run on this cycle's program, when the cycle had nothing left to send (DESIGN §12h E4). */
   sweep?: SweepRecord
   /** The discrimination measure, on the cycle it ran on. */
@@ -186,7 +195,7 @@ export interface ExecutionRecord {
   round: number
   base: string
   head: string
-  status: "done" | "cycles_spent" | "sessions_spent"
+  status: "done" | "cycles_spent" | "sessions_spent" | "trial_spent"
   /** The work order's task zone, so the next round can carry what was left undone. */
   task: string[]
   sessions: { id: string; opened_for: string; closed: "normally" | "broken" }[]
@@ -207,6 +216,45 @@ export interface ExecutionRecord {
   final?: ItemSighting[]
   /** What each check and probe executed on the kept program, for the next round's selection: function ids, then by id indexes into them and the output digest. */
   coverage?: { functions: string[]; ids: Record<string, { f?: number[]; d: string }> }
+  /** The first delivery: the commit before the first review (§12i), scored locally. */
+  first_delivery?: { cycle: string; commit: string }
+  /** The reviewer's items of this round, as the code formalized and checked them (DESIGN §12i). */
+  review_items?: ReviewItemRecord[]
+  /** The round's acceptance under DESIGN §12i, summarized for the report. */
+  accept?: AcceptRoundRecord
+}
+
+/** One item of a review (DESIGN §12i): the reviewer's words, the units, and what the code made of it. */
+export interface ReviewItemRecord {
+  /** V<round>.<review>.<item>. */
+  id: string
+  round: number
+  review: string
+  item: number
+  text: string
+  units: string[]
+  /** The premise it did not pass, or null when it was sent. */
+  premise: string | null
+  detail?: string
+  /** The check the code built (sent items), for later runs. */
+  check?: { input: import("./runner.js").CheckInput; assertions: import("./checks.js").Assertion[]; reference_script: import("./checks.js").CheckDraft["reference_script"]; object: string | null }
+  /** The guard it became once the executor fixed it. */
+  guard?: string
+  /** The same deviation reported again (same units, same call): the earlier item's id, which the ledger keeps using. */
+  same_as?: string
+}
+
+export interface AcceptRoundRecord {
+  reviews: { n: number; cycle: string; attempts: number; valid: boolean; no_issues: boolean; reported: number; malformed: number; blocked: number; sent: number; superseded: string[]; leads: number }[]
+  /** Review sessions in which the program never ran (done again). */
+  voided: number
+  /** Items the premises stopped, by premise. */
+  premise_blocked: Record<string, number>
+  guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; retired: { id: string; reason: string }[] }
+  reverted: number
+  trial: { runs: number; failures: number }
+  /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind. */
+  leads: { library: number; judgment: number }
 }
 
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
@@ -514,7 +562,7 @@ export async function executeRound(workdir: string, workorder: WorkOrder, text: 
     for (const f of detected.findings) if (f.verdict === "ok") okSoFar.add(pairKey(f.probe, f.unit))
     // Only a program that built has items to send.
     if (!build.ok) items = items.map(i => ({ ...i, action: "none" as const, why: undefined }))
-    for (const i of items) { if (i.verdict === "not_landed" || i.verdict === "wrong") tracked.add(i.id); if (i.action !== "none") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}) }) }
+    for (const i of items) { if (i.verdict === "not_landed" || i.verdict === "wrong") tracked.add(i.id); if (i.action === "send" || i.action === "hold") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}) }) }
     const send = new Set(toSend())
     const held = items.filter(i => i.action === "hold").map(i => i.id)
     const trailers: [string, string][] = [

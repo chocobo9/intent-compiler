@@ -222,7 +222,7 @@ describe("exp2 store: append-only, ordered, one writer", () => {
   })
 
   it("refuses any edit of an existing entry", () => {
-    const base: Exp2State = { profile: "exp2-ic/block1", run_id: "t", sources: [{ round: 1, text: "a", hash: "x" }], calls: [], rounds: [], signals: [], checks: [], check_events: [], check_runs: [], check_calls: [], check_rounds: [], executions: [], reports: [], rulings: [], adjudication_calls: [], probes: [], probe_events: [], probe_calls: [], probe_rounds: [], judgments: [], judge_calls: [], probe_measures: [] }
+    const base: Exp2State = { profile: "exp2-ic/block1", run_id: "t", sources: [{ round: 1, text: "a", hash: "x" }], calls: [], rounds: [], signals: [], checks: [], check_events: [], check_runs: [], check_calls: [], check_rounds: [], executions: [], reports: [], rulings: [], adjudication_calls: [], probes: [], probe_events: [], probe_calls: [], probe_rounds: [], judgments: [], judge_calls: [], probe_measures: [], guards: [], guard_events: [], review_calls: [], formalize_calls: [] }
     assert.doesNotThrow(() => appendOnly(base, { ...base, sources: [...base.sources, { round: 2, text: "b", hash: "y" }] }))
     assert.throws(() => appendOnly(base, { ...base, sources: [{ round: 1, text: "changed", hash: "x" }] }), /append-only/u)
     assert.throws(() => appendOnly(base, { ...base, sources: [] }), /append-only/u)

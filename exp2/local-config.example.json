@@ -19,7 +19,7 @@
     "directory": "C:/exp2/run1/app",
     "provider": "openai",
     "model": "gpt-5.6-luna-fast",
-    "variant": "medium",
+    "variant": "low",
     "agent": "build",
     "request_timeout_ms": 3600000
   },
@@ -81,6 +81,22 @@
     "adjudicate": {
       "model": "gpt-5.6-luna-fast",
       "variant": "medium"
+    },
+    "review": {
+      "model": "gpt-5.6-luna-fast",
+      "variant": "medium"
+    },
+    "formalize": {
+      "model": "gpt-5.6-luna-fast",
+      "variant": "medium"
     }
+  },
+  "acceptance": {
+    "mode": "review",
+    "probes": false,
+    "stale_by_reference": false,
+    "reviews": 3,
+    "trial_fixes": 2,
+    "review_agent": "build"
   }
 }

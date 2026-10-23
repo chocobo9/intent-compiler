@@ -216,7 +216,7 @@ const verb = (kind: string) => kind === "partial" ? "partly revised" : kind === 
  * or modified after they entered; a block their basis refers to (refers_to) was; or a convention in their `uses`
  * changed. Each event names its cause.
  */
-export function staleChecks(registry: Registry, library: readonly CheckRecord[], events: readonly CheckEvent[], round: number): CheckEvent[] {
+export function staleChecks(registry: Registry, library: readonly CheckRecord[], events: readonly CheckEvent[], round: number, options: { byReference?: boolean } = {}): CheckEvent[] {
   return activeChecks(library, events).flatMap((c): CheckEvent[] => {
     const basis = basisOf(registry, c)
     const own = replacedBasis(registry, basis, c.round, round)
@@ -224,6 +224,9 @@ export function staleChecks(registry: Registry, library: readonly CheckRecord[],
       const h = own[0]
       return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "basis", source: h.unit }, reason: `basis ${h.unit}: ${h.parts.join(", ")} ${verb(h.kind)} in round ${h.round} by ${h.by.join(", ")}` }]
     }
+    // Staleness inferred from what the basis refers to, from unstated readings and from conventions used: off under
+    // DESIGN §12i item 6, where only a deterministic flip of a guard says a check is out of date.
+    if (options.byReference === false) return []
     const refs = registry.references.filter(e => e.kind === "refers_to" && basis.some(u => within(registry, e.from, u) || within(registry, u, e.from)))
     for (const e of refs) {
       const hit = replacedBasis(registry, registry.referredText(e), c.round, round)
@@ -333,7 +336,7 @@ export interface Coverage {
 }
 
 /** Sentence-level units inside a block (a paragraph without sentences is one unit; a clause is its own unit). */
-function unitsOf(registry: Registry, id: string): SourceBlock[] {
+export function unitsOf(registry: Registry, id: string): SourceBlock[] {
   const b = registry.block(id)
   if (!b || b.kind === "heading") return []
   if (b.level === "clause" || b.level === "sentence" || (b.level === "paragraph" && !b.children.length)) return [b]
@@ -341,7 +344,7 @@ function unitsOf(registry: Registry, id: string): SourceBlock[] {
 }
 
 /** A basis id rests on a unit when it is the unit, lies inside it, or holds it without holding anything else. */
-function restsOn(registry: Registry, basis: string, unit: SourceBlock): boolean {
+export function restsOn(registry: Registry, basis: string, unit: SourceBlock): boolean {
   if (within(registry, basis, unit.id)) return true
   if (!within(registry, unit.id, basis)) return false
   const b = registry.block(basis)!
@@ -543,7 +546,7 @@ function namesOf(k: CheckDraft): { what: string; name: string }[] {
   return out.filter(n => !seen.has(`${n.what}:${n.name}`) && seen.add(`${n.what}:${n.name}`))
 }
 
-function targetProblems(t: Target): string | null {
+export function targetProblems(t: Target): string | null {
   const needsPath = ["file", "file_line", "file_exists", "json", "csv_cell"].includes(t.kind)
   if (needsPath && !t.path) return `${t.kind} needs a path`
   if (t.path && t.path !== "-" && !safePath(t.path)) return `path ${t.path} must be relative and inside the run directory`

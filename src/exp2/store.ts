@@ -13,6 +13,9 @@ import { adjudicate, type AdjudicationCallRecord, type AdjudicationTransport, ty
 import type { Discrimination } from "./discrimination.js"
 import { activeProbes, deriveProbes, openGaps, probeUnits, staleProbes, strengthenProbes, type ProbeCallRecord, type ProbeEvent, type ProbeRecord, type ProbeRoundRecord, type ProbeRun, type ProbeTransport } from "./probes.js"
 import { judgeRuns, type Finding, type JudgeCallRecord, type Judgment, type JudgeTransport } from "./judge.js"
+import type { GuardEvent, GuardRecord } from "./guards.js"
+import type { ReviewCallRecord } from "./review.js"
+import type { FormalizeCallRecord } from "./formalize.js"
 
 /**
  * Exp2 external state (DESIGN §5): one JSON file kept by code, append-only, changed only inside a locked
@@ -62,6 +65,12 @@ export interface Exp2State {
   judge_calls: JudgeCallRecord[]
   /** Each round's measure of whether the probes tell right from wrong, and the strengthening it led to (BLOCK10 §7.3). */
   probe_measures: MeasureRecord[]
+  /** Guards (G1, G2, … never reused) and the changes of their standing (DESIGN §12i items 3–6). */
+  guards: GuardRecord[]
+  guard_events: GuardEvent[]
+  /** The reviewer's sessions and the formalizer's calls (DESIGN §12i items 1–2). */
+  review_calls: ReviewCallRecord[]
+  formalize_calls: FormalizeCallRecord[]
 }
 
 export interface MeasureRecord {
@@ -102,6 +111,8 @@ export interface DeriveDeps {
   baseline: ProgramRef
   maxRepairs?: number
   timeoutMs?: number
+  /** Whether a check goes stale when text it refers to, a convention it uses or its object's later text changes (default true; off under DESIGN §12i item 6). */
+  staleByReference?: boolean
 }
 
 export interface IngestOptions { maxRepairs?: number }
@@ -174,7 +185,7 @@ export class Exp2Store {
       if (!s.rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} has no accepted attribution`)
       if (s.check_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} already has its checks`)
       const registry = this.registry(s)
-      s.check_events.push(...staleChecks(registry, s.checks, s.check_events, round))
+      s.check_events.push(...staleChecks(registry, s.checks, s.check_events, round, { byReference: deps.staleByReference }))
       const nextCall = () => s.calls.length + s.check_calls.length
       const outcome = await deriveChecks(registry, round, s.checks, s.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `M${nextCall() + n}` })
       s.check_calls.push(...outcome.calls)
@@ -214,11 +225,11 @@ export class Exp2Store {
   }
 
   /** Reruns the whole active library on `program` (the regression), records the runs, and returns the statuses. */
-  async runRoundChecks(round: number, program: ProgramRef, runner: CheckRunner, options: { verdict?: boolean; timeoutMs?: number; adjudicate?: AdjudicationTransport } = {}): Promise<{ runs: CheckRun[]; statuses: ObjectStatus[] }> {
+  async runRoundChecks(round: number, program: ProgramRef, runner: CheckRunner, options: { verdict?: boolean; timeoutMs?: number; adjudicate?: AdjudicationTransport; staleByReference?: boolean } = {}): Promise<{ runs: CheckRun[]; statuses: ObjectStatus[] }> {
     const verdict = options.verdict ?? true, timeoutMs = options.timeoutMs ?? 10_000
     return this.transaction(async s => {
       const registry = this.registry(s)
-      s.check_events.push(...staleChecks(registry, s.checks.filter(c => c.round <= round), s.check_events, round))
+      s.check_events.push(...staleChecks(registry, s.checks.filter(c => c.round <= round), s.check_events, round, { byReference: options.staleByReference }))
       const facts = codeFacts(registry, round)
       const library = activeChecks(s.checks.filter(c => c.round <= round), s.check_events.filter(e => e.round <= round))
       let runs: CheckRun[] = (await runChecks(library, program, runner, round, registry, facts, timeoutMs, id => upheldKinds(s, id))).map(r => ({ ...r, verdict }))
@@ -242,25 +253,30 @@ export class Exp2Store {
    * Marks probes whose text changed stale, then writes probes for this round's changed units and for the live units
    * of the probes that just went stale. Each admitted probe gets the next P id.
    */
-  async deriveRoundProbes(round: number, transport: ProbeTransport, options: { maxRepairs?: number } = {}): Promise<ProbeRoundRecord> {
-    return this.writeRoundProbes(round, await this.beginRoundProbes(round), transport, options)
+  async deriveRoundProbes(round: number, transport: ProbeTransport, options: { maxRepairs?: number; byReference?: boolean; gaps?: boolean } = {}): Promise<ProbeRoundRecord> {
+    return this.writeRoundProbes(round, await this.beginRoundProbes(round, options), transport, options)
   }
 
   /**
    * The first, short part of a round's probe writing (BLOCK10 §9.1): probes whose text changed are marked stale at
    * once, so nothing run from here on uses them, and the units to write for are fixed. No model call.
    */
-  async beginRoundProbes(round: number): Promise<{ units: string[]; stale: string[]; gaps: string[] }> {
+  /**
+   * byReference (default true): probes also go stale when text their units refer to changes; gaps (default true): units
+   * earlier rounds left unexercised are written for again. Both off under DESIGN §12i item 5–6: a unit is written for
+   * once, when it enters or is revised.
+   */
+  async beginRoundProbes(round: number, options: { byReference?: boolean; gaps?: boolean } = {}): Promise<{ units: string[]; stale: string[]; gaps: string[] }> {
     return this.transaction(s => {
       const registry = this.registry(s)
       if (s.probe_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Probes of round ${round} are already written`)
-      const stale = staleProbes(registry, s.probes, s.probe_events, round)
+      const stale = staleProbes(registry, s.probes, s.probe_events, round, { byReference: options.byReference })
       s.probe_events.push(...stale)
       // Stale this round, by now or an earlier attempt of the round: their live units are written again.
       const now = s.probe_events.filter(e => e.round === round).map(e => e.probe)
       const units = probeUnits(registry, round, s.probes.filter(p => now.includes(p.id)))
       // Units earlier rounds left unexercised come back until covered or declared uncheckable (BLOCK11 §2).
-      const gaps = openGaps(registry, s.probe_rounds, libraryCovers(registry, s.checks, s.check_events)).filter(u => !units.includes(u))
+      const gaps = options.gaps === false ? [] : openGaps(registry, s.probe_rounds, libraryCovers(registry, s.checks, s.check_events)).filter(u => !units.includes(u))
       return { units: [...units, ...gaps], stale: now, gaps }
     })
   }
@@ -359,6 +375,25 @@ export class Exp2Store {
     })
   }
 
+  /** Keeps one review session's record (DESIGN §12i item 1) as soon as it ends. */
+  async recordReviewCall(record: ReviewCallRecord): Promise<void> {
+    await this.transaction(s => { s.review_calls.push(record) })
+  }
+
+  /** Keeps the formalizer's calls of one review, renumbered in the state (F<n>). */
+  async recordFormalizeCalls(calls: FormalizeCallRecord[]): Promise<void> {
+    await this.transaction(s => { renumber(calls, "F", s.formalize_calls.length); s.formalize_calls.push(...calls) })
+  }
+
+  /** Keeps guards born and changes of standing (DESIGN §12i items 3–6); ids are the driver's, in sequence. */
+  async recordGuards(born: readonly GuardRecord[], events: readonly GuardEvent[]): Promise<void> {
+    if (!born.length && !events.length) return
+    await this.transaction(s => {
+      for (const g of born) if (g.id !== `G${s.guards.length + 1}`) throw new Error(`guard ${g.id} is out of sequence (next is G${s.guards.length + 1})`); else s.guards.push(g)
+      s.guard_events.push(...events)
+    })
+  }
+
   /** The state file's exact text, for a checkpoint. */
   exportState(): string {
     return existsSync(this.file) ? readFileSync(this.file, "utf8") : JSON.stringify(this.inspect(), null, 2) + "\n"
@@ -433,12 +468,13 @@ function renumber(calls: { id: string }[], prefix: string, count: number): Map<s
 
 function emptyChecks() {
   return { checks: [] as CheckRecord[], check_events: [] as CheckEvent[], check_runs: [] as CheckRun[], check_calls: [] as CheckCallRecord[], check_rounds: [] as CheckRoundRecord[], executions: [] as ExecutionRecord[], reports: [] as RoundReport[], rulings: [] as Ruling[], adjudication_calls: [] as AdjudicationCallRecord[],
-    probes: [] as ProbeRecord[], probe_events: [] as ProbeEvent[], probe_calls: [] as ProbeCallRecord[], probe_rounds: [] as ProbeRoundRecord[], judgments: [] as Judgment[], judge_calls: [] as JudgeCallRecord[], probe_measures: [] as MeasureRecord[] }
+    probes: [] as ProbeRecord[], probe_events: [] as ProbeEvent[], probe_calls: [] as ProbeCallRecord[], probe_rounds: [] as ProbeRoundRecord[], judgments: [] as Judgment[], judge_calls: [] as JudgeCallRecord[], probe_measures: [] as MeasureRecord[],
+    guards: [] as GuardRecord[], guard_events: [] as GuardEvent[], review_calls: [] as ReviewCallRecord[], formalize_calls: [] as FormalizeCallRecord[] }
 }
 
 /** Every list in the state may only grow; existing entries must stay byte-identical. */
 export function appendOnly(before: Exp2State, after: Exp2State): void {
-  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports", "rulings", "adjudication_calls", "probes", "probe_events", "probe_calls", "probe_rounds", "judgments", "judge_calls", "probe_measures"] as const) {
+  for (const key of ["sources", "calls", "rounds", "signals", "checks", "check_events", "check_runs", "check_calls", "check_rounds", "executions", "reports", "rulings", "adjudication_calls", "probes", "probe_events", "probe_calls", "probe_rounds", "judgments", "judge_calls", "probe_measures", "guards", "guard_events", "review_calls", "formalize_calls"] as const) {
     const a = (before[key] ?? []) as unknown[], b = (after[key] ?? []) as unknown[]
     if (b.length < a.length || a.some((x, i) => JSON.stringify(x) !== JSON.stringify(b[i]))) throw new Error(`Exp2 state ${key} is append-only`)
   }

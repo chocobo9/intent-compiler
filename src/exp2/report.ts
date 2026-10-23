@@ -8,6 +8,7 @@ import type { ProbeRoundRecord } from "./probes.js"
 import { pairKey, type Finding } from "./judge.js"
 import type { SweepRecord } from "./execution.js"
 import type { LedgerEntry, LedgerSummary } from "./ledger.js"
+import type { AcceptRoundRecord } from "./execution.js"
 
 /**
  * The round report (DESIGN §14), built by code from the round's records: official score (filled in locally only,
@@ -72,6 +73,30 @@ export interface RoundReport {
   ledger?: LedgerSummary
   /** The full run before delivery and what the cycles' selection missed (DESIGN §12h E4). */
   selection?: { sweep: SweepRecord | null; omissions: { id: string; since: string }[] }
+  /** The round under the review acceptance (DESIGN §12i): reviews, premises, guards, reverts, coverage, the roles' cost. */
+  review?: ReviewReport
+  /** The first delivery's official score, scored locally like the round's (DESIGN §12i); never read by the system. */
+  first_delivery_score?: null | { passed: number; total: number }
+}
+
+export interface ReviewReport {
+  first_delivery: { cycle: string; commit: string } | null
+  reviews: AcceptRoundRecord["reviews"]
+  voided: number
+  reviewer: StageCost
+  formalizer: StageCost
+  models: { reviewer: string[]; formalizer: string[] }
+  /** Reviewer's items over the round, and how many entered a repair list. */
+  items: { reported: number; sent: number; malformed: number }
+  premise_blocked: Record<string, number>
+  guards: AcceptRoundRecord["guards"]
+  reverted: number
+  trial: { runs: number; failures: number }
+  leads: { library: number; judgment: number }
+  /** Live rule units, those a guard that ran rests on, and those none does (DESIGN §12i item 7). */
+  coverage: { units: number; covered: number; uncovered: string[] } | null
+  /** Cache reads over all input read, per role. */
+  cache: { reviewer: number | null; formalizer: number | null }
 }
 
 export interface AcceptanceSummary {
@@ -152,6 +177,13 @@ export interface ReportInput {
   wall?: RoundReport["wall"]
   summary?: AcceptanceSummary
   ledger?: LedgerSummary
+  review?: {
+    accept: AcceptRoundRecord
+    first_delivery: { cycle: string; commit: string } | null
+    review_calls: readonly { usage: TokenUsage; stub: boolean; model?: string }[]
+    formalize_calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
+    coverage: { units: number; covered: number; uncovered: string[] } | null
+  }
   probes?: null | {
     calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
     judge_calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
@@ -212,7 +244,20 @@ export function buildReport(i: ReportInput): RoundReport {
     ...(i.wall ? { wall: i.wall } : {}),
     ...(i.summary ? { acceptance: i.summary } : {}),
     ...(i.ledger ? { ledger: i.ledger } : {}),
+    ...(i.review ? { review: reviewReport(i.review) } : {}),
     ...(e.sweep || e.cycles.some(c => c.sweep) ? { selection: { sweep: e.sweep ?? null, omissions: dedupe([...e.cycles.flatMap(c => c.sweep?.omissions ?? []), ...(e.sweep && !e.cycles.some(c => c.sweep === e.sweep) ? e.sweep.omissions : [])]) } } : {}),
+  }
+}
+
+function reviewReport(r: NonNullable<ReportInput["review"]>): ReviewReport {
+  const reviewer = stageCost(r.review_calls), formalizer = stageCost(r.formalize_calls)
+  const a = r.accept
+  return {
+    first_delivery: r.first_delivery, reviews: a.reviews, voided: a.voided, reviewer, formalizer,
+    models: { reviewer: [...new Set(r.review_calls.flatMap(c => c.model ? [c.model] : []))], formalizer: [...new Set(r.formalize_calls.flatMap(c => c.model ? [c.model] : []))] },
+    items: { reported: a.reviews.reduce((n, x) => n + x.reported, 0), sent: a.reviews.reduce((n, x) => n + x.sent, 0), malformed: a.reviews.reduce((n, x) => n + x.malformed, 0) },
+    premise_blocked: a.premise_blocked, guards: a.guards, reverted: a.reverted, trial: a.trial, leads: a.leads, coverage: r.coverage,
+    cache: { reviewer: cacheShare(reviewer.tokens), formalizer: cacheShare(formalizer.tokens) },
   }
 }
 
@@ -223,6 +268,17 @@ const cacheShare = (u: TokenUsage) => ratio(u.cache_read_tokens, u.input_tokens 
 const tok = (u: TokenUsage) => `in ${u.input_tokens}, cache read ${u.cache_read_tokens}, out ${u.output_tokens}`
 const reasons = (m: Partial<Record<string, number>>) => { const e = Object.entries(m).filter(([, n]) => n); return e.length ? `${e.reduce((t, [, n]) => t + n!, 0)} (${e.map(([k, n]) => `${k} ${n}`).join(", ")})` : "0" }
 const tallyBy = (list: string[]) => [...list.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>())].map(([k, n]) => `${k} ${n}`).join(", ")
+
+function renderReview(v: ReviewReport, firstScore: null | { passed: number; total: number }): string[] {
+  const by = (m: Record<string, number>) => Object.entries(m).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"
+  return [
+    `Review acceptance: first delivery ${v.first_delivery ? `${v.first_delivery.cycle} ${v.first_delivery.commit.slice(0, 8)}` : "none"}${firstScore ? ` (official ${firstScore.passed}/${firstScore.total})` : ""}; trial runs ${v.trial.runs} (${v.trial.failures} failed); reviews ${v.reviews.length} (void sessions ${v.voided}): ${v.reviews.map(x => `#${x.n} on ${x.cycle}${x.valid ? "" : " void"}${x.no_issues ? " NO ISSUES" : ""}: reported ${x.reported}, blocked ${x.blocked}, malformed ${x.malformed}, sent ${x.sent}${x.superseded.length ? `, superseded ${x.superseded.join(" ")}` : ""}, leads given ${x.leads}`).join("; ") || "none"}.`,
+    `Reviewer items: reported ${v.items.reported}, entered a repair list ${v.items.sent}; premise checks blocked ${Object.values(v.premise_blocked).reduce((a, b) => a + b, 0)} (${by(v.premise_blocked)}).`,
+    `Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}${v.guards.born.length ? ` (${v.guards.born.join(", ")})` : ""}; flips on changed text ${v.guards.flipped_changed_text.length}${v.guards.flipped_changed_text.length ? ` (${v.guards.flipped_changed_text.join(", ")})` : ""}, on unchanged text ${v.guards.flipped_unchanged.length}${v.guards.flipped_unchanged.length ? ` (${v.guards.flipped_unchanged.join(", ")})` : ""}; retired as superseded ${v.guards.retired.length}${v.guards.retired.length ? ` (${v.guards.retired.map(x => x.id).join(", ")})` : ""}; repairs reverted ${v.reverted}.`,
+    `Guard coverage: ${v.coverage ? `${v.coverage.covered}/${v.coverage.units} live units; uncovered ${v.coverage.uncovered.length}${v.coverage.uncovered.length ? ` (${v.coverage.uncovered.slice(0, 25).join(", ")}${v.coverage.uncovered.length > 25 ? ` and ${v.coverage.uncovered.length - 25} more; the full list is in report.json` : ""})` : ""}` : "n/a"}. Leads to the reviewer: library ${v.leads.library}, judgment ${v.leads.judgment}.`,
+    `Reviewer (${v.models.reviewer.join(", ") || "?"}): ${v.reviewer.calls} sessions, ${tok(v.reviewer.tokens)}, cache share ${v.cache.reviewer ?? "n/a"}. Formalizer (${v.models.formalizer.join(", ") || "?"}): ${v.formalizer.calls} calls, ${tok(v.formalizer.tokens)}, cache share ${v.cache.formalizer ?? "n/a"}.`,
+  ]
+}
 
 export function renderReport(r: RoundReport): string {
   const line = (label: string, c: StageCost) => `| ${label} | ${c.calls} | ${tok(c.tokens)}${c.unknown_usage_calls ? ` (+ ${c.unknown_usage_calls} calls unknown)` : ""} | ${c.stub_calls} |`
@@ -256,6 +312,7 @@ export function renderReport(r: RoundReport): string {
       `Open: program wrong ${r.acceptance.open.program_wrong.length}, uncovered ${r.acceptance.open.uncovered.length}, reference disagreement pending ${r.acceptance.open.reference_pending.length}, ambiguous ${r.acceptance.open.ambiguous.length}; closed as uncheckable ${r.acceptance.open.uncheckable.length}${r.acceptance.open.confirmed?.length ? `; confirmed by a ruling ${r.acceptance.open.confirmed.length}` : ""}${r.acceptance.open.uncheckable.length ? ` (${r.acceptance.open.uncheckable.map(u => u.unit).join(", ")})` : ""}.`,
     ] : []),
     ...(r.selection ? [`Selection: full run before delivery on ${r.selection.sweep?.cycle ?? "none"}${r.selection.sweep ? ` (checks ${r.selection.sweep.checks}, probes ${r.selection.sweep.probes}, found ${r.selection.sweep.found.length})` : ""}; selection omissions ${r.selection.omissions.length}${r.selection.omissions.length ? ` (${r.selection.omissions.map(o => `${o.id} since ${o.since}`).join(", ")})` : ""}.`] : []),
+    ...(r.review ? renderReview(r.review, r.first_delivery_score ?? null) : []),
     ...(r.ledger ? [`Ledger: open program wrong ${r.ledger.open.program_wrong.length} (confirmed by a ruling ${r.ledger.confirmed?.length ?? 0}), uncovered ${r.ledger.open.uncovered.length}, reference pending ${r.ledger.open.reference_pending.length}; listed only ${r.ledger.report_only.length}${r.ledger.report_only.length ? ` (${tallyBy(r.ledger.report_only.map(x => x.how))})` : ""}; ended this round ${r.ledger.ended.length}${r.ledger.ended.length ? ` (${tallyBy(r.ledger.ended.map(x => x.how))})` : ""}; sent ${r.ledger.sends} times; held ${r.ledger.held.length}.`] : []),
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,

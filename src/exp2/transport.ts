@@ -5,6 +5,7 @@ import { withProviderErrors, type RateLimitPolicy } from "./provider-errors.js"
 import { PROBES_SCHEMA, PROBES_SYSTEM_PROMPT, type ProbeRequest, type ProbeTransport } from "./probes.js"
 import { JUDGE_SCHEMA, JUDGE_SYSTEM_PROMPT, type JudgeRequest, type JudgeTransport } from "./judge.js"
 import { ADJUDICATION_SCHEMA, ADJUDICATION_SYSTEM_PROMPT, type AdjudicationRequest, type AdjudicationTransport } from "./adjudication.js"
+import { FORMALIZE_SCHEMA, FORMALIZE_SYSTEM_PROMPT, type FormalizeRequest, type FormalizeTransport } from "./formalize.js"
 
 /**
  * The attribution step over OpenCode structured output. The first answer and every repair use the same system
@@ -68,6 +69,15 @@ export function createOpenCodeProbesTransport(options: OpenCodeModelTransportV2O
 /** The judge (BLOCK10 §1.4), by default gpt-5.6-luna-fast medium on the management server; a new session per call. */
 export function createOpenCodeJudgeTransport(options: OpenCodeModelTransportV2Options, rateLimit?: RateLimitPolicy): JudgeTransport {
   const transport = withProviderErrors(createOpenCodeStructuredTransport<JudgeRequest>(options, JUDGE_SYSTEM_PROMPT, JUDGE_SCHEMA), rateLimit)
+  return async request => {
+    const call = await transport(request)
+    return { text: call.text, usage: call.usage, stub: false, ...(call.model ? { model: call.model } : {}), ...(call.provider ? { provider: call.provider } : {}) }
+  }
+}
+
+/** The formalizer (DESIGN §12i item 2): the reviewer's list as checks, one structured call per review; by default the reviewer's model. */
+export function createOpenCodeFormalizeTransport(options: OpenCodeModelTransportV2Options, rateLimit?: RateLimitPolicy): FormalizeTransport {
+  const transport = withProviderErrors(createOpenCodeStructuredTransport<FormalizeRequest>(options, FORMALIZE_SYSTEM_PROMPT, FORMALIZE_SCHEMA), rateLimit)
   return async request => {
     const call = await transport(request)
     return { text: call.text, usage: call.usage, stub: false, ...(call.model ? { model: call.model } : {}), ...(call.provider ? { provider: call.provider } : {}) }

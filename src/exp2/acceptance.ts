@@ -18,6 +18,10 @@ import { addUsage } from "./report.js"
 import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import { Exp2Store } from "./store.js"
 import { buildWorkOrder } from "./workorder.js"
+import { copyProgram, discardCopy, isNoIssues, listEntries, reviewRanProgram, reviewRequest, type Reviewer, type ReviewFocus } from "./review.js"
+import { checkPremises, formalizeReview, itemCheckRecord, reproduces, type FormalItem, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
+import { renderEvidence, type ReviewItemRecord } from "./execution.js"
+import { coverage, EMPTY_CHECKS } from "./checks.js"
 
 /**
  * Measurement for the offline acceptance of BLOCK10 (REPAIR-BLOCK §4), local only. Nothing here is read by the
@@ -326,3 +330,120 @@ export async function replayAcceptance(d: ReplayDeps, products: readonly Product
   }
   return out
 }
+
+// ---------------------------------------------------------------- acceptance-only replay under DESIGN §12i
+
+export interface ReviewReplayDeps extends Omit<ReplayDeps, "probes" | "judge"> {
+  reviewer: Reviewer
+  formalize: FormalizeTransport
+  /** The program's name, as the requirements call it. */
+  binary: string
+  /** Reviews per product (default 1: one sample of the reviewer per run; the comparison runs the tool several times). */
+  reviews?: number
+}
+
+export interface ReviewedProduct {
+  product: Product
+  built: boolean
+  build_output?: string
+  reviews: { n: number; attempts: number; valid: boolean; no_issues: boolean; text: string; usage: TokenUsage; model?: string; program_runs: number }[]
+  voided: number
+  /** Every item the formalizer read in the reviews, with the premise that stopped it (null: it would be sent). */
+  items: (ReviewItemRecord & { review_n: number })[]
+  malformed: { review_n: number; message: string }[]
+  /** Library checks failing on the product (leads given to the reviewer), and those passing (guards it would have). */
+  library: { failing: string[]; passing: string[] }
+  usage: { reviewer: TokenUsage; formalizer: TokenUsage }
+  calls: { reviews: number; formalize: number }
+}
+
+/** A copy of a product's tree for one review: a clone at HEAD when it is a repository, a plain copy otherwise. */
+function copyProduct(path: string, dir: string): string {
+  if (existsSync(join(path, ".git"))) return copyProgram(path, head(path), dir)
+  cpSync(path, dir, { recursive: true })
+  return dir
+}
+
+/**
+ * The new acceptance on frozen programs (DESIGN §12i), no coding: the attribution and library checks of rounds 1..N
+ * are built once (as replayAcceptance); each product then gets the library run (its failures are the reviewer's
+ * leads), `reviews` reviews in copies of its tree, the formalizer's items, and the code's premise and reproduction
+ * checks. Nothing is repaired, so no guard is born; what the table shows is what would have been sent and what the
+ * premises stopped, next to the reviewer's raw list.
+ */
+export async function replayReview(d: ReviewReplayDeps, products: readonly Product[]): Promise<ReviewedProduct[]> {
+  const last = Math.max(...products.map(p => p.round))
+  const nullProgram = nullBaseline(join(d.root, "null-baseline"))
+  for (let r = 1; r <= last; r++) {
+    const s = d.store.inspect()
+    if (!s.rounds.some(x => x.round === r && x.status === "accepted")) {
+      const a = await d.store.ingestRound(r, d.text(r), d.attribution, { maxRepairs: d.attributionRepairs ?? 2 })
+      if (a.status !== "accepted") throw new Error(`attribution of round ${r} did not pass (${a.status})`)
+    }
+    if (d.store.ablation.checks !== false && !d.store.inspect().check_rounds.some(x => x.round === r && x.status === "accepted")) {
+      const c = await d.store.deriveRoundChecks(r, d.checks, { sandbox: d.sandbox, runner: d.runner, baseline: nullProgram, maxRepairs: d.checkRepairs ?? 2, timeoutMs: d.timeoutMs, staleByReference: false })
+      if (c.status === "interrupted") throw new RoleUnavailable("check derivation", c.issues?.[0]?.message ?? "interrupted")
+    }
+  }
+  const out: ReviewedProduct[] = []
+  const zeroUsage = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
+  for (const p of products) {
+    const b = d.build(p.path, `review-${p.name}`)
+    if (!b.ok) { out.push({ product: p, built: false, build_output: b.output.slice(0, 2000), reviews: [], voided: 0, items: [], malformed: [], library: { failing: [], passing: [] }, usage: { reviewer: zeroUsage(), formalizer: zeroUsage() }, calls: { reviews: 0, formalize: 0 } }); continue }
+    const store = productStore(d.store, d.root, p.name)
+    const registry = store.registry()
+    const facts = codeFacts(registry, p.round)
+    const verdict = await store.runRoundChecks(p.round, b.program!, d.runner, { verdict: true, timeoutMs: d.timeoutMs, staleByReference: false })
+    const s = store.inspect()
+    const failing = verdict.runs.filter(r => r.outcome === "fail" && r.failure?.reason !== "timeout")
+    const leads: ReviewFocus["leads"] = failing.map(r => ({ id: r.check, text: renderEvidence([r], [r.check], s.checks, registry, new Set()) }))
+    const revised = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(bl => bl.modifications.filter(m => m.round === p.round).flatMap(m => m.parts.map(x => ({ id: x, text: `${registry.block(x)?.text.trim() ?? ""} (${m.kind === "withdraw" ? "withdrawn" : m.kind === "partial" ? "partly revised" : "replaced"} by ${m.by.join(", ")} in round ${p.round})` })))))
+    const focus: ReviewFocus = { round: p.round, units: p.round === 1 ? [] : [...new Map(revised.map(x => [x.id, x])).values()], guardFailures: [], leads }
+    const sources = s.sources.filter(x => x.round <= p.round).map(x => ({ round: x.round, text: x.text }))
+    const result: ReviewedProduct = { product: p, built: true, reviews: [], voided: 0, items: [], malformed: [], library: { failing: failing.map(r => r.check), passing: verdict.runs.filter(r => r.outcome === "pass").map(r => r.check) }, usage: { reviewer: zeroUsage(), formalizer: zeroUsage() }, calls: { reviews: 0, formalize: 0 } }
+    for (let n = 1; n <= (d.reviews ?? 1); n++) {
+      let text: string | null = null, attempts = 0, usage = zeroUsage(), model: string | undefined, runs = 0
+      for (; attempts < 2 && text === null; ) {
+        attempts++
+        const dir = copyProduct(p.path, join(d.root, "review-copies", `${p.name}-${n}-${attempts}`))
+        const o = await d.reviewer.review(dir, reviewRequest(sources, focus), `${p.name} review ${n}`)
+        discardCopy(dir)
+        result.calls.reviews++
+        usage = addUsage(usage, o.usage)
+        model = o.model
+        runs = o.runs.length
+        if (reviewRanProgram(o.runs)) text = o.text
+        else result.voided++
+      }
+      result.usage.reviewer = addUsage(result.usage.reviewer, usage)
+      result.reviews.push({ n, attempts, valid: text !== null, no_issues: text !== null && isNoIssues(text), text: text ?? "", usage, ...(model ? { model } : {}), program_runs: runs })
+      if (text === null || isNoIssues(text)) continue
+      const f = await formalizeReview(registry, p.round, text, d.binary, d.formalize, { reviewId: `${p.name}.${n}`, callId: k => `F${n}.${k}` })
+      await store.recordFormalizeCalls(f.calls as FormalizeCallRecord[])
+      result.calls.formalize += f.calls.length
+      for (const c of f.calls) result.usage.formalizer = addUsage(result.usage.formalizer, c.usage)
+      if (f.unavailable) throw new RoleUnavailable("formalize", f.unavailable, f.calls)
+      result.malformed.push(...f.malformed.map(m => ({ review_n: n, message: m.message })))
+      for (const it of f.items) await classify(it, n)
+      if (!f.items.length && listEntries(text) > 0 && !f.malformed.length) result.malformed.push({ review_n: n, message: `the review lists ${listEntries(text)} entries and the formalizer read none` })
+    }
+    async function classify(it: FormalItem, n: number) {
+      const id = `V${p.round}.${n}.${it.item}`
+      const rec: ReviewItemRecord & { review_n: number } = { id, round: p.round, review: `${p.name}.${n}`, review_n: n, item: it.item, text: it.text, units: it.units, premise: null }
+      const pr = await checkPremises(registry, p.round, it, d.sandbox, d.timeoutMs)
+      let failure: { premise: Premise; detail: string } | null = pr.ok ? null : pr.failure
+      if (pr.ok) {
+        const rep = await reproduces(itemCheckRecord(id, p.round, it, pr.check), b.program!, d.runner, p.round, registry, facts, d.timeoutMs)
+        if (!rep.reproduced) failure = { premise: "not_reproduced", detail: `the check passes on the program (exit ${rep.run.exit_code})` }
+        else rec.check = pr.check
+      }
+      if (failure) { rec.premise = failure.premise; rec.detail = failure.detail }
+      result.items.push(rec)
+    }
+    out.push(result)
+  }
+  return out
+}
+
+/** Rule-bearing units of a round, for the replay's report. */
+export function unitsOfRound(registry: Parameters<typeof coverage>[0], round: number): string[] { return coverage(registry, round, EMPTY_CHECKS, [], []).units }

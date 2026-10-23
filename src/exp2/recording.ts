@@ -9,6 +9,7 @@ import { Exp2Store } from "./store.js"
 import { ADJUDICATION_SCHEMA, ADJUDICATION_SYSTEM_PROMPT, type AdjudicationRequest, type AdjudicationTransport } from "./adjudication.js"
 import { PROBES_SCHEMA, PROBES_SYSTEM_PROMPT, type ProbeRequest, type ProbeTransport } from "./probes.js"
 import { JUDGE_SCHEMA, JUDGE_SYSTEM_PROMPT, type JudgeRequest, type JudgeTransport } from "./judge.js"
+import { FORMALIZE_SCHEMA, FORMALIZE_SYSTEM_PROMPT, type FormalizeRequest, type FormalizeTransport } from "./formalize.js"
 
 /**
  * Recording and replay of management calls (DESIGN §12b item 7). A recording keeps each call's request, answer and
@@ -16,7 +17,7 @@ import { JUDGE_SCHEMA, JUDGE_SYSTEM_PROMPT, type JudgeRequest, type JudgeTranspo
  * is asked; a request the recording does not hold is an error (ReplayMiss), never a stand-in answer.
  */
 
-export type RecordedStep = "attribution" | "checks" | "adjudication" | "probes" | "judge"
+export type RecordedStep = "attribution" | "checks" | "adjudication" | "probes" | "judge" | "formalize"
 
 export interface CassetteEntry {
   step: RecordedStep
@@ -50,6 +51,7 @@ const STEPS = {
   adjudication: { system: ADJUDICATION_SYSTEM_PROMPT, schema: ADJUDICATION_SCHEMA },
   probes: { system: PROBES_SYSTEM_PROMPT, schema: PROBES_SCHEMA },
   judge: { system: JUDGE_SYSTEM_PROMPT, schema: JUDGE_SCHEMA },
+  formalize: { system: FORMALIZE_SYSTEM_PROMPT, schema: FORMALIZE_SCHEMA },
 } as const
 
 /** The call's full text, in the format of the reference recordings' prompt files. */
@@ -89,10 +91,12 @@ function recorder<R>(step: RecordedStep, inner: (r: R) => Promise<ModelReply>, c
 }
 
 /** Wraps real transports; every answered call is appended to the cassette (and saved, when a file is given). */
-export function recordingTransports(t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport }, cassette: Cassette, file?: string): { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport } {
+export function recordingTransports(t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport; formalize?: FormalizeTransport }, cassette: Cassette, file?: string): { attribution: AttributionTransport; checks: ChecksTransport; adjudicate?: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport; formalize?: FormalizeTransport } {
   const save = file ? () => saveCassette(file, cassette) : undefined
   return {
     attribution: recorder<ModelRequest>("attribution", t.attribution, cassette, save), checks: recorder<CheckRequest>("checks", t.checks, cassette, save),
+    // The reviewer's sessions (tools, free text) are not cassette calls; their text is in the state. The formalizer's are.
+    ...(t.formalize ? { formalize: recorder<FormalizeRequest>("formalize", t.formalize, cassette, save) } : {}),
     ...(t.adjudicate ? { adjudicate: recorder<AdjudicationRequest>("adjudication", t.adjudicate, cassette, save) } : {}),
     ...(t.probes ? { probes: recorder<ProbeRequest>("probes", t.probes, cassette, save) } : {}),
     ...(t.judge ? { judge: recorder<JudgeRequest>("judge", t.judge, cassette, save) } : {}),
@@ -139,7 +143,7 @@ export function replayTransports(cassette: Cassette): Replay {
  * An answer list that runs out is a miss.
  */
 export function orderedAnswers(answers: Record<RecordedStep, string[]>): { attribution: AttributionTransport; checks: ChecksTransport } {
-  const next = { attribution: 0, checks: 0, adjudication: 0, probes: 0, judge: 0 }
+  const next = { attribution: 0, checks: 0, adjudication: 0, probes: 0, judge: 0, formalize: 0 }
   const give = (step: RecordedStep) => async (): Promise<ModelReply> => {
     const text = answers[step][next[step]++]
     if (text === undefined) throw new ReplayMiss(`recorded ${step} answers ran out after ${answers[step].length}`)
@@ -204,7 +208,7 @@ export async function rekeyAttribution(stateDir: string, texts: readonly string[
   const out: { round: number; status: string; used: number; recorded: number }[] = []
   for (let i = 0; i < texts.length; i++) {
     const before = cassette.entries.length
-    const t = recordingTransports({ ...orderedAnswers({ attribution: answers[i], checks: [], adjudication: [], probes: [], judge: [] }) }, cassette)
+    const t = recordingTransports({ ...orderedAnswers({ attribution: answers[i], checks: [], adjudication: [], probes: [], judge: [], formalize: [] }) }, cassette)
     const record = await store.ingestRound(i + 1, texts[i], t.attribution, { maxRepairs: Math.max(answers[i].length - 1, 0) })
     out.push({ round: i + 1, status: record.status, used: cassette.entries.length - before, recorded: answers[i].length })
     if (record.status !== "accepted") break

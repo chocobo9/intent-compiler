@@ -1,0 +1,411 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { before, describe, it } from "node:test"
+import assert from "node:assert/strict"
+import { acceptRound, renderReviewList, type AcceptDeps } from "../../src/exp2/accept.js"
+import { replayReview } from "../../src/exp2/acceptance.js"
+import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
+import { goBuilder, goTrial } from "../../src/exp2/build.js"
+import { codeFacts, type CheckRecord } from "../../src/exp2/checks.js"
+import { DEFAULT_LIMITS } from "../../src/exp2/execution.js"
+import { checkPremises, claimProblems, itemCheckRecord, parseCsvGo, parsedFacts, reproduces, type FormalItem } from "../../src/exp2/formalize.js"
+import { git, head, initRepo } from "../../src/exp2/git.js"
+import { changedTextBehind, guardCoverage, type GuardEvent, type GuardRecord } from "../../src/exp2/guards.js"
+import { ledgerOf } from "../../src/exp2/ledger.js"
+import { renderReport } from "../../src/exp2/report.js"
+import { invokesProgram, isNoIssues, programRunsIn, REPAIR_INTRO, REVIEW_INTRO, REVIEW_REPLY, reviewBaseText, reviewRanProgram, supersededIn } from "../../src/exp2/review.js"
+import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
+import { Serial } from "../../src/exp2/serial.js"
+import { Exp2Store } from "../../src/exp2/store.js"
+import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
+import { checkStubTransport } from "./check-stubs.js"
+import { DROP, FILTER, GO_MOD, MAIN, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
+import { roundText } from "./inputs.js"
+import { stubProbeWriter } from "./probe-stubs.js"
+import { FILTER_INPUT, FILTER_ITEM_TEXT, filterItem, scriptedReviewer, SORT_INPUT, stubFormalizer, workingReviewer } from "./review-stubs.js"
+import { serialExecutor } from "./serial-executor.js"
+import { StubExecutor, write } from "./stub-executor.js"
+import { stubTransport } from "./stubs.js"
+
+/**
+ * The acceptance block (DESIGN §12i): the reviewer finds, code checks the premises, guards hold what was fixed, a
+ * repair that breaks a guard is reverted, flips route by whether the text behind them changed, probes are written once
+ * per unit, a review that never ran the program is void, and the report carries the round's measures. Every model
+ * is a stand-in; the reviewer stand-in builds and runs the program copy it is given.
+ */
+
+const FILTER_UNIT = "R1.S3.P2.s4", SORT_UNIT = "R1.S3.P9.s2", SIDECAR_UNIT = "R1.S3.P24.s1"
+const SORT_NUM = SORT.replace('import "sort"', 'import (\n\t"sort"\n\t"strconv"\n)').replace("return t.rows[a][i] < t.rows[b][i]", "x, _ := strconv.ParseFloat(t.rows[a][i], 64)\n\t\ty, _ := strconv.ParseFloat(t.rows[b][i], 64)\n\t\treturn x < y")
+const ALL = ["filter", "sort", "rename", "drop"]
+const files = (o: { filterWrong?: boolean; sortText?: boolean; reverseInTransform?: boolean; sidecar?: boolean } = {}) => {
+  let transform = TRANSFORM(ALL, o.sidecar ?? true)
+  if (o.reverseInTransform) transform = transform.replace("\t\tif t, err = f(t, op); err != nil {\n\t\t\treturn fail(err.Error())\n\t\t}", "\t\tif t, err = f(t, op); err != nil {\n\t\t\treturn fail(err.Error())\n\t\t}\n\t\tif name == \"sort\" {\n\t\t\tfor i, j := 0, len(t.rows)-1; i < j; i, j = i+1, j-1 {\n\t\t\t\tt.rows[i], t.rows[j] = t.rows[j], t.rows[i]\n\t\t\t}\n\t\t}")
+  return { "go.mod": GO_MOD, "main.go": MAIN, "verify.go": VERIFY(), "transform.go": transform, "filter.go": FILTER(o.filterWrong ?? false), "sort.go": o.sortText ? SORT : SORT_NUM, "rename.go": RENAME, "drop.go": DROP }
+}
+
+const target = (kind: string, extra: Record<string, unknown> = {}) => ({ kind, path: null, line: null, pointer: null, column: null, ...extra }) as CheckRecord["assertions"][number]["target"]
+const resolved = (id: string, t: CheckRecord["assertions"][number]["target"], expect: unknown, kind: "verbatim" | "derived" = "derived", block: string | null = null): CheckRecord["assertions"][number] => ({ id, role: "business", target: t, expect, tolerance: null, source: { kind, block } })
+/** A library check for the sort (its values worked out already, as an admitted check holds them). */
+const sortCheck = (id: string, object: string): CheckRecord => ({
+  id, round: 1, key: "sort-asc", object, blocks: [SORT_UNIT], uses: [], direction: "holds", input: SORT_INPUT,
+  assertions: [resolved("l2", target("file_line", { path: "out.csv", line: 2 }), "3,3"), resolved("l5", target("file_line", { path: "out.csv", line: 5 }), "2,20"), resolved("exit", target("exit_code"), 0)],
+  unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
+})
+/** A library check for the R1 sidecar: transform writes <output>.sha256. */
+const sidecarCheck = (id: string, object: string): CheckRecord => ({
+  id, round: 1, key: "transform-sidecar", object, blocks: [SIDECAR_UNIT], uses: [], direction: "holds", input: FILTER_INPUT,
+  assertions: [resolved("side", target("file_exists", { path: "out.csv.sha256" }), true, "verbatim", SIDECAR_UNIT), resolved("exit", target("exit_code"), 0)],
+  unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
+})
+
+const noop = { review: async () => {}, formalize: async () => {}, guards: async () => {} }
+
+/** Runs one round with the review acceptance on a fresh work tree; the stand-ins and guards as given. */
+async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: string) => void)[], o: { library?: CheckRecord[]; guards?: GuardRecord[]; guardEvents?: GuardEvent[]; reviewer: AcceptDeps["reviewer"]; formalize: AcceptDeps["formalize"]; leads?: AcceptDeps["leads"]; reviews?: number; record?: AcceptDeps["record"]; carried?: AcceptDeps["carried"] }) {
+  const workdir = join(dir, `work-${r}-${Math.random().toString(36).slice(2, 6)}`)
+  mkdirSync(workdir, { recursive: true })
+  initRepo(workdir)
+  const registry = store.registry(), anchors = new GoAnchorExtractor()
+  const w = buildWorkOrder({ registry, round: r, library: o.library ?? [], events: [], statuses: [], runs: [], anchors: anchors.extract(workdir), links: [], steps: [], previous_task: [] })
+  const executor = new StubExecutor({ messages: messages.map(m => (wd: string) => { m(wd) }) })
+  const record = await acceptRound(workdir, w, renderWorkOrder(w), executor, {
+    registry, library: o.library ?? [], events: [], facts: codeFacts(registry, r), guards: o.guards ?? [], guardEvents: o.guardEvents ?? [],
+    runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), anchors, build: goBuilder(join(dir, "builds"), {}, "dpipe"),
+    reviewer: o.reviewer, formalize: o.formalize, binary: "dpipe", sources: store.inspect().sources.map(s => ({ round: s.round, text: s.text })),
+    copyDir: label => join(dir, "copies", label), ...(o.leads ? { leads: o.leads } : {}), record: o.record ?? noop, ...(o.carried ? { carried: o.carried } : {}), checkTimeoutMs: 10_000,
+  }, { ...DEFAULT_LIMITS, repairCycles: 3, ...(o.reviews !== undefined ? { reviews: o.reviews } : {}) })
+  return { record, executor, workdir, registry }
+}
+
+describe("exp2 acceptance block: the review request and the repair message are the control group's, word for word", () => {
+  it("base texts, headings, NO ISSUES and SUPERSEDED lines, the program's runs in a session", () => {
+    const text = reviewBaseText([{ round: 2, text: "R2 text\n" }, { round: 1, text: "R1 text" }])
+    assert.equal(text, `${REVIEW_INTRO}\n${REVIEW_REPLY}\n\n# Round 1 requirements\nR1 text\n# Round 2 requirements\nR2 text\n`)
+    assert.equal(REPAIR_INTRO, "An independent review of the program against the requirements reported the following. Follow the requirements where an item seems to contradict them, and do not change behaviour the items do not concern.")
+    assert.ok(isNoIssues("NO ISSUES") && isNoIssues(" **NO ISSUES**\n") && !isNoIssues("NO ISSUES except one") && !isNoIssues("1. something"))
+    assert.deepEqual(supersededIn("1. x\nSUPERSEDED G3: round 5 removed the sidecar\n- SUPERSEDED G7: gone"), [{ guard: "G3", reason: "round 5 removed the sidecar" }, { guard: "G7", reason: "gone" }])
+    assert.ok(invokesProgram("./dpipe transform --input a.csv", "dpipe") && invokesProgram("cd /tmp && /x/y/dpipe verify", "dpipe") && invokesProgram("go run . transform", "dpipe"))
+    assert.ok(!invokesProgram("go build -o dpipe ./...", "dpipe") && !invokesProgram("cat dpipe.go", "dpipe"))
+    const messages = [{ info: { role: "assistant" }, parts: [
+      { type: "tool", tool: "bash", state: { status: "completed", input: { command: "go build -o dpipe ./..." }, output: "", metadata: { exit: 0 } } },
+      { type: "tool", tool: "bash", state: { status: "completed", input: { command: "./dpipe transform --input d.csv --recipe r.json --output o.csv" }, output: "", metadata: { exit: 1 } } },
+      { type: "tool", tool: "bash", state: { status: "completed", input: { command: "./dpipe verify --file a --checksum b" }, output: "sh: ./dpipe: No such file or directory", metadata: {} } },
+    ] }]
+    assert.deepEqual(programRunsIn(messages, "dpipe"), [{ command: "./dpipe transform --input d.csv --recipe r.json --output o.csv", exit_code: 1 }, { command: "./dpipe verify --file a --checksum b", exit_code: 127 }])
+    assert.ok(reviewRanProgram([{ command: "x", exit_code: 1 }]) && !reviewRanProgram([{ command: "x", exit_code: 127 }]) && !reviewRanProgram([]))
+  })
+})
+
+describe("exp2 acceptance block §2: the premises code checks before an item is sent", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-acc-premise-"))
+  const store = new Exp2Store(join(dir, "store"), "accp")
+  const sandbox = new LocalScriptSandbox(), runner = new LocalProcessRunner()
+  before(async () => { for (const r of [1, 2, 3, 4, 5]) await store.ingestRound(r, roundText(r), stubTransport()) })
+
+  it("the standard CSV parser reads as Go does: a blank line is no record, a single-column file has no empty cell there", () => {
+    assert.deepEqual(parseCsvGo("v\n10\n20\n30\n\n"), { ok: true, records: [["v"], ["10"], ["20"], ["30"]] })
+    assert.deepEqual(parsedFacts("now.csv", "v\n10\n20\n30\n\n"), { path: "now.csv", parses: true, records: 3, empty_cells: 0, columns: ["v"] })
+    assert.deepEqual(parsedFacts("t.csv", "a,b\n1,\n,2\n"), { path: "t.csv", parses: true, records: 2, empty_cells: 2, columns: ["a", "b"] })
+    assert.equal(parseCsvGo("a,b\n1,2,3\n").ok, false, "a record with another field count is an error")
+    assert.deepEqual(parseCsvGo("a,b\r\n\"x,y\",\"q\"\"r\"\r\n"), { ok: true, records: [["a", "b"], ["x,y", "q\"r"]] })
+    assert.deepEqual(parsedFacts("x.json", "{\"a\":1}"), { path: "x.json", parses: true, records: null, empty_cells: null, columns: null })
+    assert.deepEqual(parsedFacts("x.json", "{"), { path: "x.json", parses: false, records: null, empty_cells: null, columns: null })
+  })
+
+  it("premises hold: the item is sent (its check fails on the program and is kept for the repair)", async () => {
+    const it = filterItem(1, FILTER_ITEM_TEXT, FILTER_UNIT)
+    const p = await checkPremises(store.registry(), 1, it, sandbox, 10_000)
+    assert.ok(p.ok, JSON.stringify(p))
+    assert.deepEqual(p.check.assertions.map(a => [a.id, a.expect]), [["l1", "id,value"], ["l2", "2,20"], ["l3", "4,12"], ["exit", 0]])
+    const src = join(dir, "wrong"); mkdirSync(src, { recursive: true }); write(src, files({ filterWrong: true }))
+    const program = goBuilder(join(dir, "b"), {}, "dpipe")(src, "wrong").program!
+    const rep = await reproduces(itemCheckRecord("V1", 1, it, p.check), program, runner, 1, store.registry(), codeFacts(store.registry(), 1), 10_000)
+    assert.equal(rep.reproduced, true)
+    const ok = join(dir, "right"); mkdirSync(ok, { recursive: true }); write(ok, files())
+    const rep2 = await reproduces(itemCheckRecord("V1", 1, it, p.check), goBuilder(join(dir, "b"), {}, "dpipe")(ok, "right").program!, runner, 1, store.registry(), codeFacts(store.registry(), 1), 10_000)
+    assert.equal(rep2.reproduced, false, "a right program: not reproduced, so not sent")
+  })
+
+  it("the unit it rests on was replaced (R5 withdrew the sidecar clause): blocked, unit not in force", async () => {
+    const it: FormalItem = { ...filterItem(1, "transform must write <output>.sha256", "R1.S3.P24.s1.c3"), units: ["R1.S3.P24.s1.c3"] }
+    const p = await checkPremises(store.registry(), 5, it, sandbox, 10_000)
+    assert.ok(!p.ok && p.failure.premise === "unit_not_in_force", JSON.stringify(p))
+    assert.match((p as { failure: { detail: string } }).failure.detail, /R1\.S3\.P24\.s1\.c3.*withdrawn in round 5 by R5\.S1\.P2\.s4/u)
+    // The same clause is still in force in round 4.
+    assert.ok((await checkPremises(store.registry(), 4, it, sandbox, 10_000)).ok)
+  })
+
+  it("a single-column CSV with an 'empty cell' that is a blank line: the parse contradicts the claim, blocked", async () => {
+    const base = filterItem(1, "null_rate_change must be reported", "R3.S6.P1")
+    const it: FormalItem = {
+      ...base, units: [FILTER_UNIT],
+      input: { args: ["drift", "--baseline", "base.csv", "--current", "now.csv", "--output", "d.json"], files: [{ path: "base.csv", content: "v\n10\n20\n30\n" }, { path: "now.csv", content: "v\n10\n20\n30\n\n" }] },
+      claims: [{ path: "base.csv", parses: true, records: 3, empty_cells: 0, columns: ["v"] }, { path: "now.csv", parses: true, records: 4, empty_cells: 1, columns: ["v"] }],
+      assertions: [resolvedDraft("n", target("json", { path: "d.json", pointer: "/null_rate_change" }), true)], reference_script: null,
+    }
+    assert.deepEqual(claimProblems(it.input!, it.claims), ["now.csv: claimed 4 data records, parsed 3", "now.csv: claimed 1 empty cells, parsed 0"])
+    const p = await checkPremises(store.registry(), 3, it, sandbox, 10_000)
+    assert.ok(!p.ok && p.failure.premise === "input_claim_false", JSON.stringify(p))
+  })
+
+  it("a numeric expectation stated in words, not computed: blocked; stated by the text: passes", async () => {
+    const base = filterItem(1, "the threshold must be 42", FILTER_UNIT)
+    const spoken: FormalItem = { ...base, assertions: [{ id: "n", role: "business", target: target("csv_cell", { path: "out.csv", line: 1, column: "value" }), expect_json: "42", tolerance: null, source: { kind: "verbatim", block: FILTER_UNIT } }], reference_script: null }
+    const p = await checkPremises(store.registry(), 1, spoken, sandbox, 10_000)
+    assert.ok(!p.ok && p.failure.premise === "value_not_computed", JSON.stringify(p))
+    // R1 states exit code 1 for the error convention: a stated number the code finds in the unit.
+    const stated: FormalItem = { ...base, units: ["R1.S8.P1.s1"], assertions: [{ id: "e", role: "business", target: target("exit_code"), expect_json: "1", tolerance: null, source: { kind: "verbatim", block: "R1.S8.P1.s1" } }], reference_script: null }
+    assert.match(store.registry().block("R1.S8.P1.s1")!.text, /exit code 1/u)
+    assert.ok((await checkPremises(store.registry(), 1, stated, sandbox, 10_000)).ok)
+    // A worked-out value whose script disagrees: blocked as well.
+    const disagree: FormalItem = { ...base, reference_script: { language: "python", code: "print('{\"l1\": \"id,value\", \"l2\": \"nope\", \"l3\": \"4,12\", \"exit\": 0}')" } }
+    const d = await checkPremises(store.registry(), 1, disagree, sandbox, 10_000)
+    assert.ok(!d.ok && d.failure.premise === "reference_failed")
+  })
+})
+
+const resolvedDraft = (id: string, t: CheckRecord["assertions"][number]["target"], value: unknown): FormalItem["assertions"][number] => ({ id, role: "business", target: t, expect_json: JSON.stringify(value), tolerance: null, source: { kind: "derived", block: null } })
+
+describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed item becomes a guard, a repair that breaks a guard is reverted", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-acc-round-"))
+  const store = new Exp2Store(join(dir, "store"), "accr")
+  before(async () => { await store.ingestRound(1, roundText(1), stubTransport()) })
+  const objects = () => { const reg = store.registry(); return { sort: reg.coverOf(SORT_UNIT)!.owner, filter: reg.coverOf(FILTER_UNIT)!.owner } }
+
+  it("the reviewer reports the filter; the premises hold; the executor fixes it; the item becomes a guard and the library check that passed is one too", async () => {
+    const reviewer = workingReviewer(join(dir, "rb1"))
+    const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
+    const recorded: { born: GuardRecord[]; events: GuardEvent[] } = { born: [], events: [] }
+    const { record, executor } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files())], {
+      library: [sortCheck("K1", objects().sort)], reviewer, formalize, record: { ...noop, guards: async (b, e) => { recorded.born.push(...b); recorded.events.push(...e) } },
+    })
+    assert.equal(record.status, "done")
+    assert.equal(record.cycles.length, 2, "one repair")
+    assert.equal(record.first_delivery?.cycle, "C1.1")
+    // The library check passed on the first program: a guard at once. The reviewer's item, fixed, is a guard from the second.
+    assert.deepEqual(record.cycles[0].guards!.born, ["G1"])
+    assert.deepEqual(record.cycles[1].guards!.born, ["G2"])
+    assert.deepEqual(recorded.born.map(g => [g.id, g.source, g.units]), [["G1", "library", [SORT_UNIT]], ["G2", "review", [FILTER_UNIT]]])
+    assert.equal(recorded.born[1].origin?.text, FILTER_ITEM_TEXT)
+    // The repair message: the control group's base text, then the reviewer's own words.
+    assert.equal(executor.log.messages.length, 2)
+    assert.ok(executor.log.messages[1].text.startsWith(`${REPAIR_INTRO}\n\n1. ${FILTER_ITEM_TEXT}`), executor.log.messages[1].text.slice(0, 400))
+    // The review request: base text word for word, the requirements, then the appendix.
+    const req = reviewer.requests[0].request
+    assert.ok(req.startsWith(`${REVIEW_INTRO}\n${REVIEW_REPLY}\n\n# Round 1 requirements\n${roundText(1)}`), req.slice(0, 300))
+    assert.match(req, /# Focus of this review\nRound 1 is the first round: all of the requirements are new\./u)
+    assert.ok(invokesProgram("GOFLAGS=-mod=mod go run . transform --input a.csv", "dpipe") && invokesProgram("cd /tmp/x && ./dpipe transform", "dpipe") && invokesProgram("timeout 5 ./dpipe verify", "dpipe"))
+    assert.ok(!req.includes("# Leads to verify"), "nothing to verify: no leads paragraph")
+    // The second review found nothing new: no third review (2 reviews, the second on the fixed program).
+    assert.deepEqual(record.accept!.reviews.map(r => [r.n, r.cycle, r.reported, r.sent, r.no_issues]), [[1, "C1.1", 1, 1, false], [2, "C1.2", 0, 0, true]])
+    assert.equal(reviewer.requests.length, 2)
+    // The ledger: the item opened in C1.1, sent once, fixed in round 1; the review item record names its guard.
+    const item = record.review_items!.find(x => x.id === "V1.1.1")!
+    assert.deepEqual([item.premise, item.guard], [null, "G2"])
+    const ledger = ledgerOf({ ...store.inspect(), executions: [record], guards: recorded.born, guard_events: recorded.events }, store.registry())
+    const e = ledger.find(x => x.id === "V1.1.1")!
+    assert.deepEqual([e.source, e.units, e.sent, e.end?.how], ["review", [FILTER_UNIT], ["C1.1"], "fixed"])
+  })
+
+  it("the repair of the filter breaks the sort guard: the repair is reverted, the lead discarded, the tree back where it was", async () => {
+    const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }])
+    const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
+    const { record, executor, workdir } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true }))], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
+    const [c1, c2] = record.cycles
+    assert.equal(c2.message, "repair")
+    assert.deepEqual(c2.reverted, { to: c1.commit, guards: ["G1"], discarded: ["V1.1.1"] })
+    assert.equal(record.accept!.reverted, 1)
+    assert.equal(head(workdir), c1.commit, "the tree is back at the state before the repair")
+    assert.equal(record.kept, "C1.1")
+    assert.ok(git(workdir, ["show", "HEAD:filter.go"]).includes("keep != true"), "the wrong filter is back: the repair is gone")
+    assert.deepEqual(c2.items!.filter(i => i.action === "discarded").map(i => i.id), ["V1.1.1"])
+    // The ledger ends the item as discarded; the guard stays passing (no failing event survives the revert).
+    const ledger = ledgerOf({ ...store.inspect(), executions: [record] }, store.registry())
+    assert.deepEqual([ledger.find(x => x.id === "V1.1.1")!.end?.how, ledger.find(x => x.id === "V1.1.1")!.state], ["discarded", "report_only"])
+    assert.equal(executor.log.messages.length, 2, "the second review (NO ISSUES) sends nothing more")
+    assert.ok(executor.log.messages[1].text.startsWith(REPAIR_INTRO))
+  })
+
+  it("a judgment turned from ok to wrong on the same output is a lead for the reviewer: never a guard, never a repair", async () => {
+    const reviewer = scriptedReviewer([{ text: "NO ISSUES" }])
+    const lead = { id: `P9/${FILTER_UNIT}`, text: "the judge now says the filter is wrong (the output did not change)", digest: "same" }
+    const { record, executor } = await round(dir, store, 1, [wd => write(wd, files())], { reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), leads: async () => [lead] })
+    assert.equal(executor.log.messages.length, 1, "no repair message")
+    assert.match(reviewer.requests[0].request, /# Leads to verify\n[^\n]*\n- P9\/R1\.S3\.P2\.s4: the judge now says the filter is wrong/u)
+    assert.deepEqual(record.accept!.leads, { library: 0, judgment: 1 })
+    assert.deepEqual(record.accept!.guards.born, [], "no guard from a judgment")
+    assert.deepEqual(record.cycles[0].items, [])
+  })
+
+  it("a review in which the program never ran is void and done again; its NO ISSUES does not count", async () => {
+    const reviewer = scriptedReviewer([{ text: "NO ISSUES", runs: [] }, { text: "NO ISSUES", runs: [{ command: "./dpipe transform --input d.csv", exit_code: 0 }] }])
+    const calls: { valid: boolean; no_issues: boolean }[] = []
+    const { record } = await round(dir, store, 1, [wd => write(wd, files())], { reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), record: { ...noop, review: async r => { calls.push({ valid: r.valid, no_issues: r.no_issues }) } } })
+    assert.equal(reviewer.requests.length, 2)
+    assert.deepEqual(calls, [{ valid: false, no_issues: false }, { valid: true, no_issues: true }])
+    assert.deepEqual([record.accept!.voided, record.accept!.reviews[0].attempts, record.accept!.reviews[0].valid], [1, 2, true])
+  })
+})
+
+describe("exp2 acceptance block §6: a guard that flips is a question for the reviewer when this round's text changed behind it, a regression otherwise", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-acc-flip-"))
+  const store = new Exp2Store(join(dir, "store"), "accf")
+  before(async () => { for (const r of [1, 2, 3, 4, 5]) await store.ingestRound(r, roundText(r), stubTransport()) })
+
+  it("R5 withdrew the sidecar: the sidecar guard fails on the new program; the request quotes the change; SUPERSEDED retires it", async () => {
+    const reg = store.registry()
+    const k = sidecarCheck("K7", reg.coverOf(SIDECAR_UNIT)!.owner)
+    const guard: GuardRecord = { id: "G1", round: 1, source: "library", check: "K7", units: [SIDECAR_UNIT], object: k.object, born: { cycle: "C1.1", program: "p" } }
+    const behind = changedTextBehind(reg, guard, [k], 5, "K7")
+    assert.ok(behind.some(b => /R1\.S3\.P24\.s1: R1\.S3\.P24\.s1\.c3 withdrawn by R5\.S1\.P2\.s4/u.test(b)), JSON.stringify(behind))
+    assert.ok(behind.some(b => /owns a unit the guard rests on and changed this round/u.test(b)))
+    assert.deepEqual(changedTextBehind(reg, guard, [k], 4, "K7"), [], "nothing changed behind it in round 4")
+    const reviewer = scriptedReviewer([{ text: "SUPERSEDED G1: round 5 removed the .sha256 sidecar files of transform and ingest." }])
+    const events: GuardEvent[] = []
+    const { record } = await round(dir, store, 5, [wd => write(wd, files({ sidecar: false }))], {
+      library: [k], guards: [guard], guardEvents: [{ guard: "G1", round: 1, cycle: "C1.1", status: "passing" }], reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }),
+      record: { ...noop, guards: async (_b, e) => { events.push(...e) } },
+    })
+    const req = reviewer.requests[0].request
+    assert.match(req, /# Checks that passed on an earlier version of the program and fail now/u)
+    assert.match(req, /G1: command \["transform"/u)
+    assert.match(req, /Text it rested on \(before\): "its SHA-256 to `<output>\.sha256`\."/u)
+    assert.match(req, /Text in force now: .*sidecar files produced during `ingest` and `transform` are \*\*removed\*\*/u)
+    assert.match(req, /# Focus of this review\nThe text under `# Round 5 requirements` is what this round added or revised/u)
+    assert.match(req, /Earlier text this round revised or withdrew \(no longer in force as written\):\n> /u)
+    assert.match(req, /\n> its SHA-256 to `<output>\.sha256`\. \(withdrawn by R5\.S1\.P3\.s5 in round 5\)/u)
+    assert.deepEqual(events.map(e => [e.guard, e.status, !!e.changed_text?.length]), [["G1", "failing", true], ["G1", "retired", false]])
+    assert.deepEqual(record.accept!.guards.flipped_changed_text, ["G1"])
+    assert.deepEqual(record.accept!.guards.retired.map(x => x.id), ["G1"])
+    assert.deepEqual(record.cycles[0].items, [], "nothing sent for it")
+    assert.equal(record.status, "done")
+  })
+
+  it("R2 did not touch the sort: a sort guard that fails is a regression, sent to the executor at once with the control group's message", async () => {
+    const reg = store.registry()
+    const k = sortCheck("K1", reg.coverOf(SORT_UNIT)!.owner)
+    const guard: GuardRecord = { id: "G1", round: 1, source: "library", check: "K1", units: [SORT_UNIT], object: k.object, born: { cycle: "C1.1", program: "p" } }
+    assert.deepEqual(changedTextBehind(reg, guard, [k], 2, "K1"), [])
+    const reviewer = scriptedReviewer([{ text: "NO ISSUES" }])
+    const { record, executor } = await round(dir, store, 2, [wd => write(wd, files({ sortText: true })), wd => write(wd, files())], {
+      library: [k], guards: [guard], guardEvents: [{ guard: "G1", round: 1, cycle: "C1.1", status: "passing" }], reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }),
+    })
+    assert.deepEqual(record.accept!.guards.flipped_unchanged, ["G1"])
+    assert.deepEqual(record.cycles[0].items!.map(i => [i.id, i.verdict, i.action]), [["G1", "not_landed", "send"]])
+    assert.equal(executor.log.messages.length, 2)
+    assert.match(executor.log.messages[1].text, new RegExp(`^${REPAIR_INTRO.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\n\n1\\. A check that passed on the previous version of the program fails now \\(G1\\)\\.\nRequirement: "- \`sort\`: Sort rows`, "u"))
+    assert.ok(!reviewer.requests[0].request.includes("# Checks that passed"), "a regression is not a question for the reviewer")
+    // Fixed by the repair: the guard passes again, the round ends with nothing open.
+    assert.deepEqual(record.cycles[1].items!.map(i => [i.id, i.verdict]), [["G1", "pass"]])
+    assert.deepEqual(record.final, [])
+  })
+
+  it("guard coverage is taken from guards that ran: units no guard rests on are reported", () => {
+    const reg = store.registry()
+    const g: GuardRecord = { id: "G1", round: 1, source: "review", units: [FILTER_UNIT], object: null, born: { cycle: "C1.1", program: "p" } }
+    const c = guardCoverage(reg, 1, [g], new Set(["G1"]))
+    assert.ok(c.units.includes(FILTER_UNIT) && c.covered.includes(FILTER_UNIT) && c.uncovered.includes(SORT_UNIT) && !c.uncovered.includes(FILTER_UNIT))
+    assert.deepEqual(guardCoverage(reg, 1, [g], new Set()).covered, [], "a guard that did not run covers nothing")
+  })
+})
+
+describe("exp2 acceptance block §5: probes are written once per unit, when it enters or is revised", () => {
+  // A writer that leaves one round-1 unit (rename) unexercised, as writers do.
+  const RENAME_UNIT = "R1.S3.P9.s3"
+  const leaving = () => { const inner = stubProbeWriter(); return async (r: Parameters<typeof inner>[0]) => { const reply = await inner(r); const a = JSON.parse(reply.text) as { probes: { covers: { unit: string }[] }[] }; a.probes = a.probes.filter(p => !p.covers.some(c => c.unit === RENAME_UNIT)); return { ...reply, text: JSON.stringify(a) } } }
+
+  it("round 2 writes nothing for an unchanged round-1 unit, and again for the units of a probe whose text was revised; no gap carry-over", async () => {
+    const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-acc-probes-")), "accw")
+    for (const r of [1, 2, 3]) await store.ingestRound(r, roundText(r), stubTransport())
+    const r1 = await store.deriveRoundProbes(1, leaving(), { byReference: false, gaps: false })
+    assert.ok(r1.entered.length > 0 && r1.uncovered.includes(RENAME_UNIT), "round 1 leaves the rename unit unexercised")
+    const b2 = await store.beginRoundProbes(2, { byReference: false, gaps: false })
+    assert.ok(!b2.units.includes(FILTER_UNIT) && !b2.units.includes(SORT_UNIT) && !b2.units.includes(RENAME_UNIT), "unchanged units are not written for again, exercised or not")
+    assert.deepEqual(b2.gaps, [], "no gap carried in")
+    // R2 partly revised fill's strategy list (R1.S3.P22.s3): the probe on it goes stale and its live units are written again.
+    const stale = store.inspect().probes.filter(p => b2.stale.includes(p.id))
+    assert.ok(stale.some(p => p.covers.some(c => c.unit === "R1.S3.P22.s3")), JSON.stringify(stale.map(p => p.covers.map(c => c.unit))))
+    assert.ok(b2.units.some(u => u.startsWith("R1.S3.P22")) && b2.units.some(u => u.startsWith("R2.")))
+    assert.ok(b2.units.every(u => u.startsWith("R2.") || stale.some(p => p.covers.some(c => c.unit === u))), "every round-1 unit written again belongs to a probe whose text was revised")
+    // With the gap carry-over on (the block 11 rule), round 1's unexercised unit would come back.
+    const store2 = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-acc-probes2-")), "accw2")
+    for (const r of [1, 2]) await store2.ingestRound(r, roundText(r), stubTransport())
+    await store2.deriveRoundProbes(1, leaving(), { byReference: false, gaps: false })
+    assert.ok((await store2.beginRoundProbes(2, { byReference: false, gaps: true })).gaps.includes(RENAME_UNIT))
+  })
+})
+
+describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, and the replay on frozen programs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-acc-serial-"))
+  const store = new Exp2Store(join(dir, "store"), "accs")
+  const reviewer = workingReviewer(join(dir, "rb"))
+  const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
+  before(async () => {
+    const serial = new Serial({
+      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
+      executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
+      reviewer, formalize, trial: goTrial(), acceptance: { mode: "review" },
+      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 2 } },
+    })
+    assert.equal(serial.mode(), "review")
+    assert.equal((await serial.run({ to: 3 })).status, "done")
+  })
+
+  it("every round's report has the review block: first delivery, stage wall times, each role's tokens, guards, flips, reverts, premises, items, coverage, void reviews", () => {
+    const s = store.inspect()
+    assert.deepEqual(s.reports.map(r => r.round), [1, 2, 3])
+    for (const r of s.reports) {
+      const v = r.review!
+      assert.ok(v, `R${r.round} review block`)
+      assert.ok(v.first_delivery && /^C\d+\.1$/u.test(v.first_delivery.cycle) && v.first_delivery.commit.length === 40)
+      assert.ok(v.reviews.length >= 1 && v.reviews.every(x => typeof x.reported === "number" && typeof x.sent === "number"))
+      assert.ok(v.reviewer.calls === v.reviews.reduce((n, x) => n + x.attempts, 0) && v.reviewer.tokens.input_tokens > 0 && v.reviewer.tokens.cache_read_tokens > 0)
+      assert.ok(typeof v.formalizer.calls === "number" && typeof v.premise_blocked === "object" && typeof v.reverted === "number" && typeof v.voided === "number")
+      assert.ok(typeof v.guards.at_start === "number" && Array.isArray(v.guards.born) && Array.isArray(v.guards.flipped_changed_text) && Array.isArray(v.guards.flipped_unchanged))
+      assert.ok(v.coverage && v.coverage.units > 0 && v.coverage.covered >= 0 && Array.isArray(v.coverage.uncovered))
+      assert.ok(v.trial.runs >= 1)
+      const stages = r.wall!.stages.map(x => x.stage)
+      for (const st of ["coding", "build", "trial", "guard rerun", "review"]) assert.ok(stages.includes(st), `R${r.round} wall time has ${st}: ${stages.join(", ")}`)
+      const text = renderReport(r)
+      assert.match(text, /Review acceptance: first delivery C\d+\.1 [0-9a-f]{8}; trial runs \d+ \(\d+ failed\); reviews \d+ \(void sessions \d+\): #1 on C\d+\.\d+/u)
+      assert.match(text, /Reviewer items: reported \d+, entered a repair list \d+; premise checks blocked \d+ \(/u)
+      assert.match(text, /Guards: \d+ at the start, \d+ at the end, new \d+.*; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
+      assert.match(text, /Guard coverage: \d+\/\d+ live units; uncovered \d+/u)
+      assert.match(text, /Reviewer \(stub:reviewer\): \d+ sessions, in \d+, cache read \d+, out \d+, cache share [\d.]+\. Formalizer \((stub:formalizer|\?)\): \d+ calls/u)
+      assert.match(text, /Ledger: open program wrong \d+/u)
+    }
+    // R1: the stand-in's sort compares as text; the reviewer reports it; the stand-in cannot fix it; guards were born from the library's passes.
+    const r1 = s.reports[0].review!
+    assert.ok(r1.items.reported >= 1 && r1.items.sent >= 1, JSON.stringify(r1.items))
+    assert.ok(r1.guards.born.length > 0)
+    assert.ok(s.guards.length === s.reports[2].review!.guards.at_end + s.guard_events.filter(e => e.status === "retired").length || s.guards.length >= s.reports[2].review!.guards.at_end)
+    assert.ok(s.review_calls.length === s.reports.reduce((n, r) => n + r.review!.reviewer.calls, 0))
+    assert.ok(s.formalize_calls.length > 0 && s.formalize_calls.every(c => /^F\d+$/u.test(c.id)))
+    // The first delivery is on record for the local scoring.
+    const fd = readFileSync(join(dir, "checkpoints", "first-deliveries.jsonl"), "utf8").trim().split("\n").map(l => JSON.parse(l) as { round: number; commit: string })
+    assert.deepEqual(fd.map(x => x.round), [1, 2, 3])
+    assert.ok(existsSync(join(dir, "checkpoints", "round-02", "ledger.md")))
+    // The sort item stays open across rounds (the ledger carries it, the work order lists it once a round).
+    const ledger = JSON.parse(readFileSync(join(dir, "checkpoints", "round-03", "ledger.json"), "utf8")) as { id: string; source: string; state: string }[]
+    assert.ok(ledger.some(e => e.source === "review" && e.id.startsWith("V1.1.")), JSON.stringify(ledger.map(e => [e.id, e.source, e.state])))
+    assert.ok(ledger.some(e => e.source === "guard" || e.source === "check" || e.source === "review"))
+  })
+
+  it("the replay runs the new acceptance on frozen programs: the reviewer's raw list, the premises' verdicts and what would be sent, per product", async () => {
+    const root = mkdtempSync(join(tmpdir(), "exp2-acc-replay-"))
+    const product = (name: string, o: Parameters<typeof files>[0]) => { const p = join(root, "src", name); mkdirSync(p, { recursive: true }); write(p, files(o)); return { name, round: 1, path: p } }
+    const rstore = new Exp2Store(join(root, "store"), "accrep")
+    const result = await replayReview({
+      store: rstore, text: roundText, attribution: stubTransport(), checks: checkStubTransport(), sandbox: new LocalScriptSandbox(), runner: new LocalProcessRunner(), build: goBuilder(join(root, "builds"), {}, "dpipe"), timeoutMs: 10_000, root,
+      reviewer: workingReviewer(join(root, "rb")), formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), binary: "dpipe",
+    }, [product("filter_wrong", { filterWrong: true }), product("clean", {})])
+    const [wrong, clean] = result
+    assert.deepEqual(wrong.items.map(i => [i.id, i.premise, i.units]), [["V1.1.1", null, [FILTER_UNIT]]])
+    assert.ok(wrong.reviews[0].valid && !wrong.reviews[0].no_issues && wrong.reviews[0].program_runs >= 2)
+    assert.ok(clean.reviews[0].no_issues && clean.items.length === 0)
+    assert.ok(wrong.usage.reviewer.input_tokens > 0 && wrong.usage.formalizer.input_tokens > 0 && clean.usage.formalizer.input_tokens === 0)
+    assert.ok(wrong.library.passing.length + wrong.library.failing.length > 0, "the library ran on the product")
+    assert.equal(renderReviewList([{ id: "a", text: "x" }, { id: "b", text: "y\n" }]), "1. x\n\n2. y")
+  })
+})
