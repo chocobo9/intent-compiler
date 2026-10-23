@@ -1,0 +1,7147 @@
+[
+ {
+  "id": "V1.1.1",
+  "source": "review",
+  "unit": "R1.S2.P3.s2.c4",
+  "case": null,
+  "units": [
+   "R1.S2.P3.s2.c4",
+   "R1.S2.P4.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "R2 work order",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4",
+   "C2.1",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "56acc71944e6b12f162fcef1e8ac32795bf5cfea3f4466b1f0dc931eb7cd6414",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"duplicate value for unique column: id\" is not stated in R1.S2.P3.s2.c4, which reads \"(checked in input file order after all other validations pass),\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.2",
+  "source": "review",
+  "unit": "R1.S3.P2.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s4.c1",
+   "R1.S3.P9.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "R2 work order",
+   "C2.1",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "7b3d7d57a88977a9a1472fba411cc65b15bc0aca348e42e034cf121c0d74f5f6",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.3",
+  "source": "review",
+  "unit": "R1.S3.P9.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2",
+   "R2 work order",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4",
+   "C2.1",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "eb97583c115051abd56efe6871dba7501964538a09ff9edf28d48e068f45b643",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.4",
+  "source": "review",
+  "unit": "R1.S3.P9.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s5",
+   "R1.S3.P6",
+   "R1.S3.P7",
+   "R1.S3.P10.s1",
+   "R1.S3.P10.s2"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a4: reference script exited 1: File \"/work/__reference__.py\", line 7\n    print(json.dumps({'a4':str(int(sum(g[labels[0]]))), 'a4b':str(int(sum(g[labels[1]]))), 'a4c':str(int(sum(g[labels[0]])/len(g[labels[0])))}))\n                                                                                                                     ; assertion a4b: reference script exited 1: File \"/work/__reference__.py\", line 7\n    print(json.dumps({'a4':str(int(sum(g[labels[0]]))), 'a4b':str(int(sum(g[labels[1]]))), 'a4c':str(int(sum(g[labels[0]])/len(g[labels[0])))}))\n                                                                                                                     ; assertion a4c: reference script exited 1: File \"/work/__reference__.py\", line 7\n    print(json.dumps({'a4':str(int(sum(g[labels[0]]))), 'a4b':str(int(sum(g[labels[1]]))), 'a4c':str(int(sum(g[labels[0]])/len(g[labels[0])))}))\n                                                                                                                     "
+   }
+  ]
+ },
+ {
+  "id": "V1.1.5",
+  "source": "review",
+  "unit": "R1.S3.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s2.c1",
+   "R1.S3.P12.s3.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2",
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "273902c217e4760117048c58f3d2ea978e5d0555fb2f177ea266435597bee1e5",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a5b: \"\" is not stated in R1.S3.P12.s6.c4, which reads \"for rows where the join key has no match in the right dataset,\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.6",
+  "source": "review",
+  "unit": "R1.S3.P14.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s2.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4",
+   "C2.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "65b476129e2a3104ae8dbc0e5321a0603f87d91ea3baea4ad8314297bdd826c9",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.7",
+  "source": "review",
+  "unit": "R1.S3.P14.s8.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s8.c1",
+   "R1.S3.P14.s8.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "R2 work order",
+   "C2.2",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4",
+   "C2.1",
+   "C2.3",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2
+  ],
+  "digest": "28a9aff393375ec8c9907ae2b7db12e0e26817d42e5790ff772adc2ac5902e4e",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "fixed",
+   "detail": "no longer failing on C3.1"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.8",
+  "source": "review",
+  "unit": "R1.S3.P17.s1.c4",
+  "case": null,
+  "units": [
+   "R1.S3.P17.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "R2 work order",
+   "C2.1",
+   "C2.2",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "a4ff12aa25866ea19a0f29a65eec53a6531008d66db206d01fb4e4cf57c134b4",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a8b: 1 is not stated in R1.S3.P17.s1.c4, which reads \"exit with error: `ERROR: invalid recipe: column <name> not found`.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.9",
+  "source": "review",
+  "unit": "R1.S3.P18.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s1",
+   "R1.S3.P19.s3.c1",
+   "R1.S3.P19.s6.c1",
+   "R1.S3.P19.s7.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.4",
+   "R2 work order",
+   "C2.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "574daf54af8bd3f2b98b05d43011106a59f6f228f2542d5b2ec4a62dcb20a436",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.10",
+  "source": "review",
+  "unit": "R1.S3.P20.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P20.s1.c1",
+   "R1.S3.P21.s2.c2",
+   "R1.S3.P21.s4.c3",
+   "R1.S3.P21.s5.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "fc94e4988957c29728b195960ca8b7784c71ea54cbdb7e0f6608f3cc905620d9",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a10b: \"\" is not stated in R1.S3.P21.s5.c1, which reads \"- Empty values are preserved\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.11",
+  "source": "review",
+  "unit": "R1.S3.P22.s3.c3",
+  "case": null,
+  "units": [
+   "R1.S3.P22.s3.c3",
+   "R1.S3.P23.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "R2 work order",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4",
+   "C2.1",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "54bf64058baaf40094eb79cac3390043725e259a43fc04aeba7a8e7ad832cb9d",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a11: \"X\" is not stated in R1.S3.P23.s4, which reads \"- `\\\"constant\\\"`: replace all empty values in the specified columns with the given `value` string.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.12",
+  "source": "review",
+  "unit": "R1.S6.P2.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s3.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "ad110d0df861f15315e744714cff5992124412d95b88a0d6f6dad457814fd9df",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a12: 0 is not stated in R1.S6.P2.s3.c1, which reads \"- On success,\""
+   },
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a12b: \"PIPELINE OK: 0 steps completed\" is not stated in R1.S6.P2.s3.c1, which reads \"- On success,\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.13",
+  "source": "review",
+  "unit": "R1.S6.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2",
+   "R2 work order",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4",
+   "C2.1",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "47f8688a30f53fb8cdbc11c0d457b33bf13260e467abbf6b4678fa5426a83641",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.14",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c2",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "2f0add936628112a0451608fe477481325171de463fd706a7c212a102d1da677",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.15",
+  "source": "review",
+  "unit": "R1.S8.P1.s4.c2",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s4.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "1d6d8b3782ce2f0c0c9d9807359dc1e50404ca1baad9cfccb6ec84bde7bd5052",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.16",
+  "source": "review",
+  "unit": "R1.S8.P1.s5.c2",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s5.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "6a29c137cde06ceaba974a6f7195ccb46ee427e6bea09947b3d699afd9337a82",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.17",
+  "source": "review",
+  "unit": "R1.S5.P2.s1",
+  "case": null,
+  "units": [
+   "R1.S5.P2.s1"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "not_reproduced: the check passes on the program as it stands (exit 0)"
+  },
+  "disposition": "blocked"
+ },
+ {
+  "id": "V1.2.1",
+  "source": "review",
+  "unit": "R1.S3.P10.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P10.s2",
+   "R1.S3.P10.s3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "input_claim_false: review-aggregate.json: claimed parses, the standard parser rejects it"
+  },
+  "disposition": "blocked"
+ },
+ {
+  "id": "V1.2.2",
+  "source": "review",
+  "unit": "R1.S3.P11.s7",
+  "case": null,
+  "units": [
+   "R1.S3.P11.s7",
+   "R1.S3.P11.s8"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "R2 work order",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4",
+   "C2.1",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "3f2a20c06307bf68587e7b58309c86f8947e8900734e1390d5484867e46b12ae",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"label,total\" is not stated in R1.S3.P10.s1, which reads \"Output columns: the group_by columns (in declaration order), followed by the aggregation result columns (in declaration order, using the `as` name).\""
+   }
+  ]
+ },
+ {
+  "id": "V1.2.3",
+  "source": "review",
+  "unit": "R1.S6.P2.s2.c2",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3",
+   "R1.S6.P2.s2.c4",
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "R2 work order",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4",
+   "C2.1",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "ed008a33430c9f0ccaab3a95949218f43728aa8ac4c96510af3d25f0190f5084",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.4",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "d402e2ab87ad499f0bc21094bb8d6ef05fd5bd8af78cbca6b7ac48403583f690",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.5",
+  "source": "review",
+  "unit": "R1.S3.P2.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "R2 work order",
+   "C2.1",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": "785e5bb0b5f8294268c6b41da91001c67e137b13e1cd063432c1c8f25f45b7b8",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.6",
+  "source": "review",
+  "unit": "R1.S3.P9.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "d8402b654cf7b54f1bd95ac6dfc9467f79db090666f5a990f0adc3da12f1ce13",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.7",
+  "source": "review",
+  "unit": "R1.S3.P9.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s1.c1",
+   "R1.S3.P9.s1.c2",
+   "R1.S3.P9.s1.c3",
+   "R1.S3.P9.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "901326b8f601a888b79dad80958570f2647edfffcfb4ac4de95ba8e6cfcb0e83",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.1",
+  "source": "review",
+  "unit": "R1.S3.P2.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s4.c1",
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c2",
+   "R1.S8.P1.s3.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "a5657c54ad65dd385738f6de597953212f91bccd2186122a7dd28f5d7e618d6e",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.2",
+  "source": "review",
+  "unit": "R1.S3.P11.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P11.s4.c1",
+   "R1.S3.P11.s4.c2",
+   "R1.S3.P11.s5",
+   "R1.S3.P11.s6.c1",
+   "R1.S3.P11.s7"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "bdb18deafe123e2c3d2dcadc97446959f2e11fa4dac90a5080a877ad4b873270",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.3",
+  "source": "review",
+  "unit": "R1.S3.P12.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s4",
+   "R1.S3.P12.s5",
+   "R1.S3.P12.s6.c1",
+   "R1.S3.P12.s6.c2",
+   "R1.S3.P12.s6.c3",
+   "R1.S3.P12.s6.c4",
+   "R1.S3.P12.s7.c1",
+   "R1.S3.P12.s7.c2",
+   "R1.S3.P12.s9.c1",
+   "R1.S3.P12.s9.c2",
+   "R1.S3.P12.s9.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "e684d8ed76fd605146901bc86df3dd03ab8e600dec71d68cd2aca1faafd1eaef",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a3c: methods disagree: A \"R1\", B \"R1b\""
+   }
+  ]
+ },
+ {
+  "id": "V1.3.4",
+  "source": "review",
+  "unit": "R1.S2.P6.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2.c1",
+   "R1.S2.P6.s2.c2",
+   "R1.S2.P6.s2.c3",
+   "R1.S2.P6.s2.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "e714e32d1a889e9cdb9a2b2b9cd53d85c0bbedad27793c4657cda85630d499ec",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.5",
+  "source": "review",
+  "unit": "R1.S3.P13.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s2.c1",
+   "R1.S3.P13.s2.c2",
+   "R1.S3.P13.s2.c3",
+   "R1.S3.P13.s2.c4",
+   "R1.S3.P13.s3.c1",
+   "R1.S3.P13.s3.c2",
+   "R1.S3.P13.s3.c3",
+   "R1.S3.P13.s3.c4",
+   "R1.S3.P13.s3.c5",
+   "R1.S3.P13.s3.c6",
+   "R1.S3.P13.s3.c7",
+   "R1.S3.P13.s3.c8",
+   "R1.S3.P14.s4",
+   "R1.S3.P15.s2.c1",
+   "R1.S3.P15.s2.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "R2 work order",
+   "C2.1",
+   "C2.2",
+   "R3 work order"
+  ],
+  "held": [
+   "C1.4",
+   "C2.3",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2
+  ],
+  "digest": "203367ca99f58d915bb555ccf74288f949d78d2e079576a74c572dfd2c8c750a",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "fixed",
+   "detail": "no longer failing on C3.1"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.6",
+  "source": "review",
+  "unit": "R1.S3.P22.s3.c3",
+  "case": null,
+  "units": [
+   "R1.S3.P22.s3.c3",
+   "R1.S3.P22.s4.c1",
+   "R1.S3.P22.s4.c2",
+   "R1.S3.P22.s4.c3",
+   "R1.S3.P23.s4",
+   "R1.S3.P23.s5",
+   "R1.S3.P23.s6"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "8a5a7546a18d8e315287e6cca49f2e262e8eeacf79332934cec7087a02145f77",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.7",
+  "source": "review",
+  "unit": "R1.S3.P20.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P20.s1.c1",
+   "R1.S3.P21.s2.c1",
+   "R1.S3.P21.s2.c2",
+   "R1.S3.P21.s3.c1",
+   "R1.S3.P21.s3.c2",
+   "R1.S3.P21.s3.c3",
+   "R1.S3.P21.s3.c4",
+   "R1.S3.P21.s4.c1",
+   "R1.S3.P21.s4.c2",
+   "R1.S3.P21.s4.c3",
+   "R1.S3.P21.s4.c4",
+   "R1.S3.P21.s5.c1",
+   "R1.S3.P21.s5.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "dd8aa326527f3a0e45727e2b2a17d387e0f90bd4ea57c9d40c192a59fe1e20b5",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.8",
+  "source": "review",
+  "unit": "R1.S3.P18.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s1",
+   "R1.S3.P19.s2",
+   "R1.S3.P19.s3.c1",
+   "R1.S3.P19.s3.c2",
+   "R1.S3.P19.s4.c1",
+   "R1.S3.P19.s4.c2",
+   "R1.S3.P19.s4.c3",
+   "R1.S3.P19.s4.c4",
+   "R1.S3.P19.s4.c5",
+   "R1.S3.P19.s5.c1",
+   "R1.S3.P19.s5.c2",
+   "R1.S3.P19.s5.c3",
+   "R1.S3.P19.s6.c1",
+   "R1.S3.P19.s6.c2",
+   "R1.S3.P19.s6.c3",
+   "R1.S3.P19.s7.c1",
+   "R1.S3.P19.s7.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order",
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   },
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "acdda9e4534e7945476292e030ead7392cd3b4c8a2e725f59702a65d33b1c522",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.9",
+  "source": "review",
+  "unit": "R1.S3.P9.s8",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s8"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "838a76324fc4c8af46b81273990f79c1ccb85caa3b5ab31fcc6fde20bdd49b11",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.10",
+  "source": "review",
+  "unit": "R1.S3.P17.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P17.s1.c1",
+   "R1.S3.P17.s1.c2",
+   "R1.S3.P17.s1.c3",
+   "R1.S3.P17.s1.c4",
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c2",
+   "R1.S8.P1.s3.c3",
+   "R1.S8.P1.s3.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "75c06b5eabb4069cfed3fa8c238261fd6088c6f3ea167ae8a9b5e71ef8e37938",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.12",
+  "source": "review",
+  "unit": "R1.S6.P2.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s1.c1",
+   "R1.S6.P2.s1.c2",
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3",
+   "R1.S6.P2.s2.c4",
+   "R1.S6.P2.s3.c1",
+   "R1.S6.P2.s3.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented and verified:\n\n- `--help` support\n- Correct filter conditions and sampling semantics\n- Fill strategies including `linear`\n- Aggregate count/empty handling and `having`\n- Unpivot naming\n- Pivot recipe support\n- Join/pipeline step dispatch\n- Empty pipeline success output\n- Pipeline verify/",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "89c4af99944835e2a8fbfddcb3d72964bc4e1596252e9c763cf9dc6a224c0a7c",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a12b: \"PIPELINE OK: 1 steps completed\" is not stated in R1.S6.P2.s1.c1, R1.S6.P2.s1.c2, R1.S6.P2.s2.c1, R1.S6.P2.s2.c2, R1.S6.P2.s2.c3, R1.S6.P2.s2.c4, R1.S6.P2.s3.c1, R1.S6.P2.s3.c2"
+   }
+  ]
+ },
+ {
+  "id": "V1.3.11",
+  "source": "review",
+  "unit": "R1.S5.P2.s1",
+  "case": null,
+  "units": [
+   "R1.S5.P2.s1",
+   "R1.S5.P2.s2",
+   "R1.S5.P2.s3",
+   "R1.S5.P2.s4"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"manifest\",\"--dir\",\".\",\"--output\",\"review-manifest.json\"]) is not among the session's commands, and review-manifest.json is in no material (leads given: K15, K17, K18; session files: 23; session commands: 7); the formalizer: The command scans the entire workspace directory, but the complete contents and file listing of that directory were not provided."
+   }
+  ]
+ },
+ {
+  "id": "K5",
+  "source": "check",
+  "unit": "R1.S2.P4",
+  "case": null,
+  "units": [
+   "R1.S2.P4",
+   "R1.S2.P4.s1",
+   "R1.S2.P4.s1.c1",
+   "R1.S2.P4.s1.c2",
+   "R1.S2.P4.s1.c3",
+   "R1.S2.P4.s1.c4",
+   "R1.S2.P4.s1.c5",
+   "R1.S2.P4.s1.c6",
+   "R1.S2.P4.s1.c7",
+   "R1.S2.P4.s2",
+   "R1.S2.P4.s2.c1",
+   "R1.S2.P4.s2.c2",
+   "R1.S2.P4.s2.c3"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The first row fails the required/type validation because `value` is not a valid float, so it is not among the valid rows considered for uniqueness. The second row is therefore the first valid occurrence of `id=1`, not a later duplicate; exit code 0 is consistent with the requirement that schema validation failures do not cause an error exit. [R1.S2.P4.s1.c1, R1.S2.P4.s1.c2, R1.S2.P4.s1.c3, R1.S2.P4.s2.c1, R1.S2.P4.s2.c2, R1.S2.P4.s2.c3, R1.S8.P1.s2]"
+  }
+ },
+ {
+  "id": "K13",
+  "source": "check",
+  "unit": "R1.S3.P6",
+  "case": null,
+  "units": [
+   "R1.S3.P6",
+   "R1.S3.P7"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K15",
+  "source": "check",
+  "unit": "R1.S3.P9",
+  "case": null,
+  "units": [
+   "R1.S3.P9",
+   "R1.S3.P9.s1",
+   "R1.S3.P9.s2",
+   "R1.S3.P9.s3",
+   "R1.S3.P9.s4",
+   "R1.S3.P9.s5",
+   "R1.S3.P9.s6",
+   "R1.S3.P9.s7",
+   "R1.S3.P9.s8",
+   "R1.S3.P9.s9",
+   "R1.S3.P9.s10"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K17",
+  "source": "check",
+  "unit": "R1.S3.P11",
+  "case": null,
+  "units": [
+   "R1.S3.P11",
+   "R1.S3.P11.s1",
+   "R1.S3.P11.s2",
+   "R1.S3.P11.s3",
+   "R1.S3.P11.s4",
+   "R1.S3.P11.s4.c1",
+   "R1.S3.P11.s5",
+   "R1.S3.P11.s6",
+   "R1.S3.P11.s6.c1",
+   "R1.S3.P11.s7",
+   "R1.S3.P11.s8",
+   "R1.S3.P11.s8.c1",
+   "R1.S3.P11.s8.c2"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K18",
+  "source": "check",
+  "unit": "R1.S3.P12",
+  "case": null,
+  "units": [
+   "R1.S3.P12",
+   "R1.S3.P12.s1",
+   "R1.S3.P12.s2",
+   "R1.S3.P12.s3",
+   "R1.S3.P12.s4",
+   "R1.S3.P12.s5",
+   "R1.S3.P12.s6",
+   "R1.S3.P12.s7",
+   "R1.S3.P12.s8",
+   "R1.S3.P12.s9",
+   "R1.S3.P12.s10",
+   "R1.S3.P12.s10.c1",
+   "R1.S3.P12.s10.c2"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K19",
+  "source": "check",
+  "unit": "R1.S3.P13",
+  "case": null,
+  "units": [
+   "R1.S3.P13",
+   "R1.S3.P13.s1",
+   "R1.S3.P13.s2",
+   "R1.S3.P13.s3",
+   "R1.S3.P13.s4",
+   "R1.S3.P13.s2.c1",
+   "R1.S3.P13.s2.c2",
+   "R1.S3.P13.s2.c3",
+   "R1.S3.P13.s2.c4",
+   "R1.S3.P13.s3.c1",
+   "R1.S3.P13.s3.c2",
+   "R1.S3.P13.s3.c3",
+   "R1.S3.P13.s3.c4",
+   "R1.S3.P13.s3.c5",
+   "R1.S3.P13.s3.c6",
+   "R1.S3.P13.s3.c7",
+   "R1.S3.P13.s3.c8"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The two rows are tied on the sole order_by column (`value`), so `rank` requires both to receive rank 1; the check incorrectly expects the second row to receive rank 2. The input order and exit code are otherwise consistent with the requirements. [R1.S3.P14.s1, R1.S3.P14.s2, R1.S3.P15.s1, R1.S3.P15.s2]"
+  }
+ },
+ {
+  "id": "K20",
+  "source": "check",
+  "unit": "R1.S3.P14",
+  "case": null,
+  "units": [
+   "R1.S3.P14"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The reference output contradicts the required partition ordering: with `order_by` id ascending, A2 must have lag 5, lead 2, and running_sum 10, while A1 must have lag 0 and lead 5. The requirements also require rank ties to follow input order and output rows to retain original order, so this reference is not text-compliant. [R1.S3.P13#81ee37a3, R1.S3.P14#1b600a68, R1.S3.P15#0b65801e]"
+  }
+ },
+ {
+  "id": "K22",
+  "source": "check",
+  "unit": "R1.S3.P16",
+  "case": null,
+  "units": [
+   "R1.S3.P16",
+   "R1.S3.P16.s1",
+   "R1.S3.P16.s2",
+   "R1.S3.P16.s1.c1",
+   "R1.S3.P16.s1.c2",
+   "R1.S3.P16.s1.c3",
+   "R1.S3.P16.s1.c4",
+   "R1.S3.P16.s2.c1",
+   "R1.S3.P16.s2.c2",
+   "R1.S3.P16.s2.c3"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1,
+   2
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K26",
+  "source": "check",
+  "unit": "R1.S3.P20",
+  "case": null,
+  "units": [
+   "R1.S3.P20",
+   "R1.S3.P20.s1",
+   "R1.S3.P20.s2",
+   "R1.S3.P20.s3",
+   "R1.S3.P20.s4",
+   "R1.S3.P20.s5"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K28",
+  "source": "check",
+  "unit": "R1.S3.P22",
+  "case": null,
+  "units": [
+   "R1.S3.P22",
+   "R1.S3.P22.s1",
+   "R1.S3.P22.s2",
+   "R1.S3.P22.s3",
+   "R1.S3.P22.s4"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K29",
+  "source": "check",
+  "unit": "R1.S3.P23",
+  "case": null,
+  "units": [
+   "R1.S3.P23",
+   "R1.S3.P23.s1",
+   "R1.S3.P23.s2",
+   "R1.S3.P23.s3",
+   "R1.S3.P23.s4",
+   "R1.S3.P23.s5",
+   "R1.S3.P23.s6",
+   "R1.S3.P23.s7",
+   "R1.S3.P23.s7.c1",
+   "R1.S3.P23.s7.c2"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1,
+   2,
+   3
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K36",
+  "source": "check",
+  "unit": "R1.S6.P2",
+  "case": null,
+  "units": [
+   "R1.S6.P2",
+   "R1.S6.P2.s1",
+   "R1.S6.P2.s2",
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3",
+   "R1.S6.P2.s2.c4",
+   "R1.S6.P2.s3",
+   "R1.S6.P2.s3.c1",
+   "R1.S6.P2.s3.c2"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The requirements support a verify pipeline step and require exit code 1 plus the failure message for a missing input, but they do not specify that the pipeline failure message must be on stdout. The check's stdout-line assertion therefore expects an unspecified stream. [R1.S6.P2.s2, R1.S6.P2.s2.c1, R1.S6.P2.s2.c2, R1.S6.P2.s2.c3, R1.S8.P1.s1]"
+  }
+ },
+ {
+  "id": "V2.1.1",
+  "source": "review",
+  "unit": "R1.S3.P12.s8.c2",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s8.c2",
+   "R1.S3.P12.s8.c3",
+   "R1.S3.P12.s8.c4"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a1: reference script exited 1: Traceback (most recent call last):\n  File \"/work/__reference__.py\", line 2, in <module>\n    with open('review_join_out.csv',newline='') as f: rows=list(csv.reader(f))\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'review_join_out.csv'; assertion a2: reference script exited 1: Traceback (most recent call last):\n  File \"/work/__reference__.py\", line 2, in <module>\n    with open('review_join_out.csv',newline='') as f: rows=list(csv.reader(f))\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'review_join_out.csv'"
+   }
+  ]
+ },
+ {
+  "id": "V2.1.2",
+  "source": "review",
+  "unit": "R1.S3.P14.s8.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s8.c1",
+   "R1.S3.P14.s8.c2",
+   "R1.S3.P16.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2",
+   "R3 work order"
+  ],
+  "held": [
+   "C2.3",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "a5657c54ad65dd385738f6de597953212f91bccd2186122a7dd28f5d7e618d6e",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "fixed",
+   "detail": "no longer failing on C3.1"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.3",
+  "source": "review",
+  "unit": "R1.S3.P17.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P17.s1.c1",
+   "R1.S3.P17.s1.c2",
+   "R1.S3.P17.s1.c3",
+   "R1.S3.P17.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "86e13e1a84947fdbb58cebf31155b7851841621958dcad4c72c5c8ea98ff3bb4",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a1: 1 is not stated in R1.S3.P17.s1.c4, which reads \"exit with error: `ERROR: invalid recipe: column <name> not found`.\""
+   }
+  ]
+ },
+ {
+  "id": "V2.1.4",
+  "source": "review",
+  "unit": "R1.S3.P18.s3",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s3",
+   "R1.S3.P18.s4",
+   "R1.S3.P19.s3.c1",
+   "R1.S3.P19.s4.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "e140c668808e716aa790ae145f8f33514d22bc563ff449fa5965ca790a615049",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.5",
+  "source": "review",
+  "unit": "R1.S3.P23.s2.c2",
+  "case": null,
+  "units": [
+   "R1.S3.P23.s2.c2",
+   "R1.S3.P23.s2.c3",
+   "R1.S3.P23.s2.c4",
+   "R1.S3.P23.s5"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "blocked",
+   "detail": "not_reproduced: the check passes on the program as it stands (exit 0)"
+  },
+  "disposition": "blocked"
+ },
+ {
+  "id": "V2.1.6",
+  "source": "review",
+  "unit": "R2.S1.P1",
+  "case": null,
+  "units": [
+   "R2.S1.P1",
+   "R2.S1.P2.s1.c1",
+   "R2.S1.P2.s1.c2",
+   "R2.S1.P2.s1.c3",
+   "R2.S3.P2.s1.c1",
+   "R2.S3.P3.s1",
+   "R2.S3.P3.s2.c1",
+   "R2.S3.P3.s3.c1",
+   "R2.S3.P3.s4.c1",
+   "R2.S3.P3.s5.c1",
+   "R2.S3.P3.s6.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "R3 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "38ee797e5a0601e82ca7e16304af9543963999838dd0efe203b7e434ad85a25b",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "fixed",
+   "detail": "no longer failing on C3.1"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.7",
+  "source": "review",
+  "unit": "R2.S19.P1",
+  "case": null,
+  "units": [
+   "R2.S19.P1",
+   "R2.S19.P2.s1.c1",
+   "R2.S20.P1.s1.c1",
+   "R2.S20.P1.s2.c1",
+   "R2.S21.P1",
+   "R2.S22.P1.s1",
+   "R2.S22.P2.s1",
+   "R2.S22.P3.s1",
+   "R2.S22.P4.s1",
+   "R2.S23.P1.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.3"
+  ],
+  "held": [
+   "C2.2"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "cbd74bc8086bec40f69d5eeb028b3d260f7653a816d6df4a2e6fe718086dfca6",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.8",
+  "source": "review",
+  "unit": "R2.S18.P1",
+  "case": null,
+  "units": [
+   "R2.S18.P1",
+   "R2.S18.P2",
+   "R2.S18.P3",
+   "R2.S29.P1",
+   "R2.S29.P2",
+   "R2.S29.P3",
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3",
+   "R1.S6.P2.s2.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "62efd4abb6772182470cbbfdbbd719671faf73b2b364283062fe58ca190f5794",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a1: 0 is not stated in R1.S6.P2.s3.c1, which reads \"- On success,\""
+   },
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a2: \"PIPELINE OK: 2 steps completed\" is not stated in R1.S6.P2.s3.c2, which reads \"exits with code 0 and prints `PIPELINE OK: N steps completed`.\""
+   }
+  ]
+ },
+ {
+  "id": "V2.1.9",
+  "source": "review",
+  "unit": "R2.S8.P1",
+  "case": null,
+  "units": [
+   "R2.S8.P1",
+   "R2.S8.P3.s1.c1",
+   "R2.S8.P3.s1.c2",
+   "R2.S8.P3.s1.c3",
+   "R2.S8.P3.s2.c1",
+   "R2.S8.P3.s3",
+   "R2.S8.P3.s4",
+   "R2.S8.P3.s5"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "a58f07fa7b86b59ac3a7f60224c81f53ae2702f3453d385996199375e62f861e",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.10",
+  "source": "review",
+  "unit": "R2.S9.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R2.S9.P1.s1.c1",
+   "R2.S9.P1.s1.c2",
+   "R2.S9.P3.s1",
+   "R2.S9.P3.s2",
+   "R2.S9.P3.s3",
+   "R2.S9.P3.s4",
+   "R2.S9.P3.s5.c1",
+   "R2.S9.P3.s6.c1",
+   "R2.S9.P3.s6.c2",
+   "R2.S9.P3.s7",
+   "R2.S9.P3.s8"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [
+   "C2.2"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "c617d0dd46637931f698fdb67fbeccbeb1577806d8402310174ecbfd98193eff",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.11",
+  "source": "review",
+  "unit": "R2.S10.P1",
+  "case": null,
+  "units": [
+   "R2.S10.P1",
+   "R2.S10.P1.s2.c1",
+   "R2.S10.P2",
+   "R2.S10.P3.s1",
+   "R2.S10.P3.s2",
+   "R2.S10.P3.s3.c1",
+   "R2.S10.P3.s4.c1",
+   "R2.S10.P3.s4.c2",
+   "R2.S10.P3.s4.c3",
+   "R2.S10.P3.s4.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "a58f07fa7b86b59ac3a7f60224c81f53ae2702f3453d385996199375e62f861e",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.12",
+  "source": "review",
+  "unit": "R2.S11.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R2.S11.P1.s1.c1",
+   "R2.S11.P1.s1.c2",
+   "R2.S11.P2",
+   "R2.S11.P3.s1",
+   "R2.S11.P3.s2",
+   "R2.S11.P3.s3.c1",
+   "R2.S11.P5.s1.c1",
+   "R2.S11.P5.s1.c2",
+   "R2.S11.P5.s1.c3",
+   "R2.S11.P5.s3.c1",
+   "R2.S11.P6.s1",
+   "R2.S11.P6.s4.c1",
+   "R2.S11.P6.s4.c2",
+   "R2.S11.P7.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "0fed64c66ec2b01c70ae701d7f575c47d888d16c9a1262b3cc9d983f3a699f01",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.13",
+  "source": "review",
+  "unit": "R2.S14.P1",
+  "case": null,
+  "units": [
+   "R2.S14.P1",
+   "R2.S14.P3.s1.c1",
+   "R2.S14.P3.s1.c2",
+   "R2.S14.P3.s2",
+   "R2.S14.P3.s3.c1",
+   "R2.S14.P4",
+   "R2.S14.P5.s1.c1",
+   "R2.S14.P5.s1.c2",
+   "R2.S14.P5.s3.c1",
+   "R2.S14.P5.s4.c1",
+   "R2.S14.P5.s4.c2",
+   "R2.S14.P5.s4.c3",
+   "R2.S14.P5.s4.c4",
+   "R2.S14.P5.s4.c5"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2",
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "4afaf06ce19a537d028ba348b3d36255c6587f4bf3d532bee17b9ec9fecf52b6",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.14",
+  "source": "review",
+  "unit": "R2.S15.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R2.S15.P1.s1.c1",
+   "R2.S15.P1.s1.c2",
+   "R2.S15.P1.s1.c3",
+   "R2.S15.P1.s1.c4",
+   "R2.S15.P3.s1.c1",
+   "R2.S15.P3.s2.c1",
+   "R2.S15.P3.s2.c2",
+   "R2.S15.P3.s2.c3",
+   "R2.S15.P3.s2.c4",
+   "R2.S15.P4",
+   "R2.S15.P6.s1",
+   "R2.S15.P6.s2",
+   "R2.S15.P6.s3"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a1: methods disagree: A \"id,total\\n1,1\\n* ,1\\n\", B \"id,total\\n1,1\\n*,1\\n\""
+   }
+  ]
+ },
+ {
+  "id": "V2.1.15",
+  "source": "review",
+  "unit": "R2.S16.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R2.S16.P1.s1.c1",
+   "R2.S16.P1.s1.c2",
+   "R2.S16.P2",
+   "R2.S16.P3.s1.c1",
+   "R2.S16.P3.s2.c1",
+   "R2.S16.P3.s3.c1",
+   "R2.S16.P4.s1.c1",
+   "R2.S16.P5.s1",
+   "R2.S16.P5.s2.c1",
+   "R2.S16.P7.s1.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "7529d8f4afe9bf006ebc7b5732f09a52171c1fa3fbfd9fbf5245ffbdaa0f4dd8",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.16",
+  "source": "review",
+  "unit": "R2.S17.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R2.S17.P1.s1.c1",
+   "R2.S17.P1.s1.c2",
+   "R2.S17.P2",
+   "R2.S17.P3.s1.c1",
+   "R2.S17.P3.s1.c2",
+   "R2.S17.P3.s3.c1",
+   "R2.S17.P3.s4.c1",
+   "R2.S17.P4.s1",
+   "R2.S17.P5.s1",
+   "R2.S17.P5.s2.c1",
+   "R2.S17.P7.s1",
+   "R2.S17.P7.s2",
+   "R2.S17.P7.s3.c1",
+   "R2.S17.P7.s3.c2",
+   "R2.S17.P7.s4.c1",
+   "R2.S17.P7.s4.c2",
+   "R2.S17.P7.s5.c1",
+   "R2.S17.P7.s5.c2",
+   "R2.S17.P7.s6",
+   "R2.S17.P7.s7"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2",
+   "C2.3",
+   "R3 work order",
+   "C3.1"
+  ],
+  "held": [
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   },
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "48a2fbff5d34dc823acf7e6554df5f8df377371632ef127f7cbac30c8a9e50b8",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.17",
+  "source": "review",
+  "unit": "R2.S28.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R2.S28.P1.s1.c1",
+   "R2.S28.P1.s1.c2",
+   "R2.S28.P2",
+   "R2.S28.P3.s1.c1",
+   "R2.S28.P3.s1.c2",
+   "R2.S28.P3.s2.c1",
+   "R2.S28.P5.s1.c1",
+   "R2.S28.P5.s1.c2",
+   "R2.S28.P5.s1.c3",
+   "R2.S28.P5.s1.c4",
+   "R2.S28.P5.s1.c5",
+   "R2.S28.P7.s1",
+   "R2.S28.P7.s2.c1",
+   "R2.S28.P7.s2.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [
+   "C2.2",
+   "C2.3"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported gaps:\n\n- Filter condition handling\n- Window validation, partitioning, ordering, and running averages\n- Pivot using `index`, `column`, and `value`\n- First-match-only joins\n- `profile` and `compare` commands\n- Pipeline `profile` and `compare` steps\n- `deduplicate`, `split`, `assert`",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "89e1f17c3c4e2da6041db230e6d2977e8a84a6e4807a606dee415d9da93f21f8",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.1",
+  "source": "review",
+  "unit": "R2.S1.P2",
+  "case": null,
+  "units": [
+   "R2.S1.P2",
+   "R2.S2.P2",
+   "R2.S3.P1",
+   "R2.S3.P2",
+   "R2.S3.P3",
+   "R2.S4.P1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2",
+   "C2.3",
+   "C2.4",
+   "R3 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "9b749e7441cb41742840e36496293b5e9d912cb8d18de41168318506cf61ac8c",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "fixed",
+   "detail": "no longer failing on C3.1"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.2",
+  "source": "review",
+  "unit": "R2.S19.P1",
+  "case": null,
+  "units": [
+   "R2.S19.P1",
+   "R2.S21.P1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2",
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "9076a5b21426345b65b621e61bb1e54b22ebb0d5a53ff5f0df9b82c6e243b898",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: true is not stated in R2.S19.P2, which reads \"Reads two CSV files and compares them row-by-row using the specified key columns, producing a JSON diff report.\""
+   }
+  ]
+ },
+ {
+  "id": "V2.2.3",
+  "source": "review",
+  "unit": "R2.S24.P1.s3.c1",
+  "case": null,
+  "units": [
+   "R2.S24.P1.s3.c1",
+   "R2.S24.P1.s3.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "dec40fce3e6273a5d43e7afd9c4e970f419d36adf443b4d9476de493d0389ea3",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.4",
+  "source": "review",
+  "unit": "R2.S29.P3",
+  "case": null,
+  "units": [
+   "R2.S29.P3",
+   "R1.S6.P2.s2",
+   "R1.S6.P2.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "e53fccdd366a55fcfd78ee6ff8ec572bfbba85ac50cfbce38c82901c1320a11c",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.5",
+  "source": "review",
+  "unit": "R1.S3.P14.s8",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s8",
+   "R1.S3.P15.s1",
+   "R1.S3.P16.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2",
+   "R3 work order"
+  ],
+  "held": [
+   "C2.3",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "b6529982545e1bb0e02c60f30631aec9a20e56c9ca78ebda136c6800ef974931",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "fixed",
+   "detail": "no longer failing on C3.1"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.6",
+  "source": "review",
+  "unit": "R2.S8.P3.s1",
+  "case": null,
+  "units": [
+   "R2.S8.P3.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "f5510e3a121575ac4c06e4ffb2bb104164526ba29b6d40ffc6d21aff46526fac",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.7",
+  "source": "review",
+  "unit": "R2.S9.P1",
+  "case": null,
+  "units": [
+   "R2.S9.P1",
+   "R2.S9.P3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2",
+   "C2.3",
+   "R3 work order"
+  ],
+  "held": [
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2,
+   3
+  ],
+  "digest": "a04c475b5ebe0fac7e582efe8f111ea1e9c22696b547a0217aa40d35bd7c9974",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.8",
+  "source": "review",
+  "unit": "R2.S11.P1",
+  "case": null,
+  "units": [
+   "R2.S11.P1",
+   "R2.S11.P3.s3",
+   "R2.S11.P5.s1",
+   "R2.S11.P6.s4",
+   "R2.S11.P7.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "fe6bc599a1f7eb3885d961d7e67ccce641058a815dca692a61dd34fa788c5516",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.9",
+  "source": "review",
+  "unit": "R2.S14.P4",
+  "case": null,
+  "units": [
+   "R2.S14.P4",
+   "R2.S14.P5.s1",
+   "R2.S14.P5.s2",
+   "R2.S14.P5.s3",
+   "R2.S14.P5.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2",
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "1f471ffc27ef5794d5ececdad87c8530eae36f0a6cf80f322d4ecf5f7bd514e1",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.10",
+  "source": "review",
+  "unit": "R2.S16.P5.s2",
+  "case": null,
+  "units": [
+   "R2.S16.P5.s2",
+   "R2.S16.P7.s1",
+   "R2.S16.P8.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "1be9d042e343630f24aa1e3837a91bdb35e860f8b8e24b4fc19ecff0b784f969",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.11",
+  "source": "review",
+  "unit": "R2.S17.P1",
+  "case": null,
+  "units": [
+   "R2.S17.P1",
+   "R2.S17.P3.s3",
+   "R2.S17.P4.s1",
+   "R2.S17.P5.s2",
+   "R2.S17.P7.s1",
+   "R2.S17.P7.s2",
+   "R2.S17.P7.s3",
+   "R2.S17.P7.s4",
+   "R2.S17.P7.s5",
+   "R2.S17.P7.s6"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2",
+   "C2.3",
+   "R3 work order"
+  ],
+  "held": [
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2,
+   3
+  ],
+  "digest": "d05f9e641d8b55be8f1aeda90b9fd92c9e859b6bf6ae11068513e3ec0e7ead64",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.12",
+  "source": "review",
+  "unit": "V2.2.12",
+  "case": null,
+  "units": [],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Addressed the reported issues:\n\n- Corrected window running averages and validation.\n- Preserved original row order while ranking within partitions.\n- Added pipeline compare arguments.\n- Added required profile output structure.\n- Added compare flags and output handling.\n- Fixed deduplicate `keep: \"la",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "not_formalized",
+    "detail": "the formalizer wrote no item for this entry of the review"
+   }
+  ]
+ },
+ {
+  "id": "V2.3.1",
+  "source": "review",
+  "unit": "R2.S20.P1.s4.c1",
+  "case": null,
+  "units": [
+   "R2.S20.P1.s4.c1",
+   "R2.S20.P1.s4.c2",
+   "R2.S24.P1.s4.c1",
+   "R2.S24.P1.s4.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "f2c475d0224b099a40bb456750794337aa5e90f3a876bdf5915581ebff80d67b",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.2",
+  "source": "review",
+  "unit": "R2.S20.P1.s2.c2",
+  "case": null,
+  "units": [
+   "R2.S20.P1.s2.c2",
+   "R2.S20.P1.s2.c4",
+   "R2.S24.P1.s5.c1",
+   "R2.S24.P1.s5.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "81a9c6a7e236983494d83e780e121d804afb888fc3e3c17c35597cd31c8058b0",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.3",
+  "source": "review",
+  "unit": "R2.S24.P1.s6.c1",
+  "case": null,
+  "units": [
+   "R2.S24.P1.s6.c1",
+   "R2.S24.P1.s6.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "f65ebe68cd52727c379dd735e1205e8ddfcf8b888afea497f547478dfb5b8ec3",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.4",
+  "source": "review",
+  "unit": "R2.S21.P1",
+  "case": null,
+  "units": [
+   "R2.S21.P1",
+   "R2.S22.P1",
+   "R2.S23.P1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3",
+   "C2.4",
+   "R3 work order"
+  ],
+  "held": [
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2,
+   3
+  ],
+  "digest": "d2a7ec81ea65a285ad65a494600c650cb66993c5219b025772cf3504058148ae",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.5",
+  "source": "review",
+  "unit": "R2.S25.P1",
+  "case": null,
+  "units": [
+   "R2.S25.P1",
+   "R2.S25.P2",
+   "R2.S25.P4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "39465dc6104e820e638c2b06d2a23c24bf2ecc892331e09aa1692175ee181554",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a2: true is not stated in R2.S19.P1, which reads \"`dpipe compare --left <path> --right <path> --key <col1,col2,...> --output <path>`\""
+   }
+  ]
+ },
+ {
+  "id": "V2.3.6",
+  "source": "review",
+  "unit": "R2.S2.P2",
+  "case": null,
+  "units": [
+   "R2.S2.P2",
+   "R2.S3.P2",
+   "R2.S3.P5",
+   "R2.S4.P1"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3",
+   "C2.4",
+   "R3 work order",
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   },
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "c7ce19983c786215b7ff73dc9be185e7aa6208d3c575e6f93b0649eecf8fbd2d",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.7",
+  "source": "review",
+  "unit": "R2.S9.P1",
+  "case": null,
+  "units": [
+   "R2.S9.P1",
+   "R2.S9.P3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3",
+   "R3 work order"
+  ],
+  "held": [
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2,
+   3
+  ],
+  "digest": "0449edc6a8af017f01eb1b48791949b76f743410659d385d2aacb592a54ccec1",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.8",
+  "source": "review",
+  "unit": "R2.S10.P1",
+  "case": null,
+  "units": [
+   "R2.S10.P1",
+   "R2.S10.P3.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "8c1a63ab99ecbca5c4e572f44af0320f7d6b80d3e4e09256289b45799c72513d",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a2: \"ERROR: assertion failed on row 3: must be positive\" is not stated in R2.S10.P3.s4, which reads \"- If the expression evaluates to `<= 0` (or `NaN`) for any row, exit immediately with error: `ERROR: assertion failed on row N: <message>` where `N` is the 1-in\""
+   }
+  ]
+ },
+ {
+  "id": "V2.3.9",
+  "source": "review",
+  "unit": "R2.S11.P5",
+  "case": null,
+  "units": [
+   "R2.S11.P5",
+   "R2.S11.P6",
+   "R2.S11.P7"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a1: methods disagree: A \"id,value,category,full_name,value_norm\\n1,10,A,Ann Lee,-0.848874687627165\\n2,20,B,Bob Smith,-0.594212281338015\\n3,,A,Cat Jones,\\n4,100,C,Dan Brown,1.44308696896518\\n\", B \"id,value,category,full_name,value_norm\\n1,10,A,Ann Lee,-0.827605888602368\\n2,20,B,Bob Smith,-0.579324122021658\\n3,,A,Cat Jones,\\n4,100,C,Dan Brown,1.40693001062403\\n\""
+   }
+  ]
+ },
+ {
+  "id": "V2.3.10",
+  "source": "review",
+  "unit": "R2.S14.P5",
+  "case": null,
+  "units": [
+   "R2.S14.P5"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3",
+   "R3 work order",
+   "C3.1"
+  ],
+  "held": [
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   },
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "b7177b99863d18734928fd771a8713434be9d02d363d0efa5b6613ed98059088",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.11",
+  "source": "review",
+  "unit": "R2.S15.P1",
+  "case": null,
+  "units": [
+   "R2.S15.P1",
+   "R2.S15.P4",
+   "R2.S15.P6",
+   "R2.S15.P8"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3",
+   "R3 work order"
+  ],
+  "held": [
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2,
+   3
+  ],
+  "digest": "d84b192181709a89011b6a596ba41e5ca5d2d254f1d55d2134d4dd323e3673bb",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.12",
+  "source": "review",
+  "unit": "R2.S16.P7",
+  "case": null,
+  "units": [
+   "R2.S16.P7"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3",
+   "R3 work order"
+  ],
+  "held": [
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "b628cb4a3a61ff5a0ef32df251ea4fe639d12a747c8ed5a58f571cb810efd9c5",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "fixed",
+   "detail": "no longer failing on C3.1"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.13",
+  "source": "review",
+  "unit": "R2.S17.P8",
+  "case": null,
+  "units": [
+   "R2.S17.P8"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3",
+   "R3 work order"
+  ],
+  "held": [
+   "C2.4",
+   "C3.1"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   },
+   {
+    "cycle": "C3.1",
+    "text": "Implemented and verified the Go CLI changes.\n\n- Fixed window ordering, partitioning, running averages/sums, and column validation.\n- Fixed linear fill boundary behavior.\n- Added profile datetime and numeric statistics.\n- Added watermark and drift command support.\n- Improved bin, detect, encode, and ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2,
+   3
+  ],
+  "digest": "2766c96784a05c76bd17ce7e96ee6744e79a985a954681e559f79e17ffbcbded",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.14",
+  "source": "review",
+  "unit": "R2.S28.P1",
+  "case": null,
+  "units": [
+   "R2.S28.P1",
+   "R2.S28.P3",
+   "R2.S28.P5",
+   "R2.S28.P7"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Implemented fixes for the reported issues:\n\n- Added profile type inference and numeric basics.\n- Added compare validation, tolerance/ignore flags, row classification, and required output handling.\n- Fixed split `names` behavior and source replacement.\n- Fixed one-hot encoding with `drop`.\n- Fixed bi",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "8dabcb279f2bc703193712096b140dc9956060d1f1fef9e1cb72593988deb01d",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: true is not stated in R2.S28.P1, which reads \"Compute a SHA-256 hash of specified columns for each row, appending a new column with the hex digest.\""
+   }
+  ]
+ },
+ {
+  "id": "G84",
+  "source": "guard",
+  "unit": "R2.S28.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R2.S28.P1.s1.c1",
+   "R2.S28.P1.s1.c2",
+   "R2.S28.P2",
+   "R2.S28.P3.s1.c1",
+   "R2.S28.P3.s1.c2",
+   "R2.S28.P3.s2.c1",
+   "R2.S28.P5.s1.c1",
+   "R2.S28.P5.s1.c2",
+   "R2.S28.P5.s1.c3",
+   "R2.S28.P5.s1.c4",
+   "R2.S28.P5.s1.c5",
+   "R2.S28.P7.s1",
+   "R2.S28.P7.s2.c1",
+   "R2.S28.P7.s2.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "not_landed",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": null,
+    "verdict": "not_landed",
+    "by": "round end"
+   }
+  ],
+  "rounds": [
+   3
+  ],
+  "digest": "e7d94b60d8299b27adc57d3532b3ccf6feb8e99823f1dfdb9df7158c1288f2d0",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  }
+ },
+ {
+  "id": "G92",
+  "source": "guard",
+  "unit": "R2.S28.P1",
+  "case": null,
+  "units": [
+   "R2.S28.P1",
+   "R2.S28.P3",
+   "R2.S28.P5",
+   "R2.S28.P7"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "not_landed",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": null,
+    "verdict": "not_landed",
+    "by": "round end"
+   }
+  ],
+  "rounds": [
+   3
+  ],
+  "digest": "c3b941ca42ca613cdb2b4e31d484711e15b449c9b716a7fc4d2b780c10205eb0",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  }
+ },
+ {
+  "id": "V3.1.1",
+  "source": "review",
+  "unit": "R3.S3.P1",
+  "case": null,
+  "units": [
+   "R3.S3.P1",
+   "R3.S3.P2",
+   "R3.S3.P3"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "98fdabae53f5b6ac2123b87b55fa5385e1abdf0d912a189dbc0154fa0c09d95e",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"z\" is not stated in R2.S11.P3, which reads \"- `column`: source column name. If it does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\\n- `method`: `\\\"zscore\\\"` or `\\\"minmax\\\"`.\\n-\""
+   }
+  ]
+ },
+ {
+  "id": "V3.1.2",
+  "source": "review",
+  "unit": "R3.S14.P1",
+  "case": null,
+  "units": [
+   "R3.S14.P1",
+   "R3.S14.P2",
+   "R3.S14.P3",
+   "R3.S14.P5",
+   "R3.S14.P7"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "d05abb3dd0cc3609606ab998ff33797231585910542cca03c93a90593871e8b7",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"v\" is not stated in R3.S14.P1, which reads \"Stratified resampling to balance class distribution.\""
+   }
+  ]
+ },
+ {
+  "id": "V3.1.3",
+  "source": "review",
+  "unit": "R3.S8.P1",
+  "case": null,
+  "units": [
+   "R3.S8.P1",
+   "R3.S8.P4",
+   "R3.S8.P5",
+   "R3.S9.P1",
+   "R3.S10.P2"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "2bacecd58624a01f284248a3ba9f6764feb8962e1760a605174760b150ced88f",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.1.4",
+  "source": "review",
+  "unit": "R3.S11.P1.s3",
+  "case": null,
+  "units": [
+   "R3.S11.P1.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "4dddd7c323db06c21819a2ebfb9c3d7e787e3b72c70c6d40c5e424821f1c7d79",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.1.5",
+  "source": "review",
+  "unit": "R2.S3.P8",
+  "case": null,
+  "units": [
+   "R2.S3.P8",
+   "R2.S3.P9",
+   "R2.S3.P10",
+   "R2.S3.P11",
+   "R2.S3.P12",
+   "R2.S3.P13"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "49bea866b518643aa5dfd13aef9d3eab51049b4bbb4646f70c79c4573bcd5a14",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.1.6",
+  "source": "review",
+  "unit": "R2.S28.P1",
+  "case": null,
+  "units": [
+   "R2.S28.P1",
+   "R2.S28.P3",
+   "R2.S28.P5",
+   "R2.S28.P7"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "866fd0f5428671952df1bf5895eb95b4eace2a0c146dabfc0a12fc614cf23f15",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"h\" is not stated in R2.S28.P3, which reads \"- `columns` (array of strings): column names whose values are included in the hash. If omitted or empty, all columns are used (in header order).\\n- `as` (string)\""
+   }
+  ]
+ },
+ {
+  "id": "V3.1.7",
+  "source": "review",
+  "unit": "R1.S3.P23.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P23.s2",
+   "R1.S3.P23.s4",
+   "R1.S3.P23.s5",
+   "R1.S3.P23.s6"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.1"
+  },
+  "sent": [
+   "C3.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.2",
+    "text": "Applied fixes for the reported regressions:\n\n- Restored SHA-256 `hash` transform output.\n- Preserved blank CSV records for fill operations.\n- Fixed sample-standard-deviation z-score normalization.\n- Added `resample` support.\n- Added numeric mean-shift detection to `drift`.\n- Added required malformed",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "1093e7a7747992d471d0a9f2d2581ed882c395d321756ba45f1df92297748f53",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.2.1",
+  "source": "review",
+  "unit": "R3.S3.P1",
+  "case": null,
+  "units": [
+   "R3.S3.P1",
+   "R3.S3.P2",
+   "R3.S3.P3.s1",
+   "R3.S3.P3.s2",
+   "R3.S3.P3.s3"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a1: methods disagree: A \"-0.7071067811865475\", B \"-0.70710678118654746\"; assertion a2: methods disagree: A \"0.7071067811865475\", B \"0.70710678118654746\""
+   }
+  ]
+ },
+ {
+  "id": "V3.2.2",
+  "source": "review",
+  "unit": "R3.S8.P1",
+  "case": null,
+  "units": [
+   "R3.S8.P1",
+   "R3.S8.P3.s3",
+   "R3.S8.P5.s1",
+   "R3.S8.P5.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "dca4356182054b35c13bc98a5341a7a3e57e6b6c2cf66fb04e31cde4e7347752",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.2.3",
+  "source": "review",
+  "unit": "R3.S16.P1",
+  "case": null,
+  "units": [
+   "R3.S16.P1",
+   "R3.S16.P3",
+   "R3.S16.P4"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "f658a151315e67a5fb5346af1b6a3585640d877b1b45bff796aa33de5c797c57",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"PIPELINE OK: 1 steps completed\" is not stated in R1.S6.P2.s3, which reads \"- On success, exits with code 0 and prints `PIPELINE OK: N steps completed`.\""
+   }
+  ]
+ },
+ {
+  "id": "V3.2.4",
+  "source": "review",
+  "unit": "R3.S14.P1",
+  "case": null,
+  "units": [
+   "R3.S14.P1",
+   "R3.S14.P3.s1",
+   "R3.S14.P4",
+   "R3.S14.P5"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "07ec5b92b15db6ec21e6e55b63ee87b4a7873b9078ca9149b6f2ca5d16b8bf4d",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.2.5",
+  "source": "review",
+  "unit": "R2.S16.P7.s1",
+  "case": null,
+  "units": [
+   "R2.S16.P7.s1",
+   "R2.S16.P9.s1",
+   "R2.S16.P9.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "0a2148aee8a5cb44bc5b4dcd1c86bf9c0727d993973753225ea7a96b3e2ecca7",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.2.6",
+  "source": "review",
+  "unit": "R2.S17.P8.s1",
+  "case": null,
+  "units": [
+   "R2.S17.P8.s1",
+   "R2.S17.P8.s2",
+   "R2.S17.P8.s3",
+   "R2.S17.P8.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "17c74c383b3bdce94c2830f7eade96a2223b2e797e4124bfc7067e882011518e",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.2.7",
+  "source": "review",
+  "unit": "R2.S28.P1",
+  "case": null,
+  "units": [
+   "R2.S28.P1",
+   "R2.S28.P3.s2",
+   "R2.S28.P5.s1",
+   "R2.S28.P7.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "e7d94b60d8299b27adc57d3532b3ccf6feb8e99823f1dfdb9df7158c1288f2d0",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.2.8",
+  "source": "review",
+  "unit": "R2.S3.P7",
+  "case": null,
+  "units": [
+   "R2.S3.P7",
+   "R2.S3.P8",
+   "R2.S3.P9",
+   "R2.S3.P10",
+   "R2.S3.P11",
+   "R2.S4.P1",
+   "R2.S4.P3.s8",
+   "R2.S4.P5.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "0fd3770f2070bdd43875a9d829b333732e54db1e7ab96b8eca1e992c1fe9e71c",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a4: methods disagree: A [{\"low\":1,\"high\":1.2,\"count\":1},{\"low\":1.2,\"high\":1.4,\"count\":0},{\"low\":1.4,\"high\":1.6,\"count\":0},{\"low\":1.6,\"high\":1.8,\"count\":0},{\"low\":1.8,\"high\":2,\"count\":1},{\"low\":2,\"high\":2.2,\"count\":0},{\"low\":2.2,\"high\":2.4,\"count\":0},{\"low\":2.4,\"high\":2.6,\"count\":0},{\"low\":2.6,\"high\":2.8,\"count\":0},{\"low\":2.8,\"high\":3,\"count\":1}], B [{\"low\":1,\"high\":1.2,\"count\":1},{\"low\":1.2,\"high\":1.4,\"count\":0},{\"low\":1.4,\"high\":1.6,\"count\":0},{\"low\":1.6,\"high\":1.8,\"count\":0},{\"low\":1.8,\"high\":2,\"count\":1},{\"low\":2,\"high\":2.2,\"count\":0},{\"low\":2.2,\"high\":2.4000000000000004,\"count\":0},{\"low\":2.4000000000000004,\"high\":2.6,\"count\":0},{\"low\":2.6,\"high\":2.8,\"count\":0},{\"low\":2.8,\"high\":3,\"count\":1}]"
+   }
+  ]
+ },
+ {
+  "id": "V3.2.9",
+  "source": "review",
+  "unit": "R2.S15.P1",
+  "case": null,
+  "units": [
+   "R2.S15.P1",
+   "R2.S15.P3.s1",
+   "R2.S15.P3.s2",
+   "R2.S15.P4",
+   "R2.S15.P6.s1",
+   "R2.S15.P6.s2",
+   "R2.S15.P6.s3",
+   "R2.S15.P8.s1",
+   "R2.S15.P8.s2",
+   "R2.S15.P8.s3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "blocked",
+   "detail": "input_claim_false: review-rollup.json: claimed parses, the standard parser rejects it"
+  },
+  "disposition": "blocked"
+ },
+ {
+  "id": "V3.2.10",
+  "source": "review",
+  "unit": "R2.S23.P1",
+  "case": null,
+  "units": [
+   "R2.S23.P1"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.2"
+  },
+  "sent": [
+   "C3.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.3",
+    "text": "Fixed the reported regressions and verified the project builds successfully.\n\n- Restored SHA-256 hash column generation.\n- Corrected normalize z-score statistics to use valid numeric values and sample standard deviation.\n- Added pipeline `drift` step support.\n- Added mean-shift drift detection.\n- Co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "24580d904c4607d63ef35df13bfb11ab53244c495a1b5c12bdddca06fdd631c5",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.3.4",
+  "source": "review",
+  "unit": "R2.S11.P6",
+  "case": null,
+  "units": [
+   "R2.S11.P6",
+   "R2.S11.P7"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "blocked",
+   "detail": "unit_not_in_force: R2.S11.P6: R2.S11.P6 replaced in round 3 by R3.S3.P1, R3.S3.P2, R3.S3.P3"
+  },
+  "disposition": "blocked",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"\" is not stated in R2.S11.P6, which reads \"Then, for each row:\\n- If the cell in `column` is empty: new column value is empty string.\\n- If the cell does not parse as a float: new column value is empty str\""
+   }
+  ]
+ },
+ {
+  "id": "V3.3.5",
+  "source": "review",
+  "unit": "R2.S3.P8",
+  "case": null,
+  "units": [
+   "R2.S3.P8",
+   "R2.S3.P9",
+   "R2.S3.P10",
+   "R2.S3.P11",
+   "R2.S3.P12",
+   "R2.S3.P13"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "45bcee7ce1207eaf9662ad4c6b90f7eaf1030d44459426de75149a906e31c0a0",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V3.3.6",
+  "source": "review",
+  "unit": "R2.S4.P1",
+  "case": null,
+  "units": [
+   "R2.S4.P1",
+   "R2.S4.P2",
+   "R2.S4.P3",
+   "R2.S4.P5"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a1: methods disagree: A [{\"column_a\":\"a\",\"column_b\":\"b\",\"correlation\":0.9897782662145303}], B [{\"column_a\":\"a\",\"column_b\":\"b\",\"correlation\":0.9591663046625439}]"
+   }
+  ]
+ },
+ {
+  "id": "V3.3.7",
+  "source": "review",
+  "unit": "R2.S28.P1",
+  "case": null,
+  "units": [
+   "R2.S28.P1",
+   "R2.S28.P3",
+   "R2.S28.P5"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "3f2a20c06307bf68587e7b58309c86f8947e8900734e1390d5484867e46b12ae",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"h\" is not stated in R2.S28.P3, which reads \"- `columns` (array of strings): column names whose values are included in the hash. If omitted or empty, all columns are used (in header order).\\n- `as` (string)\""
+   }
+  ]
+ },
+ {
+  "id": "V3.3.13",
+  "source": "review",
+  "unit": "R3.S16.P1",
+  "case": null,
+  "units": [
+   "R3.S16.P1",
+   "R3.S16.P4",
+   "R1.S6.P2.s2",
+   "R1.S6.P2.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "6e35542cc04aab1a6419032412838d0bafec77b5a711067a7698463bdef638eb",
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"PIPELINE OK: 1 steps completed\" is not stated in R1.S6.P2.s3, which reads \"- On success, exits with code 0 and prints `PIPELINE OK: N steps completed`.\""
+   }
+  ]
+ },
+ {
+  "id": "V3.3.1",
+  "source": "review",
+  "unit": "R3.S6.P1",
+  "case": null,
+  "units": [
+   "R3.S6.P1",
+   "R3.S8.P1",
+   "R3.S8.P3",
+   "R3.S8.P4",
+   "R3.S9.P1"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"drift\",\"--baseline\",\"baseline.csv\",\"--current\",\"current.csv\",\"--output\",\"drift.json\"]) is not among the session's commands, and drift.json is in no material (leads given: none; session files: 7; session commands: 5); the formalizer: The review gives the command but does not provide the complete contents of baseline.csv and current.csv."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.2",
+  "source": "review",
+  "unit": "R3.S14.P1",
+  "case": null,
+  "units": [
+   "R3.S14.P1",
+   "R3.S14.P3",
+   "R3.S14.P5",
+   "R3.S14.P7"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"transform\",\"--input\",\"data.csv\",\"--recipe\",\"[{\\\"op\\\":\\\"resample\\\",\\\"column\\\":\\\"label\\\",\\\"strategy\\\":\\\"oversample\\\",\\\"seed\\\":42}]\",\"--output\",\"out.csv\"]) is not among the session's commands, and out.csv is in no material (leads given: none; session files: 7; session commands: 5); the formalizer: The review does not provide the complete contents of data.csv."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.3",
+  "source": "review",
+  "unit": "R3.S3.P1",
+  "case": null,
+  "units": [
+   "R3.S3.P1",
+   "R3.S3.P2",
+   "R3.S3.P3"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"transform\",\"--input\",\"values.csv\",\"--recipe\",\"[{\\\"op\\\":\\\"normalize\\\",\\\"column\\\":\\\"value\\\",\\\"method\\\":\\\"zscore\\\",\\\"as\\\":\\\"z\\\"}]\",\"--output\",\"out.csv\"]) is not among the session's commands, and values.csv, out.csv are in no material (leads given: none; session files: 7; session commands: 5); the formalizer: The review names values.csv and describes its values but does not provide the complete CSV contents, including its header and row layout."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.8",
+  "source": "review",
+  "unit": "R2.S15.P1",
+  "case": null,
+  "units": [
+   "R2.S15.P1",
+   "R2.S15.P3",
+   "R2.S15.P5",
+   "R2.S15.P6",
+   "R2.S15.P8"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"transform\",\"--input\",\"sales.csv\",\"--recipe\",\"[{\\\"op\\\":\\\"rollup\\\",\\\"columns\\\":[\\\"region\\\",\\\"city\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"sales\\\",\\\"function\\\":\\\"sum\\\",\\\"as\\\":\\\"total\\\"}]}]\",\"--output\",\"out.csv\"]) is not among the session's commands, and sales.csv, out.csv are in no material (leads given: none; session files: 7; session commands: 5); the formalizer: The review does not provide the complete contents of sales.csv."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.9",
+  "source": "review",
+  "unit": "R2.S16.P7",
+  "case": null,
+  "units": [
+   "R2.S16.P7",
+   "R2.S16.P9"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"transform\",\"--input\",\"values.csv\",\"--recipe\",\"[{\\\"op\\\":\\\"detect\\\",\\\"column\\\":\\\"value\\\",\\\"method\\\":\\\"mad\\\",\\\"as\\\":\\\"outlier\\\",\\\"factor\\\":3}]\",\"--output\",\"out.csv\"]) is not among the session's commands, and values.csv, out.csv are in no material (leads given: none; session files: 7; session commands: 5); the formalizer: The review does not provide the complete contents of values.csv."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.10",
+  "source": "review",
+  "unit": "R2.S17.P3",
+  "case": null,
+  "units": [
+   "R2.S17.P3",
+   "R2.S17.P8"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"transform\",\"--input\",\"values.csv\",\"--recipe\",\"[{\\\"op\\\":\\\"bin\\\",\\\"column\\\":\\\"value\\\",\\\"method\\\":\\\"quantile\\\",\\\"bins\\\":4,\\\"as\\\":\\\"bucket\\\"}]\",\"--output\",\"out.csv\"]) is not among the session's commands, and values.csv, out.csv are in no material (leads given: none; session files: 7; session commands: 5); the formalizer: The review does not provide the complete contents of values.csv."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.11",
+  "source": "review",
+  "unit": "R2.S9.P3",
+  "case": null,
+  "units": [
+   "R2.S9.P3"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the item quotes no command that runs the program, and names no lead (leads given: none; session files: 7; session commands: 5); the formalizer: The review gives the cell value and recipe but does not provide the complete input CSV, including its header and output path."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.12",
+  "source": "review",
+  "unit": "R1.S6.P2.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s1.c1",
+   "R1.S6.P2.s1.c2"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"pipeline\",\"--config\",\"config.json\"]) is not among the session's commands, and config.json is in no material (leads given: none; session files: 7; session commands: 5); the formalizer: The review does not provide complete contents for config.json, the referenced recipe.json, or the pipeline input files."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.14",
+  "source": "review",
+  "unit": "R2.S23.P1",
+  "case": null,
+  "units": [
+   "R2.S23.P1",
+   "R2.S23.P1.s2"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"compare\",\"--left\",\"left.csv\",\"--right\",\"right.csv\",\"--key\",\"id\",\"--output\",\"diff.json\"]) is not among the session's commands, and left.csv, right.csv, diff.json are in no material (leads given: none; session files: 7; session commands: 5); the formalizer: The review does not provide complete contents for left.csv and right.csv."
+   }
+  ]
+ },
+ {
+  "id": "V3.3.15",
+  "source": "review",
+  "unit": "R1.S2.P3.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S2.P3.s2.c1",
+   "R1.S2.P3.s2.c4",
+   "R1.S2.P3.s2.c5",
+   "R1.S2.P4.s2"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 3,
+   "cycle": "C3.3"
+  },
+  "sent": [
+   "C3.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C3.4",
+    "text": "Applied the targeted fixes and verified `go build -o dpipe ./...` succeeds.\n\nFixed:\n\n- SHA-256 hash transform dispatch and output.\n- Sample-standard-deviation normalization using valid numeric values.\n- Resample operation support.\n- Split excess-part joining.\n- Pipeline transform recipe selection.\n-",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 3,
+    "cycle": "C3.3",
+    "verdict": "unverified",
+    "by": "run"
+   },
+   {
+    "round": 3,
+    "cycle": "C3.4",
+    "verdict": "discarded",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 3,
+   "how": "discarded",
+   "detail": "the repair made G77 fail; reverted"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the item quotes no command that runs the program, and names no lead (leads given: none; session files: 7; session commands: 5); the formalizer: The review does not provide complete contents of the CSV input or schema file, nor the output path needed to rebuild the call."
+   }
+  ]
+ }
+]

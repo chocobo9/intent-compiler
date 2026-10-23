@@ -1,0 +1,6 @@
+Stopped by the design session 2026-10-23 evening at the user's decision, during round 4 (rounds 1-3 complete and scored).
+Code fe6562d, all/full text scope (the cold-start deviation), executor low. Kept as the "all scope" ablation sample and
+as the evidence for DESIGN 12j.7 items 9 (work order 64.6k chars at R2), 11 (R3: guard G77 superseded by R3 text but
+reverted three repairs, 35 fixed items discarded) (correction 2026-10-23 evening: R3 attribution DID record the revisions — R3.S2 revise→R2.S13, R3.S3 partial→R2.S11.P5/P6; the revert came only from the code order, item 11). Not continued because
+later rounds would only repeat known defects; the 12i main comparison will be run on the consolidated code with delta scope.
+R1 112->149/219, R2 191->346/481, R3 389->389/535.

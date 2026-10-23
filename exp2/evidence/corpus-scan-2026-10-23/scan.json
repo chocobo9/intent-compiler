@@ -1,0 +1,1981 @@
+[
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "file": "theme_d10_w10_ml_ai_mlops_forensics_analysis.json",
+  "lang": "?",
+  "rounds": 9,
+  "chars": 15772,
+  "rev_sents": 13,
+  "rev_rounds": 7,
+  "withdraw_sents": 2,
+  "xref_sents": 4,
+  "regress_lb_median": 20,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 2308,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 1
+   },
+   {
+    "n": 2,
+    "chars": 585,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 705,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 4,
+    "chars": 2770,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 1571,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 2127,
+    "rev": 3,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 7,
+    "chars": 2246,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 1872,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 9,
+    "chars": 1588,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "mlpipe-dag-orchestrator",
+  "file": "theme_d10_w11_ml_ai_mlops_automation_scripting.json",
+  "lang": "Go",
+  "rounds": 7,
+  "chars": 31935,
+  "rev_sents": 4,
+  "rev_rounds": 4,
+  "withdraw_sents": 1,
+  "xref_sents": 3,
+  "regress_lb_median": 1,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 4915,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 4655,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 3104,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 4400,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 5,
+    "chars": 3400,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 6229,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 5232,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   }
+  ]
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "file": "theme_d10_w12_ml_ai_mlops_explanation_reporting.json",
+  "lang": "?",
+  "rounds": 7,
+  "chars": 7366,
+  "rev_sents": 27,
+  "rev_rounds": 6,
+  "withdraw_sents": 1,
+  "xref_sents": 5,
+  "regress_lb_median": 9,
+  "first_violation_median": 2,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 560,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 776,
+    "rev": 5,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 1430,
+    "rev": 5,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 776,
+    "rev": 3,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 5,
+    "chars": 1196,
+    "rev": 3,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 6,
+    "chars": 1230,
+    "rev": 6,
+    "withdraw": 1,
+    "xref": 1
+   },
+   {
+    "n": 7,
+    "chars": 1398,
+    "rev": 5,
+    "withdraw": 0,
+    "xref": 2
+   }
+  ]
+ },
+ {
+  "task": "nexus-ml-pipeline-system",
+  "file": "theme_d10_w2_ml_ai_mlops_brownfield_modification.json",
+  "lang": "?",
+  "rounds": 8,
+  "chars": 14266,
+  "rev_sents": 2,
+  "rev_rounds": 2,
+  "withdraw_sents": 6,
+  "xref_sents": 2,
+  "regress_lb_median": 1,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 4924,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 3869,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 3,
+    "chars": 1201,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 1023,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 5,
+    "chars": 1025,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 733,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 942,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 549,
+    "rev": 1,
+    "withdraw": 5,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "file": "theme_d10_w4_ml_ai_mlops_migration_upgrade.json",
+  "lang": "Go",
+  "rounds": 7,
+  "chars": 64168,
+  "rev_sents": 28,
+  "rev_rounds": 6,
+  "withdraw_sents": 28,
+  "xref_sents": 17,
+  "regress_lb_median": 24,
+  "first_violation_median": 2,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 5385,
+    "rev": 0,
+    "withdraw": 3,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 15293,
+    "rev": 6,
+    "withdraw": 7,
+    "xref": 3
+   },
+   {
+    "n": 3,
+    "chars": 6854,
+    "rev": 8,
+    "withdraw": 0,
+    "xref": 4
+   },
+   {
+    "n": 4,
+    "chars": 6520,
+    "rev": 1,
+    "withdraw": 2,
+    "xref": 2
+   },
+   {
+    "n": 5,
+    "chars": 14884,
+    "rev": 4,
+    "withdraw": 3,
+    "xref": 4
+   },
+   {
+    "n": 6,
+    "chars": 8336,
+    "rev": 4,
+    "withdraw": 2,
+    "xref": 3
+   },
+   {
+    "n": 7,
+    "chars": 6896,
+    "rev": 5,
+    "withdraw": 11,
+    "xref": 1
+   }
+  ]
+ },
+ {
+  "task": "mlpipe-inference-pipeline-migration",
+  "file": "theme_d10_w4_ml_ai_mlops_migration_upgrade__not_1234.json",
+  "lang": "Go",
+  "rounds": 13,
+  "chars": 26041,
+  "rev_sents": 3,
+  "rev_rounds": 2,
+  "withdraw_sents": 11,
+  "xref_sents": 6,
+  "regress_lb_median": 38,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 2599,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 2374,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 3,
+    "chars": 2696,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 2289,
+    "rev": 0,
+    "withdraw": 4,
+    "xref": 1
+   },
+   {
+    "n": 5,
+    "chars": 2058,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 1716,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 2340,
+    "rev": 1,
+    "withdraw": 4,
+    "xref": 1
+   },
+   {
+    "n": 8,
+    "chars": 1571,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 9,
+    "chars": 2191,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 10,
+    "chars": 1667,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 11,
+    "chars": 1594,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 12,
+    "chars": 1357,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 13,
+    "chars": 1589,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "file": "theme_d10_w5_ml_ai_mlops_integration_e2e_wiring.json",
+  "lang": "Go",
+  "rounds": 7,
+  "chars": 49722,
+  "rev_sents": 7,
+  "rev_rounds": 4,
+  "withdraw_sents": 2,
+  "xref_sents": 15,
+  "regress_lb_median": 0,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 13236,
+    "rev": 2,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 16250,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 3,
+    "chars": 3625,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 4,
+    "chars": 4961,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 5,
+    "chars": 3503,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 6,
+    "chars": 3803,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 3
+   },
+   {
+    "n": 7,
+    "chars": 4344,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 2
+   }
+  ]
+ },
+ {
+  "task": "mlops-inference-gateway",
+  "file": "theme_d10_w8_ml_ai_mlops_security_patch_hardening.json",
+  "lang": "Go",
+  "rounds": 8,
+  "chars": 12769,
+  "rev_sents": 2,
+  "rev_rounds": 2,
+  "withdraw_sents": 6,
+  "xref_sents": 2,
+  "regress_lb_median": 0,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 5825,
+    "rev": 0,
+    "withdraw": 3,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 1321,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 3,
+    "chars": 648,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 715,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 698,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 945,
+    "rev": 0,
+    "withdraw": 2,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 1149,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 1468,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 1
+   }
+  ]
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "file": "theme_d10_w9_ml_ai_mlops_reproducibility_verification.json",
+  "lang": "Go",
+  "rounds": 8,
+  "chars": 18191,
+  "rev_sents": 1,
+  "rev_rounds": 1,
+  "withdraw_sents": 0,
+  "xref_sents": 2,
+  "regress_lb_median": 2,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 11110,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 897,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 3,
+    "chars": 1355,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 1021,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 1455,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 6,
+    "chars": 738,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 780,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 835,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "sparse-iterative-pde-solver",
+  "file": "theme_d11_w2_scientific_numerical_brownfield_modification.json",
+  "lang": "?",
+  "rounds": 7,
+  "chars": 27623,
+  "rev_sents": 11,
+  "rev_rounds": 4,
+  "withdraw_sents": 0,
+  "xref_sents": 16,
+  "regress_lb_median": 0,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 7007,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 2,
+    "chars": 5356,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 3,
+    "chars": 4109,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 4
+   },
+   {
+    "n": 4,
+    "chars": 4048,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 5,
+    "chars": 1926,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 6,
+    "chars": 2255,
+    "rev": 6,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 7,
+    "chars": 2922,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 1
+   }
+  ]
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "file": "theme_d11_w2_scientific_numerical_brownfield_modification__not_1234.json",
+  "lang": "?",
+  "rounds": 5,
+  "chars": 12715,
+  "rev_sents": 5,
+  "rev_rounds": 2,
+  "withdraw_sents": 0,
+  "xref_sents": 2,
+  "regress_lb_median": 0,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 4792,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 1664,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 2187,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 2207,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 1865,
+    "rev": 3,
+    "withdraw": 0,
+    "xref": 2
+   }
+  ]
+ },
+ {
+  "task": "numeriforge-reproducibility-migration",
+  "file": "theme_d11_w9_scientific_numerical_reproducibility_verification.json",
+  "lang": "?",
+  "rounds": 8,
+  "chars": 11343,
+  "rev_sents": 6,
+  "rev_rounds": 2,
+  "withdraw_sents": 0,
+  "xref_sents": 11,
+  "regress_lb_median": 0,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 1241,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 2,
+    "chars": 1463,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 3,
+    "chars": 1754,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 4,
+    "chars": 1535,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 5,
+    "chars": 1407,
+    "rev": 5,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 6,
+    "chars": 1323,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 7,
+    "chars": 1568,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 8,
+    "chars": 1052,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   }
+  ]
+ },
+ {
+  "task": "flowr-workflow-orchestrator",
+  "file": "theme_d12_w1_automation_productivity_greenfield_implementation.json",
+  "lang": "shell",
+  "rounds": 7,
+  "chars": 170939,
+  "rev_sents": 31,
+  "rev_rounds": 6,
+  "withdraw_sents": 15,
+  "xref_sents": 34,
+  "regress_lb_median": 54,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 20938,
+    "rev": 2,
+    "withdraw": 8,
+    "xref": 1
+   },
+   {
+    "n": 2,
+    "chars": 13200,
+    "rev": 3,
+    "withdraw": 3,
+    "xref": 2
+   },
+   {
+    "n": 3,
+    "chars": 32159,
+    "rev": 8,
+    "withdraw": 0,
+    "xref": 6
+   },
+   {
+    "n": 4,
+    "chars": 15333,
+    "rev": 3,
+    "withdraw": 2,
+    "xref": 3
+   },
+   {
+    "n": 5,
+    "chars": 19021,
+    "rev": 7,
+    "withdraw": 1,
+    "xref": 5
+   },
+   {
+    "n": 6,
+    "chars": 28195,
+    "rev": 5,
+    "withdraw": 0,
+    "xref": 7
+   },
+   {
+    "n": 7,
+    "chars": 42093,
+    "rev": 3,
+    "withdraw": 1,
+    "xref": 10
+   }
+  ]
+ },
+ {
+  "task": "forgekit-monorepo-build-pipeline",
+  "file": "theme_d1_w11_code_build_automation_scripting.json",
+  "lang": "?",
+  "rounds": 8,
+  "chars": 31111,
+  "rev_sents": 9,
+  "rev_rounds": 2,
+  "withdraw_sents": 10,
+  "xref_sents": 5,
+  "regress_lb_median": 14,
+  "first_violation_median": 2,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 3444,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 6132,
+    "rev": 0,
+    "withdraw": 2,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 3410,
+    "rev": 4,
+    "withdraw": 7,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 3350,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 5,
+    "chars": 3736,
+    "rev": 4,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 6,
+    "chars": 3711,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 3515,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 3813,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "jobforge-dag-runner",
+  "file": "theme_d1_w1_code_build_greenfield_implementation.json",
+  "lang": "?",
+  "rounds": 9,
+  "chars": 43938,
+  "rev_sents": 5,
+  "rev_rounds": 3,
+  "withdraw_sents": 6,
+  "xref_sents": 17,
+  "regress_lb_median": 6,
+  "first_violation_median": 2,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 10518,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 6412,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 3
+   },
+   {
+    "n": 3,
+    "chars": 6949,
+    "rev": 1,
+    "withdraw": 2,
+    "xref": 2
+   },
+   {
+    "n": 4,
+    "chars": 3918,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 5,
+    "chars": 3732,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 2
+   },
+   {
+    "n": 6,
+    "chars": 4133,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 1
+   },
+   {
+    "n": 7,
+    "chars": 3027,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 8,
+    "chars": 2895,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 9,
+    "chars": 2354,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 2
+   }
+  ]
+ },
+ {
+  "task": "minicc-compiler-evolution",
+  "file": "theme_d1_w2_code_build_brownfield_modification.json",
+  "lang": "?",
+  "rounds": 8,
+  "chars": 20846,
+  "rev_sents": 6,
+  "rev_rounds": 3,
+  "withdraw_sents": 6,
+  "xref_sents": 3,
+  "regress_lb_median": 46,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 2719,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 3406,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 1
+   },
+   {
+    "n": 3,
+    "chars": 1455,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 2246,
+    "rev": 0,
+    "withdraw": 4,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 2288,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 3700,
+    "rev": 2,
+    "withdraw": 1,
+    "xref": 2
+   },
+   {
+    "n": 7,
+    "chars": 2049,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 2983,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "buildctl-pipeline-orchestrator",
+  "file": "theme_d1_w5_code_build_integration_e2e_wiring.json",
+  "lang": "Go",
+  "rounds": 8,
+  "chars": 14463,
+  "rev_sents": 2,
+  "rev_rounds": 1,
+  "withdraw_sents": 1,
+  "xref_sents": 0,
+  "regress_lb_median": 0,
+  "first_violation_median": 2,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 6134,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 1791,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 978,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 1928,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 411,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 521,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 1044,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 1656,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "file": "theme_d1_w9_code_build_reproducibility_verification.json",
+  "lang": "Go",
+  "rounds": 7,
+  "chars": 43405,
+  "rev_sents": 11,
+  "rev_rounds": 5,
+  "withdraw_sents": 15,
+  "xref_sents": 9,
+  "regress_lb_median": 42,
+  "first_violation_median": 2,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 8874,
+    "rev": 0,
+    "withdraw": 3,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 7263,
+    "rev": 1,
+    "withdraw": 2,
+    "xref": 4
+   },
+   {
+    "n": 3,
+    "chars": 6210,
+    "rev": 2,
+    "withdraw": 4,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 6162,
+    "rev": 6,
+    "withdraw": 3,
+    "xref": 2
+   },
+   {
+    "n": 5,
+    "chars": 4563,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 6,
+    "chars": 5360,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 1
+   },
+   {
+    "n": 7,
+    "chars": 4973,
+    "rev": 1,
+    "withdraw": 2,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "repro-verify-engine",
+  "file": "theme_d3_w9_testing_quality_reproducibility_verification.json",
+  "lang": "?",
+  "rounds": 7,
+  "chars": 9515,
+  "rev_sents": 2,
+  "rev_rounds": 2,
+  "withdraw_sents": 2,
+  "xref_sents": 3,
+  "regress_lb_median": 0,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 358,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 1997,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 1
+   },
+   {
+    "n": 3,
+    "chars": 1886,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 1594,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 1866,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 6,
+    "chars": 747,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 1067,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 1
+   }
+  ]
+ },
+ {
+  "task": "eventq-pipeline",
+  "file": "theme_d5_w1_data_engineering_greenfield_implementation.json",
+  "lang": "Go",
+  "rounds": 13,
+  "chars": 245149,
+  "rev_sents": 54,
+  "rev_rounds": 12,
+  "withdraw_sents": 13,
+  "xref_sents": 73,
+  "regress_lb_median": 26,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 14332,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 23563,
+    "rev": 3,
+    "withdraw": 2,
+    "xref": 9
+   },
+   {
+    "n": 3,
+    "chars": 15149,
+    "rev": 6,
+    "withdraw": 3,
+    "xref": 6
+   },
+   {
+    "n": 4,
+    "chars": 15570,
+    "rev": 8,
+    "withdraw": 1,
+    "xref": 8
+   },
+   {
+    "n": 5,
+    "chars": 11887,
+    "rev": 4,
+    "withdraw": 1,
+    "xref": 2
+   },
+   {
+    "n": 6,
+    "chars": 17694,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 12
+   },
+   {
+    "n": 7,
+    "chars": 15191,
+    "rev": 4,
+    "withdraw": 1,
+    "xref": 4
+   },
+   {
+    "n": 8,
+    "chars": 24413,
+    "rev": 10,
+    "withdraw": 1,
+    "xref": 4
+   },
+   {
+    "n": 9,
+    "chars": 23859,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 4
+   },
+   {
+    "n": 10,
+    "chars": 14280,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 11,
+    "chars": 31646,
+    "rev": 6,
+    "withdraw": 0,
+    "xref": 7
+   },
+   {
+    "n": 12,
+    "chars": 20446,
+    "rev": 6,
+    "withdraw": 1,
+    "xref": 6
+   },
+   {
+    "n": 13,
+    "chars": 17119,
+    "rev": 2,
+    "withdraw": 1,
+    "xref": 9
+   }
+  ]
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "file": "theme_d5_w5_data_engineering_integration_e2e_wiring.json",
+  "lang": "?",
+  "rounds": 9,
+  "chars": 138802,
+  "rev_sents": 18,
+  "rev_rounds": 6,
+  "withdraw_sents": 26,
+  "xref_sents": 56,
+  "regress_lb_median": 6,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 9252,
+    "rev": 2,
+    "withdraw": 6,
+    "xref": 2
+   },
+   {
+    "n": 2,
+    "chars": 7917,
+    "rev": 0,
+    "withdraw": 2,
+    "xref": 3
+   },
+   {
+    "n": 3,
+    "chars": 9711,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 3
+   },
+   {
+    "n": 4,
+    "chars": 16189,
+    "rev": 4,
+    "withdraw": 4,
+    "xref": 9
+   },
+   {
+    "n": 5,
+    "chars": 15652,
+    "rev": 1,
+    "withdraw": 3,
+    "xref": 8
+   },
+   {
+    "n": 6,
+    "chars": 14238,
+    "rev": 4,
+    "withdraw": 2,
+    "xref": 5
+   },
+   {
+    "n": 7,
+    "chars": 19887,
+    "rev": 1,
+    "withdraw": 5,
+    "xref": 5
+   },
+   {
+    "n": 8,
+    "chars": 16274,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 7
+   },
+   {
+    "n": 9,
+    "chars": 29682,
+    "rev": 4,
+    "withdraw": 4,
+    "xref": 14
+   }
+  ]
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "file": "theme_d5_w9_data_engineering_reproducibility_verification.json",
+  "lang": "Go",
+  "rounds": 15,
+  "chars": 88855,
+  "rev_sents": 31,
+  "rev_rounds": 9,
+  "withdraw_sents": 20,
+  "xref_sents": 13,
+  "regress_lb_median": 0,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 18802,
+    "rev": 8,
+    "withdraw": 2,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 24600,
+    "rev": 2,
+    "withdraw": 9,
+    "xref": 5
+   },
+   {
+    "n": 3,
+    "chars": 9436,
+    "rev": 6,
+    "withdraw": 1,
+    "xref": 1
+   },
+   {
+    "n": 4,
+    "chars": 4770,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 4307,
+    "rev": 6,
+    "withdraw": 4,
+    "xref": 1
+   },
+   {
+    "n": 6,
+    "chars": 3322,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 7,
+    "chars": 2188,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 3292,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 9,
+    "chars": 2900,
+    "rev": 3,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 10,
+    "chars": 2280,
+    "rev": 1,
+    "withdraw": 4,
+    "xref": 4
+   },
+   {
+    "n": 11,
+    "chars": 2127,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 12,
+    "chars": 1956,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 13,
+    "chars": 3747,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 14,
+    "chars": 3721,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 15,
+    "chars": 1407,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "lsm-kvstore-engine",
+  "file": "theme_d6_w1_database_storage_greenfield_implementation.json",
+  "lang": "Go",
+  "rounds": 8,
+  "chars": 20975,
+  "rev_sents": 5,
+  "rev_rounds": 3,
+  "withdraw_sents": 18,
+  "xref_sents": 2,
+  "regress_lb_median": 0,
+  "first_violation_median": 2,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 12395,
+    "rev": 0,
+    "withdraw": 13,
+    "xref": 1
+   },
+   {
+    "n": 2,
+    "chars": 1314,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 1130,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 1345,
+    "rev": 0,
+    "withdraw": 2,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 1293,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 6,
+    "chars": 1278,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 946,
+    "rev": 2,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 1274,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "service-mesh-health-router",
+  "file": "theme_d7_w5_systems_networking_integration_e2e_wiring.json",
+  "lang": "Go",
+  "rounds": 8,
+  "chars": 31088,
+  "rev_sents": 8,
+  "rev_rounds": 6,
+  "withdraw_sents": 5,
+  "xref_sents": 1,
+  "regress_lb_median": 0,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 15190,
+    "rev": 0,
+    "withdraw": 3,
+    "xref": 1
+   },
+   {
+    "n": 2,
+    "chars": 3930,
+    "rev": 0,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 1473,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 2321,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 2805,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 1217,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 1963,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 2189,
+    "rev": 2,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "multiservice-deploy-pipeline",
+  "file": "theme_d8_w5_cloud_devops_integration_e2e_wiring.json",
+  "lang": "?",
+  "rounds": 11,
+  "chars": 47449,
+  "rev_sents": 12,
+  "rev_rounds": 4,
+  "withdraw_sents": 18,
+  "xref_sents": 3,
+  "regress_lb_median": 44,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 5445,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 3725,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 3,
+    "chars": 3266,
+    "rev": 7,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 4,
+    "chars": 2074,
+    "rev": 2,
+    "withdraw": 3,
+    "xref": 1
+   },
+   {
+    "n": 5,
+    "chars": 2631,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 6,
+    "chars": 4554,
+    "rev": 0,
+    "withdraw": 6,
+    "xref": 0
+   },
+   {
+    "n": 7,
+    "chars": 5011,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 4652,
+    "rev": 1,
+    "withdraw": 1,
+    "xref": 1
+   },
+   {
+    "n": 9,
+    "chars": 4637,
+    "rev": 0,
+    "withdraw": 5,
+    "xref": 0
+   },
+   {
+    "n": 10,
+    "chars": 3172,
+    "rev": 0,
+    "withdraw": 2,
+    "xref": 1
+   },
+   {
+    "n": 11,
+    "chars": 8282,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   }
+  ]
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "file": "theme_d9_w11_security_automation_scripting.json",
+  "lang": "Go",
+  "rounds": 15,
+  "chars": 73574,
+  "rev_sents": 6,
+  "rev_rounds": 5,
+  "withdraw_sents": 0,
+  "xref_sents": 11,
+  "regress_lb_median": 12,
+  "first_violation_median": 1,
+  "per_round": [
+   {
+    "n": 1,
+    "chars": 10628,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 2,
+    "chars": 11339,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 3,
+    "chars": 7668,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 4,
+    "chars": 5088,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 5,
+    "chars": 4006,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 6,
+    "chars": 4008,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 7,
+    "chars": 3481,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 8,
+    "chars": 2617,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 9,
+    "chars": 2964,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 10,
+    "chars": 2368,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 11,
+    "chars": 4007,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 0
+   },
+   {
+    "n": 12,
+    "chars": 4411,
+    "rev": 1,
+    "withdraw": 0,
+    "xref": 2
+   },
+   {
+    "n": 13,
+    "chars": 3733,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 14,
+    "chars": 3649,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 1
+   },
+   {
+    "n": 15,
+    "chars": 3607,
+    "rev": 0,
+    "withdraw": 0,
+    "xref": 2
+   }
+  ]
+ }
+]

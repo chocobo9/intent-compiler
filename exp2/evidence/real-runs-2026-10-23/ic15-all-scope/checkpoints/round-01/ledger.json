@@ -1,0 +1,2220 @@
+[
+ {
+  "id": "V1.1.1",
+  "source": "review",
+  "unit": "R1.S2.P3.s2.c4",
+  "case": null,
+  "units": [
+   "R1.S2.P3.s2.c4",
+   "R1.S2.P4.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "56acc71944e6b12f162fcef1e8ac32795bf5cfea3f4466b1f0dc931eb7cd6414",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"duplicate value for unique column: id\" is not stated in R1.S2.P3.s2.c4, which reads \"(checked in input file order after all other validations pass),\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.2",
+  "source": "review",
+  "unit": "R1.S3.P2.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s4.c1",
+   "R1.S3.P9.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "4ebf3cc3387d99fff809661380617b4dc6bdc064bc5faabbaa37cd0c4cc7f182",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.3",
+  "source": "review",
+  "unit": "R1.S3.P9.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "eb97583c115051abd56efe6871dba7501964538a09ff9edf28d48e068f45b643",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.4",
+  "source": "review",
+  "unit": "R1.S3.P9.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s5",
+   "R1.S3.P6",
+   "R1.S3.P7",
+   "R1.S3.P10.s1",
+   "R1.S3.P10.s2"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a4: reference script exited 1: File \"/work/__reference__.py\", line 7\n    print(json.dumps({'a4':str(int(sum(g[labels[0]]))), 'a4b':str(int(sum(g[labels[1]]))), 'a4c':str(int(sum(g[labels[0]])/len(g[labels[0])))}))\n                                                                                                                     ; assertion a4b: reference script exited 1: File \"/work/__reference__.py\", line 7\n    print(json.dumps({'a4':str(int(sum(g[labels[0]]))), 'a4b':str(int(sum(g[labels[1]]))), 'a4c':str(int(sum(g[labels[0]])/len(g[labels[0])))}))\n                                                                                                                     ; assertion a4c: reference script exited 1: File \"/work/__reference__.py\", line 7\n    print(json.dumps({'a4':str(int(sum(g[labels[0]]))), 'a4b':str(int(sum(g[labels[1]]))), 'a4c':str(int(sum(g[labels[0]])/len(g[labels[0])))}))\n                                                                                                                     "
+   }
+  ]
+ },
+ {
+  "id": "V1.1.5",
+  "source": "review",
+  "unit": "R1.S3.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s2.c1",
+   "R1.S3.P12.s3.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "5233a8c93ef35aadd8430e92a0ce6648b2e420669508fb257380a8b182c1770e",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a5b: \"\" is not stated in R1.S3.P12.s6.c4, which reads \"for rows where the join key has no match in the right dataset,\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.6",
+  "source": "review",
+  "unit": "R1.S3.P14.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s2.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "22db6251ffd42e8951b7ec5ffb68621b05d1d7d48f75f1f40e9bec2a1e116682",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.7",
+  "source": "review",
+  "unit": "R1.S3.P14.s8.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s8.c1",
+   "R1.S3.P14.s8.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "c884682bcc364a9576ea7bb6c6fe4cafa258c74b8902ee83c98b2835b880c26d",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.8",
+  "source": "review",
+  "unit": "R1.S3.P17.s1.c4",
+  "case": null,
+  "units": [
+   "R1.S3.P17.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "6fda32c96c8b0a2687aa77eb9212c29b1b9b43c835137391678c1af25d823a5b",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a8b: 1 is not stated in R1.S3.P17.s1.c4, which reads \"exit with error: `ERROR: invalid recipe: column <name> not found`.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.9",
+  "source": "review",
+  "unit": "R1.S3.P18.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s1",
+   "R1.S3.P19.s3.c1",
+   "R1.S3.P19.s6.c1",
+   "R1.S3.P19.s7.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.4"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "e246d8dee0bd3497229f8546f933fe5682cc9f63b02b2c444db571f287ce334a",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.10",
+  "source": "review",
+  "unit": "R1.S3.P20.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P20.s1.c1",
+   "R1.S3.P21.s2.c2",
+   "R1.S3.P21.s4.c3",
+   "R1.S3.P21.s5.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "723cec4d0bfd16fdb006f15c9a083b866b70f39869b275daa7fb1685c24c2874",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a10b: \"\" is not stated in R1.S3.P21.s5.c1, which reads \"- Empty values are preserved\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.11",
+  "source": "review",
+  "unit": "R1.S3.P22.s3.c3",
+  "case": null,
+  "units": [
+   "R1.S3.P22.s3.c3",
+   "R1.S3.P23.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "54bf64058baaf40094eb79cac3390043725e259a43fc04aeba7a8e7ad832cb9d",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a11: \"X\" is not stated in R1.S3.P23.s4, which reads \"- `\\\"constant\\\"`: replace all empty values in the specified columns with the given `value` string.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.12",
+  "source": "review",
+  "unit": "R1.S6.P2.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s3.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "5b3c82b0a4291b70141938c8625342bcc3574fb7cbf6c6086f5d19c86e1714bd",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a12: 0 is not stated in R1.S6.P2.s3.c1, which reads \"- On success,\""
+   },
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a12b: \"PIPELINE OK: 0 steps completed\" is not stated in R1.S6.P2.s3.c1, which reads \"- On success,\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.13",
+  "source": "review",
+  "unit": "R1.S6.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "47f8688a30f53fb8cdbc11c0d457b33bf13260e467abbf6b4678fa5426a83641",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.14",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c2",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "2f0add936628112a0451608fe477481325171de463fd706a7c212a102d1da677",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.15",
+  "source": "review",
+  "unit": "R1.S8.P1.s4.c2",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s4.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "1d6d8b3782ce2f0c0c9d9807359dc1e50404ca1baad9cfccb6ec84bde7bd5052",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.16",
+  "source": "review",
+  "unit": "R1.S8.P1.s5.c2",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s5.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reviewed issues across ingest, transformations, windows, reshaping, fill, pipeline execution, and exact error reporting.\n\nVerification passed:\n\n```text\ngofmt -w main.go\ngo build -o dpipe ./...\n```",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "6a29c137cde06ceaba974a6f7195ccb46ee427e6bea09947b3d699afd9337a82",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.17",
+  "source": "review",
+  "unit": "R1.S5.P2.s1",
+  "case": null,
+  "units": [
+   "R1.S5.P2.s1"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "not_reproduced: the check passes on the program as it stands (exit 0)"
+  },
+  "disposition": "blocked"
+ },
+ {
+  "id": "V1.2.1",
+  "source": "review",
+  "unit": "R1.S3.P10.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P10.s2",
+   "R1.S3.P10.s3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "input_claim_false: review-aggregate.json: claimed parses, the standard parser rejects it"
+  },
+  "disposition": "blocked"
+ },
+ {
+  "id": "V1.2.2",
+  "source": "review",
+  "unit": "R1.S3.P11.s7",
+  "case": null,
+  "units": [
+   "R1.S3.P11.s7",
+   "R1.S3.P11.s8"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "3f2a20c06307bf68587e7b58309c86f8947e8900734e1390d5484867e46b12ae",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"label,total\" is not stated in R1.S3.P10.s1, which reads \"Output columns: the group_by columns (in declaration order), followed by the aggregation result columns (in declaration order, using the `as` name).\""
+   }
+  ]
+ },
+ {
+  "id": "V1.2.3",
+  "source": "review",
+  "unit": "R1.S6.P2.s2.c2",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3",
+   "R1.S6.P2.s2.c4",
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "ed008a33430c9f0ccaab3a95949218f43728aa8ac4c96510af3d25f0190f5084",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.4",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "d402e2ab87ad499f0bc21094bb8d6ef05fd5bd8af78cbca6b7ac48403583f690",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.5",
+  "source": "review",
+  "unit": "R1.S3.P2.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "e2c10058a4ab934ec99aba45c9e532bb9cd267b112be619064bbea1f9ab3015c",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.6",
+  "source": "review",
+  "unit": "R1.S3.P9.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "d8402b654cf7b54f1bd95ac6dfc9467f79db090666f5a990f0adc3da12f1ce13",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.7",
+  "source": "review",
+  "unit": "R1.S3.P9.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s1.c1",
+   "R1.S3.P9.s1.c2",
+   "R1.S3.P9.s1.c3",
+   "R1.S3.P9.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the remaining reviewed issues:\n\n- `drop` now supports `columns`\n- Join recipes accept array form and `on`\n- Typed pipeline steps execute and report failures correctly\n- Missing files use the required error format\n- `having` filters aggregate output\n- `filter`, `sort`, and fractional `sample` h",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "901326b8f601a888b79dad80958570f2647edfffcfb4ac4de95ba8e6cfcb0e83",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.1",
+  "source": "review",
+  "unit": "R1.S3.P2.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s4.c1",
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c2",
+   "R1.S8.P1.s3.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "4e6d8f27c983b528719b7cdfe1aaf338cc41970069f1587cc6f2ae3b8ab1efc5",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.2",
+  "source": "review",
+  "unit": "R1.S3.P11.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P11.s4.c1",
+   "R1.S3.P11.s4.c2",
+   "R1.S3.P11.s5",
+   "R1.S3.P11.s6.c1",
+   "R1.S3.P11.s7"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "d9a52f9516b4fb0ae8394f3b09dae96563b0de4ea4215a648c822076a15476b2",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.3",
+  "source": "review",
+  "unit": "R1.S3.P12.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s4",
+   "R1.S3.P12.s5",
+   "R1.S3.P12.s6.c1",
+   "R1.S3.P12.s6.c2",
+   "R1.S3.P12.s6.c3",
+   "R1.S3.P12.s6.c4",
+   "R1.S3.P12.s7.c1",
+   "R1.S3.P12.s7.c2",
+   "R1.S3.P12.s9.c1",
+   "R1.S3.P12.s9.c2",
+   "R1.S3.P12.s9.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "19a0e77b0872810d8cc251036bf516417bd8f5e2f1a66270e8fca96e6bed7495",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a3c: methods disagree: A \"R1\", B \"R1b\""
+   }
+  ]
+ },
+ {
+  "id": "V1.3.4",
+  "source": "review",
+  "unit": "R1.S2.P6.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2.c1",
+   "R1.S2.P6.s2.c2",
+   "R1.S2.P6.s2.c3",
+   "R1.S2.P6.s2.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "e714e32d1a889e9cdb9a2b2b9cd53d85c0bbedad27793c4657cda85630d499ec",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.5",
+  "source": "review",
+  "unit": "R1.S3.P13.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s2.c1",
+   "R1.S3.P13.s2.c2",
+   "R1.S3.P13.s2.c3",
+   "R1.S3.P13.s2.c4",
+   "R1.S3.P13.s3.c1",
+   "R1.S3.P13.s3.c2",
+   "R1.S3.P13.s3.c3",
+   "R1.S3.P13.s3.c4",
+   "R1.S3.P13.s3.c5",
+   "R1.S3.P13.s3.c6",
+   "R1.S3.P13.s3.c7",
+   "R1.S3.P13.s3.c8",
+   "R1.S3.P14.s4",
+   "R1.S3.P15.s2.c1",
+   "R1.S3.P15.s2.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "aa54cd2157f65ec338b9fff9f3459df2262e25cb87257ef09682919fbb9a3395",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.6",
+  "source": "review",
+  "unit": "R1.S3.P22.s3.c3",
+  "case": null,
+  "units": [
+   "R1.S3.P22.s3.c3",
+   "R1.S3.P22.s4.c1",
+   "R1.S3.P22.s4.c2",
+   "R1.S3.P22.s4.c3",
+   "R1.S3.P23.s4",
+   "R1.S3.P23.s5",
+   "R1.S3.P23.s6"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "b822a5ab5f3cec0819e3dba052ba6ed6229f2688b67bed8185e391a8c9838cfb",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.7",
+  "source": "review",
+  "unit": "R1.S3.P20.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P20.s1.c1",
+   "R1.S3.P21.s2.c1",
+   "R1.S3.P21.s2.c2",
+   "R1.S3.P21.s3.c1",
+   "R1.S3.P21.s3.c2",
+   "R1.S3.P21.s3.c3",
+   "R1.S3.P21.s3.c4",
+   "R1.S3.P21.s4.c1",
+   "R1.S3.P21.s4.c2",
+   "R1.S3.P21.s4.c3",
+   "R1.S3.P21.s4.c4",
+   "R1.S3.P21.s5.c1",
+   "R1.S3.P21.s5.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "f7575024b93e60abcf2a5728658768cbb125bacd28312a148059cf051f5813a6",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.8",
+  "source": "review",
+  "unit": "R1.S3.P18.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s1",
+   "R1.S3.P19.s2",
+   "R1.S3.P19.s3.c1",
+   "R1.S3.P19.s3.c2",
+   "R1.S3.P19.s4.c1",
+   "R1.S3.P19.s4.c2",
+   "R1.S3.P19.s4.c3",
+   "R1.S3.P19.s4.c4",
+   "R1.S3.P19.s4.c5",
+   "R1.S3.P19.s5.c1",
+   "R1.S3.P19.s5.c2",
+   "R1.S3.P19.s5.c3",
+   "R1.S3.P19.s6.c1",
+   "R1.S3.P19.s6.c2",
+   "R1.S3.P19.s6.c3",
+   "R1.S3.P19.s7.c1",
+   "R1.S3.P19.s7.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "b20b3959ff4356208102df1044d5a09ad0ff933b70fb4f821a9d8ced8d82daff",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.9",
+  "source": "review",
+  "unit": "R1.S3.P9.s8",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s8"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "dd5743d7d023f1bf85d8918028afdaab72722f30b3e4230ce6ac4caa7f2eaf0c",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.10",
+  "source": "review",
+  "unit": "R1.S3.P17.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P17.s1.c1",
+   "R1.S3.P17.s1.c2",
+   "R1.S3.P17.s1.c3",
+   "R1.S3.P17.s1.c4",
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c2",
+   "R1.S8.P1.s3.c3",
+   "R1.S8.P1.s3.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "f5c94d38515a2ddf38605c15e2a64643534817b5b768362a97d8259eb9ef66f1",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.12",
+  "source": "review",
+  "unit": "R1.S6.P2.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s1.c1",
+   "R1.S6.P2.s1.c2",
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3",
+   "R1.S6.P2.s2.c4",
+   "R1.S6.P2.s3.c1",
+   "R1.S6.P2.s3.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "65568b55542da756a0b93450d6de3aad844bdb80e017b966b50b7c9ff9e5435a",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a12b: \"PIPELINE OK: 1 steps completed\" is not stated in R1.S6.P2.s1.c1, R1.S6.P2.s1.c2, R1.S6.P2.s2.c1, R1.S6.P2.s2.c2, R1.S6.P2.s2.c3, R1.S6.P2.s2.c4, R1.S6.P2.s3.c1, R1.S6.P2.s3.c2"
+   }
+  ]
+ },
+ {
+  "id": "V1.3.11",
+  "source": "review",
+  "unit": "R1.S5.P2.s1",
+  "case": null,
+  "units": [
+   "R1.S5.P2.s1",
+   "R1.S5.P2.s2",
+   "R1.S5.P2.s3",
+   "R1.S5.P2.s4"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Recipe-array joins and left-join unmatched rows\n- Filter/sort validation and conditions\n- Typed primary-key sorting\n- Window partitioning and ordering\n- Strategy-aware fill\n- Pivot and unpivot\n- Aggregate `having` and non-empty `count`\n- Pipeline field mapping\n- CSV-onl",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "the command it quotes ([\"manifest\",\"--dir\",\".\",\"--output\",\"review-manifest.json\"]) is not among the session's commands, and review-manifest.json is in no material (leads given: K15, K17, K18; session files: 23; session commands: 7); the formalizer: The command scans the entire workspace directory, but the complete contents and file listing of that directory were not provided."
+   }
+  ]
+ },
+ {
+  "id": "K5",
+  "source": "check",
+  "unit": "R1.S2.P4",
+  "case": null,
+  "units": [
+   "R1.S2.P4",
+   "R1.S2.P4.s1",
+   "R1.S2.P4.s1.c1",
+   "R1.S2.P4.s1.c2",
+   "R1.S2.P4.s1.c3",
+   "R1.S2.P4.s1.c4",
+   "R1.S2.P4.s1.c5",
+   "R1.S2.P4.s1.c6",
+   "R1.S2.P4.s1.c7",
+   "R1.S2.P4.s2",
+   "R1.S2.P4.s2.c1",
+   "R1.S2.P4.s2.c2",
+   "R1.S2.P4.s2.c3"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The first row fails the required/type validation because `value` is not a valid float, so it is not among the valid rows considered for uniqueness. The second row is therefore the first valid occurrence of `id=1`, not a later duplicate; exit code 0 is consistent with the requirement that schema validation failures do not cause an error exit. [R1.S2.P4.s1.c1, R1.S2.P4.s1.c2, R1.S2.P4.s1.c3, R1.S2.P4.s2.c1, R1.S2.P4.s2.c2, R1.S2.P4.s2.c3, R1.S8.P1.s2]"
+  }
+ },
+ {
+  "id": "K13",
+  "source": "check",
+  "unit": "R1.S3.P6",
+  "case": null,
+  "units": [
+   "R1.S3.P6",
+   "R1.S3.P7"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K15",
+  "source": "check",
+  "unit": "R1.S3.P9",
+  "case": null,
+  "units": [
+   "R1.S3.P9",
+   "R1.S3.P9.s1",
+   "R1.S3.P9.s2",
+   "R1.S3.P9.s3",
+   "R1.S3.P9.s4",
+   "R1.S3.P9.s5",
+   "R1.S3.P9.s6",
+   "R1.S3.P9.s7",
+   "R1.S3.P9.s8",
+   "R1.S3.P9.s9",
+   "R1.S3.P9.s10"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K17",
+  "source": "check",
+  "unit": "R1.S3.P11",
+  "case": null,
+  "units": [
+   "R1.S3.P11",
+   "R1.S3.P11.s1",
+   "R1.S3.P11.s2",
+   "R1.S3.P11.s3",
+   "R1.S3.P11.s4",
+   "R1.S3.P11.s4.c1",
+   "R1.S3.P11.s5",
+   "R1.S3.P11.s6",
+   "R1.S3.P11.s6.c1",
+   "R1.S3.P11.s7",
+   "R1.S3.P11.s8",
+   "R1.S3.P11.s8.c1",
+   "R1.S3.P11.s8.c2"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K18",
+  "source": "check",
+  "unit": "R1.S3.P12",
+  "case": null,
+  "units": [
+   "R1.S3.P12",
+   "R1.S3.P12.s1",
+   "R1.S3.P12.s2",
+   "R1.S3.P12.s3",
+   "R1.S3.P12.s4",
+   "R1.S3.P12.s5",
+   "R1.S3.P12.s6",
+   "R1.S3.P12.s7",
+   "R1.S3.P12.s8",
+   "R1.S3.P12.s9",
+   "R1.S3.P12.s10",
+   "R1.S3.P12.s10.c1",
+   "R1.S3.P12.s10.c2"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K19",
+  "source": "check",
+  "unit": "R1.S3.P13",
+  "case": null,
+  "units": [
+   "R1.S3.P13",
+   "R1.S3.P13.s1",
+   "R1.S3.P13.s2",
+   "R1.S3.P13.s3",
+   "R1.S3.P13.s4",
+   "R1.S3.P13.s2.c1",
+   "R1.S3.P13.s2.c2",
+   "R1.S3.P13.s2.c3",
+   "R1.S3.P13.s2.c4",
+   "R1.S3.P13.s3.c1",
+   "R1.S3.P13.s3.c2",
+   "R1.S3.P13.s3.c3",
+   "R1.S3.P13.s3.c4",
+   "R1.S3.P13.s3.c5",
+   "R1.S3.P13.s3.c6",
+   "R1.S3.P13.s3.c7",
+   "R1.S3.P13.s3.c8"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The two rows are tied on the sole order_by column (`value`), so `rank` requires both to receive rank 1; the check incorrectly expects the second row to receive rank 2. The input order and exit code are otherwise consistent with the requirements. [R1.S3.P14.s1, R1.S3.P14.s2, R1.S3.P15.s1, R1.S3.P15.s2]"
+  }
+ },
+ {
+  "id": "K20",
+  "source": "check",
+  "unit": "R1.S3.P14",
+  "case": null,
+  "units": [
+   "R1.S3.P14"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The reference output contradicts the required partition ordering: with `order_by` id ascending, A2 must have lag 5, lead 2, and running_sum 10, while A1 must have lag 0 and lead 5. The requirements also require rank ties to follow input order and output rows to retain original order, so this reference is not text-compliant. [R1.S3.P13#81ee37a3, R1.S3.P14#1b600a68, R1.S3.P15#0b65801e]"
+  }
+ },
+ {
+  "id": "K22",
+  "source": "check",
+  "unit": "R1.S3.P16",
+  "case": null,
+  "units": [
+   "R1.S3.P16",
+   "R1.S3.P16.s1",
+   "R1.S3.P16.s2",
+   "R1.S3.P16.s1.c1",
+   "R1.S3.P16.s1.c2",
+   "R1.S3.P16.s1.c3",
+   "R1.S3.P16.s1.c4",
+   "R1.S3.P16.s2.c1",
+   "R1.S3.P16.s2.c2",
+   "R1.S3.P16.s2.c3"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K26",
+  "source": "check",
+  "unit": "R1.S3.P20",
+  "case": null,
+  "units": [
+   "R1.S3.P20",
+   "R1.S3.P20.s1",
+   "R1.S3.P20.s2",
+   "R1.S3.P20.s3",
+   "R1.S3.P20.s4",
+   "R1.S3.P20.s5"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K28",
+  "source": "check",
+  "unit": "R1.S3.P22",
+  "case": null,
+  "units": [
+   "R1.S3.P22",
+   "R1.S3.P22.s1",
+   "R1.S3.P22.s2",
+   "R1.S3.P22.s3",
+   "R1.S3.P22.s4"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K29",
+  "source": "check",
+  "unit": "R1.S3.P23",
+  "case": null,
+  "units": [
+   "R1.S3.P23",
+   "R1.S3.P23.s1",
+   "R1.S3.P23.s2",
+   "R1.S3.P23.s3",
+   "R1.S3.P23.s4",
+   "R1.S3.P23.s5",
+   "R1.S3.P23.s6",
+   "R1.S3.P23.s7",
+   "R1.S3.P23.s7.c1",
+   "R1.S3.P23.s7.c2"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K36",
+  "source": "check",
+  "unit": "R1.S6.P2",
+  "case": null,
+  "units": [
+   "R1.S6.P2",
+   "R1.S6.P2.s1",
+   "R1.S6.P2.s2",
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3",
+   "R1.S6.P2.s2.c4",
+   "R1.S6.P2.s3",
+   "R1.S6.P2.s3.c1",
+   "R1.S6.P2.s3.c2"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The requirements support a verify pipeline step and require exit code 1 plus the failure message for a missing input, but they do not specify that the pipeline failure message must be on stdout. The check's stdout-line assertion therefore expects an unspecified stream. [R1.S6.P2.s2, R1.S6.P2.s2.c1, R1.S6.P2.s2.c2, R1.S6.P2.s2.c3, R1.S8.P1.s1]"
+  }
+ }
+]

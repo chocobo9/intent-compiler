@@ -1,0 +1,622 @@
+[
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "rounds": 9,
+  "levels": {
+   "section": 9,
+   "paragraph": 75,
+   "sentence": 167,
+   "clause": 288
+  },
+  "kinds": {
+   "section": 9,
+   "prose": 43,
+   "sentence": 67,
+   "clause": 288,
+   "list": 24,
+   "item": 93,
+   "code": 14,
+   "mixed": 1
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "mlpipe-dag-orchestrator",
+  "rounds": 7,
+  "levels": {
+   "section": 7,
+   "paragraph": 103,
+   "sentence": 248,
+   "clause": 514
+  },
+  "kinds": {
+   "section": 7,
+   "prose": 68,
+   "sentence": 149,
+   "clause": 514,
+   "list": 23,
+   "item": 94,
+   "mixed": 9,
+   "code": 8
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "rounds": 7,
+  "levels": {
+   "section": 7,
+   "paragraph": 25,
+   "sentence": 40,
+   "clause": 142
+  },
+  "kinds": {
+   "section": 7,
+   "prose": 14,
+   "sentence": 29,
+   "clause": 142,
+   "list": 11,
+   "item": 11
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "nexus-ml-pipeline-system",
+  "rounds": 8,
+  "levels": {
+   "section": 8,
+   "paragraph": 42,
+   "sentence": 134,
+   "clause": 295
+  },
+  "kinds": {
+   "section": 8,
+   "prose": 32,
+   "sentence": 88,
+   "clause": 295,
+   "list": 1,
+   "item": 46,
+   "mixed": 9
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "rounds": 7,
+  "levels": {
+   "section": 80,
+   "paragraph": 252,
+   "sentence": 552,
+   "clause": 1099
+  },
+  "kinds": {
+   "section": 80,
+   "prose": 103,
+   "sentence": 144,
+   "clause": 1099,
+   "heading": 73,
+   "list": 73,
+   "item": 406,
+   "mixed": 1,
+   "code": 4
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "mlpipe-inference-pipeline-migration",
+  "rounds": 13,
+  "levels": {
+   "section": 13,
+   "paragraph": 100,
+   "sentence": 322,
+   "clause": 574
+  },
+  "kinds": {
+   "section": 13,
+   "prose": 37,
+   "sentence": 100,
+   "clause": 574,
+   "mixed": 31,
+   "item": 212,
+   "code": 10,
+   "list": 32
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "rounds": 7,
+  "levels": {
+   "section": 74,
+   "paragraph": 278,
+   "sentence": 464,
+   "clause": 859
+  },
+  "kinds": {
+   "section": 74,
+   "prose": 135,
+   "sentence": 239,
+   "clause": 859,
+   "heading": 67,
+   "code": 58,
+   "list": 27,
+   "item": 191,
+   "mixed": 25
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "mlops-inference-gateway",
+  "rounds": 8,
+  "levels": {
+   "section": 21,
+   "paragraph": 70,
+   "sentence": 103,
+   "clause": 189
+  },
+  "kinds": {
+   "section": 21,
+   "prose": 35,
+   "sentence": 70,
+   "clause": 189,
+   "heading": 20,
+   "list": 8,
+   "item": 26,
+   "table": 12,
+   "code": 2
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "rounds": 8,
+  "levels": {
+   "section": 17,
+   "paragraph": 75,
+   "sentence": 165,
+   "clause": 277
+  },
+  "kinds": {
+   "section": 17,
+   "prose": 46,
+   "sentence": 115,
+   "clause": 277,
+   "heading": 9,
+   "code": 14,
+   "mixed": 15,
+   "list": 3,
+   "item": 38
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "sparse-iterative-pde-solver",
+  "rounds": 7,
+  "levels": {
+   "section": 41,
+   "paragraph": 159,
+   "sentence": 248,
+   "clause": 427
+  },
+  "kinds": {
+   "section": 41,
+   "prose": 77,
+   "sentence": 153,
+   "clause": 427,
+   "heading": 34,
+   "mixed": 22,
+   "item": 73,
+   "list": 13,
+   "code": 33,
+   "table": 2
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "rounds": 5,
+  "levels": {
+   "section": 16,
+   "paragraph": 53,
+   "sentence": 87,
+   "clause": 217
+  },
+  "kinds": {
+   "section": 16,
+   "prose": 21,
+   "sentence": 49,
+   "clause": 217,
+   "heading": 11,
+   "code": 8,
+   "mixed": 3,
+   "list": 15,
+   "item": 33
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "numeriforge-reproducibility-migration",
+  "rounds": 8,
+  "levels": {
+   "section": 8,
+   "paragraph": 56,
+   "sentence": 126,
+   "clause": 213
+  },
+  "kinds": {
+   "section": 8,
+   "prose": 40,
+   "sentence": 60,
+   "clause": 213,
+   "list": 10,
+   "item": 65,
+   "code": 2,
+   "mixed": 5
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "flowr-workflow-orchestrator",
+  "rounds": 7,
+  "levels": {
+   "section": 142,
+   "paragraph": 591,
+   "sentence": 1143,
+   "clause": 2555
+  },
+  "kinds": {
+   "section": 142,
+   "heading": 142,
+   "prose": 234,
+   "sentence": 405,
+   "clause": 2555,
+   "code": 138,
+   "list": 137,
+   "item": 664,
+   "mixed": 4,
+   "table": 10
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "forgekit-monorepo-build-pipeline",
+  "rounds": 8,
+  "levels": {
+   "section": 52,
+   "paragraph": 171,
+   "sentence": 249,
+   "clause": 414
+  },
+  "kinds": {
+   "section": 52,
+   "prose": 69,
+   "sentence": 156,
+   "clause": 414,
+   "list": 12,
+   "item": 68,
+   "heading": 51,
+   "code": 37,
+   "mixed": 25,
+   "table": 2
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "jobforge-dag-runner",
+  "rounds": 9,
+  "levels": {
+   "section": 75,
+   "paragraph": 229,
+   "sentence": 361,
+   "clause": 853
+  },
+  "kinds": {
+   "section": 75,
+   "heading": 75,
+   "prose": 96,
+   "sentence": 182,
+   "clause": 853,
+   "list": 43,
+   "item": 164,
+   "code": 28,
+   "table": 2
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "minicc-compiler-evolution",
+  "rounds": 8,
+  "levels": {
+   "section": 13,
+   "paragraph": 137,
+   "sentence": 191,
+   "clause": 268
+  },
+  "kinds": {
+   "section": 13,
+   "prose": 84,
+   "sentence": 137,
+   "clause": 268,
+   "list": 10,
+   "item": 16,
+   "code": 64,
+   "mixed": 8,
+   "heading": 5,
+   "table": 4
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "buildctl-pipeline-orchestrator",
+  "rounds": 8,
+  "levels": {
+   "section": 18,
+   "paragraph": 61,
+   "sentence": 139,
+   "clause": 249
+  },
+  "kinds": {
+   "section": 18,
+   "prose": 38,
+   "sentence": 106,
+   "clause": 249,
+   "heading": 10,
+   "list": 6,
+   "item": 26,
+   "table": 8,
+   "code": 6
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "rounds": 7,
+  "levels": {
+   "section": 48,
+   "paragraph": 209,
+   "sentence": 380,
+   "clause": 738
+  },
+  "kinds": {
+   "section": 48,
+   "prose": 101,
+   "sentence": 163,
+   "clause": 738,
+   "heading": 41,
+   "code": 46,
+   "list": 30,
+   "item": 194,
+   "mixed": 14
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "repro-verify-engine",
+  "rounds": 7,
+  "levels": {
+   "section": 7,
+   "paragraph": 25,
+   "sentence": 78,
+   "clause": 202
+  },
+  "kinds": {
+   "section": 7,
+   "prose": 16,
+   "sentence": 45,
+   "clause": 202,
+   "mixed": 9,
+   "item": 33
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "eventq-pipeline",
+  "rounds": 13,
+  "levels": {
+   "section": 228,
+   "paragraph": 912,
+   "sentence": 1498,
+   "clause": 3582
+  },
+  "kinds": {
+   "section": 228,
+   "heading": 228,
+   "prose": 315,
+   "sentence": 585,
+   "clause": 3582,
+   "code": 310,
+   "list": 203,
+   "item": 752,
+   "mixed": 5,
+   "table": 12
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "rounds": 9,
+  "levels": {
+   "section": 118,
+   "paragraph": 476,
+   "sentence": 784,
+   "clause": 1927
+  },
+  "kinds": {
+   "section": 118,
+   "heading": 118,
+   "prose": 152,
+   "sentence": 218,
+   "clause": 1927,
+   "list": 119,
+   "item": 483,
+   "code": 164,
+   "mixed": 4,
+   "table": 2
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "rounds": 15,
+  "levels": {
+   "section": 172,
+   "paragraph": 546,
+   "sentence": 912,
+   "clause": 1756
+  },
+  "kinds": {
+   "section": 172,
+   "prose": 180,
+   "sentence": 289,
+   "clause": 1756,
+   "heading": 161,
+   "list": 112,
+   "item": 562,
+   "mixed": 40,
+   "code": 100,
+   "table": 14
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "lsm-kvstore-engine",
+  "rounds": 8,
+  "levels": {
+   "section": 23,
+   "paragraph": 69,
+   "sentence": 202,
+   "clause": 461
+  },
+  "kinds": {
+   "section": 23,
+   "prose": 41,
+   "sentence": 138,
+   "clause": 461,
+   "heading": 15,
+   "list": 10,
+   "item": 62,
+   "mixed": 3,
+   "table": 2
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "service-mesh-health-router",
+  "rounds": 8,
+  "levels": {
+   "section": 28,
+   "paragraph": 128,
+   "sentence": 267,
+   "clause": 540
+  },
+  "kinds": {
+   "section": 28,
+   "heading": 22,
+   "prose": 72,
+   "sentence": 154,
+   "clause": 540,
+   "code": 15,
+   "mixed": 21,
+   "item": 104,
+   "list": 7
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "multiservice-deploy-pipeline",
+  "rounds": 11,
+  "levels": {
+   "section": 11,
+   "paragraph": 134,
+   "sentence": 491,
+   "clause": 874
+  },
+  "kinds": {
+   "section": 11,
+   "prose": 112,
+   "sentence": 424,
+   "clause": 874,
+   "mixed": 16,
+   "code": 6,
+   "item": 62,
+   "table": 2,
+   "list": 3
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "rounds": 15,
+  "levels": {
+   "section": 34,
+   "paragraph": 347,
+   "sentence": 770,
+   "clause": 1421
+  },
+  "kinds": {
+   "section": 34,
+   "prose": 192,
+   "sentence": 293,
+   "clause": 1421,
+   "list": 59,
+   "item": 437,
+   "heading": 27,
+   "mixed": 34,
+   "code": 71,
+   "table": 4
+  },
+  "problems": 0,
+  "errors": [],
+  "problem_samples": []
+ }
+]

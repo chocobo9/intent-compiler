@@ -12,3 +12,11 @@ its text parts and tool calls (tool name, full input, output truncated to 3000 c
 are in the `apply_patch` inputs. The executor session of rep1e was not exported before the host rebooted; the repair
 messages it received are reconstructible from `review_calls[].response_text` (fallback whole reply) and
 `executions[].cycles`.
+
+## ic15-all-scope (added 2026-10-23 evening)
+
+The 15-round run on fe6562d with the cumulative-text (all/full) scope, executor low, stopped during R4 (STOPPED.txt).
+R1–R3 complete: state, reports, ledgers, scores, measures, official per-case results. Use R3 to replay the G77 case:
+a guard born in R2 from a reviewer item (zscore, population stddev), superseded by R3's text (R3.S3 partial → R2.S11.P5,
+P6 in the attribution record), flipped in all three repair cycles and reverted them (35 fixed items discarded). The
+expected behaviour after DESIGN §12j.7 item 11: classified as "text changed behind it", sent to the reviewer, no revert.

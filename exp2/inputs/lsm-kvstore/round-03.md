@@ -1,0 +1,5 @@
+Two things this round.
+
+First, there's a snapshot bug: if you write a bunch of keys, take a snapshot, write new versions of those keys, and enough flushes happen to trigger the L0-to-L1 compaction, the snapshot starts returning `NOT_FOUND` for keys it should still see. The full compaction path handles this correctly, so it's just the L0 compaction that's dropping versions it shouldn't. Fix that.
+
+Second, add data block checksums to SSTables. Each data block should be followed by a CRC-32 (IEEE) checksum of the block's raw bytes, stored as a uint32 LE. The index entries' `block_size` should NOT include the checksum — the 4-byte checksum sits right after the block data. On read, verify the checksum and return `ERROR: data corruption detected` if it fails. Also add a `VERIFY` command that scans every SSTable file in the data directory: validates the footer magic, verifies every data block checksum, and re-checks the bloom filter and index integrity. Output `OK` if everything is clean, or one line per corrupted file: `CORRUPT: <filename> (<reason>)` followed by a final summary `VERIFY_FAILED: <N> file(s) corrupted`.

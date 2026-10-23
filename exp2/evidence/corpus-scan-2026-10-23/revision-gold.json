@@ -1,0 +1,1932 @@
+[
+ {
+  "task": "buildctl-pipeline-orchestrator",
+  "round": 3,
+  "kind": "partial",
+  "sentence": "Fix cache keys: include sorted dependency names and sorted output paths alongside the existing inputs.",
+  "earlier_round": 1,
+  "earlier_quote": "The cache key for a target is the SHA-256 hex digest of the following items concatenated in order:",
+  "confidence": "medium",
+  "note": "changes which items the cache key contains"
+ },
+ {
+  "task": "buildctl-pipeline-orchestrator",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Change build to fail-fast by default.",
+  "earlier_round": 1,
+  "earlier_quote": "Other independent targets continue executing normally.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "buildctl-pipeline-orchestrator",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "When any target fails, don't start additional targets -- unstarted targets get status `cancelled` (distinct from `skipped`, which still means a dependency failed).",
+  "earlier_round": 1,
+  "earlier_quote": "Other independent targets continue executing normally.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "If only a **lower anchor** exists (no float-parseable non-empty cell found below the current empty cell), the empty cell is filled with the lower anchor's value.",
+  "earlier_round": 2,
+  "earlier_quote": "If either anchor is **missing** (no non-empty numeric value exists above or below), the cell remains empty.",
+  "confidence": "high",
+  "note": "fill linear boundary extrapolation"
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "If only an **upper anchor** exists (no float-parseable non-empty cell found above the current empty cell), the empty cell is filled with the upper anchor's value.",
+  "earlier_round": 2,
+  "earlier_quote": "If either anchor is **missing** (no non-empty numeric value exists above or below), the cell remains empty.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Previously, cells with only one anchor remained empty. This is now corrected to use constant extrapolation from the nearest available anchor.",
+  "earlier_round": 2,
+  "earlier_quote": "the cell remains empty",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The `normalize` transform with `\"method\": \"zscore\"` now uses **sample standard deviation** (Bessel's correction) instead of population standard deviation:",
+  "earlier_round": 2,
+  "earlier_quote": "For `zscore`: compute `mean` and population `stddev` (`sqrt(sum((xi - mean)^2) / n)`).",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "The `verify` command previously used SHA256 for computing file checksums. It now uses **BLAKE2b-256** instead.",
+  "earlier_round": 1,
+  "earlier_quote": "Reads `<path>`, computes SHA-256, compares against the hex",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Checksums in manifest files must now be BLAKE2b-256 hex digests (64 lowercase hex characters).",
+  "earlier_round": 1,
+  "earlier_quote": "\"sha256\": \"abcdef...\"",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "The `manifest` command must also produce BLAKE2b-256 checksums (not SHA256).",
+  "earlier_round": 1,
+  "earlier_quote": "\"sha256\": \"abcdef...\"",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 5,
+  "kind": "withdraw",
+  "sentence": "The `.sha256` sidecar files produced during `ingest` and `transform` are **removed** — these commands no longer produce sidecar hash files.",
+  "earlier_round": 1,
+  "earlier_quote": "A SHA-256 checksum of the output file (computed on the raw bytes) is written to `<output>.sha256`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 5,
+  "kind": "withdraw",
+  "sentence": "If `<output>.sha256` exists from a previous run, `ingest` and `transform` must remove it.",
+  "earlier_round": 1,
+  "earlier_quote": "its SHA-256 to `<output>.sha256`",
+  "confidence": "medium",
+  "note": "new cleanup rule accompanying the withdrawal"
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "`manifest` command: produces BLAKE2b-256 checksums instead of SHA256.",
+  "earlier_round": 1,
+  "earlier_quote": "\"sha256\": \"abcdef...\"",
+  "confidence": "medium",
+  "note": "restatement in change list"
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 5,
+  "kind": "withdraw",
+  "sentence": "`ingest` command: no longer writes `.sha256` sidecar files.",
+  "earlier_round": 1,
+  "earlier_quote": "A SHA-256 checksum of the output file (computed on the raw bytes) is written to `<output>.sha256`",
+  "confidence": "medium",
+  "note": "restatement in change list"
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 5,
+  "kind": "withdraw",
+  "sentence": "`transform` command: no longer writes `.sha256` sidecar files.",
+  "earlier_round": 1,
+  "earlier_quote": "its SHA-256 to `<output>.sha256`",
+  "confidence": "medium",
+  "note": "restatement in change list"
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The `lineage` command previously treated the `\"manifest\"` step's `dir` field as a single input node, creating an edge from `dir` to the manifest output file.",
+  "earlier_round": 5,
+  "earlier_quote": "`\"manifest\"`: input = `dir` (treated as a single node), output = `output`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "`\"manifest\"` step has **no input nodes** (empty inputs array `[]`).",
+  "earlier_round": 5,
+  "earlier_quote": "`\"manifest\"`: input = `dir` (treated as a single node), output = `output`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 10,
+  "kind": "revise",
+  "sentence": "The manifest output format changes. The `blake2b` JSON field is replaced with two new fields:",
+  "earlier_round": 1,
+  "earlier_quote": "\"sha256\": \"abcdef...\"",
+  "confidence": "medium",
+  "note": "round 5 implied a blake2b field; field name first given in R1 as sha256"
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 12,
+  "kind": "revise",
+  "sentence": "When the `method` field is omitted or empty, normalize should now behave exactly like `\"minmax\"` instead of producing empty values.",
+  "earlier_round": 2,
+  "earlier_quote": "`method`: `\"zscore\"` or `\"minmax\"`.",
+  "confidence": "medium",
+  "note": "changes behaviour for omitted method"
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 15,
+  "kind": "revise",
+  "sentence": "It should now report `row_hash` as the SHA-256 digest of the same sorted row-content string defined for `snapshot`.",
+  "earlier_round": 13,
+  "earlier_quote": "`row_hash` is the lowercase 32-character MD5 hex digest of that sorted row-content string.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "deterministic-data-pipeline-go",
+  "round": 15,
+  "kind": "revise",
+  "sentence": "The `row_hash` field in the JSON output is now a 64-character lowercase hexadecimal string instead of 32 characters.",
+  "earlier_round": 13,
+  "earlier_quote": "`row_hash` is the lowercase 32-character MD5 hex digest of that sorted row-content string.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "The invalid-`reason` vocabulary's `fx_lookup` code is retired.",
+  "earlier_round": 3,
+  "earlier_quote": "`\"fx_lookup\"` — amount+currency valid at JSON level but no day-rate entry exists for the (date, currency) pair",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "Split `fx_lookup` into two distinct codes",
+  "earlier_round": 3,
+  "earlier_quote": "`\"fx_lookup\"` — amount+currency valid at JSON level but no day-rate entry exists for the (date, currency) pair",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "This is a user-visible correction to audit-log reason codes: `fx_lookup` is no longer emitted",
+  "earlier_round": 3,
+  "earlier_quote": "`\"fx_lookup\"` — amount+currency valid at JSON level",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "the strict-rates feature relaxes `rates.json` loading: rate values that are non-finite (NaN/Inf/-Inf), zero, or negative no longer cause the whole file to be rejected at load time.",
+  "earlier_round": 1,
+  "earlier_quote": "Every rate must be a finite positive JSON number. Otherwise: `error: fx rates must be positive finite`.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 4,
+  "kind": "partial",
+  "sentence": "These checks replace/augment the pre-existing `fx rates must include USD=1.0`, `fx days invalid`, and `fx base must be USD` errors",
+  "earlier_round": 1,
+  "earlier_quote": "Every day's table must contain `\"USD\": 1.0`. Otherwise: `error: fx rates must include USD=1.0`.",
+  "confidence": "medium",
+  "note": "new pre-flight rates validation messages take precedence"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 4,
+  "kind": "partial",
+  "sentence": "Correction to the audit-log accepted-record key order: for `type in {purchase, refund}` accepted records (the \"monetary\" bucket), `--audit-log` records gain a new key `fx_fallback_days` positioned AFTER `resolved_against`.",
+  "earlier_round": 3,
+  "earlier_quote": "{\"id\": \"...\", \"ts\": \"...\", \"type\": \"...\", \"shard\": \"...\", \"line\": N, \"bucket\": \"accepted\",",
+  "confidence": "medium",
+  "note": "record shape gains a key; additive in nature but stated as correction"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "When `--dedup-policy first-arrival` is supplied, the winner-selection rule is replaced in full:",
+  "earlier_round": 1,
+  "earlier_quote": "Keep the record with the lexicographically largest `ts`.",
+  "confidence": "low",
+  "note": "opt-in policy, default unchanged"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The `cutoff` value in every `late` audit record is now a structured JSON object with exactly two keys in this order:",
+  "earlier_round": 3,
+  "earlier_quote": "`cutoff` is the effective `seeded_max_ts - watermark_lag` threshold (ISO `YYYY-MM-DDTHH:MM:SSZ`)",
+  "confidence": "high",
+  "note": "R3 cutoff was a bare timestamp string"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "Every entry of `pending_purchases` in the emitted `--state-out` JSON MUST carry a new integer key, `first_seen_epoch`",
+  "earlier_round": 2,
+  "earlier_quote": "Inner key order inside each entry is exactly `id`, `ts`, `user`, `usd`, `origin_run`.",
+  "confidence": "high",
+  "note": "R2 said no other keys may appear"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "`audit_log` becomes a **JSON array of basenames** in this exact order",
+  "earlier_round": 3,
+  "earlier_quote": "`audit_log`: the basename (no directory prefix) of the `--audit-log` path.",
+  "confidence": "low",
+  "note": "only when rotation produced more than one segment"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "`sha256` is **removed**; in its place an array key `sha256_segments` is emitted",
+  "earlier_round": 3,
+  "earlier_quote": "`sha256`: lowercase 64-hex-char SHA-256 of the FINAL bytes written to `--audit-log`",
+  "confidence": "low",
+  "note": "only when rotation produced more than one segment"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 9,
+  "kind": "revise",
+  "sentence": "blank-only input lines (lines that are empty after whitespace-trim, but are still physically present in the shard) are RESCUED into the invalid bucket",
+  "earlier_round": 1,
+  "earlier_quote": "Blank lines and lines that contain only whitespace must be ignored (not rejected).",
+  "confidence": "medium",
+  "note": "only under tagged/tagged-sorted formats; legacy unchanged"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 10,
+  "kind": "revise",
+  "sentence": "Under `--session-policy fixed-window`, the original sole-gap session rule is **replaced** — for the sole purpose of computing `summary.sessions.total` — by a fixed-window bucketing rule.",
+  "earlier_round": 1,
+  "earlier_quote": "Start a new session whenever the gap between consecutive events exceeds `--session-gap` seconds",
+  "confidence": "low",
+  "note": "opt-in policy, default unchanged"
+ },
+ {
+  "task": "eventq-pipeline",
+  "round": 13,
+  "kind": "revise",
+  "sentence": "Under `observed`, `time_range.min` and `time_range.max` in `--output` are recomputed over the same timestamp corpus used by the sharding report.",
+  "earlier_round": 1,
+  "earlier_quote": "`time_range.min` / `.max` are the smallest and largest `ts` among surviving events.",
+  "confidence": "low",
+  "note": "opt-in policy, default unchanged"
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "`number`-typed key: **missing key columns are no longer a hard error.** A record that lacks the key column is sorted as if its value were the special sentinel \"less than every finite number\".",
+  "earlier_round": 1,
+  "earlier_quote": "A missing key column in a record is treated as the empty string for `string` comparisons, and as a hard error for `number` comparisons.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "## Correction to `sort` — missing key columns no longer abort",
+  "earlier_round": 1,
+  "earlier_quote": "A missing key column in a record is treated as the empty string for `string` comparisons, and as a hard error for `number` comparisons.",
+  "confidence": "medium",
+  "note": "heading restatement"
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 4,
+  "kind": "partial",
+  "sentence": "**Empty string** in a `number` key is treated like *missing* (sentinel below all finite numbers), not as a parsing error.",
+  "earlier_round": 1,
+  "earlier_quote": "A missing key column in a record is treated as the empty string for `string` comparisons, and as a hard error for `number` comparisons.",
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "A record that lacks a `by` column is **no longer a hard error**.",
+  "earlier_round": 2,
+  "earlier_quote": "A record missing one of the `by` columns is a hard error (abort the run with `flowctl: group: ...`).",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 6,
+  "kind": "partial",
+  "sentence": "for `sum` this overrides the previous \"sum of empty group is 0\" rule ONLY when every contributing record lacked the column",
+  "earlier_round": 2,
+  "earlier_quote": "`sum` of an empty group is `0`.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "For an `as: string` sort key, an **empty-string value** (whether the record lacks the column entirely or the column is present-but-empty) is now treated as a null-like sentinel separately from ordinary string comparison:",
+  "earlier_round": 4,
+  "earlier_quote": "`string`-typed key: unchanged — a missing key column is treated as the empty string.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "In short: `\"\"` is now the **largest** string under `asc` (and the smallest under `desc`), whereas before it was the smallest under `asc` (and the largest under `desc`).",
+  "earlier_round": 4,
+  "earlier_quote": "`string`-typed key: unchanged — a missing key column is treated as the empty string.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 9,
+  "kind": "revise",
+  "sentence": "The formula is now `p_i = (r_i - 1) / n_part` — the denominator is the partition size itself, not `n_part - 1`, and the `max(1, ...)` clamp is removed.",
+  "earlier_round": 5,
+  "earlier_quote": "`p_i = (r_i - 1) / max(1, n_part - 1)`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "flowctl-pipeline-wiring",
+  "round": 9,
+  "kind": "revise",
+  "sentence": "This is a **retroactive summary-line change**: any existing pipeline that asserted the exact summary line will now see an additional ` dropped_late=0` suffix.",
+  "earlier_round": 2,
+  "earlier_quote": "flowctl: processed=<N> emitted=<M> dropped_nonnumeric=<D1> dropped_missing=<D2>",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "flowr-workflow-orchestrator",
+  "round": 5,
+  "kind": "partial",
+  "sentence": "Params slot into the existing four-tier `${VAR}` resolution. The full tier order, highest precedence first, becomes:",
+  "earlier_round": 3,
+  "earlier_quote": "with the same resolution priority tiers: step env, workflow env, parent env, builtins.",
+  "confidence": "medium",
+  "note": "adds a CLI-params tier between step env and workflow env"
+ },
+ {
+  "task": "flowr-workflow-orchestrator",
+  "round": 5,
+  "kind": "partial",
+  "sentence": "A leading `./` in `path` is **stripped** before normalization.",
+  "earlier_round": 4,
+  "earlier_quote": "`path` must be a non-empty string with no NUL byte and must not begin with `/`.",
+  "confidence": "medium",
+  "note": "C2 tightening of artifact path rule"
+ },
+ {
+  "task": "flowr-workflow-orchestrator",
+  "round": 5,
+  "kind": "partial",
+  "sentence": "Any `path` that contains the literal substring `..` as a path segment (i.e. a segment whose bytes are exactly `..`) is a validation error (exit 4): `invalid artifact path: <path>`.",
+  "earlier_round": 4,
+  "earlier_quote": "`path` must be a non-empty string with no NUL byte and must not begin with `/`.",
+  "confidence": "high",
+  "note": "R5 says narrowly backward-incompatible tightening"
+ },
+ {
+  "task": "flowr-workflow-orchestrator",
+  "round": 5,
+  "kind": "partial",
+  "sentence": "A **trailing `/`** in `path` is a validation error (exit 4): `invalid artifact path: <path>`.",
+  "earlier_round": 4,
+  "earlier_quote": "`path` must be a non-empty string with no NUL byte and must not begin with `/`.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "flowr-workflow-orchestrator",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "**C3 overrides the `--run-id` validator announced in R1.**",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "validator regex widened to allow dots; R1 text visible here does not show the regex"
+ },
+ {
+  "task": "flowr-workflow-orchestrator",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The validator regex for `--run-id` becomes **`^[A-Za-z0-9_.\\-]+$`**.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "forgekit-monorepo-build-pipeline",
+  "round": 3,
+  "kind": "partial",
+  "sentence": "`get_src_mtime` must also consider the `package.forge` file's modification time.",
+  "earlier_round": 1,
+  "earlier_quote": "The cache only looks at each package's own source timestamps.",
+  "confidence": "low",
+  "note": "bug fix widening cache inputs; R1 text predates package.forge mention"
+ },
+ {
+  "task": "forgekit-monorepo-build-pipeline",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Replace the timestamp-based freshness check with a content hash.",
+  "earlier_round": 3,
+  "earlier_quote": "`get_src_mtime` must also consider the `package.forge` file's modification time.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "forgekit-monorepo-build-pipeline",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "**Key behavioral change**: `touch`ing a file without changing its content does **not** invalidate the cache, because the SHA256 hash is unchanged.",
+  "earlier_round": 3,
+  "earlier_quote": "`get_src_mtime` must also consider the `package.forge` file's modification time.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "forgekit-monorepo-build-pipeline",
+  "round": 5,
+  "kind": "partial",
+  "sentence": "The cache stamp file (`.forge_cache/<pkg>-<profile>.hash`) stores the source hash at the time of the last successful build.",
+  "earlier_round": 2,
+  "earlier_quote": "The cache file naming should incorporate the profile, e.g. `<pkg>-<profile>.stamp`.",
+  "confidence": "medium",
+  "note": "stamp extension .stamp -> .hash"
+ },
+ {
+  "task": "forgekit-monorepo-build-pipeline",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "**Required fix:** Include the profile name in the source hash computation.",
+  "earlier_round": 5,
+  "earlier_quote": "SHA256(sorted concatenation of SHA256 hashes of all files in src/ + Makefile + package.forge)",
+  "confidence": "medium",
+  "note": "correction to R5 cache key definition"
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 2,
+  "kind": "revise",
+  "sentence": "the `normalize` transform must return **0.5** for each element instead of 0.0.",
+  "earlier_round": 1,
+  "earlier_quote": "**The `normalize` transform must use min-max normalization**: `(x - min) / (max - min)`.",
+  "confidence": "medium",
+  "note": "R1 does not state zero-range result; R2 states the prior value as 0.0"
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The normalize transform now maps values to the **[-1, 1]** range instead of [0, 1]:",
+  "earlier_round": 1,
+  "earlier_quote": "`normalize` (min-max scale to [0,1])",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "When all values are identical (zero range), return **0.0** (the midpoint of [-1, 1]).",
+  "earlier_round": 2,
+  "earlier_quote": "the `normalize` transform must return **0.5** for each element instead of 0.0.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "This replaces the previous [0, 1] normalization and the 0.5 zero-range behavior entirely.",
+  "earlier_round": 2,
+  "earlier_quote": "the `normalize` transform must return **0.5** for each element instead of 0.0.",
+  "confidence": "high",
+  "note": "restates; also covers R1 [0,1]"
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "When a new version is promoted to production, the previously-production version is now demoted to **staging** instead of archived:",
+  "earlier_round": 1,
+  "earlier_quote": "Promoting a version to `production` must automatically demote the current production version (if any) to `archived`.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The `weighted_mean` experiment aggregation now reads weight values from the run's **metrics** map instead of the parameters map:",
+  "earlier_round": 1,
+  "earlier_quote": "`weighted_mean`: weighted average using a specified parameter as weight.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Change the behavior to also handle a single experiment gracefully:",
+  "earlier_round": 4,
+  "earlier_quote": "Return **400** if fewer than 2 experiment names are specified, or if the `metric` parameter is missing.",
+  "confidence": "high",
+  "note": "R5 allows exactly 1 experiment"
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "The `mean` aggregation type for experiment metrics now computes a **trimmed mean** when there are 4 or more data points:",
+  "earlier_round": 1,
+  "earlier_quote": "`mean`: arithmetic mean of the metric values.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "The pipeline `export` step with `format: \"csv\"` now includes a header row in the output:",
+  "earlier_round": 1,
+  "earlier_quote": "Formats: `json`, `csv`, `summary`.",
+  "confidence": "medium",
+  "note": "R1 does not specify csv layout; R6 says previously plain comma-separated values"
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "Previously, annotation keys were case-sensitive. Now, annotation keys are normalized to **lowercase** on both write and read:",
+  "earlier_round": 4,
+  "earlier_quote": "Return **409** if an annotation with the same key already exists on this version.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 6,
+  "kind": "partial",
+  "sentence": "The duplicate-key check is case-insensitive: if `\"review_status\"` exists and you try to add `\"Review_Status\"`, it should return the \"already exists\" error.",
+  "earlier_round": 4,
+  "earlier_quote": "Return **409** if an annotation with the same key already exists on this version.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "When creating a model version, tags are now automatically **deduplicated** and **sorted alphabetically**:",
+  "earlier_round": 1,
+  "earlier_quote": "Each version carries a `metrics` map (string→float64), a `tags` list",
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The existing `DELETE /api/v1/experiments/{name}/runs/{id}` endpoint currently returns only a status message. Modify it to return the full deleted run data:",
+  "earlier_round": 2,
+  "earlier_quote": "Returns **200** with `{\"status\": \"deleted\"}` on success.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "gomlops-platform-modernization",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "Change the error from `duplicate step name: X` to `duplicate step name: \"X\"` (with the step name in double quotes).",
+  "earlier_round": 4,
+  "earlier_quote": "Duplicate step names (two or more steps share the same name).",
+  "confidence": "medium",
+  "note": "R4 gives no message text for duplicate names"
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "This is now corrected: flags must be hashed in **manifest order** — the exact order they appear in the JSON `flags` array.",
+  "earlier_round": 1,
+  "earlier_quote": "For each flag in `flags`, sorted alphabetically: the flag string as UTF-8 bytes, followed by one newline byte (`0x0A`).",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "3. For each flag in `flags`, in manifest order (not sorted): the flag string as UTF-8 bytes, followed by one newline byte (`0x0A`).",
+  "earlier_round": 1,
+  "earlier_quote": "For each flag in `flags`, sorted alphabetically: the flag string as UTF-8 bytes, followed by one newline byte (`0x0A`).",
+  "confidence": "high",
+  "note": "block-quoted restatement of the corrected step 3"
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "It no longer performs two independent full builds.",
+  "earlier_round": 1,
+  "earlier_quote": "Verify reproducibility by building all targets twice independently.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "`first_hash` is replaced by `cached_hash`: the SHA-256 hex digest of the output artifact from the cached/first build.",
+  "earlier_round": 1,
+  "earlier_quote": "\"first_hash\":\"...\"",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "`second_hash` is replaced by `fresh_hash`: the SHA-256 hex digest of the output artifact from the clean rebuild.",
+  "earlier_round": 1,
+  "earlier_quote": "\"second_hash\":\"...\"",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "The per-target `targets` array in the output contains ONLY targets that exist in BOTH the current manifest and the baseline.",
+  "earlier_round": 1,
+  "earlier_quote": "If the baseline file does not contain an entry for a target, that target's `baseline_fingerprint` and `baseline_output_hash` are empty strings",
+  "confidence": "medium",
+  "note": "targets absent from baseline now go to extra_in_current instead of empty-string entries"
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "This is now corrected: the chain hash must also include the **profile name** (if active) as the first element.",
+  "earlier_round": 4,
+  "earlier_quote": "Concatenate all these byte sequences (no separator, no newline between them).",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "when computing `freed_bytes`, count the file size only if the hard link count would drop to zero after removal",
+  "earlier_round": 1,
+  "earlier_quote": "`freed_bytes` is the total size in bytes of all removed files (artifacts + metadata).",
+  "confidence": "medium",
+  "note": "dedup changes gc accounting"
+ },
+ {
+  "task": "hermetic-build-artifact-verifier",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "The `status` command's `store_size_bytes` counts each unique inode only once (not once per hard link).",
+  "earlier_round": 5,
+  "earlier_quote": "`store_size_bytes`: total size in bytes of all files under `<store_root>/objects/` (recursively).",
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "jobforge-dag-runner",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "The attribute list must now be written with a single **space** between the two attributes (but still with NO space around the `=`):",
+  "earlier_round": 3,
+  "earlier_quote": "separated by a single comma (no spaces)",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "jobforge-dag-runner",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "i.e. attributes are **space-separated** (not comma-separated).",
+  "earlier_round": 3,
+  "earlier_quote": "The attributes appear in exactly this order: `level` first, then `workdir`, separated by a single comma (no spaces).",
+  "confidence": "medium",
+  "note": "restatement"
+ },
+ {
+  "task": "jobforge-dag-runner",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "The literal prefix changes from `level <N>: ` to `L<N> [`, with no space between `L` and the level number.",
+  "earlier_round": 1,
+  "earlier_quote": "`level N: a, b, c` (names comma-space separated)",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "jobforge-dag-runner",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "The text output must now use the new format:",
+  "earlier_round": 1,
+  "earlier_quote": "print one line per level, in the form",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "lsm-kvstore-engine",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "SCAN now uses an **exclusive** end key.",
+  "earlier_round": 1,
+  "earlier_quote": "Inclusive lexicographic range scan on the latest committed state.",
+  "confidence": "high",
+  "note": "also applies to SNAP_SCAN, TX_SCAN"
+ },
+ {
+  "task": "lsm-kvstore-engine",
+  "round": 5,
+  "kind": "partial",
+  "sentence": "The per-block CRC-32 checksum covers the compressed block bytes as written.",
+  "earlier_round": 3,
+  "earlier_quote": "CRC-32 (IEEE) checksum of the block's raw bytes",
+  "confidence": "medium",
+  "note": "detail of what bytes the CRC covers"
+ },
+ {
+  "task": "lsm-kvstore-engine",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "Instead of a single WAL file, use numbered segment files: `wal_000001.log`, `wal_000002.log`, etc. in the data directory.",
+  "earlier_round": 1,
+  "earlier_quote": "After successful MemTable flush, truncate the WAL.",
+  "confidence": "medium",
+  "note": "R1 does not name a file, implies single WAL truncated"
+ },
+ {
+  "task": "lsm-kvstore-engine",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "On memtable flush, delete all WAL segments whose highest seqnum is <= the flushed seqnum — don't truncate the active segment.",
+  "earlier_round": 1,
+  "earlier_quote": "After successful MemTable flush, truncate the WAL.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "minicc-compiler-evolution",
+  "round": 2,
+  "kind": "revise",
+  "sentence": "Fix `&&` so that if the left operand is falsy, the right operand is never evaluated and the result is the left value (falsy).",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "low",
+  "note": "bug fix; R1 does not state evaluation order"
+ },
+ {
+  "task": "minicc-compiler-evolution",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Change `for..in` so it iterates over *indices* instead:",
+  "earlier_round": 1,
+  "earlier_quote": "`for (x in arr) { body }` iterates over each element of an array, binding the current element to a new local variable `x` on each iteration",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "minicc-compiler-evolution",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "When either operand of `+` is a string, the other should be coerced to its string representation and the result should be string concatenation.",
+  "earlier_round": 1,
+  "earlier_quote": "`+=` on strings performs concatenation.",
+  "confidence": "low",
+  "note": "bug fix of coercion; R1 does not specify mixed-type +"
+ },
+ {
+  "task": "minicc-compiler-evolution",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "`<`, `>`, `<=`, `>=` should perform lexicographic (byte-by-byte) comparison when both operands are strings.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "low",
+  "note": "bug fix; R1 does not specify string comparison"
+ },
+ {
+  "task": "minicc-compiler-evolution",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Change closures to capture by **reference**: a closure shares the same variable binding as its enclosing scope.",
+  "earlier_round": 2,
+  "earlier_quote": "Closures capture variables from their enclosing scope by value at the time the closure is created.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "minicc-compiler-evolution",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Closures currently capture variables by value (snapshot at creation time).",
+  "earlier_round": 2,
+  "earlier_quote": "Closures capture variables from their enclosing scope by value at the time the closure is created.",
+  "confidence": "medium",
+  "note": "restates the old rule being replaced"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 2,
+  "kind": "partial",
+  "sentence": "The gradient norm spike detector now uses a 30-step sliding window (was 50) with a Z-score threshold of 2.5 (was 3.0).",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 2,
+  "kind": "partial",
+  "sentence": "The severity boundary for \"high\" is now Z > 4.0 (was 5.0).",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 2,
+  "kind": "partial",
+  "sentence": "Training gap detection threshold has been reduced to 3600 seconds (was 7200).",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 2,
+  "kind": "partial",
+  "sentence": "Timeline gap detection now flags gaps of more than 50 consecutive missing steps (was 100).",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The `verify` command's checkpoint `issues` field is now an array of objects `{\"type\": string, \"detail\": string}` instead of plain strings.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "the entry with the **earliest** timestamp now wins (previously it was the latest).",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The previous 4-level system (`critical`, `high`, `medium`, `low`) is replaced with a 5-level system that adds an `info` level for non-actionable observations.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "Learning rate anomalies are now `info` severity (were `medium`)",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "Provenance chain breaks are now `medium` (were `high`)",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "Training time gaps are now `info` (were `low`)",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "Anomaly sort order now uses severity, then type alphabetically, then epoch, then step.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "medium",
+  "note": "prior sort order not stated in visible text"
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "**Gradient spike detection** now uses Exponential Weighted Moving Average (EWMA) instead of a simple sliding window mean/stddev.",
+  "earlier_round": 2,
+  "earlier_quote": "The gradient norm spike detector now uses a 30-step sliding window (was 50)",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "ml-checkpoint-forensics-engine",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "**Loss divergence detection** now compares the current loss value against an Exponential Moving Average (EMA) rather than comparing window endpoints.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external docs (round 1 defers to /app/docs)"
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "round": 2,
+  "kind": "revise",
+  "sentence": "every command should output `{\"error\": \"<message>\"}` on stdout with exit code 1.",
+  "earlier_round": 1,
+  "earlier_quote": "Exit code 0 on success, 1 on error.",
+  "confidence": "medium",
+  "note": "R2 says compare-outputs, merge-checkpoints, drift-analysis currently dump plain text to stderr"
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Fix `generate-report` to match: any missing tensor should make the comparison fail, and the summary should mention it",
+  "earlier_round": 1,
+  "earlier_quote": "\"comparison\": {\"match\": false, \"summary\": \"2/5 tensors differ\"}",
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Rewrite the lineage handling in `generate-report` to use the same validation logic as `audit-lineage` so the report includes the detailed `errors` array when lineage fails.",
+  "earlier_round": 1,
+  "earlier_quote": "\"lineage\": {\"valid\": true, \"depth\": 4}",
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Non-increasing step changes should count as \"converging\"; non-decreasing step changes (with at least one strict increase) should count as \"diverging\".",
+  "earlier_round": 1,
+  "earlier_quote": "`\"converging\"` if `step_changes` is strictly monotonically decreasing; `\"diverging\"` if strictly monotonically increasing",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Use the maximum step change across all consecutive pairs as the denominator instead, so the score reflects the full drift history.",
+  "earlier_round": 1,
+  "earlier_quote": "`stability_score`: `1.0 - (last_step_change / first_step_change)`, clamped to `[0.0, 1.0]`.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "Only flag timestamps where the child is strictly *before* the parent -- equal timestamps should be allowed.",
+  "earlier_round": 1,
+  "earlier_quote": "Timestamps are monotonically increasing along any path (child timestamp > all parent timestamps)",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "Use the mean step change as the denominator instead: `stability_score = 1 - (last_step_change / mean_change)`.",
+  "earlier_round": 5,
+  "earlier_quote": "Use the maximum step change across all consecutive pairs as the denominator instead",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "ml-checkpoint-reproducibility-engine",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "When all consecutive step changes are exactly equal and non-zero, classify the tensor as `\"stable\"` instead of `\"converging\"`.",
+  "earlier_round": 5,
+  "earlier_quote": "When all step changes are identical, treat it as \"converging\".",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "round": 2,
+  "kind": "revise",
+  "sentence": "The regression metric previously named `mape` has been corrected to `smape` (Symmetric Mean Absolute Percentage Error) with an updated formula.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external spec"
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "round": 2,
+  "kind": "revise",
+  "sentence": "The metric key changes from `mape` to `smape` in all outputs.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external spec"
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Previously, all metrics used the same delta direction for regression checks (`delta < min_absolute_delta`). Now, higher-is-better metrics regress when they decrease, and lower-is-better metrics regress when they increase.",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external spec"
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "round": 3,
+  "kind": "partial",
+  "sentence": "The regression config format changes from `min_absolute_delta`/`min_relative_delta` to `max_delta`/`max_relative_delta` (non-negative values representing maximum allowed worsening).",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external spec"
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "In previous versions, the `smape` metric was excluded from bootstrap confidence interval computation for regression tasks. This has been corrected.",
+  "earlier_round": 2,
+  "earlier_quote": null,
+  "confidence": "medium",
+  "note": "CI metric list not in visible text of round 2"
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "The `--bootstrap` flag for the `evaluate` command now defaults to `0` instead of `1000`.",
+  "earlier_round": 2,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "default 1000 was in external spec v2"
+ },
+ {
+  "task": "ml-eval-report-engine",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The compare command's regression analysis table in Markdown output previously listed metrics in alphabetical order (using `sort.Strings`). This was an oversight from v3. The table must now list metrics in the standard metric order for the task type",
+  "earlier_round": 3,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "earlier value only in external spec"
+ },
+ {
+  "task": "mlops-inference-gateway",
+  "round": 2,
+  "kind": "revise",
+  "sentence": "All passwords must be hashed before storage using SHA-256 with a unique per-user random salt (minimum 16 bytes).",
+  "earlier_round": 1,
+  "earlier_quote": "Create user. Body: `username`, `password`, `role`.",
+  "confidence": "low",
+  "note": "R1 does not state storage format; R2 describes prior storage as plaintext"
+ },
+ {
+  "task": "mlpipe-dag-orchestrator",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The `metric_summary` in the report command currently uses population standard deviation (dividing by N). It should use sample standard deviation with Bessel's correction (dividing by N-1).",
+  "earlier_round": 1,
+  "earlier_quote": "compute `mean`, `std` (population standard deviation), `min`, `max`.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-dag-orchestrator",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "**Change `best_experiment` selection to composite scoring:**",
+  "earlier_round": 1,
+  "earlier_quote": "`best_experiment`: the experiment ID with the lowest average rank across all objective metrics.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-dag-orchestrator",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "Only `best_experiment` selection changes from rank-based to composite-score-based.",
+  "earlier_round": 1,
+  "earlier_quote": "`best_experiment`: the experiment ID with the lowest average rank across all objective metrics.",
+  "confidence": "medium",
+  "note": "restatement of the change"
+ },
+ {
+  "task": "mlpipe-dag-orchestrator",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "Fix `report` so that it only includes experiments whose IDs match the expected parameter combinations from the given pipeline YAML.",
+  "earlier_round": 1,
+  "earlier_quote": "`experiments`: array of `{\"id\": \"...\", \"metrics\": {\"metric_name\": value, ...}}` across all stages, sorted by experiment ID.",
+  "confidence": "high",
+  "note": "report previously read all experiment dirs"
+ },
+ {
+  "task": "mlpipe-dag-orchestrator",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "The same scoping fix must also apply to the `export` command and the `sweep` command: when given a pipeline YAML, they should only include experiments that match that pipeline's parameter grid.",
+  "earlier_round": 3,
+  "earlier_quote": "across all completed experiments",
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "mlpipe-dag-orchestrator",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "Change composite scoring to importance-weighted averaging: each shared metric's weight is the sample standard deviation of that metric's normalized values across all included experiments (Bessel's correction, dividing by n-1).",
+  "earlier_round": 2,
+  "earlier_quote": "Compute a composite score for each experiment: the arithmetic mean of its normalized (direction-adjusted) values across all shared metrics.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-inference-pipeline-migration",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "Change registry storage from `registry.idx` (pipe-delimited) to `registry.json` (JSON array)",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "medium",
+  "note": "prior flat-file format only described in R4 itself (existing code)"
+ },
+ {
+  "task": "mlpipe-inference-pipeline-migration",
+  "round": 8,
+  "kind": "partial",
+  "sentence": "The resolved `\"weights\"` array is always persisted in the config JSON, including the unweighted case (where it is `[1.0, 1.0, ...]`, one entry of `1.0` per model).",
+  "earlier_round": 7,
+  "earlier_quote": "The JSON format: `{\"name\": \"...\", \"models\": [\"m1\",\"m2\",...], \"strategy\": \"average\"}`",
+  "confidence": "medium",
+  "note": "config JSON gains weights and created fields"
+ },
+ {
+  "task": "mlpipe-inference-pipeline-migration",
+  "round": 11,
+  "kind": "revise",
+  "sentence": "Only AFTER combining should postprocessing (round + clip) be applied, using the first model's postprocessing config.",
+  "earlier_round": 7,
+  "earlier_quote": "Output format same as regular `mlpipe run` (csv or json)",
+  "confidence": "medium",
+  "note": "R11 says each model computed with own preprocessing and activation, postprocessing once on combined result"
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "When **all** actual values are zero (no rows can be used for computation), MAPE should be reported as `null` in the output JSON, not `0.0`.",
+  "earlier_round": 1,
+  "earlier_quote": "`mape` — mean(|y - ŷ| / |y|) * 100, skipping rows where y = 0",
+  "confidence": "medium",
+  "note": "R1 does not state the all-zero result; implicit"
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "If SS_tot is zero and SS_res is also zero (predictions perfectly match the constant actuals), R2 should be `1.0` (perfect prediction).",
+  "earlier_round": 1,
+  "earlier_quote": "if SS_tot is 0, r2 is 0",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "If SS_tot is zero but SS_res is non-zero (predictions differ from the constant actual value), R2 should be reported as `null` — the metric is undefined.",
+  "earlier_round": 1,
+  "earlier_quote": "if SS_tot is 0, r2 is 0",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "When a metric is present in one version but absent in another, the missing version's value should be `null` (not `0.0`).",
+  "earlier_round": 1,
+  "earlier_quote": "\"metrics_diff\": {",
+  "confidence": "low",
+  "note": "R1 does not specify missing-metric value; quote is the compare output block"
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 3,
+  "kind": "partial",
+  "sentence": "The `delta` and `pct_change` fields should also be `null` when either version's value is `null`.",
+  "earlier_round": 1,
+  "earlier_quote": "`pct_change` is `(v2 - v1) / |v1| * 100`. If `v1` is 0, `pct_change` is `null`.",
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "When `--no-cache` is used, the `cache_stats` field should be omitted entirely from the pipeline run output.",
+  "earlier_round": 2,
+  "earlier_quote": "The `cache_stats` field is still present but both values are 0.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "In the plan output, register stages should have `\"cache_status\": \"uncacheable\"` instead of \"hit\", \"miss\", or \"unknown\".",
+  "earlier_round": 2,
+  "earlier_quote": "`\"hit\"` if the cache key can be computed at plan time and a valid cache entry exists.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "The confusion matrix metric output format is changing for ALL classification evaluations, including binary classification.",
+  "earlier_round": 1,
+  "earlier_quote": "`confusion_matrix` — `{\"tp\": N, \"fp\": N, \"tn\": N, \"fn\": N}`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "The `mlpipe registry list` command output format is changing.",
+  "earlier_round": 1,
+  "earlier_quote": "List models in the registry, optionally filtered. Returns a JSON array:",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "All validation errors (including file-not-found and parse errors) are reported through the standard validation output on stdout:",
+  "earlier_round": null,
+  "earlier_quote": null,
+  "confidence": "medium",
+  "note": "R5 says previous behaviour was exitError to stderr; not found in R1-R4 text"
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "This means `mlpipe validate` NEVER writes to stderr — all output goes to stdout as structured JSON.",
+  "earlier_round": null,
+  "earlier_quote": null,
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 7,
+  "kind": "partial",
+  "sentence": "For CV runs, the `stage_summary` should include a `folds` key:",
+  "earlier_round": 6,
+  "earlier_quote": "`stage_summary`: Map of stage name to abbreviated status.",
+  "confidence": "medium",
+  "note": "extends run record format"
+ },
+ {
+  "task": "mlpipe-orchestrator",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The `diff` command should apply parameter substitution (`--param` flags and `${...}` resolution) before comparing.",
+  "earlier_round": 6,
+  "earlier_quote": "## 3. Pipeline Diff Command",
+  "confidence": "medium",
+  "note": "R6 diff compares raw configs; no param substitution mentioned"
+ },
+ {
+  "task": "multiservice-deploy-pipeline",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Build artifact format changes from `<name>:<timestamp>:built` to `<name>:<version>+build.<timestamp>`, where `<version>` is the service's version from the manifest.",
+  "earlier_round": 1,
+  "earlier_quote": "containing `<service_name>:<epoch_seconds>:built`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "multiservice-deploy-pipeline",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Version comparison now uses semver-first logic:",
+  "earlier_round": 2,
+  "earlier_quote": "determine which environment has the newer version by comparing the numeric build timestamp embedded in the version string",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "multiservice-deploy-pipeline",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The summary line changes to: `Promoted N, skipped M, conflicts C`",
+  "earlier_round": 2,
+  "earlier_quote": "print a summary line: `Promoted N, skipped M`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "multiservice-deploy-pipeline",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "The rollback behavior is wrong — rolling back a service should restore the previous version from event history, not just remove it entirely.",
+  "earlier_round": 1,
+  "earlier_quote": "Remove a service's deployment from an environment.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "multiservice-deploy-pipeline",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "The rollback output changes to: `ROLLBACK <service> from <env>: <current_version> -> <previous_version>`",
+  "earlier_round": 1,
+  "earlier_quote": "Print `ROLLBACK <service_name> from <environment> OK` on success.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "nexus-ml-pipeline-system",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "When such a step fails, its downstream dependents still execute normally instead of being marked as dependency-failed.",
+  "earlier_round": 1,
+  "earlier_quote": "If a dependency fails, dependent steps also fail with \"dependency failed\"",
+  "confidence": "low",
+  "note": "opt-in via allow_failure flag; default cascade unchanged"
+ },
+ {
+  "task": "nexus-ml-pipeline-system",
+  "round": 3,
+  "kind": "partial",
+  "sentence": "if the only failures are allow_failure steps, the overall run status should be `succeeded_with_warnings` rather than `failed`.",
+  "earlier_round": 1,
+  "earlier_quote": "status (`pending`/`running`/`succeeded`/`failed`)",
+  "confidence": "low",
+  "note": "only applies to allow_failure steps"
+ },
+ {
+  "task": "nexus-ml-pipeline-system",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "After variable substitution, if any unresolved `${...}` reference remains in the condition string, the condition evaluates to false (the step is skipped) rather than causing a runtime error.",
+  "earlier_round": 2,
+  "earlier_quote": "After all substitutions (including defaults), any remaining `${...}` token without a `:-` default is still an unresolved variable error.",
+  "confidence": "medium",
+  "note": "applies to conditions specifically"
+ },
+ {
+  "task": "numeriforge-reproducibility-migration",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The CSV export format is incomplete. It currently outputs only `label,value` data rows. It should include comment lines at the top with experiment metadata before the header row:",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "medium",
+  "note": "earlier CSV format defined in external docs"
+ },
+ {
+  "task": "numeriforge-reproducibility-migration",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "The previous output tokens must be replaced:",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": "verify tokens defined in external docs"
+ },
+ {
+  "task": "numeriforge-reproducibility-migration",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "`VERIFIED:` must change to `INTEGRITY_OK:`",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "numeriforge-reproducibility-migration",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "`CORRUPTED:` must change to `INTEGRITY_FAIL:`",
+  "earlier_round": 1,
+  "earlier_quote": null,
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "numeriforge-reproducibility-migration",
+  "round": 5,
+  "kind": "partial",
+  "sentence": "The audit command's checksum verification should also use the updated terminology in its failure messages (e.g., \"integrity check failed\" instead of \"checksum verification failed\").",
+  "earlier_round": 3,
+  "earlier_quote": "If the checksum fails, print `AUDIT_FAIL: <id>` with a reason mentioning checksum and exit 1.",
+  "confidence": "medium",
+  "note": null
+ },
+ {
+  "task": "numeriforge-reproducibility-migration",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The summary should show: `Audit Summary: <N> passed, <M> failed, <S> skipped out of <total> total`",
+  "earlier_round": 4,
+  "earlier_quote": "print a summary line: `Audit Summary: <N> passed, <M> failed out of <total> total`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "repro-verify-engine",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The policy engine incorrectly modifies the raw `overall_status` field in the verification report. The raw `overall_status` must always reflect the strict v1 verification result (e.g., `\"FAIL\"` for non-deterministic output), regardless of policy rules.",
+  "earlier_round": 2,
+  "earlier_quote": "Policy rules are evaluated after normal verification and can override the effective pass/fail result.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "repro-verify-engine",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The diff subcommand does not correctly return exit code 1 when step regressions are detected. It must exit 1 whenever `summary.regressions >= 1`.",
+  "earlier_round": 2,
+  "earlier_quote": "If either input file is missing or invalid: exit with code 2 and print an error message to stderr.",
+  "confidence": "low",
+  "note": "R2 states no exit code 1 rule for diff; spec in external file"
+ },
+ {
+  "task": "repro-verify-engine",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "The previous ranks (PASS=4, FAIL=3, ERROR=2, TIMEOUT=1, SKIPPED=0) are corrected to (PASS=4, TIMEOUT=3, ERROR=2, FAIL=1, SKIPPED=0).",
+  "earlier_round": 4,
+  "earlier_quote": "Status rank: PASS=4 > FAIL=3 > ERROR=2 > TIMEOUT=1 > SKIPPED=0.",
+  "confidence": "high",
+  "note": "trend only"
+ },
+ {
+  "task": "repro-verify-engine",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "Previously it averaged ALL steps' stability values, including steps that appear in only 1 report (trivial stability=1.0). The corrected behavior: only average stability values for steps with `appearances > 1`.",
+  "earlier_round": 4,
+  "earlier_quote": "`stability` = `1.0 - (status_changes / (appearances - 1))`",
+  "confidence": "high",
+  "note": "overall_stability aggregate"
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Modify the `enrich` subcommand so that exact `ipv4` IOC matches take priority over `ipv4_cidr` matches when they target the same (field, IP address) pair on a threat.",
+  "earlier_round": 2,
+  "earlier_quote": "This resolution is applied independently per threat field and per IP address within that field.",
+  "confidence": "high",
+  "note": "R2 resolved CIDR specificity only among CIDRs; exact matches did not interact"
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "During CIDR candidate collection, skip any (field_name, IP_address) pair that appears in the shadow set.",
+  "earlier_round": 2,
+  "earlier_quote": "only the most specific CIDR (longest prefix length) produces a match for that (field, IP address) pair",
+  "confidence": "medium",
+  "note": "mechanism of the shadow rule"
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "The `dominant_type` field in `timeline` output previously broke ties alphabetically. **This is now changed.**",
+  "earlier_round": 4,
+  "earlier_quote": "Ties broken alphabetically (smallest string value first).",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "When multiple threat types share the highest count within a bucket, break the tie by the **highest mean `enriched_risk_score`** among the tied types (descending).",
+  "earlier_round": 4,
+  "earlier_quote": "Ties broken alphabetically (smallest string value first).",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The `escalation_index` in `timeline` was previously defined to sum only **positive** severity deltas. This is corrected: it should sum the **absolute value** of all consecutive severity deltas (both escalations and de-escalations).",
+  "earlier_round": 4,
+  "earlier_quote": "Sum only the **positive** deltas.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 10,
+  "kind": "revise",
+  "sentence": "The recency component half-life is **reduced from 60 minutes to 30 minutes**.",
+  "earlier_round": 8,
+  "earlier_quote": "`recency_component` = `2^(-age_minutes / 60.0)`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 12,
+  "kind": "partial",
+  "sentence": "`\"critical\"` if priority_score >= 0.80 (was 0.75)",
+  "earlier_round": 8,
+  "earlier_quote": "`\"critical\"` if score >= 0.75",
+  "confidence": "high",
+  "note": "threshold value change"
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 12,
+  "kind": "partial",
+  "sentence": "`\"high\"` if priority_score >= 0.55 (was 0.50)",
+  "earlier_round": 8,
+  "earlier_quote": "`\"high\"` if score >= 0.50",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 12,
+  "kind": "partial",
+  "sentence": "`\"medium\"` if priority_score >= 0.30 (was 0.25)",
+  "earlier_round": 8,
+  "earlier_quote": "`\"medium\"` if score >= 0.25",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 15,
+  "kind": "partial",
+  "sentence": "`critical`: ratio >= **0.4** (was 0.5)",
+  "earlier_round": 12,
+  "earlier_quote": "`\"critical\"` if any ratio >= 0.5",
+  "confidence": "high",
+  "note": "threshold value change"
+ },
+ {
+  "task": "secaudit-log-sentinel",
+  "round": 15,
+  "kind": "partial",
+  "sentence": "`warning`: ratio >= **0.15** (was 0.2)",
+  "earlier_round": 12,
+  "earlier_quote": "`\"warning\"` if any ratio >= 0.2",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "service-mesh-health-router",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "When multiple endpoints share the same active-connection count, they should be preferred by weight (higher weight wins), not just by address order.",
+  "earlier_round": 1,
+  "earlier_quote": "Break ties by selecting the endpoint with the lowest address (lexicographic).",
+  "confidence": "high",
+  "note": "R3 states the existing tie-break is wrong"
+ },
+ {
+  "task": "service-mesh-health-router",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "Update the `data-store` service config to use `connection_limit_mode = \"per-service\"`.",
+  "earlier_round": 1,
+  "earlier_quote": "max_connections_per_endpoint = 3",
+  "confidence": "high",
+  "note": "changes data-store semantics from per-endpoint to per-service"
+ },
+ {
+  "task": "service-mesh-health-router",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "Its `max_connections_per_endpoint` is 3, so data-store now allows at most 3 simultaneous connections in total (spread across both endpoints), not 3 per endpoint.",
+  "earlier_round": 1,
+  "earlier_quote": "Each service has a `max_connections_per_endpoint` setting.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "service-mesh-health-router",
+  "round": 6,
+  "kind": "partial",
+  "sentence": "When a connection times out waiting in the rate limiter queue, it currently increments only `queue_timeouts`. It should increment both `queue_timeouts` AND `rate_limited`.",
+  "earlier_round": 2,
+  "earlier_quote": "Queue timeout rejections increment `queue_timeouts`.",
+  "confidence": "high",
+  "note": "R2: rate_limited counts only immediate/queue-full rejections"
+ },
+ {
+  "task": "service-mesh-health-router",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "The half_open state currently allows exactly one probe connection at a time. Change it to allow a configurable batch of concurrent probes.",
+  "earlier_round": 1,
+  "earlier_quote": "only one connection at a time is allowed (as a probe)",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "service-mesh-health-router",
+  "round": 8,
+  "kind": "revise",
+  "sentence": "This replaces the previous single-probe logic.",
+  "earlier_round": 1,
+  "earlier_quote": "only one connection at a time is allowed (as a probe)",
+  "confidence": "medium",
+  "note": "restates the replacement"
+ },
+ {
+  "task": "sparse-iterative-pde-solver",
+  "round": 2,
+  "kind": "revise",
+  "sentence": "**Both CG and GMRES must now report the true relative residual**, computed as `||b - A*x_final|| / ||b||`, not just the internal estimate.",
+  "earlier_round": 1,
+  "earlier_quote": "residual: <final relative residual in scientific notation>",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-pde-solver",
+  "round": 2,
+  "kind": "revise",
+  "sentence": "Each line must now contain two tab-separated values: `<iteration_number>\\t<true_relative_residual>`.",
+  "earlier_round": 1,
+  "earlier_quote": "The history must start with the relative residual for the initial guess",
+  "confidence": "high",
+  "note": "R2 says history previously had one residual per line"
+ },
+ {
+  "task": "sparse-iterative-pde-solver",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "The convergence history file format specified in round 2 (tab-separated `<iteration>\\t<true_relative_residual>`) is now replaced. The new format has **three** tab-separated columns per line:",
+  "earlier_round": 2,
+  "earlier_quote": "Each line must now contain two tab-separated values: `<iteration_number>\\t<true_relative_residual>`.",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-pde-solver",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "The residual norms reported by all iterative solvers (`sparse-solve`, `poisson`, `convdiff`, `heat`) change from the 2-norm to the infinity norm (maximum absolute value).",
+  "earlier_round": 2,
+  "earlier_quote": "The output line `residual:` must show the true relative residual",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-pde-solver",
+  "round": 6,
+  "kind": "revise",
+  "sentence": "`residual:` output line changes from `||b - A*x||_2 / ||b||_2` to `||b - A*x||_inf / ||b||_inf`",
+  "earlier_round": 2,
+  "earlier_quote": "`||b - A*x_final|| / ||b||`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-pde-solver",
+  "round": 7,
+  "kind": "revise",
+  "sentence": "The 3-column convergence history format specified in round 4 is replaced with a **4-column** format:",
+  "earlier_round": 4,
+  "earlier_quote": "The new format has **three** tab-separated columns per line:",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "After the solver loop finishes, explicitly recompute the true residual as `||b - A * x||_2 / ||b||_2` using the computed solution vector and report that value as `residual_norm`.",
+  "earlier_round": 1,
+  "earlier_quote": "residual_norm: <final ||r||_2 / ||b||_2>",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "The `converged` field must also be based on the true residual (yes if and only if the true residual is below tolerance).",
+  "earlier_round": 1,
+  "earlier_quote": "stop when `||r_k||_2 / ||b||_2 < tol`",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "Instead, detect `||b||_2 == 0` before calling the solver and immediately output the zero solution",
+  "earlier_round": 1,
+  "earlier_quote": "residual_norm: <final ||r||_2 / ||b||_2>",
+  "confidence": "low",
+  "note": "replaces an implementation workaround not in the spec text"
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 3,
+  "kind": "revise",
+  "sentence": "In both the forward and backward sweeps of SSOR, if the diagonal entry for a row is zero, set the corresponding output component to zero instead of dividing.",
+  "earlier_round": 1,
+  "earlier_quote": "**SSOR** - Symmetric Successive Over-Relaxation with omega=1.2.",
+  "confidence": "low",
+  "note": "bug fix; R1 gives no zero-diagonal rule"
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 4,
+  "kind": "revise",
+  "sentence": "RCM should handle disconnected graphs consistently:",
+  "earlier_round": 1,
+  "earlier_quote": "apply Reverse Cuthill-McKee (RCM) reordering before solving",
+  "confidence": "low",
+  "note": "bug fix of RCM; per-component rules added"
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "Numerical issues during solving (non-positive-definite detection, BiCGSTAB breakdown) should produce a partial result rather than terminating with only an error message.",
+  "earlier_round": 2,
+  "earlier_quote": "immediately print `error: matrix is not positive definite` to stderr and exit with code 1",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "**CG non-positive-definite detection must produce partial output instead of exiting.**",
+  "earlier_round": 2,
+  "earlier_quote": "immediately print `error: matrix is not positive definite` to stderr and exit with code 1",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "**BiCGSTAB breakdown must produce partial output instead of exiting.**",
+  "earlier_round": 2,
+  "earlier_quote": "immediately print `error: BiCGSTAB numerical breakdown` to stderr and exit with code 1",
+  "confidence": "high",
+  "note": null
+ },
+ {
+  "task": "sparse-iterative-solver-review",
+  "round": 5,
+  "kind": "revise",
+  "sentence": "**IC(0) non-positive pivot must fall back instead of exiting.**",
+  "earlier_round": 2,
+  "earlier_quote": "numerical breakdowns (zero or negative pivot) during IC(0) factorization",
+  "confidence": "high",
+  "note": null
+ }
+]

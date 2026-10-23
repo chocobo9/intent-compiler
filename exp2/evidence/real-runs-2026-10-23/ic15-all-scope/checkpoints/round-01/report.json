@@ -1,0 +1,1359 @@
+{
+  "round": 1,
+  "official_score": {
+    "passed": 149,
+    "total": 219
+  },
+  "status": "done",
+  "stages": {
+    "understand": {
+      "calls": 2,
+      "tokens": {
+        "input_tokens": 18803,
+        "cache_read_tokens": 13952,
+        "cache_write_tokens": 0,
+        "output_tokens": 5000,
+        "reasoning_tokens": 603
+      },
+      "stub_calls": 0
+    },
+    "acceptance": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 51194,
+        "cache_read_tokens": 30976,
+        "cache_write_tokens": 0,
+        "output_tokens": 26083,
+        "reasoning_tokens": 2584
+      },
+      "stub_calls": 0
+    },
+    "coding": {
+      "calls": 4,
+      "tokens": {
+        "input_tokens": 93386,
+        "cache_read_tokens": 1357952,
+        "cache_write_tokens": 0,
+        "output_tokens": 5334,
+        "reasoning_tokens": 794
+      },
+      "stub_calls": 0
+    }
+  },
+  "interrupted": {
+    "attempts": 0,
+    "stages": {
+      "understand": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "acceptance": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "coding": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      }
+    }
+  },
+  "scope": [
+    "O1",
+    "O2",
+    "O3",
+    "O4",
+    "O5",
+    "O6",
+    "O7",
+    "O8",
+    "O9",
+    "O10",
+    "O11",
+    "O12",
+    "O13",
+    "O14",
+    "O15",
+    "O16",
+    "O17",
+    "O18",
+    "O19",
+    "O20",
+    "O21",
+    "O22",
+    "O23",
+    "O24",
+    "O25",
+    "O26",
+    "O27",
+    "O28",
+    "O29",
+    "O30",
+    "O31",
+    "O32",
+    "O33",
+    "O34",
+    "O35",
+    "O36",
+    "O37",
+    "O38",
+    "O39"
+  ],
+  "zones": {
+    "task": 39,
+    "protect": 0,
+    "status": 0,
+    "source_blocks": 48,
+    "anchors": 0
+  },
+  "execution": {
+    "status": "cycles_spent",
+    "cycles": 4,
+    "repairs": 3,
+    "kept": "C1.4",
+    "failing_at_end": 0,
+    "contests": 0,
+    "carried_objects": [
+      "O4",
+      "O5",
+      "O9",
+      "O15",
+      "O17",
+      "O18",
+      "O19",
+      "O20",
+      "O21",
+      "O23",
+      "O24",
+      "O25",
+      "O26",
+      "O27",
+      "O28",
+      "O29",
+      "O36",
+      "O38"
+    ],
+    "sessions": 1,
+    "broken_sessions": 0
+  },
+  "checks": {
+    "entered": 41,
+    "stale": 0,
+    "retired": 4,
+    "run": 37,
+    "passed": 21,
+    "failed": 16,
+    "admitted": 41,
+    "unknown": 0,
+    "unknown_not_fed_back": 0,
+    "dropped": {
+      "verbatim_mismatch": 1,
+      "reference_value_missing": 1
+    },
+    "normalized": {
+      "doubled escapes": 1
+    },
+    "refused_calls": 0
+  },
+  "probes": null,
+  "objects": [
+    {
+      "object": "O1",
+      "name": "dpipe CLI and deterministic data pipeline",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K1"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O2",
+      "name": "ingest command",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O3",
+      "name": "schema validation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K3"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O4",
+      "name": "schema column constraints",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K4"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O5",
+      "name": "ingest validation ordering",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O6",
+      "name": "ingest primary key",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O7",
+      "name": "ingest output and checksum",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K7"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O8",
+      "name": "transform command",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O9",
+      "name": "transformation recipe execution",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K9"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O10",
+      "name": "expression operator precedence",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K10"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O11",
+      "name": "expression NaN arithmetic",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K11"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O12",
+      "name": "expression functions",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K12"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O13",
+      "name": "expression evaluator",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K13"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O14",
+      "name": "derive formatting",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K14"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O15",
+      "name": "sample and basic transformation operations",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K15"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O16",
+      "name": "aggregate output ordering and formatting",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K16"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O17",
+      "name": "aggregate having clause",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K17"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O18",
+      "name": "join transformation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K18"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O19",
+      "name": "window transformation",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O20",
+      "name": "window functions",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O21",
+      "name": "window output shape",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K21"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O22",
+      "name": "window result formatting",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K22"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O23",
+      "name": "window column validation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K23"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O24",
+      "name": "pivot transformation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K24"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O25",
+      "name": "pivot behavior",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K25"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O26",
+      "name": "unpivot transformation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K26"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O27",
+      "name": "unpivot behavior",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K27"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O28",
+      "name": "fill transformation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K28"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O29",
+      "name": "fill behavior",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K29"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O30",
+      "name": "transform output and checksum",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O31",
+      "name": "verify command",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K31"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O32",
+      "name": "checksum verification",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K32"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O33",
+      "name": "manifest command",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O34",
+      "name": "manifest generation",
+      "status": "unknown",
+      "reasons": [
+        "reading"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": [
+        "K34"
+      ]
+    },
+    {
+      "object": "O35",
+      "name": "pipeline command",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K35"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O36",
+      "name": "pipeline execution",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O37",
+      "name": "determinism contract",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O38",
+      "name": "error handling",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K39",
+        "K40"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O39",
+      "name": "dpipe buildability",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K38"
+      ],
+      "unknown": []
+    }
+  ],
+  "loss": {
+    "boundary": [
+      "O2",
+      "O5",
+      "O6",
+      "O8",
+      "O19",
+      "O20",
+      "O30",
+      "O33",
+      "O34",
+      "O36",
+      "O37"
+    ],
+    "ic": [],
+    "executor": [
+      "O1",
+      "O13",
+      "O15",
+      "O17",
+      "O18",
+      "O22",
+      "O23",
+      "O24",
+      "O25",
+      "O26",
+      "O28",
+      "O29",
+      "O31",
+      "O35",
+      "O39"
+    ]
+  },
+  "management_calls": 5,
+  "wall": {
+    "round_ms": 1163670,
+    "stages": [
+      {
+        "stage": "attribution",
+        "ms": 30685,
+        "spans": 1,
+        "first_start_ms": 0,
+        "last_end_ms": 30685
+      },
+      {
+        "stage": "check writing",
+        "ms": 172245,
+        "spans": 1,
+        "first_start_ms": 30692,
+        "last_end_ms": 202937
+      },
+      {
+        "stage": "checks",
+        "ms": 8,
+        "spans": 1,
+        "first_start_ms": 30701,
+        "last_end_ms": 30709
+      },
+      {
+        "stage": "coding",
+        "ms": 295480,
+        "spans": 1,
+        "first_start_ms": 30807,
+        "last_end_ms": 326287
+      },
+      {
+        "stage": "build",
+        "ms": 7052,
+        "spans": 4,
+        "first_start_ms": 326287,
+        "last_end_ms": 1082323
+      },
+      {
+        "stage": "trial",
+        "ms": 8602,
+        "spans": 4,
+        "first_start_ms": 329901,
+        "last_end_ms": 1084758
+      },
+      {
+        "stage": "waiting for checks",
+        "ms": 4,
+        "spans": 2,
+        "first_start_ms": 332284,
+        "last_end_ms": 1105170
+      },
+      {
+        "stage": "guard rerun",
+        "ms": 57415,
+        "spans": 11,
+        "first_start_ms": 332288,
+        "last_end_ms": 1105074
+      },
+      {
+        "stage": "review",
+        "ms": 326379,
+        "spans": 3,
+        "first_start_ms": 341494,
+        "last_end_ms": 965718
+      },
+      {
+        "stage": "formalize",
+        "ms": 131216,
+        "spans": 3,
+        "first_start_ms": 483240,
+        "last_end_ms": 1008469
+      },
+      {
+        "stage": "premise checks",
+        "ms": 26108,
+        "spans": 3,
+        "first_start_ms": 542856,
+        "last_end_ms": 1017552
+      },
+      {
+        "stage": "repair",
+        "ms": 219639,
+        "spans": 3,
+        "first_start_ms": 554327,
+        "last_end_ms": 1081096
+      }
+    ]
+  },
+  "acceptance": {
+    "by_kind": {
+      "A": 5,
+      "B": 32,
+      "C": 0
+    },
+    "open": {
+      "program_wrong": [
+        "V1.1.1",
+        "V1.1.2",
+        "V1.1.3",
+        "V1.1.5",
+        "V1.1.6",
+        "V1.1.7",
+        "V1.1.8",
+        "V1.1.9",
+        "V1.1.10",
+        "V1.1.11",
+        "V1.1.12",
+        "V1.1.13",
+        "V1.2.2",
+        "V1.2.3",
+        "V1.2.5",
+        "V1.3.1",
+        "V1.3.2",
+        "V1.3.3",
+        "V1.3.5",
+        "V1.3.6",
+        "V1.3.7",
+        "V1.3.8",
+        "V1.3.9",
+        "V1.3.10",
+        "V1.3.12"
+      ],
+      "uncovered": [],
+      "reference_pending": [
+        "K13",
+        "K15",
+        "K17",
+        "K18",
+        "K22",
+        "K26",
+        "K28",
+        "K29"
+      ],
+      "ambiguous": [],
+      "uncheckable": [],
+      "expired": [],
+      "confirmed": []
+    }
+  },
+  "ledger": {
+    "open": {
+      "program_wrong": [
+        "V1.1.1",
+        "V1.1.2",
+        "V1.1.3",
+        "V1.1.5",
+        "V1.1.6",
+        "V1.1.7",
+        "V1.1.8",
+        "V1.1.9",
+        "V1.1.10",
+        "V1.1.11",
+        "V1.1.12",
+        "V1.1.13",
+        "V1.2.2",
+        "V1.2.3",
+        "V1.2.5",
+        "V1.3.1",
+        "V1.3.2",
+        "V1.3.3",
+        "V1.3.5",
+        "V1.3.6",
+        "V1.3.7",
+        "V1.3.8",
+        "V1.3.9",
+        "V1.3.10",
+        "V1.3.12"
+      ],
+      "uncovered": [],
+      "reference_pending": [
+        "K13",
+        "K15",
+        "K17",
+        "K18",
+        "K22",
+        "K26",
+        "K28",
+        "K29"
+      ]
+    },
+    "confirmed": [],
+    "report_only": [
+      {
+        "id": "V1.1.4",
+        "how": "unverified",
+        "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+      },
+      {
+        "id": "V1.1.17",
+        "how": "blocked",
+        "detail": "not_reproduced: the check passes on the program as it stands (exit 0)"
+      },
+      {
+        "id": "V1.2.1",
+        "how": "blocked",
+        "detail": "input_claim_false: review-aggregate.json: claimed parses, the standard parser rejects it"
+      },
+      {
+        "id": "V1.3.11",
+        "how": "unverified",
+        "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+      }
+    ],
+    "ended": [
+      {
+        "id": "V1.1.4",
+        "how": "unverified",
+        "cycles": 1
+      },
+      {
+        "id": "V1.1.14",
+        "how": "fixed",
+        "cycles": 2
+      },
+      {
+        "id": "V1.1.15",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V1.1.16",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V1.1.17",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.1",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.4",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V1.2.6",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V1.2.7",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V1.3.4",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V1.3.11",
+        "how": "unverified",
+        "cycles": 1
+      },
+      {
+        "id": "K5",
+        "how": "ruled_program_right",
+        "cycles": 0
+      },
+      {
+        "id": "K19",
+        "how": "ruled_program_right",
+        "cycles": 0
+      },
+      {
+        "id": "K20",
+        "how": "ruled_program_right",
+        "cycles": 0
+      },
+      {
+        "id": "K36",
+        "how": "ruled_program_right",
+        "cycles": 0
+      }
+    ],
+    "sends": 46,
+    "held": [
+      "V1.1.1",
+      "V1.1.2",
+      "V1.1.3",
+      "V1.1.6",
+      "V1.1.7",
+      "V1.1.8",
+      "V1.1.9",
+      "V1.1.10",
+      "V1.1.11",
+      "V1.1.12",
+      "V1.1.13",
+      "V1.2.2",
+      "V1.2.3",
+      "V1.2.5",
+      "V1.3.1",
+      "V1.3.2",
+      "V1.3.5",
+      "V1.3.9",
+      "V1.3.10"
+    ]
+  },
+  "review": {
+    "first_delivery": {
+      "cycle": "C1.1",
+      "commit": "ddb3d0c146a1f4bcdaa493dbe5a11ff74a64e0d8"
+    },
+    "reviews": [
+      {
+        "n": 1,
+        "cycle": "C1.1",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 17,
+        "malformed": 0,
+        "blocked": 1,
+        "sent": 16,
+        "superseded": [],
+        "leads": 26,
+        "program_runs": 18,
+        "fallback": 0,
+        "logged": 7,
+        "entered": 16,
+        "conservation": {
+          "reported": 17,
+          "sent": 9,
+          "logged": 7,
+          "fallback": 0,
+          "blocked": 1,
+          "ok": true
+        }
+      },
+      {
+        "n": 2,
+        "cycle": "C1.2",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 7,
+        "malformed": 0,
+        "blocked": 1,
+        "sent": 6,
+        "superseded": [],
+        "leads": 4,
+        "program_runs": 20,
+        "fallback": 0,
+        "logged": 1,
+        "entered": 6,
+        "conservation": {
+          "reported": 7,
+          "sent": 5,
+          "logged": 1,
+          "fallback": 0,
+          "blocked": 1,
+          "ok": true
+        }
+      },
+      {
+        "n": 3,
+        "cycle": "C1.3",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 12,
+        "malformed": 0,
+        "blocked": 0,
+        "sent": 12,
+        "superseded": [],
+        "leads": 3,
+        "program_runs": 5,
+        "fallback": 1,
+        "logged": 2,
+        "fallback_whole": false,
+        "fallback_reasons": {
+          "no_input": 1
+        },
+        "entered": 12,
+        "conservation": {
+          "reported": 12,
+          "sent": 9,
+          "logged": 2,
+          "fallback": 1,
+          "blocked": 0,
+          "ok": true
+        }
+      }
+    ],
+    "voided": 0,
+    "reviewer": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 123720,
+        "cache_read_tokens": 1494784,
+        "cache_write_tokens": 0,
+        "output_tokens": 12738,
+        "reasoning_tokens": 5568
+      },
+      "stub_calls": 0
+    },
+    "formalizer": {
+      "calls": 4,
+      "tokens": {
+        "input_tokens": 76098,
+        "cache_read_tokens": 5504,
+        "cache_write_tokens": 0,
+        "output_tokens": 22619,
+        "reasoning_tokens": 4192
+      },
+      "stub_calls": 0
+    },
+    "models": {
+      "reviewer": [
+        "gpt-5.6-luna-fast"
+      ],
+      "formalizer": [
+        "gpt-5.6-luna-fast"
+      ]
+    },
+    "items": {
+      "reported": 36,
+      "sent": 34,
+      "malformed": 0,
+      "verified": 23,
+      "logged": 10,
+      "fallback": 1,
+      "blocked": 2
+    },
+    "conservation_errors": [],
+    "premise_blocked": {
+      "not_reproduced": 1,
+      "input_claim_false": 1
+    },
+    "premise_logged": {
+      "value_not_stated": 7,
+      "reference_failed": 2,
+      "value_not_computed": 2
+    },
+    "fallback": {
+      "reviews": 1,
+      "whole": 0,
+      "items": 1,
+      "reasons": {
+        "no_input": 1
+      }
+    },
+    "program_runs_zero": 0,
+    "guards": {
+      "at_start": 0,
+      "at_end": 28,
+      "born": [
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8",
+        "G9",
+        "G10",
+        "G11",
+        "G12",
+        "G13",
+        "G14",
+        "G15",
+        "G16",
+        "G17",
+        "G18",
+        "G19",
+        "G20",
+        "G21",
+        "G22",
+        "G23",
+        "G24",
+        "G25",
+        "G26",
+        "G27",
+        "G28"
+      ],
+      "flipped_changed_text": [],
+      "flipped_unchanged": [],
+      "retired": []
+    },
+    "reverted": 0,
+    "trial": {
+      "runs": 4,
+      "failures": 0
+    },
+    "leads": {
+      "library": 33,
+      "judgment": 0
+    },
+    "coverage": {
+      "units": 131,
+      "covered": 58,
+      "uncovered": [
+        "R1.S0.P1.s1",
+        "R1.S2.P4.s1",
+        "R1.S2.P4.s2",
+        "R1.S3.P7.s1",
+        "R1.S3.P9.s3",
+        "R1.S3.P9.s4",
+        "R1.S3.P9.s5",
+        "R1.S3.P9.s6",
+        "R1.S3.P9.s7",
+        "R1.S3.P9.s8",
+        "R1.S3.P9.s9",
+        "R1.S3.P9.s10",
+        "R1.S3.P11.s1",
+        "R1.S3.P11.s3",
+        "R1.S3.P11.s4",
+        "R1.S3.P11.s5",
+        "R1.S3.P11.s8",
+        "R1.S3.P12.s1",
+        "R1.S3.P12.s2",
+        "R1.S3.P12.s3",
+        "R1.S3.P12.s4",
+        "R1.S3.P12.s5",
+        "R1.S3.P12.s6",
+        "R1.S3.P12.s10",
+        "R1.S3.P13.s1",
+        "R1.S3.P13.s2",
+        "R1.S3.P13.s3",
+        "R1.S3.P13.s4",
+        "R1.S3.P14.s1",
+        "R1.S3.P14.s2",
+        "R1.S3.P14.s3",
+        "R1.S3.P14.s4",
+        "R1.S3.P14.s5",
+        "R1.S3.P14.s6",
+        "R1.S3.P14.s7",
+        "R1.S3.P14.s8",
+        "R1.S3.P14.s9",
+        "R1.S3.P16.s1",
+        "R1.S3.P16.s2",
+        "R1.S3.P17.s1",
+        "R1.S3.P18.s1",
+        "R1.S3.P18.s2",
+        "R1.S3.P18.s3",
+        "R1.S3.P18.s4",
+        "R1.S3.P19.s2",
+        "R1.S3.P19.s3",
+        "R1.S3.P19.s4",
+        "R1.S3.P19.s6",
+        "R1.S3.P19.s7",
+        "R1.S3.P19.s8",
+        "R1.S3.P20.s1",
+        "R1.S3.P20.s2",
+        "R1.S3.P20.s3",
+        "R1.S3.P20.s4",
+        "R1.S3.P20.s5",
+        "R1.S3.P22.s1",
+        "R1.S3.P22.s2",
+        "R1.S3.P22.s3",
+        "R1.S3.P22.s4",
+        "R1.S3.P23.s2",
+        "R1.S3.P23.s3",
+        "R1.S3.P23.s4",
+        "R1.S3.P23.s7",
+        "R1.S4.P1.s1",
+        "R1.S4.P2.s1",
+        "R1.S4.P2.s2",
+        "R1.S6.P1.s1",
+        "R1.S6.P2.s1",
+        "R1.S6.P2.s2",
+        "R1.S6.P2.s3",
+        "R1.S8.P1.s2",
+        "R1.S8.P1.s3",
+        "R1.S8.P2.s1"
+      ]
+    },
+    "cache": {
+      "reviewer": 0.924,
+      "formalizer": 0.067
+    }
+  },
+  "measures": {
+    "round": 1,
+    "wall_ms": 1163670,
+    "stages_ms": {
+      "attribution": 30685,
+      "check writing": 172245,
+      "checks": 8,
+      "coding": 295480,
+      "build": 7052,
+      "trial": 8602,
+      "waiting for checks": 4,
+      "guard rerun": 57415,
+      "review": 326379,
+      "formalize": 131216,
+      "premise checks": 26108,
+      "repair": 219639
+    },
+    "first_delivery": {
+      "cycle": "C1.1",
+      "commit": "ddb3d0c146a1f4bcdaa493dbe5a11ff74a64e0d8"
+    },
+    "guards": {
+      "at_start": 0,
+      "at_end": 28,
+      "born": 28
+    },
+    "regressions": {
+      "changed_text": 0,
+      "unchanged": 0
+    },
+    "reverted": 0,
+    "premise": {
+      "blocked": {
+        "not_reproduced": 1,
+        "input_claim_false": 1
+      },
+      "logged": {
+        "value_not_stated": 7,
+        "reference_failed": 2,
+        "value_not_computed": 2
+      }
+    },
+    "fallback": {
+      "reviews": 1,
+      "whole": 0,
+      "items": 1,
+      "reasons": {
+        "no_input": 1
+      }
+    },
+    "reviews": 3,
+    "program_runs_zero": 0,
+    "checks": {
+      "entered": 41,
+      "admitted": 41,
+      "unknown_not_fed_back": 0,
+      "dropped": 2,
+      "refused_calls": 0
+    },
+    "items": {
+      "reported": 36,
+      "entered": 34,
+      "verified": 23,
+      "logged": 10,
+      "fallback": 1,
+      "blocked": 2,
+      "no_input": 1,
+      "conservation_errors": 0
+    },
+    "tokens": {
+      "executor": {
+        "calls": 4,
+        "uncached_input": 93386,
+        "cache_read": 1357952,
+        "output": 5334,
+        "cache_write": 0
+      },
+      "attribution": {
+        "calls": 2,
+        "uncached_input": 18803,
+        "cache_read": 13952,
+        "output": 5000,
+        "cache_write": 0
+      },
+      "checks": {
+        "calls": 3,
+        "uncached_input": 51194,
+        "cache_read": 30976,
+        "output": 26083,
+        "cache_write": 0
+      },
+      "reviewer": {
+        "calls": 3,
+        "uncached_input": 123720,
+        "cache_read": 1494784,
+        "output": 12738,
+        "cache_write": 0
+      },
+      "formalizer": {
+        "calls": 4,
+        "uncached_input": 76098,
+        "cache_read": 5504,
+        "output": 22619,
+        "cache_write": 0
+      },
+      "probes": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      },
+      "judge": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      },
+      "interrupted_management": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      }
+    },
+    "non_executor_cost": 490777
+  },
+  "first_delivery_score": {
+    "passed": 112,
+    "total": 219
+  }
+}

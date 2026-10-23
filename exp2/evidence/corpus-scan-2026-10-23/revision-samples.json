@@ -1,0 +1,1529 @@
+{
+ "ml-checkpoint-forensics-engine": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "Replace each stub with the real implementation."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "- The gradient norm spike detector now uses a 30-step sliding window (was 50) with a Z-score threshold of 2.5 (was 3.0)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The `verify` command's checkpoint `issues` field is now an array of objects `{\"type\": string, \"detail\": string}` instead of plain strings."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Update the implementation to match the corrected output schemas."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "When multiple shard entries for the same `(epoch, step)` have different metric values, the entry with the **earliest** timestamp now wins (previously it was the latest)."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Update the implementation accordingly."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Update the query parser to match the corrected specification."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "Update the documentation and implementation for the `detect` command."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- `--format csv`: when set to `csv`, the `detect` command outputs CSV instead of JSON."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "Update the implementation accordingly."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "The previous 4-level system (`critical`, `high`, `medium`, `low`) is replaced with a 5-level system that adds an `info` level for non-actionable observations."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "- Anomaly sort order now uses severity, then type alphabetically, then epoch, then step."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "**Gradient spike detection** now uses Exponential Weighted Moving Average (EWMA) instead of a simple sliding window mean/stddev."
+  }
+ ],
+ "mlpipe-dag-orchestrator": [
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "It takes two or more pipeline YAML files (each must have been previously run) and outputs JSON to stdout."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The command takes a pipeline that has been previously run and examines the relationship between one parameter and one metric across all completed experiments."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Only `best_experiment` selection changes from rank-based to composite-score-based."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "- `--sort-by <column_name>`: sort rows by the named column instead of the default."
+  }
+ ],
+ "ml-eval-report-engine": [
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "The specification has been updated to v2 (`/app/docs/spec_v2.md`)."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "The changes from v1 include:"
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "**sMAPE replaces MAPE**: The regression metric previously named `mape` has been corrected to `smape` (Symmetric Mean Absolute Percentage Error) with an updated formula."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "The metric key changes from `mape` to `smape` in all outputs."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "Update the implementation to match the new specification."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The specification has been updated to v3 (`/app/docs/spec_v3.md`)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The changes from v2 include:"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Previously, all metrics used the same delta direction for regression checks (`delta < min_absolute_delta`)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The regression config format changes from `min_absolute_delta`/`min_relative_delta` to `max_delta`/`max_relative_delta` (non-negative values representing maximum allowed worsening)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Update the implementation to match the new specification."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "The specification has been updated to v4 (`/app/docs/spec_v4.md`)."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "The changes from v3 include:"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Update the implementation to add the new `summary` subcommand."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "The specification has been updated to v5 (`/app/docs/spec_v5.md`)."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "The changes from v4 include:"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Update the implementation to support both changes."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "The specification has been updated to v6 (`/app/docs/spec_v6.md`)."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "The changes from v5 include:"
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "**Bootstrap default change (conflict with v2-v5)**: The `--bootstrap` flag for the `evaluate` command now defaults to `0` instead of `1000`."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "This means confidence intervals are no longer computed by default."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "This is a breaking change from v2-v5 where CIs were computed by default with 1000 iterations."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "Update the implementation to match the new specification."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "The specification has been updated to v7 (`/app/docs/spec_v7.md`)."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "The changes from v6 include:"
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "**Regression analysis metric ordering (correction)**: The compare command's regression analysis table in Markdown output previously listed metrics in alphabetical order (using `sort.Strings`)."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "When `--json` is present, the command outputs a JSON object to stdout instead of the text summary line."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "Update the implementation to match the new specification."
+  }
+ ],
+ "nexus-ml-pipeline-system": [
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "When such a step fails, its downstream dependents still execute normally instead of being marked as dependency-failed."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "- If the run exists, delete it from storage so it no longer appears in `pipeline list`, `pipeline history`, or `pipeline status`"
+  }
+ ],
+ "gomlops-platform-modernization": [
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "If any request fails, all subsequent requests are **not** executed and appear in the results with `{\"model_name\": \"...\", \"status\": \"skipped\"}` instead of a normal result or error."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "When all values in the data array are identical (max equals min), the `normalize` transform must return **0.5** for each element instead of 0.0."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "- If a config value (in the step's `config` map) is exactly the string `\"${variable_name}\"`, it is replaced with the numeric value of that variable before the step executes."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "- If a config value is exactly `\"${param.NAME}\"`, it is replaced with the parameter's value, using the correct JSON type: number parameters become JSON numbers, string parameters become JSON strings."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "For example, deleting a run that contributed to a mean aggregation must change the mean value (unless the value happens to remain the same), decrease the count by one, and remove the run's ID from `run_ids`."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "All existing endpoints and behaviors not mentioned above continue to operate as previously specified."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The normalize transform now maps values to the **[-1, 1]** range instead of [0, 1]:"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- This replaces the previous [0, 1] normalization and the 0.5 zero-range behavior entirely."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "### Production Demotion — Staging Instead of Archived"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "When a new version is promoted to production, the previously-production version is now demoted to **staging** instead of archived:"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The `weighted_mean` experiment aggregation now reads weight values from the run's **metrics** map instead of the parameters map:"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- Previously: `weighted_mean` with `weight_param=w` used `run.Parameters[\"w\"]` for the weight."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "All existing endpoints and behaviors not mentioned above continue to operate as previously specified."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "In a chain of demotions (v1->prod, v2->prod demotes v1, v3->prod demotes v2), each demoted version's `demoted_by` reflects the version that *directly* replaced it (v1's `demoted_by` is 2, v2's `demoted_by` is 3)."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "- Removes the direct dependency from `name` to `dep`."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Change the behavior to also handle a single experiment gracefully:"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "All existing endpoints and behaviors not mentioned above continue to operate as previously specified."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- Previously, CSV output was just comma-separated values: `1,2,3`."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "Previously, annotation keys were case-sensitive."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- If the model's registry entry or the loaded version no longer exists in the registry (e.g., model was deleted), `status` is `\"orphaned\"`, `registry_stage` is `\"unknown\"`, and `stage_match` is `false`."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "All existing endpoints and behaviors not mentioned above continue to operate as previously specified."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "- Return **400** if the version no longer exists in the registry (e.g., model was re-created without that version)."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "- This correction enables clients to confirm which run was deleted and preserve its data before it is removed."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "- Change the error from `duplicate step name: X` to `duplicate step name: \"X\"` (with the step name in double quotes)."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "- This correction enables clients to confirm which run was deleted and preserve its data before it is removed."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "All existing endpoints and behaviors not mentioned above continue to operate as previously specified."
+  }
+ ],
+ "mlpipe-inference-pipeline-migration": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- If a registered model's directory no longer exists on disk, commands that access it should report \"model directory not found\" instead of crashing with a raw filesystem error."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "- Remove the JSON file"
+  },
+  {
+   "round": 11,
+   "kind": "rev",
+   "text": "The `prune` command (from Round 10) doesn't update the `profile` output correctly after pruning."
+  }
+ ],
+ "mlpipe-orchestrator": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "Any string value in `params` of any stage containing `${key}` is replaced with the corresponding global param value before execution."
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- `{\"op\": \"label_encode\", \"columns\": [\"col1\", ...]}` — Replace each listed column's values with integers: sort unique values alphabetically, assign 0, 1, 2, ..."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "If it does, the stage is marked as a cache hit and its outputs are loaded from cache instead of being recomputed."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "When `--cv K` is specified, the pipeline is executed in cross-validation mode instead of the standard single-pass mode."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- In the plan output, register stages should have `\"cache_status\": \"uncacheable\"` instead of \"hit\", \"miss\", or \"unknown\"."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "After internal review, we've decided to make several breaking changes to improve consistency and prepare for production deployment."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "Update the cascade logic to distinguish between failed dependencies and skipped dependencies."
+  }
+ ],
+ "mlops-inference-gateway": [
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "No changes to request/response formats."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The model version upload endpoint (`/api/v1/models/{id}/versions`) should use the configured `max_model_size_mb` value instead of the default."
+  }
+ ],
+ "ml-checkpoint-reproducibility-engine": [
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "When all consecutive step changes are exactly equal and non-zero, classify the tensor as `\"stable\"` instead of `\"converging\"`."
+  }
+ ],
+ "sparse-iterative-pde-solver": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- Must support left-preconditioning: replace the residual equation with `M^{-1} r` at each step"
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "Previously the history file had one residual per line with no iteration number."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "For Dirichlet boundary nodes, the system row is replaced with identity and the RHS with the boundary value."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "The convergence history file format specified in round 2 (tab-separated `<iteration>\\t<true_relative_residual>`) is now replaced."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "The residual norms reported by all iterative solvers (`sparse-solve`, `poisson`, `convdiff`, `heat`) change from the 2-norm to the infinity norm (maximum absolute value)."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- `residual:` output line changes from `||b - A*x||_2 / ||b||_2` to `||b - A*x||_inf / ||b||_inf`"
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- `true_residual:` output line changes from `||b - A*x||_2` to `||b - A*x||_inf`"
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- Convergence is still checked using the **2-norm** internally (no change to convergence behavior), but the **reported** residual values use the infinity norm"
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "This affects the stdout output of: `sparse-solve`, `poisson`, `convdiff`, and `heat` (the `max_residual` field in heat output also changes to infinity norm)."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- `--transpose`: If present, compute `y = A^T * x` instead of `y = A * x`"
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "The 3-column convergence history format specified in round 4 is replaced with a **4-column** format:"
+  }
+ ],
+ "sparse-iterative-solver-review": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "When `--analyze` is specified instead of `--solver`, print analysis to stdout:"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "In both the forward and backward sweeps of SSOR, if the diagonal entry for a row is zero, set the corresponding output component to zero instead of dividing."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "**CG non-positive-definite detection must produce partial output instead of exiting.** When CG detects `pAp <= 0`, it must stop iterating and output the current partial solution with the standard fields: `solver`, `preconditioner`, `dimensi"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "**BiCGSTAB breakdown must produce partial output instead of exiting.** When BiCGSTAB detects a breakdown (rho near zero or denominator near zero), it must stop iterating and output the current partial solution with the same standard fields."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "**IC(0) non-positive pivot must fall back instead of exiting.** When IC(0) factorization encounters a non-positive diagonal during factorization, instead of aborting, fall back to no preconditioner: discard the incomplete factor, run the so"
+  }
+ ],
+ "numeriforge-reproducibility-migration": [
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "The previous output tokens must be replaced:"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "- `VERIFIED:` must change to `INTEGRITY_OK:`"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "- `CORRUPTED:` must change to `INTEGRITY_FAIL:`"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Update the verify command and all internal code that produces these messages."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "The audit command's checksum verification should also use the updated terminology in its failure messages (e.g., \"integrity check failed\" instead of \"checksum verification failed\")."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "- When auditing a result that has no seed parameter and no seed in metadata, print `AUDIT_SKIP: <id> (no seed)` instead of crashing or reporting a false failure."
+  }
+ ],
+ "flowr-workflow-orchestrator": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "The base name no longer exists as an executable step after expansion."
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "* The token `${NAME}` where `NAME` matches `^[A-Za-z_][A-Za-z0-9_]*$` is replaced by the resolved value of `NAME`."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "All previously specified behavior continues to hold; the additions are layered on top and must not regress any existing guarantee."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "For every `<key>.json` entry whose output list includes at least one output path that no longer exists on disk (relative to the current directory), the cache file is deleted."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "A step may replace `cmd` with a `pipe:` list:"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Its exit code is recorded but does not change the run's global status."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Its exit code is recorded but does not change the run's global status."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "A step may declare `foreach:` as an alternative fan-out mechanism that, unlike `matrix:`, is resolved **at run time** from the interpolated env, a literal list, or the structured outputs of a previously-executed step."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "When the list is empty, instead of `step_foreach_expanded` the orchestrator emits `step_skipped` with `\"reason\":\"empty_foreach\"` and the base name."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Any change to the workflow on disk since the prior run is ignored (the snapshot is what's executed)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "This event replaces the usual `run_started` in the `events.ndjson` stream — a resumed run emits only `run_resumed`, not `run_started`."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "every occurrence of every raw secret value is replaced byte-for-byte with `***` (three ASCII asterisks)."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Replacement is greedy and non-overlapping; the orchestrator processes longer secret values before shorter ones so that a secret which is a substring of another is replaced as a whole first."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Specifically, before the cache key's canonical JSON object is hashed, every secret raw value in the effective env, in the cmd string, and in any resolved `${step.NAME.output.KEY}` value that has been captured into the cmd/env is replaced wi"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Extend the `flowr` orchestrator with three new feature families and one targeted correction of a previously ambiguous rule."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "* Unresolved foreach nodes gain `shape=\"box3d\"` instead of the default: `  \"<base>\" [label=\"<base>\",shape=\"box3d\"];`."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Previously such paths had implementation-defined behavior; R5 forbids them outright."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "A workflow that relied on `..` in an artifact path must be updated to reference the file directly."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "C2 does not change the rest of F19: `required`, `name`, presence, `size`, `sha256`, the `artifacts_summary` counters, and the downgrade precedence (`missing_output` > `missing_step_output` > `missing_artifact`) are all unchanged."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "It does not change the cache key (artifact paths never participated in cache keys in the first place)."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "For `shared` locks with one or more holders the descriptor is `{mode: \"shared\", holders: [\"<step>\", ...]}` (note `holders` plural key instead of `holder`)."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "Unlike `flowr run`'s validation path (which uses exit 4 for anything short of a valid workflow), `flowr lint` is a strictly additive surface: it never replaces or weakens validation."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "When supplied, and the lint run produces at least one warning, the process exits `7` instead of `0`."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "When absent, warnings never change the exit code."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "All previously documented R1–R5 fields, events, statuses, exit codes, precedence chains, and cache semantics retain their earlier meanings."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "Tests that previously required exit `4` on `--run-id foo.bar` **now require exit `0`**."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "Announce this loudly in any wrapper that previously treated exit `4` from a dotted id as \"validator caught a typo\" — under R7 it is a successful run."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "All previously documented R1–R6 fields, events, statuses, exit codes, precedence chains, and cache semantics retain their earlier meanings EXCEPT for the C3 override."
+  }
+ ],
+ "forgekit-monorepo-build-pipeline": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "**Circular dependency detection is missing.** If someone introduces a dependency cycle, `forge build` enters an infinite loop instead of detecting it."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Changes to the manifest (version, deps, build command, etc.) therefore never invalidate the cache."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Any change to the manifest should trigger a rebuild."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "**Root cause:** `clean_package()` unconditionally removes the entire `build/` directory."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- Do not change the Makefile templates or the build command invocation."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Replace the timestamp-based freshness check with a content hash."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "It does **not** change the message printed by `forge build`."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "When `forge build` skips an unchanged package it must still print the established line `[<pkg>:<profile>] Up to date (cached)` exactly as in prior rounds; do not rename it to `cached`."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "When a package is rebuilt, the old `.stamp` file (if any) is replaced with the new `.hash` file."
+  }
+ ],
+ "jobforge-dag-runner": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "bytes are not valid UTF-8, invalid bytes are replaced with the Unicode"
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "No existing error code is renamed, removed, or renumbered."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "existing error code is renamed, removed, or renumbered."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "## Breaking change to `plan --format text`"
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "- The literal prefix changes from `level <N>: ` to `L<N> [`, with no"
+  }
+ ],
+ "minicc-compiler-evolution": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- String escape sequences (`\\n`, `\\t`, `\\\\`, `\\\"`) are not being processed — the lexer copies backslash characters literally instead of interpreting them."
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- Operator precedence is wrong — comparison operators (`==`, `!=`, `<`, `>`, `<=`, `>=`) are parsed at the same level as `+`/`-`, so `a + b == c` is mis-parsed as `a + (b == c)` instead of `(a + b) == c`."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "Subsequent changes to captured variables in the outer scope do not affect the closure's copies, and vice versa."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "The change only affects scalar values (integers, strings, booleans) which previously were copied as snapshots."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "| `replace`    | `str.replace(old, new)` | Replace the **first** occurrence of `old` with `new` and return the resulting string."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "print \"hello world\".replace(\"world\", \"there\");  // hello there"
+  }
+ ],
+ "buildctl-pipeline-orchestrator": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "Remove the `.buildctl-cache` directory and all its contents."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Adding `--plan` to `--affected` changes the output: instead of `rebuild_order`, output `rebuild_plan` -- an array of arrays (layers)."
+  }
+ ],
+ "hermetic-build-artifact-verifier": [
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "No changes to their input formats, output formats, or error handling."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Existing cached artifacts computed under the old sorted-flag fingerprinting scheme will no longer match and will be rebuilt."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- If the profile has `compiler`, it replaces the target's `compiler`."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "This round changes the `verify` command's behavior and output format, and adds a chain hash to the `audit` command."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "It no longer performs two independent full builds."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Field changes from the previous format:"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "- `first_hash` is replaced by `cached_hash`: the SHA-256 hex digest of the output artifact from the cached/first build."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "- `second_hash` is replaced by `fresh_hash`: the SHA-256 hex digest of the output artifact from the clean rebuild."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "These represent targets that were removed or renamed since the baseline was created."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "This means changing a hook command changes the fingerprint, invalidating the cache."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "Previously, if two profiles happened to produce the same individual fingerprints (unlikely but possible in edge cases), their chain hashes would be identical."
+  }
+ ],
+ "repro-verify-engine": [
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "- When `policy` is present, the process exit code must follow `policy_overall_status` (0 for PASS, 1 for FAIL, 2 for ERROR) instead of the raw verification result."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "Previously it averaged ALL steps' stability values, including steps that appear in only 1 report (trivial stability=1.0)."
+  }
+ ],
+ "eventq-pipeline": [
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "**Atomicity**: `--state-out` must be written by constructing the full payload in memory, writing to `<state-out>.tmp`, then `rename(<state-out>.tmp, <state-out>)`."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "## Semantic changes to the ingest pipeline when state is supplied"
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "- If the existing `--state-out` file parses with `run_index` strictly less than that threshold, overwrite it normally (via the atomic `.tmp`/rename path)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- Writing `--audit-log` uses the same atomicity rule as `--state-out`: build the payload in memory, write to `<audit-log>.tmp`, then rename."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "If both apply (id is in `state.seen_ids` AND there is a same-run duplicate loser), emit `\"cross_run\"` for EVERY occurrence in the current run — the `state.seen_ids` check supersedes the same-run tie-break."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The `.tmp`/rename atomicity still applies."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "the post-rename file)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- The digest is written using the same `.tmp` + rename atomicity as `--audit-log` and `--state-out`."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- The digest file is written AFTER `--audit-log` has been fully renamed into place, so its `sha256` matches the final on-disk audit file."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "## What changed from the audit-log feature"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Every audit-log record that would previously have carried `\"reason\": \"fx_lookup\"` now carries exactly one of:"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "These two codes replace `fx_lookup` wherever it appeared in the audit-log feature vocabulary and precedence table."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "- `--audit-log` bytes CHANGE for events whose reason used to be `fx_lookup`: they now carry `fx_unknown_currency` or `fx_no_rate_for_date` (and, under `--rates-strict`, events with an unusable rate entry carry `fx_bad_rate` instead of `fx_n"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "- `--audit-log-digest` bytes may change correspondingly because its `sha256` reflects the new audit bytes and its `invalid_reasons` histogram contains the new codes instead of `fx_lookup`."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "This is a correction-style change to the accepted record shape."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "It is pretty-printed with **2-space indentation** and a **trailing newline**, and is written via `.tmp`+rename."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "- `manifest_sha256`: 64-char lowercase-hex SHA-256 of the manifest file's on-disk bytes (computed **after** the manifest has been atomically renamed into place)."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "- The manifest is written as `<path>.tmp` and then atomically renamed to `<path>`."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "- The manifest is written **after all other outputs have been finalized**, so the `sha256` / `bytes` fields reflect the final on-disk bytes of those outputs (including the audit log after its own `.tmp+rename`)."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "replaced in full:"
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "instead of a bare string — regardless of `--strict-late-audit`."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "It does not change the per-record shape produced by"
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "This replaces the single-string form."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "not change the rotation rule itself."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "and a **trailing newline**, atomically via `.tmp`+rename (same"
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "indentation and a trailing newline, atomically via `.tmp`+rename."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "atomically renamed into place, so the sha256 is computed over the"
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "rename."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "`--summary-schema-out` sidecar is written (atomic `.tmp`+rename)."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "`os.Rename` to `<path>`."
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "the rejects-format feature does NOT change the audit-log on-disk bytes under any flag combination"
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "`--rejects-format` observe no the rejects-format feature changes to this sidecar at all."
+  },
+  {
+   "round": 10,
+   "kind": "rev",
+   "text": "`fixed-window` replaces that rule for `summary.sessions.total` by"
+  },
+  {
+   "round": 10,
+   "kind": "rev",
+   "text": "is **replaced** — for the sole purpose of computing"
+  },
+  {
+   "round": 11,
+   "kind": "rev",
+   "text": "rename after all other outputs have been finalized."
+  },
+  {
+   "round": 11,
+   "kind": "rev",
+   "text": "Written via `.tmp` + rename after the"
+  },
+  {
+   "round": 11,
+   "kind": "rev",
+   "text": "sharding-report file has been written and renamed into place (so the"
+  },
+  {
+   "round": 11,
+   "kind": "rev",
+   "text": "Written via `.tmp` + rename after the"
+  },
+  {
+   "round": 11,
+   "kind": "rev",
+   "text": "Written via `.tmp` + rename"
+  },
+  {
+   "round": 11,
+   "kind": "rev",
+   "text": "and/or `--sharding-report-histogram` does NOT change the"
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "rename after all other outputs (including every existing sidecar) have"
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "`argv_sha256` is stable across changes to path values (e.g."
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "Written via `.tmp` + rename after the"
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "run-provenance file has been written and renamed into place (so the"
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "`argv_sha256` is invariant under changes to path-valued flag"
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "`env_fingerprint` is invariant under changes to `EVENTQ_*`"
+  },
+  {
+   "round": 13,
+   "kind": "rev",
+   "text": "No new output files, top-level keys, or renamed"
+  },
+  {
+   "round": 13,
+   "kind": "rev",
+   "text": "buffer before `--output` is written via `.tmp` + rename."
+  }
+ ],
+ "flowctl-pipeline-wiring": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- A record that does not satisfy the predicate is removed from the stream."
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- Rename collisions (two entries produce the same output name) are a config"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "would never be renamed, and they are the same on both sides anyway)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "If the pipeline's `join` is changed to `kind: inner`, carol is dropped:"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "## Correction to `sort` — missing key columns no longer abort"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "- `number`-typed key: **missing key columns are no longer a hard"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "counters are **unchanged**; a sort that no longer aborts on missing"
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "previously would have aborted a pipeline due to a missing numeric sort"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "time the value of that column changes from one record to the"
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "## Relaxation to `group` — missing `by` columns are no longer a hard error"
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "Previously: *\"A record missing one of the `by` columns is a hard"
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- A record that lacks a `by` column is **no longer a hard error**."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "- Pipelines that PREVIOUSLY depended on `group` aborting on missing"
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "supplied: a non-empty ordered list of axis specs that replace the"
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "Add a `window` stage for time-based aggregation, and change the"
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "## Change to `rank` — `method: percent` now uses `(r_i - 1) / n_part`"
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "the `max(1, ...)` clamp is removed."
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "of `n_part` records no longer hits `1.0`; instead it tops out at"
+  }
+ ],
+ "deterministic-data-pipeline-go": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "In typical usage this will be a previously ingested (valid) CSV file, but any headered CSV input is allowed."
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "{\"op\": \"rename\", \"from\": \"label\", \"to\": \"category\"},"
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- `rename`: Rename a column."
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "- `drop`: Remove the listed columns."
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "The `having` clause is applied after sorting — it only removes rows, it does not change the relative order of remaining rows."
+  },
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "For each specified column, replace each empty value with the most recent non-empty value seen above it in the same column."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "- The original column is removed and the new columns are inserted at the position where the original column was."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "If `drop` is `true`, remove the original column and insert the new columns at its position (maintaining the same index in the header)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Previously, cells with only one anchor remained empty."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "The `normalize` transform with `\"method\": \"zscore\"` now uses **sample standard deviation** (Bessel's correction) instead of population standard deviation:"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Previously, population standard deviation (`n` denominator) was used."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- `\"type_changed\"`: `\"type changed from <baseline_type> to <current_type>\"`"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- `\"null_rate_change\"`: `\"null rate changed from <baseline_rate> to <current_rate>\"` using `%v` formatting."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- `\"unique_ratio_change\"`: `\"unique ratio changed from <baseline_ratio> to <current_ratio>\"` using `%v` formatting."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "The `verify` command previously used SHA256 for computing file checksums."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "It now uses **BLAKE2b-256** instead."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "- The `.sha256` sidecar files produced during `ingest` and `transform` are **removed** — these commands no longer produce sidecar hash files."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "`manifest` command: produces BLAKE2b-256 checksums instead of SHA256."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "`ingest` command: no longer writes `.sha256` sidecar files."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "`transform` command: no longer writes `.sha256` sidecar files."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "Replace every empty cell in the column with `formatFloat(fillValue)`."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "The `lineage` command previously treated the `\"manifest\"` step's `dir` field as a single input node, creating an edge from `dir` to the manifest output file."
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "- `\"full\"`: replace entire value with `\"****\"`."
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "- `\"partial\"`: keep first 2 characters and last 2 characters, replace middle with `***`."
+  },
+  {
+   "round": 9,
+   "kind": "rev",
+   "text": "If value has 4 or fewer characters, replace with `\"****\"`."
+  },
+  {
+   "round": 10,
+   "kind": "rev",
+   "text": "The `blake2b` JSON field is replaced with two new fields:"
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "When the `method` field is omitted or empty, normalize should now behave exactly like `\"minmax\"` instead of producing empty values."
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "Additionally, when all values in the column are identical (min == max), the default path must output `0` for every row instead of attempting `(value - min) / (max - min)` which would divide by zero."
+  },
+  {
+   "round": 15,
+   "kind": "rev",
+   "text": "The `row_hash` field in the JSON output is now a 64-character lowercase hexadecimal string instead of 32 characters."
+  }
+ ],
+ "lsm-kvstore-engine": [
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "`PUT` without `--ttl` on a key that previously had a TTL clears the TTL."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Second, SCAN now uses an **exclusive** end key."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "The `--reverse` flag still reverses output order but does not change the range boundaries."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "Instead of a single WAL file, use numbered segment files: `wal_000001.log`, `wal_000002.log`, etc."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "If you open a cursor with no flags, seek to a key that exists, then immediately call CURSOR_PREV, you get back the same key you just seeked to instead of the key before it."
+  }
+ ],
+ "service-mesh-health-router": [
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Update the mesh router to fix least-connections tie-breaking and add per-service connection idle timeouts."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "Update the selection logic accordingly."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "Update the `data-store` service config to use `connection_limit_mode = \"per-service\"`."
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "Add log rotation: when `access.log` exceeds 1 MB, rename it to `access.log.1` (overwriting any existing `.1`) and start a fresh `access.log`."
+  },
+  {
+   "round": 6,
+   "kind": "rev",
+   "text": "Update the meshrouter access logging and rate-limit accounting behavior:"
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "Update the existing `api-gateway` service config to set `depends_on = [\"data-store\"]`."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "This replaces the previous single-probe logic."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "Update the existing `cache-layer` service config to set `mirror_endpoint = \"127.0.0.1:8073\"` and `mirror_sample_pct = 100`."
+  }
+ ],
+ "multiservice-deploy-pipeline": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "With `--parallel`, instead of building, output parallelizable build waves — each line lists comma-separated services (alphabetically sorted within each wave) that can be built concurrently."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "This migration changes the build artifact format and version comparison logic across multiple commands."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "**Changes to `validate`** — Additionally validate that every service has a `version` field matching the pattern `N.N.N` (three dot-separated non-negative integers)."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "**Changes to `build`** — Build artifact format changes from `<name>:<timestamp>:built` to `<name>:<version>+build.<timestamp>`, where `<version>` is the service's version from the manifest."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "**Changes to `diff`** — Version comparison now uses semver-first logic:"
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "**Changes to `promote`** — Add downgrade conflict detection and a `--force` flag."
+  },
+  {
+   "round": 3,
+   "kind": "rev",
+   "text": "- The summary line changes to: `Promoted N, skipped M, conflicts C` where C is the number of services blocked by conflicts."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "The rollback output changes to: `ROLLBACK <service> from <env>: <current_version> -> <previous_version>` (or `ROLLBACK <service> from <env>: <current_version> -> (removed)` if no prior version exists)."
+  },
+  {
+   "round": 4,
+   "kind": "rev",
+   "text": "This replaces the environment's entire service set with the snapshot's recorded versions."
+  },
+  {
+   "round": 8,
+   "kind": "rev",
+   "text": "The `state_snapshot` tracks the service's deployment state at the time health was set — when deployment state changes (deploy/rollback/promote), the snapshot no longer matches and the service reverts to default `healthy`."
+  },
+  {
+   "round": 11,
+   "kind": "rev",
+   "text": "**`pipeline.sh audit <environment> --json`** — Output the full report as a single line of valid JSON instead of the human-readable format."
+  }
+ ],
+ "secaudit-log-sentinel": [
+  {
+   "round": 1,
+   "kind": "rev",
+   "text": "If a placeholder references a field not present in the threat (e.g., `{dest_ip}` for brute_force), replace with `\"N/A\"`."
+  },
+  {
+   "round": 2,
+   "kind": "rev",
+   "text": "**Freshness Tiers** (replaces binary TTL):"
+  },
+  {
+   "round": 5,
+   "kind": "rev",
+   "text": "The `dominant_type` field in `timeline` output previously broke ties alphabetically."
+  },
+  {
+   "round": 7,
+   "kind": "rev",
+   "text": "The `escalation_index` in `timeline` was previously defined to sum only **positive** severity deltas."
+  },
+  {
+   "round": 10,
+   "kind": "rev",
+   "text": "Previously it was `2^(-age_minutes / 60.0)`."
+  },
+  {
+   "round": 12,
+   "kind": "rev",
+   "text": "**Fix:** Update the priority_label boundaries to:"
+  }
+ ]
+}
