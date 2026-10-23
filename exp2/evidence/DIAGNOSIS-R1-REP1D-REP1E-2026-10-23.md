@@ -226,3 +226,16 @@ formalizer 的请求（`buildFormalizeRequest`）只有注释原文、审查员�
 - rep1e 参考脚本：对 `checks[]` 中每条有 `reference_script` 的检查，把 `input.files` 写进空目录，脚本存为 `__reference__.py`，`python3 -I` 运行，再用 `json.loads` 读 stdout。21 条都是退出码 0、不是 JSON；K14 没有脚本。
 - official 对比：两份 `cases.json` 的 `cases` 逐键比较。
 - 会话中的文件：解析每个 `apply_patch` 的 `input.patchText`，按 `*** Add File:`、`*** Update File:`、`*** Delete File:` 切分，取 `+` 行作为文件内容。
+
+## 补记：与设计会话结论（rep1e/RESULT.txt）的对照
+
+上文写完并推送（c84fb8d）之后才读 RESULT.txt。
+
+| 点 | RESULT.txt | 本文 | 说明 |
+|---|---|---|---|
+| 分数不动的直接原因 | 执行方每次只改 2–3 行，自述四项未做 | 同 | 一致 |
+| 压缩代码是否由工单造成 | 不是：对照组同档位 R1 也写约 30 行的压缩 main.go（rep1 30 行，修补 15 行、6 行），R2 才重写 | 本文第 1 题的推断里把它列为未能判断 | RESULT 的依据来自对照组的运行目录，不在本次材料里，本文没有核对；按它的依据，本文那条推断里的"工单作为首条消息"一项不成立 |
+| 库检查不准入的条数 | 16/22"所有断言都是 unknown" | 19/22 `admission: "unknown"`，断言数 0 | 本文的数是 `checks[].admission` 和 `assertions.length` 直接计数；RESULT 的口径未写明 |
+| 写检查时有没有告知 | 没有 | 没有 | 一致 |
+| 库检查的参数以程序名开头 | 未提 | 21/22，3 条运行过的都回 "ERROR: unknown command"，G1 因此通过 | RESULT 没有这一条；它的"3 checks ran, 2 leads, 1 guard"未说明这 3 条本身不成立 |
+| `no_input` 条目的输入是否在会话里 | 13/20 | 20/20（verify 的两条还要用同一会话中前一条命令的输出） | 本文按回复中引用的文件名逐个比对（方法见第 2 题）；RESULT 的 13 条口径未写明，可能只数了回复里点名"自己写的文件"的条目 |
