@@ -1,23 +1,14 @@
 import { execFileSync } from "node:child_process"
 import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
-import { discriminate, remeasure } from "./discrimination.js"
-import type { PlatformOptions } from "./platform.js"
 import { join } from "node:path"
-import type { AnchorExtractor } from "./anchors.js"
-import { AuthInvalid, QuotaExhausted, RoleUnavailable, type AttributionTransport, type TokenUsage } from "./attribution.js"
+import { RoleUnavailable, type AttributionTransport, type TokenUsage } from "./attribution.js"
 import { codeFacts, type ChecksTransport } from "./checks.js"
-import type { AdjudicationTransport } from "./adjudication.js"
-import { ledgerOf, type LedgerEntry } from "./ledger.js"
-import { runDigest } from "./verdict.js"
 import type { Product } from "./detect.js"
-import { executeRound, repairMessage, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor } from "./execution.js"
-import { commitStep, git, head, initRepo } from "./git.js"
-import { correctionItems, outputDigest, pairKey, probeStatuses, renderCorrections, type CorrectionItem, type Finding, type JudgeTransport } from "./judge.js"
-import { activeProbes, runProbes, type ProbeRoundRecord, type ProbeTransport } from "./probes.js"
+import { type BuildResult } from "./execution.js"
+import { head } from "./git.js"
 import { addUsage } from "./report.js"
-import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
+import { nullBaseline, type CheckRunner, type ScriptSandbox } from "./runner.js"
 import { Exp2Store } from "./store.js"
-import { buildWorkOrder } from "./workorder.js"
 import { copyProgram, discardCopy, isNoIssues, reviewEntries, reviewRanProgram, reviewRequest, type Reviewer, type ReviewFocus } from "./review.js"
 import { NO_MATERIALS, sessionInput, type ReviewMaterials } from "./materials.js"
 import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalItem, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
@@ -31,21 +22,6 @@ import { coverage, EMPTY_CHECKS } from "./checks.js"
 
 export interface DefectTable { clean: string[]; defects: { name: string; products: string[]; pattern: string }[] }
 
-export interface ProductFindings { product: string; items: CorrectionItem[]; findings: Finding[]; probeKey: (probe: string) => string }
-
-/** Hits per defect (a product's correction list has an item matching the pattern), and items on the clean products. */
-export function scoreDefects(table: DefectTable, lists: readonly ProductFindings[]): { rows: { name: string; hit: string[]; of: string[] }[]; hits: number; total: number; clean: { product: string; items: number }[] } {
-  const by = new Map(lists.map(l => [l.product, l]))
-  const text = (l: ProductFindings, it: CorrectionItem) => `${l.probeKey(it.probe)} ${it.rule.id} ${it.finding}`
-  const rows = table.defects.map(d => {
-    const re = new RegExp(d.pattern, "iu")
-    return { name: d.name, of: d.products, hit: d.products.filter(p => { const l = by.get(p); return !!l && l.items.some(it => re.test(text(l, it))) }) }
-  })
-  return {
-    rows, hits: rows.reduce((n, r) => n + r.hit.length, 0), total: rows.reduce((n, r) => n + r.of.length, 0),
-    clean: table.clean.map(p => ({ product: p, items: by.get(p)?.items.length ?? NaN })),
-  }
-}
 
 export interface OfficialResult { passed: number; total: number; cases: Map<string, boolean> | null }
 
@@ -84,157 +60,10 @@ export function compareCases(before: Map<string, boolean>, after: Map<string, bo
 /** The first line of a repair harness session: what the session is given. */
 export const REPAIR_INTRO = "The Go program in this directory was built from the requirements below. An independent check ran the program and compared what it did with the requirements; the correction list after the requirements is what it found."
 
-// ---------------------------------------------------------------- the two harnesses, with their dependencies passed in
-
-export interface HarnessDeps {
-  store: Exp2Store
-  /** Where computations the judge asks for run (BLOCK11 §4). */
-  sandbox?: ScriptSandbox
-  judge: JudgeTransport
-  /** Rules where the judge's computation and the program disagree; without it the judge does. */
-  ruling?: JudgeTransport
-  build: (dir: string, label: string) => BuildResult
-  runner: CheckRunner
-  timeoutMs: number
-}
-
-export interface DetectedProduct {
-  product: Product
-  built: boolean
-  build_output?: string
-  items: CorrectionItem[]
-  findings: Finding[]
-  ambiguous: Finding[]
-  judge_calls: number
-  judge_tokens: TokenUsage
-  /** The discrimination measure on this product and the strengthening it led to (null when off). */
-  measure: null | { mutants: number; killed: number; survived: number; build_failed: number; score: number | null; weak_units: string[]; strengthened: string[]; still_weak: number; writer_calls: number; writer_tokens: TokenUsage }
-}
-
-/**
- * Writes the round's probes once (unless the state has them). Then, for each product on its own copy of the state:
- * the discrimination measure on the product and the strengthening it calls for (when `mutants` > 0), and the runs
- * and the judge. A product never benefits from another's mutants or verdicts, as a round has only its own program.
- */
-export async function probeDetect(deps: HarnessDeps & { probes: ProbeTransport; root: string; anchors?: AnchorExtractor; mutants?: number; platform?: PlatformOptions; maxRepairs?: number; buildAsync?: (dir: string, label: string) => Promise<BuildResult> }, products: readonly Product[], round = 1): Promise<{ written: ProbeRoundRecord | null; products: DetectedProduct[] }> {
-  const base = deps.store
-  const written = base.inspect().probe_rounds.some(r => r.round === round && r.status === "accepted") ? null : await base.deriveRoundProbes(round, deps.probes)
-  // A writer that could not be reached, or wrote nothing usable, is no result: the harness stops with the cause.
-  if (written?.status === "interrupted") {
-    const i = written.issues?.[0]
-    throw i?.code === "quota" ? new QuotaExhausted(`probe writing: ${i.message}`) : i?.code === "auth" ? new AuthInvalid(`probe writing: ${i.message}`) : new RoleUnavailable("probe writing", i?.message ?? "interrupted")
-  }
-  if (written && written.units.length && !written.entered.length) throw new Error(`probe writing admitted no probe for ${written.units.length} units (${written.calls.length} calls; ${written.dropped.length} dropped)`)
-  const out: DetectedProduct[] = []
-  for (const p of products) {
-    const b = deps.build(p.path, `probe-${p.name}`)
-    if (!b.ok) { out.push({ product: p, built: false, build_output: b.output.slice(0, 2000), items: [], findings: [], ambiguous: [], judge_calls: 0, judge_tokens: zero(), measure: null }); continue }
-    const store = productStore(base, deps.root, p.name)
-    let measure: DetectedProduct["measure"] = null
-    if ((deps.mutants ?? 0) > 0 && deps.anchors) {
-      const calls0 = store.inspect().probe_calls.length
-      const md = { build: deps.build, ...(deps.buildAsync ? { buildAsync: deps.buildAsync } : {}), runner: deps.runner, registry: store.registry(), anchors: deps.anchors.extract(p.path), links: [], timeoutMs: deps.timeoutMs, max: deps.mutants!, platform: deps.platform }
-      const s0 = store.inspect()
-      const d = await discriminate(p.path, b.program!, activeProbes(s0.probes, s0.probe_events).filter(x => x.round <= p.round), md)
-      let entered: string[] = [], after: { still: string[]; killed: string[] } | null = null
-      if (d.weak.length) {
-        const st = await store.strengthen(round, d.weak, deps.probes, { maxRepairs: deps.maxRepairs ?? 2 })
-        if (st.status === "interrupted") throw new RoleUnavailable("probe strengthening", st.issues?.[0]?.message ?? "interrupted")
-        entered = st.entered
-        if (entered.length) { const s1 = store.inspect(); after = await remeasure(p.path, b.program!, activeProbes(s1.probes, s1.probe_events), d, { ...md, registry: store.registry() }) }
-        await store.recordMeasure({ round, label: p.name, sites: d.sites, counts: d.counts, score: d.score, weak: d.weak.map(w => ({ object: w.object, units: w.units, sites: w.sites })), strengthen: { status: st.status, calls: st.calls, entered, dropped: st.dropped }, after })
-      } else await store.recordMeasure({ round, label: p.name, sites: d.sites, counts: d.counts, score: d.score, weak: [], strengthen: null, after: null })
-      const wc = store.inspect().probe_calls.slice(calls0)
-      measure = { mutants: d.mutants.length, ...d.counts, score: d.score, weak_units: [...new Set(d.weak.flatMap(w => w.units))], strengthened: entered, still_weak: after ? after.still.length : d.counts.survived, writer_calls: wc.length, writer_tokens: wc.reduce((t, c) => addUsage(t, c.usage), zero()) }
-    }
-    const s = store.inspect(), probes = activeProbes(s.probes, s.probe_events).filter(x => x.round <= p.round)
-    const runs = await runProbes(probes, b.program!, deps.runner, deps.timeoutMs)
-    const before = store.inspect().judge_calls.length
-    const findings = await store.judge(p.round, runs, deps.judge, { sandbox: deps.sandbox, ...(deps.ruling ? { ruling: deps.ruling } : {}) })
-    const calls = store.inspect().judge_calls.slice(before)
-    out.push({
-      product: p, built: true, findings, items: correctionItems(store.registry(), probes, runs, findings), ambiguous: findings.filter(f => f.verdict === "ambiguous"),
-      judge_calls: calls.length, judge_tokens: calls.reduce((t, c) => addUsage(t, c.usage), zero()), measure,
-    })
-  }
-  return { written, products: out }
-}
-
-/** A product's own copy of the state, under <root>/products/<name>/store: made from the base the first time. */
-export function productStore(base: Exp2Store, root: string, name: string): Exp2Store {
-  const dir = join(root, "products", name, "store")
-  if (!existsSync(join(dir, "exp2-state.json"))) { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, "exp2-state.json"), base.exportState(), "utf8") }
-  const s = base.inspect()
-  return new Exp2Store(dir, s.run_id, s.ablation ?? {})
-}
-
-export interface RepairedProduct {
-  product: Product
-  base: string
-  record: ExecutionRecord | null
-  items_before: string[]
-  open_after: string[]
-  official_before?: OfficialResult
-  official_after?: OfficialResult
-  cases?: ReturnType<typeof compareCases>
-}
-
-/**
- * Repairs each product from its correction list with the round's flow (BLOCK10 §1.5): a copy of its repository, one
- * execution session whose first message is the requirements and the correction list, then the cycles (probes run
- * again on every reply, the judge sees what changed). Scored before and after with the official command, if given.
- */
-export async function repairProducts(deps: HarnessDeps & { storeFor?: (product: Product) => Exp2Store; executor: () => Executor; anchors: AnchorExtractor; limits: ExecutionLimits; binary: string; text: (round: number) => string; score?: (commit: string, repo: string, round: number) => OfficialResult }, products: readonly Product[], root: string): Promise<RepairedProduct[]> {
-  const out: RepairedProduct[] = []
-  for (const p of products) {
-    const workdir = join(root, p.name, "app")
-    if (!existsSync(workdir)) {
-      mkdirSync(join(root, p.name), { recursive: true })
-      if (existsSync(join(p.path, ".git"))) git(join(root, p.name), ["clone", "-q", p.path, workdir])
-      else { cpSync(p.path, workdir, { recursive: true }); initRepo(workdir); commitStep(workdir, "product as given", [["IC-Round", "0"]]) }
-    }
-    const base = head(workdir)
-    const store = deps.storeFor?.(p) ?? deps.store
-    const registry = store.registry()
-    const s = store.inspect(), probes = activeProbes(s.probes, s.probe_events).filter(x => x.round <= p.round)
-    const detect = async (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>) => {
-      const runs = await runProbes(probes, program, deps.runner, deps.timeoutMs)
-      const findings = await store.judge(p.round, runs, deps.judge, { contests, sandbox: deps.sandbox, ...(deps.ruling ? { ruling: deps.ruling } : {}) })
-      return { findings, items: correctionItems(store.registry(), probes, runs, findings, before) }
-    }
-    const b = deps.build(workdir, `repair-${p.name}-base`)
-    if (!b.ok) { out.push({ product: p, base, record: null, items_before: [], open_after: [] }); continue }
-    const start = await detect(b.program!, new Set(), new Map())
-    const official_before = deps.score?.(base, workdir, p.round)
-    if (!start.items.length) { out.push({ product: p, base, record: null, items_before: [], open_after: [], ...(official_before ? { official_before } : {}) }); continue }
-    const requirements = [...registry.sources.values()].filter(x => x.round <= p.round).map(x => deps.text(x.round)).join("\n\n")
-    const text = [
-      REPAIR_INTRO,
-      "", "# Requirements", "", requirements, "", "# Correction list", "",
-      repairMessage("", { ok: true, output: "" }, renderCorrections(start.items, deps.binary)),
-    ].join("\n")
-    const workorder = buildWorkOrder({ registry, round: p.round, library: [], events: [], statuses: probeStatuses(registry, start.findings), runs: [], anchors: deps.anchors.extract(workdir), links: [], steps: [], previous_task: [] })
-    const passed = new Set(start.findings.filter(f => f.verdict === "ok").map(f => pairKey(f.probe, f.unit)))
-    const record = await executeRound(workdir, workorder, text, deps.executor(), {
-      registry, library: [], events: [], links: [], anchors: deps.anchors, build: deps.build, runner: deps.runner, facts: codeFacts(registry, p.round),
-      detect: { passed, program: deps.binary, run: detect },
-    }, deps.limits)
-    const official_after = deps.score?.(head(workdir), workdir, p.round)
-    out.push({
-      product: p, base, record, items_before: start.items.map(i => i.key), open_after: record.open,
-      ...(official_before ? { official_before } : {}), ...(official_after ? { official_after } : {}),
-      ...(official_before?.cases && official_after?.cases ? { cases: compareCases(official_before.cases, official_after.cases) } : {}),
-    })
-  }
-  return out
-}
-
-const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
-
 // ---------------------------------------------------------------- acceptance-only replay (DESIGN §12h E6)
 
 /** Hits per defect over any texts of a product's items, from library checks and probes alike (DESIGN §12h E6). */
-export function scoreTexts(table: DefectTable, lists: readonly { product: string; texts: readonly string[] }[]): ReturnType<typeof scoreDefects> {
+export function scoreTexts(table: DefectTable, lists: readonly { product: string; texts: readonly string[] }[]): { rows: { name: string; hit: string[]; of: string[] }[]; hits: number; total: number; clean: { product: string; items: number }[] } {
   const by = new Map(lists.map(l => [l.product, l]))
   const rows = table.defects.map(d => {
     const re = new RegExp(d.pattern, "iu")
@@ -243,15 +72,13 @@ export function scoreTexts(table: DefectTable, lists: readonly { product: string
   return { rows, hits: rows.reduce((n, r) => n + r.hit.length, 0), total: rows.reduce((n, r) => n + r.of.length, 0), clean: table.clean.map(p => ({ product: p, items: by.get(p)?.texts.length ?? NaN })) }
 }
 
-export interface ReplayDeps {
+// ---------------------------------------------------------------- acceptance-only replay under DESIGN §12i
+
+export interface ReviewReplayDeps {
   store: Exp2Store
   text: (round: number) => string
   attribution: AttributionTransport
   checks: ChecksTransport
-  probes: ProbeTransport
-  judge: JudgeTransport
-  ruling?: JudgeTransport
-  adjudicate?: AdjudicationTransport
   sandbox: ScriptSandbox
   runner: CheckRunner
   build: (dir: string, label: string) => BuildResult
@@ -259,82 +86,6 @@ export interface ReplayDeps {
   root: string
   attributionRepairs?: number
   checkRepairs?: number
-  probeRepairs?: number
-}
-
-export interface ReplayedProduct {
-  product: Product
-  built: boolean
-  build_output?: string
-  ledger: LedgerEntry[]
-  /** The texts the defect table is matched against, per item failing on the program: check and probe items alike. */
-  texts: { id: string; text: string }[]
-  calls: { judge: number; adjudication: number }
-}
-
-/**
- * Acceptance only, no coding (DESIGN §12h E6): builds the checks and probes of rounds 1..N once (attribution, library
- * checks against the null program, probes: whatever the state does not have yet), then, for each frozen program on
- * its own copy of the state, runs the library and the probes of its round on it, rules on disagreements, and folds
- * the result into a ledger. Nothing is changed in any program.
- */
-export async function replayAcceptance(d: ReplayDeps, products: readonly Product[]): Promise<ReplayedProduct[]> {
-  const last = Math.max(...products.map(p => p.round))
-  const nullProgram = nullBaseline(join(d.root, "null-baseline"))
-  for (let r = 1; r <= last; r++) {
-    const s = d.store.inspect()
-    if (!s.rounds.some(x => x.round === r && x.status === "accepted")) {
-      const a = await d.store.ingestRound(r, d.text(r), d.attribution, { maxRepairs: d.attributionRepairs ?? 2 })
-      if (a.status !== "accepted") throw new Error(`attribution of round ${r} did not pass (${a.status})`)
-    }
-    if (d.store.ablation.checks !== false && !d.store.inspect().check_rounds.some(x => x.round === r && x.status === "accepted")) {
-      const c = await d.store.deriveRoundChecks(r, d.checks, { sandbox: d.sandbox, runner: d.runner, baseline: nullProgram, maxRepairs: d.checkRepairs ?? 2, timeoutMs: d.timeoutMs })
-      if (c.status === "interrupted") throw new RoleUnavailable("check derivation", c.issues?.[0]?.message ?? "interrupted")
-    }
-    if (!d.store.inspect().probe_rounds.some(x => x.round === r && x.status === "accepted")) {
-      const w = await d.store.deriveRoundProbes(r, d.probes, { maxRepairs: d.probeRepairs ?? 2 })
-      if (w.status === "interrupted") throw new RoleUnavailable("probe writing", w.issues?.[0]?.message ?? "interrupted")
-    }
-  }
-  const out: ReplayedProduct[] = []
-  for (const p of products) {
-    const b = d.build(p.path, `replay-${p.name}`)
-    if (!b.ok) { out.push({ product: p, built: false, build_output: b.output.slice(0, 2000), ledger: [], texts: [], calls: { judge: 0, adjudication: 0 } }); continue }
-    const store = productStore(d.store, d.root, p.name)
-    const s0 = store.inspect()
-    const verdict = await store.runRoundChecks(p.round, b.program!, d.runner, { verdict: true, timeoutMs: d.timeoutMs, ...(d.adjudicate ? { adjudicate: d.adjudicate } : {}) })
-    const s1 = store.inspect()
-    const probes = activeProbes(s1.probes.filter(x => x.round <= p.round), s1.probe_events.filter(e => e.round <= p.round))
-    const runs = await runProbes(probes, b.program!, d.runner, d.timeoutMs)
-    const findings = await store.judge(p.round, runs, d.judge, { sandbox: d.sandbox, ...(d.ruling ? { ruling: d.ruling } : {}) })
-    const items = correctionItems(store.registry(), probes, runs, findings)
-    const s = store.inspect()
-    const digest = new Map(runs.map(r => [r.probe, outputDigest(r.output)]))
-    const failing = verdict.runs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed")
-    // The program as one cycle that sends nothing: the round's end in the ledger is what fails on it.
-    const cycle = {
-      id: `replay-R${p.round}`, round: p.round, session: "replay", message: "work", commit: "", build: { ok: true, output: "" },
-      runs: verdict.runs.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null })),
-      failing: failing.map(r => r.check), contests: [], corrections: items.map(i => i.key), ambiguous: findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: [],
-      items: [...failing.map(r => ({ id: r.check, digest: runDigest(r), verdict: "not_landed", action: "none" as const })), ...items.map(i => ({ id: i.key, digest: digest.get(i.probe) ?? "", verdict: "wrong", action: "none" as const }))],
-      anchors: [], note: "", usage: zero(),
-    } as CycleRecord
-    const execution = { round: p.round, base: "", head: "", status: "done", task: [], sessions: [], cycles: [cycle], kept: cycle.id, carried: [], open: cycle.corrections, links: [], usage: zero(), final: cycle.items } as ExecutionRecord
-    const ledger = ledgerOf({ ...s, executions: [execution] }, store.registry(s))
-    const checkOf = new Map(s.checks.map(k => [k.id, k]))
-    const probeKey = (id: string) => s.probes.find(x => x.id === id)?.key ?? id
-    const texts = [
-      ...failing.map(r => ({ id: r.check, text: `${checkOf.get(r.check)?.key ?? r.check} ${checkOf.get(r.check)?.blocks.join(" ") ?? ""} ${r.failure?.detail ?? ""}` })),
-      ...items.map(i => ({ id: i.key, text: `${probeKey(i.probe)} ${i.rule.id} ${i.finding}` })),
-    ]
-    out.push({ product: p, built: true, ledger, texts, calls: { judge: s.judge_calls.length - s0.judge_calls.length, adjudication: s.adjudication_calls.length - s0.adjudication_calls.length } })
-  }
-  return out
-}
-
-// ---------------------------------------------------------------- acceptance-only replay under DESIGN §12i
-
-export interface ReviewReplayDeps extends Omit<ReplayDeps, "probes" | "judge"> {
   reviewer: Reviewer
   formalize: FormalizeTransport
   /** The program's name, as the requirements call it. */
@@ -366,6 +117,14 @@ export interface ReviewedProduct {
   calls: { reviews: number; formalize: number }
 }
 
+/** A product's own copy of the state, under <root>/products/<name>/store: made from the base the first time. */
+export function productStore(base: Exp2Store, root: string, name: string): Exp2Store {
+  const dir = join(root, "products", name, "store")
+  if (!existsSync(join(dir, "exp2-state.json"))) { mkdirSync(dir, { recursive: true }); writeFileSync(join(dir, "exp2-state.json"), base.exportState(), "utf8") }
+  const s = base.inspect()
+  return new Exp2Store(dir, s.run_id, s.ablation ?? {})
+}
+
 /** A copy of a product's tree for one review: a clone at HEAD when it is a repository, a plain copy otherwise. */
 function copyProduct(path: string, dir: string): string {
   if (existsSync(join(path, ".git"))) return copyProgram(path, head(path), dir)
@@ -390,7 +149,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
       if (a.status !== "accepted") throw new Error(`attribution of round ${r} did not pass (${a.status})`)
     }
     if (d.store.ablation.checks !== false && !d.store.inspect().check_rounds.some(x => x.round === r && x.status === "accepted")) {
-      const c = await d.store.deriveRoundChecks(r, d.checks, { sandbox: d.sandbox, runner: d.runner, baseline: nullProgram, maxRepairs: d.checkRepairs ?? 2, timeoutMs: d.timeoutMs, staleByReference: false, binary: d.binary, admitInLoop: true })
+      const c = await d.store.deriveRoundChecks(r, d.checks, { sandbox: d.sandbox, runner: d.runner, baseline: nullProgram, maxRepairs: d.checkRepairs ?? 2, timeoutMs: d.timeoutMs, binary: d.binary, admitInLoop: true })
       if (c.status === "interrupted") throw new RoleUnavailable("check derivation", c.issues?.[0]?.message ?? "interrupted")
     }
   }
@@ -403,7 +162,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
     const store = productStore(d.store, d.root, p.name)
     const registry = store.registry()
     const facts = codeFacts(registry, p.round)
-    const verdict = await store.runRoundChecks(p.round, b.program!, d.runner, { verdict: true, timeoutMs: d.timeoutMs, staleByReference: false })
+    const verdict = await store.runRoundChecks(p.round, b.program!, d.runner, { verdict: true, timeoutMs: d.timeoutMs })
     const s = store.inspect()
     const failing = verdict.runs.filter(r => r.outcome === "fail" && r.failure?.reason !== "timeout")
     const leads: ReviewFocus["leads"] = failing.map(r => ({ id: r.check, text: renderEvidence([r], [r.check], s.checks, registry, new Set()) }))

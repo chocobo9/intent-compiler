@@ -16,6 +16,7 @@ import { checkStubTransport } from "./check-stubs.js"
 import { ROUNDS, roundText } from "./inputs.js"
 import { ProcessCrash, serialExecutor, type Injection } from "./serial-executor.js"
 import { SCRIPTS, stubTransport } from "./stubs.js"
+import { standInReview } from "./review-stubs.js"
 
 // Fixed commit dates: the same work gives the same commits, so two runs can be compared commit for commit.
 process.env.GIT_AUTHOR_DATE = "2026-10-20T00:00:00Z"
@@ -40,7 +41,7 @@ function serialIn(dir: string, faults: Faults = {}, fired = new Set<string>()) {
     return attribution(request)
   }
   const serial = new Serial({
-    store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText,
+    ...standInReview(dir), store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText,
     attribution: faultyAttribution, checks, executor: serialExecutor(faults.coding ?? [], fired), executorIsStub: true,
     anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds")),
     limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 1500, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1, callTimeoutMs: 1500 } },
@@ -108,9 +109,9 @@ describe("exp2 block 5: the serial R1–R15 with stand-in model and executor", (
 
   it("interrupted by spent quotas and a crash, the serial resumes from its checkpoints and ends where the uninterrupted one does", async () => {
     const fired = new Set<string>()
-    // The coding quota hits a repair message: R5 still has one (from R7 on the stand-in's unfixed checks are listed
-    // only, DESIGN §12h E3, and a round ends after its work message).
-    const faults: Faults = { attribution: [{ round: 6, kind: "quota" }], coding: [{ round: 5, message: 2, action: "quota" }, { round: 12, message: 1, action: "crash" }] }
+    // The coding quota hits a repair message: R1's (the reviewer reports the stand-in's text sort; later rounds carry
+    // it in the work order and, with no progress, hold it, so they end after the work message).
+    const faults: Faults = { attribution: [{ round: 6, kind: "quota" }], coding: [{ round: 1, message: 2, action: "quota" }, { round: 12, message: 1, action: "crash" }] }
     const waits: number[] = []
     const first = serialIn(b, faults, fired)
     await assert.rejects(first.serial.run({ to: 15, wait: async ms => { waits.push(ms) } }), ProcessCrash)
@@ -123,11 +124,11 @@ describe("exp2 block 5: the serial R1–R15 with stand-in model and executor", (
     assert.deepEqual(comparable(stateB), comparable(stateA))
     for (const round of ROUNDS) assert.equal(meta(b, round).head, meta(a, round).head, `R${round} checkpoint commit`)
     // What the interrupted attempts spent is kept and counted in their rounds' reports.
-    const r6 = second.serial.interruptedAttempts(6), r5 = second.serial.interruptedAttempts(5), r12 = second.serial.interruptedAttempts(12)
+    const r6 = second.serial.interruptedAttempts(6), r1 = second.serial.interruptedAttempts(1), r12 = second.serial.interruptedAttempts(12)
     assert.match(r6[0].reason, /^quota/u)
     assert.equal(r6[0].calls.length, 1)
-    assert.match(r5[0].reason, /^quota/u)
-    assert.ok(r5[0].execution !== null, "the coding progress of the stopped attempt")
+    assert.match(r1[0].reason, /^quota/u)
+    assert.ok(r1[0].execution !== null, "the coding progress of the stopped attempt")
     assert.match(r12[0].reason, /unclean stop/u)
     assert.ok(r12[0].calls.length > 0)
     assert.equal(stateB.reports.find(r => r.round === 6)!.interrupted.attempts, 1)

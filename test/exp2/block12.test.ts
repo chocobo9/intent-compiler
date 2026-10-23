@@ -9,22 +9,19 @@ import { goBuilder } from "../../src/exp2/build.js"
 import { codeFacts } from "../../src/exp2/checks.js"
 import { changeScope, coveredFunctions, ranOnly } from "../../src/exp2/coverage.js"
 import { batchScript } from "../../src/exp2/docker.js"
-import { executeRound, DEFAULT_LIMITS, NO_PROGRESS, type ExecutionDeps, type Executor } from "../../src/exp2/execution.js"
+import { executeRound, DEFAULT_LIMITS, NO_PROGRESS, type ExecutionDeps } from "../../src/exp2/execution.js"
 import { initRepo } from "../../src/exp2/git.js"
 import { computedAgrees, correctionItems, judgeRuns, pairKey, type JudgeRequest } from "../../src/exp2/judge.js"
 import { ledgerOf, ledgerSummary } from "../../src/exp2/ledger.js"
 import { activeProbes, deriveProbes, runProbes, type ProbeRecord } from "../../src/exp2/probes.js"
-import { replayAcceptance, scoreTexts } from "../../src/exp2/acceptance.js"
-import { acceptanceFromLedger, renderReport } from "../../src/exp2/report.js"
+import { acceptanceFromLedger } from "../../src/exp2/report.js"
 import { LocalProcessRunner, LocalScriptSandbox, type ProgramRef } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
-import { runAndJudge, Serial } from "../../src/exp2/serial.js"
+import { runAndJudge } from "../../src/exp2/probe-run.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
-import { checkStubTransport } from "./check-stubs.js"
 import { DROP, FILTER, GO_MOD, MAIN, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
 import { roundText } from "./inputs.js"
 import { filterVerdict, stubJudge, stubProbeWriter } from "./probe-stubs.js"
-import { serialExecutor } from "./serial-executor.js"
 import { StubExecutor, write } from "./stub-executor.js"
 import { stubTransport } from "./stubs.js"
 
@@ -245,73 +242,6 @@ describe("exp2 block 12 E4: each cycle runs what the round's text, the ledger an
   })
 })
 
-/** The stand-in executor, which compares as text in its sort until round `round`, whose work message fixes it. */
-function fixesSortIn(round: number): (r: number) => Executor {
-  const inner = serialExecutor()
-  return r => {
-    const e = inner(r)
-    return { open: async ctx => { const x = await e.open(ctx); let first = true; return { ...x, id: x.id, close: () => x.close(), send: async (m: string) => { const reply = await x.send(m); if (r === round && first) write(ctx.workdir, { "op_sort.go": SORT_NUM }); first = false; return reply } } } }
-  }
-}
-
-/** The independent session, a stand-in that reads the sort and filter for real (DESIGN §12h E3). */
-const rulingSession = stubJudge()
-
-describe("exp2 block 12 E2, E4, E5: the serial's report and ledger", () => {
-  const dir = mkdtempSync(join(tmpdir(), "exp2-b12s-"))
-  const store = new Exp2Store(join(dir, "store"), "b12s", { checks: false })
-  before(async () => {
-    const serial = new Serial({
-      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
-      executor: fixesSortIn(4), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe", true), binary: "dpipe",
-      probes: stubProbeWriter(), judge: stubJudge(), ruling: rulingSession,
-      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 2 } },
-    })
-    assert.equal((await serial.run({ to: 4 })).status, "done")
-  })
-
-  it("each cycle says what it selected and why; the full run, its omissions and the cache share are in the report", () => {
-    const [r1, r2] = store.inspect().reports
-    for (const r of [r1, r2]) {
-      assert.ok(r.probes!.runs_by_cycle.every(c => c.selected), JSON.stringify(r.probes!.runs_by_cycle))
-      assert.ok(r.selection && r.selection.sweep && Array.isArray(r.selection.omissions))
-      assert.ok(r.probes!.cache && "writer" in r.probes!.cache && "judge" in r.probes!.cache)
-      const text = renderReport(r)
-      assert.match(text, /selected checks \d+.*, probes \d+ \(/u)
-      assert.match(text, /Selection: full run before delivery on C\d+\.\d+ \(checks \d+, probes \d+, found \d+\); selection omissions \d+/u)
-      assert.match(text, /Cache reads of input: writer (?:[\d.]+|n\/a), judge (?:[\d.]+|n\/a)/u)
-      assert.match(text, /Ledger: open program wrong \d+ \(confirmed by a ruling \d+\), uncovered \d+, reference pending \d+; listed only \d+/u)
-    }
-    // R2's text changed few units: its first cycle selects by the R1 full run's coverage, not everything.
-    const c = r2.probes!.runs_by_cycle[0]
-    assert.ok((c.selected!.probes["changed text"] ?? 0) + (c.selected!.probes["executed a changed function"] ?? 0) + (c.selected!.probes.everything ?? 0) > 0, JSON.stringify(c.selected))
-  })
-
-  it("a real defect the executor leaves for three rounds, confirmed by the ruling: carried and sent once every round, never listed only; fixed in R4", () => {
-    const s = store.inspect()
-    const ledger = ledgerOf(s, store.registry(s))
-    // The stand-in executor's sort compares as text until R4.
-    const sort = s.probes.find(p => p.key.endsWith("sort-asc"))!
-    const id = pairKey(sort.id, sort.covers[0].unit)
-    const e = ledger.find(x => x.id === id)!
-    assert.deepEqual([e.opened.round, e.opened.cycle], [1, "C1.1"])
-    assert.deepEqual(e.confirmed, { round: 1 }, "the ruling on the unchanged output in R1 upheld it")
-    for (const r of [2, 3, 4]) assert.ok(s.executions[r - 1].carried_in?.some(c => c.id === id), `in R${r}'s work order`)
-    // One send a round: the first cycle in R1, the work order from R2 on; held while it does not change.
-    const sends = (r: number) => e.sent.filter(x => x === `R${r} work order` || x.startsWith(`C${r}.`)).length
-    assert.deepEqual([1, 2, 3, 4].map(sends), [1, 1, 1, 1], JSON.stringify(e.sent))
-    assert.ok(["C1.2", "C2.1", "C3.1"].every(c => e.held.includes(c)), JSON.stringify(e.held))
-    assert.deepEqual(e.rounds, [1, 2, 3])
-    assert.deepEqual([e.end?.how, e.end?.round, e.state], ["fixed", 4, "closed"], JSON.stringify(e.end))
-    assert.equal(rulingSession.requests.filter(q => q.items.some(it => it.units.some(u => u.id === sort.covers[0].unit) && it.contest)).length, 1, "ruled once: the same output keeps the ruling")
-    for (const r of [2, 3]) assert.ok(s.reports[r - 1].ledger!.confirmed.includes(id) && !s.reports[r - 1].ledger!.report_only.some(x => x.id === id), `R${r}: shown as confirmed, not as listed only`)
-    assert.match(renderReport(s.reports[1]), /open program wrong \d+ \(confirmed by a ruling [1-9]\d*\)/u)
-    const saved = JSON.parse(readFileSync(join(dir, "checkpoints", "round-02", "ledger.json"), "utf8")) as typeof ledger
-    assert.ok(saved.some(x => x.id === id && x.confirmed && x.state === "open"))
-    assert.ok(existsSync(join(dir, "checkpoints", "round-02", "ledger.md")))
-  })
-})
-
 describe("exp2 block 12 E5: calls that share an opening wait for the first one's reply", () => {
   it("judge batches and probe groups: the first call ends before any other starts", async () => {
     const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b12c-")), "b12c")
@@ -330,28 +260,6 @@ describe("exp2 block 12 E5: calls that share an opening wait for the first one's
     await judgeRuns(store.registry(), 1, probes, runs, [], slow(stubJudge()), { callId: n => `J${n}`, batchSize: 3 })
     const j = spans.reduce((a, b) => a.start <= b.start ? a : b)
     assert.ok(spans.length >= 4 && spans.filter(s => s !== j).every(s => s.start >= j.end))
-  })
-})
-
-describe("exp2 block 12 E6: acceptance replayed on frozen programs, without coding", () => {
-  it("builds R1's checks and probes once, runs them on each program, and hits the defect table with checks and probes together", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "exp2-b12r-"))
-    const product = (name: string, wrong: boolean) => { const p = join(dir, "src", name); mkdirSync(p, { recursive: true }); write(p, files({ filterWrong: wrong })); return { name, round: 1, path: p } }
-    const store = new Exp2Store(join(dir, "store"), "b12r")
-    const result = await replayAcceptance({
-      store, text: roundText, attribution: stubTransport(), checks: checkStubTransport(), probes: stubProbeWriter(), judge: stubJudge(),
-      adjudicate: async () => ({ stub: true, text: JSON.stringify({ verdict: "check_right", basis: ["R1.S3"], reason: "the text" }) }),
-      sandbox: new LocalScriptSandbox(), runner: new LocalProcessRunner(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), timeoutMs: 10_000, root: dir,
-    }, [product("filter_wrong", true), product("clean", false)])
-    const [wrong, clean] = result
-    const open = (r: typeof wrong) => r.ledger.filter(e => e.state === "open" && e.reason === "program_wrong")
-    assert.ok(open(wrong).some(e => e.source === "probe" && /filter/u.test(store.inspect().probes.find(p => e.id.startsWith(`${p.id}/`))!.key)), "the filter probe item")
-    assert.ok(open(wrong).some(e => e.source === "check"), "and a library check item")
-    assert.ok(!clean.texts.some(t => /filter-gt/u.test(t.text)), JSON.stringify(clean.texts))
-    const score = scoreTexts({ clean: ["clean"], defects: [{ name: "filter keeps the rejected rows", products: ["filter_wrong"], pattern: "filter" }] }, result.map(r => ({ product: r.product.name, texts: r.texts.map(t => t.text) })))
-    assert.deepEqual([score.hits, score.total], [1, 1])
-    assert.ok(wrong.texts.some(t => /^K\d+$/u.test(t.id) && /filter/u.test(t.text)) && wrong.texts.some(t => /^P\d+\//u.test(t.id) && /filter/u.test(t.text)), "both kinds match the defect")
-    assert.equal(store.inspect().probe_rounds.filter(r => r.status === "accepted").length, 1, "written once for both programs")
   })
 })
 

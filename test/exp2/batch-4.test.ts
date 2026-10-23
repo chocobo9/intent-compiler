@@ -101,7 +101,7 @@ describe("batch 4: the serial stops the round, waits and runs it again; nothing 
     const serial = new Serial({
       store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
       executor, executorIsStub: true, anchors: new GoAnchorExtractor(), runner: o.runner ?? new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
-      reviewer: workingReviewer(join(dir, "rb")), formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), trial: wrapTrial(o.trial ?? (() => false)), acceptance: { mode: "review" },
+      reviewer: workingReviewer(join(dir, "rb")), formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), trial: wrapTrial(o.trial ?? (() => false)),
       limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 2 } },
     })
     return { store, serial }

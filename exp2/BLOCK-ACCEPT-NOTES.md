@@ -640,3 +640,154 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 **边界**
 - 没有用真 docker 停机实测，规则按 rep1f 的原话和公开的客户端措辞校准。
 - 一轮中途停下会丢掉这一轮执行方已经做的工作（回到检查点），和配额停轮一样。
+
+## 22. 批 1：摘出路径、本轮包、翻转先分类
+
+设计依据：origin/exp2-pure-ic 的 DESIGN §6a（原文的运行逻辑）和 §12j.7 第 1–12 条；§6a 取代 §2.3/§4.4/§6 里"全部原文交给模型"的写法。测试新增在 `test/exp2/batch-1.test.ts`，其余按下面各项改写或删除。
+
+### 22.1 摘出路径（§12j.4）
+
+**做法**
+- **串行只剩 review 一种流程**：
+  - `Serial.runRound` 去掉 probes 模式那一支（探针写作、带入、`executeRound`、终判探针、变异度量）；
+  - `reviewRound` 去掉探针线索；
+  - `SerialConfig` 去掉 `probes`、`judge`、`ruling`、`adjudicate`、`buildAsync`，`reviewer` 和 `formalize` 改为必填；
+  - `SerialLimits` 去掉 `probeRepairs`、`mutants`、`probeConcurrency`；
+  - `AcceptanceConfig` 去掉 `mode`、`probes`、`staleByReference`；
+  - serial.ts 从 756 行减到 499 行。
+- **代码保留**：`probes.ts`、`judge.ts`、`adjudication.ts`、`discrimination.ts`、`executeRound` 都保留。`runAndJudge`、`verdictCounts` 从 serial 挪到新文件 `probe-run.ts`，直接调用这些模块的测试照旧运行。
+- **裁决（第 1 条）**：`runRoundChecks` 不再接受 `adjudicate`，终判不调用裁决。由此没有裁决 token，报告和 measures 里也就没有这一项。
+- **按引用过期删除（§12j.5）**：`staleChecks` 只剩"自己的依据被改"一条，refers_to、读法、约定三条分支删除。work order 里"受约定修订影响"的任务入口因此不会再触发；代码留着，供 `executeRound` 的旧测试使用。
+- **回放只留 review**：`intent-exp2-replay` 去掉 `--mode probes`，`acceptance.ts` 删掉 `probeDetect`、`repairProducts`、`replayAcceptance`、`scoreDefects`（从 492 行减到 251 行）。
+- **配置**（`local-config.ts`）：
+  - `acceptance.mode` 只接受 review，`probes` 和 `stale_by_reference` 只接受 false。旧配置文件（例如 rep1f、rep1g 的）写的正是这些值，可以照常加载；
+  - `roles: null` 不再允许，因为一轮离不开 formalizer；
+  - 示例配置删掉了不用的 roles 和 `probe_repairs`，加上 `workorder_scope`、`review_scope`。
+- **报告只渲染两组数**（`renderReport`）：
+  - 第一组：§12i 预先登记的一行（measures 去掉 probes、judge 两列 token）；
+  - 第二组：接口计数，即审查条目（报、进、挡、no_input、守恒）、写检查（准入/入库、未告知、丢弃、拒绝调用、未覆盖单位）、守卫（数目、三类翻转、退役、回退）、给出的原文字符数、修订召回；
+  - 其余（阶段、区、对象、台账、各阶段墙钟时间）只在 report.json 里；
+  - `RoundReport.probes` 变为可选，只有旧报告里有。
+
+**删除清单**（恢复方式：`git show 48de051:<路径>`）
+
+| 路径 | 用途 | 引用 |
+|---|---|---|
+| `src/cli/exp2-detect.ts`（38 行） | 第 9 块：库检查跑冻结产物 | package.json bin `intent-exp2-detect`；BLOCK9/12-NOTES、READY-FOR-LOCAL（历史文档，未改） |
+| `src/cli/exp2-probe-detect.ts`（60 行） | 第 10 块：探针检出 | bin `intent-exp2-probe-detect`；BLOCK10/12-NOTES、READY-FOR-LOCAL |
+| `src/cli/exp2-repair.ts`（46 行） | 第 10 块：按纠错单修复 | bin `intent-exp2-repair`；BLOCK10/12-NOTES、READY-FOR-LOCAL |
+| `detect.ts` 的 `detect`、`renderDetect`（97 行） | 上面 detect CLI 的实现 | 只有 block9 的一项测试 |
+| `acceptance.ts` 的 `probeDetect`、`repairProducts`、`replayAcceptance`、`scoreDefects` 及其类型 | 探针检出、修复、probes 回放 | 上面的 CLI；block10、block12 的测试 |
+| serial.ts 的 probes 流程、`measure`、`probe`、`mergeStatuses`、`programName`、`CARRIED_HEADER` | 第 10–12 块的串行 | serial、block10–12 的测试 |
+| `checks.ts` `staleChecks` 的引用、读法、约定分支 | 第 4 块和 §12d 的过期规则 | propagation、recording 测试 |
+
+**测试**
+- 删除 13 项：block10 4 项（带探针的串行 2 项、检出和修复 harness 2 项）、block10c 2 项（编码不等探针写作）、block11 1 项（§6 报告）、block12 3 项（串行的报告和台账 2 项、E6 probes 回放 1 项）、block9 1 项（detect harness）、checks 1 项（裁决退役）、propagation 1 项（约定过期）。
+- 改写到 review 流程：串行类测试（serial、recording、ablation、local、infra）加上替身审查员和 formalizer（`standInReview`）。infra 的五项改测写检查方、formalizer、录音和 replay CLI 的故障。
+- 其余断言随行为一起改：
+  - 过期断言改为不过期；
+  - 第 1 轮计分同时记首次交付，`scored` 由 `[1]` 变为 `[1, 1]`；
+  - 额度注入从 R5 第 2 条消息移到 R1 第 2 条，因为 review 流程里 R5 没有第二条消息。
+
+### 22.2 本轮包（第 6、9 条，§6a 第 3 步）
+
+**做法**
+- **`view.ts`**：
+  - `effectiveText`：块的当前有效文本。被整块取代或撤回的块返回 null；被部分修订的句子删去原文，原位置留 `⟦<id> replaced by <ids>⟧`；amended（代码、表格）保留，并注明以新的为准。
+  - `roundPackage`：本轮的全部块；本轮新增或修订对象的早轮块（当前有效视图）；与这些对象有关系边相连的早轮对象的块（一跳，边的两个方向都算）；未结条目依据的块。每块一次，按轮次和文中顺序排列。
+  - `packageSources`：把本轮包排成审查员读的格式。本轮原文整段给出，早轮的块按轮次标题排，相邻的块按原文接起来。
+- **工单**（`buildWorkOrder` 的 `scope`）：delta 时原文区就是本轮包，all 时同旧版。工单另带 `scope.source_chars` 和 `source_chars_all`，后者是同一工单若给全部原文的字符数。
+- **审查请求**：`review_scope` 默认为 delta，用 `packageSources`。full 同旧版，等同对照组。附录中"早轮原文已审过、作为上下文"和"本轮修订或撤回的早轮原文"两段保留。
+- **配置**：`acceptance.workorder_scope: delta|all`、`review_scope: delta|full`，默认都是 delta；all/full 只作消融。
+- **报告**：`zones.source_scope`、`source_chars`、`source_chars_all`、`source_blocks_all`，审查请求字符数 `review.request_chars`，measures 里的 `sources`；渲染为一行 "Requirements given"。
+
+**验收**（替身串行 R1–R3，真实原文，同一组替身；字符数取自各轮 report.json）
+
+| 轮 | 工单原文区 delta | 工单原文区 all | 审查请求合计 delta | 审查请求合计 full |
+|---|---|---|---|---|
+| R1 | 21,326 | 21,326 | 39,228 | 39,228 |
+| R2 | 29,828 | 46,483 | 30,473 | 45,289 |
+| R3 | 26,129 | 56,260 | 29,286 | 56,719 |
+
+- R1 的本轮包就是 R1 全文，两档相同。
+- R2 的 delta 是 all 的 64%，R3 是 46%。delta 档的大小取决于本轮涉及的对象，all 档随轮次累积增长。
+- R2、R3 的包里，早轮块逐个都能归到这四类之一：本轮新增/修订对象的块、关系边连到的早轮对象的块、未结条目依据的块（测试逐块核对），本轮的块全部在内。工单没有状态区。
+
+### 22.3 任务区只列确认过的失败（第 10 条），状态区删除（第 4 条）
+
+**做法**：`buildWorkOrder` 新增 `confirmed`，取串行带入的条目，即复现过的审查条目和失败的守卫。给了 `confirmed` 时：
+- 任务区的失败证据只来自这些条目（reason 为 confirmed 或 guard failing）；
+- 库检查（假设）的失败和"读法"失败都不进工单；
+- 状态区为空，渲染时不打印该节。
+
+保护区保留，等 15 轮数据再定。
+
+**条款冲突的处理**：第 10 条写"hypothesis 的失败进状态区并标未确认"，第 4 条和 §12j.4 写"状态区删"。按后者实现：假设检查的失败只作为线索交给审查员，不进工单。
+
+### 22.4 翻转先分类、后回退；回退丢代码不丢发现（第 11、2 条）
+
+**做法**（`accept.ts`）
+- **修补周期里的翻转先分类**：
+  - 本轮原文改过它背后的单位（`changedTextBehind`）的，交审查员；
+  - 运行结果为 disputed（只有派生或计算的值不一致、位置不对、输入不全）的，记 `disputed`，作为线索交审查员，不当退化，不送修，也不随台账带入下一轮；
+  - 只有原文未改、又不是 disputed 的翻转才算退化。
+- **只有退化触发回退**：回退的代码改动丢弃，这次修补所针对的条目回到未修好状态：
+  - 下一周期带着"上次修补被回退"的说明再送一次（`Sends.reopen`，每条每轮一次），之后按 Sends 的停送规则处理；
+  - 台账里不再出现 `discarded`；
+  - `cycle.reverted.resent` 记下重送的条目。
+- **本轮出生的守卫没有"背后改动"**：`changedTextBehind` 对 `guard.round >= round` 返回空。
+  - 这是在验收中发现的问题：R1 里每个守卫的对象都"本轮有改动"，分类放到回退之前后，R1 的真退化就永远不会回退。
+  - block-accept 的回退测试（R1 守卫）在这条修好之前失败，修好后通过。
+
+**验收**（R1–R3 真实原文；G77 用合成等价物：R2 的 zscore 句 R2.S11.P5.s3 用总体标准差，守卫按总体公式求值，派生值）
+- **R3 记录了修订**（stub 归属 partial override）：
+  - 修补引入样本标准差，G1 翻转，分类为 changed_text；
+  - 下一次审查请求里有 G1 的问题，审查员替身答 SUPERSEDED，G1 退役；
+  - reverted 0，过滤器的修补保留，最终保留的是最后一个周期。
+- **R3 没有记录修订**（R3.S3 作为 add 归给 normalize，modification 0 条，同 15 轮 R3 的归属）：结果同上，由"守卫的对象本轮有改动"这一条判出。
+- **原文未改、值是原文写明的（verbatim）**：修补把 sort 改坏，回退 1 次；过滤器条目带着说明重送；第三次修补修好；台账里没有 discarded。
+- **原文未改、值是派生的**：sort 守卫翻转记为 disputed。reverted 0，没有送给执行方，下一次审查的线索里有它。
+- **还缺的数据**：15 轮 R3 的真实状态没在分支上。拿到之后，用它重放 G77 那三次修补，确认走的是分类而不是回退。
+
+**行为变化**：审查来源的守卫，期望值大多是 formalizer 派生的。按第 11 条，这类守卫在原文未改时翻转记为 disputed，交审查员确认，不直接送修、也不回退。block-accept 的 sort 守卫测试为此改用写明的值，保留"退化直接送修"那条路径的覆盖。
+
+### 22.5 写检查：拒绝回告、覆盖义务降为报告项（第 7、3 条）
+
+**做法**
+- **拒绝回告**：`beginRoundChecks(round)` 把上一轮被程序当作未知子命令拒绝的库检查标为 stale，cause 为 `refused`。拒绝记录来自上一轮的 check_runs 和各周期运行。reason 写明程序怎么回答的，于是下一次写检查请求的 `stale` 里有它，模型重写这条调用。系统提示里 stale 的说明加了"或其调用被程序拒绝"。
+  - 告知要到下一轮：拒绝只能在有程序之后才知道，而写检查在本轮开头。
+- **覆盖义务**：`deriveChecks` 默认不再把 uncovered 当作问题退回，`acceptance.coverage_obligation: true` 可以恢复。本轮未覆盖的单位数进报告的 "Check writing" 一行（`checks.uncovered`）。`unitsOnce` 保留。
+
+**依据**：第 5 次 R1 的 G1（rep1e K12）；rep1d、rep1e 每次写检查调用都被退回 13–15 条未覆盖（映射表第 4 节）。
+
+**验收**：拒绝的 K1 在下一轮成为 stale/refused，reason 带程序的回答。七次重放的写检查计数与基线相同或更好（22.7）。
+
+### 22.6 修订召回进报告（第 12 条）
+
+**做法**：`revisionRecall(registry, round)` 统计三个数：本轮原文中像修订的段落（含 instead of、previously、no longer、now、formerly、rather than、replace、change），其中作为某条 modification 新文本被记录的段落，以及本轮 modification 的总数。没有被记录的提示段落列出 id。结果放在报告 `revisions`，渲染为 "Revisions recorded" 一行。
+
+**验收**：
+- R3 用 stub 归属时，R3.S3.P1 被记录为修订；
+- 用"不记修订"的归属时，recorded 变少，R3.S3.P1 列在未记录里。
+
+这个数是提示词的命中，不是判定：含 now 的段落未必是修订。
+
+### 22.7 验收汇总
+
+- **七次重放的接口计数**（第 20 节的基线）：`replay-baseline.test.ts` 通过，逐项相同或更好。
+- **故障注入**：批次 C 的五种全部守恒（batch-c 测试通过）。
+- **报告字段**：去掉 probes；新增的 `revisions`、`zones.source_*`、`checks.uncovered`、`measures.sources` 都是本批要求进报告的数。状态 schema 本批未改（批 3）。
+- **离线测试**：见第 14 节第 1 步。
+
+### 22.8 交接（会话额度用完时的状态，2026-10-23）
+
+**已推送**：d5c31ce（重放基线）、48de051（批 4）。本节所在的提交是批 1，可以直接在本地接着做。
+
+**本地还要做的**
+1. 跑全量 `npm test`。会话里第二遍 exp2 测试的状态：未跑完（会话中断）。全量预期是会话结果加上原有的 1 个失败（repair-batch "R3 original counterexample…"）。
+2. 回写第 14 节第 1 步的预期数字；第 4 步的回放命令去掉 `--mode review`（该参数已删）。
+3. G77 的真实重放：把 15 轮 R3 的真实状态（exp2-state.json 和 checkpoints）推到 origin/exp2-pure-ic。然后照 batch-1.test.ts 中 item 11 那组测试的写法，用真实的 guards、guard_events 和 R3 归属重放三次修补，确认翻转走的是分类而不是回退。
+4. 冒烟：等 15 轮（all 档消融）跑完，本地排队跑真实 R1。看接口计数，加上 report.md 的 "Requirements given"、"Revisions recorded" 两行。
+5. 未做、留给批 2：回放的 strict 列（前提降为记录）。
+
+**新的配置项**：`acceptance.workorder_scope`（delta/all）、`review_scope`（delta/full）、`coverage_obligation`（默认 false）；`resume.environment_wait_ms`（批 4）。

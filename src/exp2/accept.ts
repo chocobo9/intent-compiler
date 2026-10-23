@@ -277,16 +277,31 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       born.push(g)
       evs.push({ guard: g.id, round, cycle: id, status: "passing", program: current.program.id })
     }
-    // 2. A repair that made a passing guard fail is reverted, and the leads it answered are dropped (§12i item 4).
-    if (kind === "repair" && flipped.length && good) {
+    // 2. Flips are classified first (§12j.7 item 11): this round's text changed behind the guard, the reviewer's question;
+    // a disputed run (the check's reading or reference against the program), a lead; only the rest are regressions.
+    const flips = flipped.map(gid => {
+      const g = guards.find(x => x.id === gid)!, run = guardRuns.find(x => x.guard === gid)!.run
+      const behind = changedTextBehind(registry, g, library, round, g.check)
+      return { g, run, behind, how: behind.length ? "changed_text" as const : run.failure?.class === "disputed" ? "disputed" as const : "regression" as const }
+    })
+    const breaking = flips.filter(f => f.how === "regression").map(f => f.g.id)
+    // A repair that made a passing guard fail on unchanged text is reverted. The code change goes, the findings stay
+    // (§12j.7 item 2): what the repair was sent for is sent again once, with word of the revert.
+    if (kind === "repair" && breaking.length && good) {
       const revertedAt = Date.now()
       resetTo(workdir, good.commit)
       deps.time?.("revert", revertedAt, Date.now())
       lastCommit = good.commit
-      cycle.reverted = { to: good.commit, guards: flipped, discarded: sentInRepair }
+      cycle.reverted = { to: good.commit, guards: breaking, resent: sentInRepair }
       accept.reverted++
-      for (const sid of sentInRepair) { items.push({ id: sid, digest: "", verdict: "discarded", action: "discarded", why: `the repair made ${flipped.join(", ")} fail; reverted` }); itemChecks.delete(sid) }
-      voidedNote = `Your previous change was reverted by the controller: it made ${flipped.join(", ")} fail, which passed before. The work tree is back at the state before that change.`
+      const seen = record.cycles.flatMap(c => c.items ?? [])
+      for (const sid of sentInRepair) {
+        const last = [...seen].reverse().find(x => x.id === sid)
+        const d = last?.digest ?? ""
+        const plan = sends.reopen(sid) ? sends.plan(sid, d) : { action: "hold" as const, why: "sent again after an earlier revert already" }
+        items.push({ id: sid, digest: d, verdict: last?.verdict ?? "wrong", ...plan, ...(plan.action === "send" ? { why: `the repair was reverted (it made ${breaking.join(", ")} fail); sent again` } : {}) })
+      }
+      voidedNote = `Your previous change was reverted by the controller: it made ${breaking.join(", ")} fail, which passed before. The work tree is back at the state before that change. What it was meant to fix is listed above again.`
       cycle.guards = { run: guardRuns.length, passed: guardRuns.filter(r => r.outcome === "pass").length, failed: guardRuns.filter(r => r.outcome === "fail").length, unknown: guardRuns.filter(r => r.outcome === "unknown").length, flipped, born: [] }
       sentInRepair = []
       current = good
@@ -298,14 +313,17 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         if (r.outcome === "pass" && statusBefore.get(g.id) !== "passing") { evs.push({ guard: g.id, round, cycle: id, status: "passing", program: current.program.id }); items.push({ id: g.id, digest: runDigest(r.run), verdict: "pass", action: "none" }); itemChecks.delete(g.id) }
         if (r.outcome !== "fail") continue
         if (flipped.includes(g.id)) {
-          const behind = changedTextBehind(registry, g, library, round, g.check)
-          evs.push({ guard: g.id, round, cycle: id, status: "failing", program: current.program.id, ...(behind.length ? { changed_text: behind } : {}) })
-          if (behind.length) { accept.guards.flipped_changed_text.push(g.id); asked.delete(g.id) } else { accept.guards.flipped_unchanged.push(g.id); regressions.push({ g, run: r.run }) }
+          const f = flips.find(x => x.g.id === g.id)!
+          evs.push({ guard: g.id, round, cycle: id, status: "failing", program: current.program.id, ...(f.behind.length ? { changed_text: f.behind } : {}), ...(f.how === "disputed" ? { disputed: `${r.run.failure!.reason}: ${r.run.failure!.detail}` } : {}) })
+          if (f.how === "changed_text") { accept.guards.flipped_changed_text.push(g.id); asked.delete(g.id) }
+          else if (f.how === "disputed") accept.guards.flipped_disputed = [...(accept.guards.flipped_disputed ?? []), g.id]
+          else { accept.guards.flipped_unchanged.push(g.id); regressions.push({ g, run: r.run }) }
           continue
         }
-        // Failing already: awaiting the reviewer's word when this round's text stands behind it, a regression otherwise.
+        // Failing already: awaiting the reviewer's word when this round's text stands behind it or the run was disputed,
+        // a regression otherwise.
         const last = [...events].reverse().find(e => e.guard === g.id && e.status === "failing")
-        if (last?.changed_text?.length) continue
+        if (last?.changed_text?.length || last?.disputed) continue
         regressions.push({ g, run: r.run })
       }
       await note(born, evs)
@@ -352,6 +370,17 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         if (leadsGiven.get(r.check) === d) continue
         leadsGiven.set(r.check, d)
         leads.push({ id: r.check, text: renderEvidence([r], [r.check], library, registry, new Set()) })
+        accept.leads.library++
+      }
+      // Guards whose flip was disputed: what they show goes to the reviewer as a lead, never as a regression (§12j.7 item 11).
+      if (!cycle.reverted) for (const r of guardRuns.filter(x => x.outcome === "fail")) {
+        const g = guards.find(x => x.id === r.guard)!
+        const last = [...events].reverse().find(e => e.guard === g.id)
+        if (last?.status !== "failing" || !last.disputed) continue
+        const d = runDigest(r.run)
+        if (leadsGiven.get(g.id) === d) continue
+        leadsGiven.set(g.id, d)
+        leads.push({ id: g.id, text: renderGuardItem(g, guardCheck(g, library), r.run, registry) })
         accept.leads.library++
       }
       for (const l of deps.leads ? await deps.leads(program, id) : []) {

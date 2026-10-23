@@ -4,7 +4,6 @@ import type { Registry } from "./registry.js"
 import type { CheckEvent, CheckRecord } from "./checks.js"
 import type { CheckRun, ObjectStatus } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
-import type { ProbeRoundRecord } from "./probes.js"
 import { pairKey, type Finding } from "./judge.js"
 import type { SweepRecord } from "./execution.js"
 import type { LedgerEntry, LedgerSummary } from "./ledger.js"
@@ -27,7 +26,14 @@ export interface RoundReport {
   /** Calls of attempts that were interrupted and rerun from the checkpoint (their tokens are spent too). */
   interrupted: { attempts: number; stages: { understand: StageCost; acceptance: StageCost; coding: StageCost } }
   scope: string[]
-  zones: { task: number; protect: number; status: number; source_blocks: number; anchors: number }
+  /** source_scope, source_chars, source_chars_all: the source zone's kind and size, and the size every round's text would have (§12j.7 item 9). */
+  zones: { task: number; protect: number; status: number; source_blocks: number; anchors: number; source_scope?: "delta" | "all"; source_chars?: number; source_chars_all?: number; source_blocks_all?: number }
+  /**
+   * How well attribution records revisions (§12j.7 item 12): paragraphs of this round's text that read like a revision
+   * (instead of, now, previously, no longer, …), those of them that are the new text of a recorded modification, and the
+   * modifications recorded this round. The ids of cue paragraphs with no modification are listed.
+   */
+  revisions?: { cue_paragraphs: number; recorded: number; modifications: number; unrecorded: string[] }
   execution: { status: ExecutionRecord["status"]; cycles: number; repairs: number; kept: string | null; failing_at_end: number; contests: number; carried_objects: string[]; sessions: number; broken_sessions: number }
   checks: {
     entered: number; stale: number; retired: number; run: number; passed: number; failed: number
@@ -35,12 +41,15 @@ export interface RoundReport {
     admitted?: number; unknown?: number; unknown_not_fed_back?: number; dropped?: Record<string, number>; normalized?: Record<string, number>
     /** Batch C, effect 2: runs the program refused as it refuses an unknown subcommand, kept from passing. */
     refused_calls?: number
+    /** §12j.7 item 3: units of this round's text with a value or rule no check rests on (reported, not sent back). */
+    uncovered?: number
   }
   /**
    * Probes and judge (BLOCK10), null when off. share: their tokens over the round's coding tokens, all tokens
    * (input, cache, output) and without cache reads. Models as the calls report them.
    */
-  probes: null | {
+  /** Probes and judge are out of the round's path (§12j.4); older reports have them. */
+  probes?: null | {
     writer: StageCost; judge: StageCost; models: { writer: string[]; judge: string[] }
     share: { all: number | null; uncached: number | null }
     active: number; written: number; stale: number; units: number; uncovered: string[]; dropped: number
@@ -101,7 +110,7 @@ export interface RoundMeasures {
   first_delivery: { cycle: string; commit: string } | null
   guards: { at_start: number; at_end: number; born: number }
   /** Guards that passed and fail now (§12i "退化次数"), on changed text and on unchanged text. */
-  regressions: { changed_text: number; unchanged: number }
+  regressions: { changed_text: number; unchanged: number; disputed?: number }
   reverted: number
   premise: { blocked: Record<string, number>; logged: Record<string, number> }
   fallback: { reviews: number; whole: number; items: number; reasons: Record<string, number> }
@@ -110,7 +119,9 @@ export interface RoundMeasures {
   /** Batch C: the round's check writing (admitted of entered, unknown never told) and the reviewer's entries (reported, entered, conservation errors). */
   checks?: { entered: number; admitted: number; unknown_not_fed_back: number; dropped: number; refused_calls: number }
   items?: { reported: number; entered: number; verified: number; logged: number; fallback: number; blocked: number; no_input: number; conservation_errors: number }
-  tokens: Record<"executor" | "attribution" | "checks" | "reviewer" | "formalizer" | "probes" | "judge" | "interrupted_management", RoleTokens>
+  tokens: Record<"executor" | "attribution" | "checks" | "reviewer" | "formalizer" | "interrupted_management", RoleTokens>
+  /** §12j.7 items 6, 9: the source zone's characters (and every round's text's), and the review requests' characters. */
+  sources?: { workorder_scope: "delta" | "all"; workorder_chars: number; workorder_chars_all: number; review_chars: number }
   non_executor_cost: number
 }
 
@@ -138,6 +149,8 @@ export interface ReviewReport {
   coverage: { units: number; covered: number; uncovered: string[] } | null
   /** Cache reads over all input read, per role. */
   cache: { reviewer: number | null; formalizer: number | null }
+  /** Characters of the round's review requests (§12j.7 item 6). */
+  request_chars?: number
 }
 
 export interface AcceptanceSummary {
@@ -221,22 +234,12 @@ export interface ReportInput {
   review?: {
     accept: AcceptRoundRecord
     first_delivery: { cycle: string; commit: string } | null
-    review_calls: readonly { usage: TokenUsage; stub: boolean; model?: string }[]
+    review_calls: readonly { usage: TokenUsage; stub: boolean; model?: string; request_chars?: number }[]
     formalize_calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
     coverage: { units: number; covered: number; uncovered: string[] } | null
   }
-  probes?: null | {
-    calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
-    judge_calls: readonly { usage: TokenUsage; stub: boolean; usage_unknown?: boolean; model?: string }[]
-    record: ProbeRoundRecord | null
-    active: number
-    findings: readonly Finding[]
-    carried_in: number
-  }
 }
 
-const allTokens = (u: TokenUsage) => u.input_tokens + u.cache_read_tokens + u.cache_write_tokens + u.output_tokens
-const uncached = (u: TokenUsage) => u.input_tokens + u.cache_write_tokens + u.output_tokens
 const ratio = (a: number, b: number) => b > 0 ? Math.round(a / b * 1000) / 1000 : null
 
 export function buildReport(i: ReportInput): RoundReport {
@@ -263,28 +266,14 @@ function reportOf(i: ReportInput): RoundReport {
     stages: { understand: stageCost(i.understand), acceptance: stageCost(i.acceptance), coding: codingCost(e, i.executorIsStub) },
     interrupted: { attempts: i.interrupted.attempts, stages: { understand: stageCost(i.interrupted.understand), acceptance: stageCost(i.interrupted.acceptance), coding: i.interrupted.coding } },
     scope: i.registry.roundScope(i.round).map(c => c.object),
-    zones: { task: i.workorder.task.length, protect: i.workorder.protect.length, status: i.workorder.status.length, source_blocks: i.workorder.source.reduce((n, g) => n + g.blocks.length, 0), anchors: i.workorder.anchors.reduce((n, a) => n + a.anchors.length, 0) },
+    zones: { task: i.workorder.task.length, protect: i.workorder.protect.length, status: i.workorder.status.length, source_blocks: i.workorder.source.reduce((n, g) => n + g.blocks.length, 0), anchors: i.workorder.anchors.reduce((n, a) => n + a.anchors.length, 0), ...(i.workorder.scope ? { source_scope: i.workorder.scope.kind, source_chars: i.workorder.scope.source_chars, source_chars_all: i.workorder.scope.source_chars_all, source_blocks_all: i.workorder.scope.blocks_all } : {}) },
+    revisions: revisionRecall(i.registry, i.round),
     execution: {
       status: e.status, cycles: e.cycles.length, repairs: e.cycles.filter(c => c.message === "repair").length, kept: e.kept,
       failing_at_end: e.cycles.find(c => c.id === e.kept)?.failing.length ?? 0, contests: e.cycles.reduce((n, c) => n + c.contests.length, 0),
       carried_objects: e.carried, sessions: e.sessions.length, broken_sessions: e.sessions.filter(s => s.closed === "broken").length,
     },
     checks: i.checks,
-    probes: i.probes ? (() => {
-      const p = i.probes!, writer = stageCost(p.calls), judge = stageCost(p.judge_calls), coding = codingCost(e, i.executorIsStub).tokens
-      const kept = e.cycles.find(c => c.id === e.kept)
-      return {
-        writer, judge, models: { writer: [...new Set(p.calls.flatMap(c => c.model ? [c.model] : []))], judge: [...new Set(p.judge_calls.flatMap(c => c.model ? [c.model] : []))] },
-        share: { all: ratio(allTokens(writer.tokens) + allTokens(judge.tokens), allTokens(coding)), uncached: ratio(uncached(writer.tokens) + uncached(judge.tokens), uncached(coding)) },
-        active: p.active, written: p.record?.entered.length ?? 0, stale: p.record?.stale.length ?? 0, units: p.record?.units.length ?? 0, uncovered: p.record?.uncovered ?? [], dropped: p.record?.dropped.length ?? 0,
-        carried_in: p.carried_in, open_at_end: p.findings.filter(f => f.verdict === "wrong").map(f => pairKey(f.probe, f.unit)),
-        ambiguous_at_end: p.findings.filter(f => f.verdict === "ambiguous").map(f => pairKey(f.probe, f.unit)), broke: kept?.broke ?? [],
-        cases: p.record?.cases ?? null, discrimination: e.cycles.find(c => c.measure)?.measure ?? null,
-        runs_by_cycle: e.cycles.filter(c => c.probe_runs).map(c => ({ cycle: c.id, ...c.probe_runs!, ...(c.sweep ? { sweep: c.sweep } : {}) })),
-        cache: { writer: cacheShare(writer.tokens), judge: cacheShare(judge.tokens) },
-        gaps: { carried_in: p.record?.gaps_in ?? [], open: [...(p.record?.uncovered ?? []), ...(p.record?.cases?.open ?? [])] },
-      }
-    })() : null,
     objects: i.statuses.map(s => ({ object: s.object, name: name(s.object), status: s.status, reasons: s.reasons, passing_strong: s.passing_strong, not_landed: s.not_landed, unknown: s.unknown })),
     loss,
     management_calls: i.understand.length + i.acceptance.length,
@@ -304,22 +293,21 @@ export function roundMeasures(r: RoundReport): RoundMeasures | null {
   const v = r.review
   if (!v) return null
   const plus = (a: StageCost, b: StageCost): StageCost => ({ calls: a.calls + b.calls, tokens: addUsage(a.tokens, b.tokens), stub_calls: a.stub_calls + b.stub_calls })
-  const none: StageCost = { calls: 0, tokens: zeroUsage(), stub_calls: 0 }
   const tokens: RoundMeasures["tokens"] = {
     executor: roleTokens(plus(r.stages.coding, r.interrupted.stages.coding)),
     attribution: roleTokens(r.stages.understand), checks: roleTokens(r.stages.acceptance),
     reviewer: roleTokens(v.reviewer), formalizer: roleTokens(v.formalizer),
-    probes: roleTokens(r.probes?.writer ?? none), judge: roleTokens(r.probes?.judge ?? none),
     interrupted_management: roleTokens(plus(r.interrupted.stages.understand, r.interrupted.stages.acceptance)),
   }
   return {
     round: r.round, wall_ms: r.wall?.round_ms ?? 0, stages_ms: Object.fromEntries((r.wall?.stages ?? []).map(x => [x.stage, x.ms])),
     first_delivery: v.first_delivery,
     guards: { at_start: v.guards.at_start, at_end: v.guards.at_end, born: v.guards.born.length },
-    regressions: { changed_text: v.guards.flipped_changed_text.length, unchanged: v.guards.flipped_unchanged.length },
+    regressions: { changed_text: v.guards.flipped_changed_text.length, unchanged: v.guards.flipped_unchanged.length, disputed: v.guards.flipped_disputed?.length ?? 0 },
     reverted: v.reverted, premise: { blocked: v.premise_blocked, logged: v.premise_logged }, fallback: v.fallback, reviews: v.reviews.length, program_runs_zero: v.program_runs_zero,
     checks: { entered: r.checks.entered, admitted: r.checks.admitted ?? 0, unknown_not_fed_back: r.checks.unknown_not_fed_back ?? 0, dropped: Object.values(r.checks.dropped ?? {}).reduce((a, b) => a + b, 0), refused_calls: r.checks.refused_calls ?? 0 },
     items: { reported: v.items.reported, entered: v.items.sent, verified: v.items.verified, logged: v.items.logged, fallback: v.items.fallback, blocked: v.items.blocked, no_input: (v.premise_blocked.no_input ?? 0) + (v.fallback.reasons.no_input ?? 0), conservation_errors: v.conservation_errors.length },
+    ...(r.zones.source_scope ? { sources: { workorder_scope: r.zones.source_scope, workorder_chars: r.zones.source_chars ?? 0, workorder_chars_all: r.zones.source_chars_all ?? 0, review_chars: v.request_chars ?? 0 } } : {}),
     tokens, non_executor_cost: Math.round(Object.entries(tokens).filter(([k]) => k !== "executor").reduce((n, [, t]) => n + costOf(t), 0)),
   }
 }
@@ -337,78 +325,63 @@ function reviewReport(r: NonNullable<ReportInput["review"]>): ReviewReport {
     conservation_errors: a.conservation_errors ?? [],
     premise_blocked: a.premise_blocked, premise_logged: a.premise_logged ?? {}, fallback: a.fallback ?? { reviews: 0, whole: 0, items: 0, reasons: {} }, program_runs_zero: a.program_runs_zero ?? 0, guards: a.guards, reverted: a.reverted, trial: a.trial, leads: a.leads, coverage: r.coverage,
     cache: { reviewer: cacheShare(reviewer.tokens), formalizer: cacheShare(formalizer.tokens) },
+    request_chars: r.review_calls.reduce((n, c) => n + (c.request_chars ?? 0), 0),
   }
+}
+
+/** Words that mark a paragraph as revising earlier text (§12j.7 item 12); a cue, not a decision. */
+const REVISION_CUE = /\b(?:instead of|previously|no longer|now|formerly|rather than|replac(?:e|es|ed|ing)|changed?)\b/iu
+
+/** The revision-recall measure of a round (§12j.7 item 12), from the registry. */
+export function revisionRecall(registry: Registry, round: number): NonNullable<RoundReport["revisions"]> {
+  const source = registry.sources.get(round)
+  if (!source) return { cue_paragraphs: 0, recorded: 0, modifications: 0, unrecorded: [] }
+  const mods = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round)))
+  const newUnits = mods.flatMap(m => m.by)
+  const within = (inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
+  const cues = source.blocks.filter(b => b.level === "paragraph" && REVISION_CUE.test(b.text))
+  const recorded = cues.filter(p => newUnits.some(u => within(u, p.id) || within(p.id, u)))
+  return { cue_paragraphs: cues.length, recorded: recorded.length, modifications: mods.length, unrecorded: cues.filter(p => !recorded.includes(p)).map(p => p.id) }
 }
 
 const dedupe = (list: { id: string; since: string }[]) => [...new Map(list.map(x => [x.id, x])).values()]
 /** Cache reads over everything read as input (DESIGN §12h E5); null with nothing read. */
 const cacheShare = (u: TokenUsage) => ratio(u.cache_read_tokens, u.input_tokens + u.cache_read_tokens)
 
-const tok = (u: TokenUsage) => `in ${u.input_tokens}, cache read ${u.cache_read_tokens}, out ${u.output_tokens}`
-const reasons = (m: Partial<Record<string, number>>) => { const e = Object.entries(m).filter(([, n]) => n); return e.length ? `${e.reduce((t, [, n]) => t + n!, 0)} (${e.map(([k, n]) => `${k} ${n}`).join(", ")})` : "0" }
-const tallyBy = (list: string[]) => [...list.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>())].map(([k, n]) => `${k} ${n}`).join(", ")
-
-function renderReview(v: ReviewReport, firstScore: null | { passed: number; total: number }): string[] {
-  const by = (m: Record<string, number>) => Object.entries(m).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"
-  return [
-    `Review acceptance: first delivery ${v.first_delivery ? `${v.first_delivery.cycle} ${v.first_delivery.commit.slice(0, 8)}` : "none"}${firstScore ? ` (official ${firstScore.passed}/${firstScore.total})` : ""}; trial runs ${v.trial.runs} (${v.trial.failures} failed); reviews ${v.reviews.length} (void sessions ${v.voided}): ${v.reviews.map(x => `#${x.n} on ${x.cycle}${x.valid ? "" : " void"}${x.no_issues ? " NO ISSUES" : ""}: reported ${x.reported}, blocked ${x.blocked}, malformed ${x.malformed}, sent ${x.sent}${x.fallback ? ` (fallback ${x.fallback}${x.fallback_whole ? ", the whole reply" : ""}: ${by(x.fallback_reasons ?? {})})` : ""}${x.logged ? `, logged ${x.logged}` : ""}${x.superseded.length ? `, superseded ${x.superseded.join(" ")}` : ""}, leads given ${x.leads}${x.program_runs !== undefined ? `, program runs seen ${x.program_runs}` : ""}`).join("; ") || "none"}.`,
-    ...(v.conservation_errors.length ? [`Conservation broken: ${v.conservation_errors.join("; ")}.`] : []),
-    `Reviewer items: reported ${v.items.reported}, entered a repair list ${v.items.sent} (verified ${v.items.verified}, logged ${v.items.logged}, fallback ${v.items.fallback}), blocked ${v.items.blocked}; every entry ended once: ${v.conservation_errors.length ? "no" : "yes"}; premise checks blocked ${Object.values(v.premise_blocked).reduce((a, b) => a + b, 0)} (${by(v.premise_blocked)}), logged and sent ${Object.values(v.premise_logged).reduce((a, b) => a + b, 0)} (${by(v.premise_logged)}); fallback in ${v.fallback.reviews} review(s), ${v.fallback.items} item(s), whole reply ${v.fallback.whole} (${by(v.fallback.reasons)}); reviews with no program run seen ${v.program_runs_zero}.`,
-    `Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}${v.guards.born.length ? ` (${v.guards.born.join(", ")})` : ""}; flips on changed text ${v.guards.flipped_changed_text.length}${v.guards.flipped_changed_text.length ? ` (${v.guards.flipped_changed_text.join(", ")})` : ""}, on unchanged text ${v.guards.flipped_unchanged.length}${v.guards.flipped_unchanged.length ? ` (${v.guards.flipped_unchanged.join(", ")})` : ""}; retired as superseded ${v.guards.retired.length}${v.guards.retired.length ? ` (${v.guards.retired.map(x => x.id).join(", ")})` : ""}; repairs reverted ${v.reverted}.`,
-    `Guard coverage: ${v.coverage ? `${v.coverage.covered}/${v.coverage.units} live units; uncovered ${v.coverage.uncovered.length}${v.coverage.uncovered.length ? ` (${v.coverage.uncovered.slice(0, 25).join(", ")}${v.coverage.uncovered.length > 25 ? ` and ${v.coverage.uncovered.length - 25} more; the full list is in report.json` : ""})` : ""}` : "n/a"}. Leads to the reviewer: library ${v.leads.library}, judgment ${v.leads.judgment}.`,
-    `Reviewer (${v.models.reviewer.join(", ") || "?"}): ${v.reviewer.calls} sessions, ${tok(v.reviewer.tokens)}, cache share ${v.cache.reviewer ?? "n/a"}. Formalizer (${v.models.formalizer.join(", ") || "?"}): ${v.formalizer.calls} calls, ${tok(v.formalizer.tokens)}, cache share ${v.cache.formalizer ?? "n/a"}.`,
-  ]
-}
 
 function renderMeasures(m: RoundMeasures): string {
   const t = (k: keyof RoundMeasures["tokens"]) => `${k} ${m.tokens[k].uncached_input}/${m.tokens[k].cache_read}/${m.tokens[k].output}`
-  return `§12i measures: wall ${(m.wall_ms / 1000).toFixed(0)} s; guards ${m.guards.at_start}→${m.guards.at_end}; regressions ${m.regressions.changed_text + m.regressions.unchanged} (changed text ${m.regressions.changed_text}, unchanged ${m.regressions.unchanged}); reverted ${m.reverted}; fallback reviews ${m.fallback.reviews} (items ${m.fallback.items}); no program run seen ${m.program_runs_zero}; tokens uncached/cache read/out: ${(["executor", "attribution", "checks", "reviewer", "formalizer", "probes", "judge", "interrupted_management"] as const).map(t).join(", ")}; non-executor cost ${m.non_executor_cost} (uncached + 0.1 × cache read + out).`
+  return `§12i measures: wall ${(m.wall_ms / 1000).toFixed(0)} s; guards ${m.guards.at_start}→${m.guards.at_end}; regressions ${m.regressions.changed_text + m.regressions.unchanged} (changed text ${m.regressions.changed_text}, unchanged ${m.regressions.unchanged}); reverted ${m.reverted}; fallback reviews ${m.fallback.reviews} (items ${m.fallback.items}); no program run seen ${m.program_runs_zero}; tokens uncached/cache read/out: ${(["executor", "attribution", "checks", "reviewer", "formalizer", "interrupted_management"] as const).map(t).join(", ")}; non-executor cost ${m.non_executor_cost} (uncached + 0.1 × cache read + out).`
 }
 
+/**
+ * The round report as text (§12j.4): the line §12i registered in advance, and the interface counts. Everything else
+ * (stages, zones, objects, ledger, wall times by stage, …) is in report.json.
+ */
 export function renderReport(r: RoundReport): string {
-  const line = (label: string, c: StageCost) => `| ${label} | ${c.calls} | ${tok(c.tokens)}${c.unknown_usage_calls ? ` (+ ${c.unknown_usage_calls} calls unknown)` : ""} | ${c.stub_calls} |`
-  const count = (s: RoundReport["objects"][number]["status"]) => r.objects.filter(o => o.status === s).length
-  return [
+  const v = r.review
+  const by = (m: Record<string, number>) => Object.entries(m).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"
+  const sum = (m: Record<string, number> | undefined) => Object.values(m ?? {}).reduce((a, b) => a + b, 0)
+  const ids = (list: readonly string[]) => list.length ? ` (${list.join(", ")})` : ""
+  const lines = [
     `# Round ${r.round} report`,
     "",
-    `Official score: ${r.official_score ? `${r.official_score.passed}/${r.official_score.total}` : "(scored locally; empty offline)"}`,
+    `Official score: ${r.official_score ? `${r.official_score.passed}/${r.official_score.total}` : "(scored locally; empty offline)"}${r.first_delivery_score ? `; first delivery ${r.first_delivery_score.passed}/${r.first_delivery_score.total}` : ""}`,
     "",
-    "| Stage | Calls | Tokens | Stand-in calls |",
-    "|---|---|---|---|",
-    line("understanding (attribution)", r.stages.understand),
-    line("acceptance (checks)", r.stages.acceptance),
-    line("coding", r.stages.coding),
-    line("interrupted attempts: understanding", r.interrupted.stages.understand),
-    line("interrupted attempts: acceptance", r.interrupted.stages.acceptance),
-    line("interrupted attempts: coding", r.interrupted.stages.coding),
+    ...(r.measures ? [renderMeasures(r.measures), ""] : []),
+    "Interface counts:",
     "",
-    `Scope: ${r.scope.length} objects. Zones: task ${r.zones.task}, protection ${r.zones.protect}, status ${r.zones.status}, source blocks ${r.zones.source_blocks}, anchors ${r.zones.anchors}.`,
-    `Execution: ${r.execution.status}; ${r.execution.cycles} cycles (${r.execution.repairs} repairs), kept ${r.execution.kept ?? "none"} with ${r.execution.failing_at_end} failing; ${r.execution.contests} contests; carried ${r.execution.carried_objects.length}; sessions ${r.execution.sessions} (${r.execution.broken_sessions} broken).`,
-    ...(r.probes ? [
-      `Probes: ${r.probes.written} written for ${r.probes.units} units (${r.probes.uncovered.length} not exercised, ${r.probes.dropped} dropped), ${r.probes.stale} stale, ${r.probes.active} active. Carried in ${r.probes.carried_in}; open at the end ${r.probes.open_at_end.length}; ambiguous ${r.probes.ambiguous_at_end.length}; broke ${r.probes.broke.length}.`,
-      `Runs per cycle (in batches): ${r.probes.runs_by_cycle.map(c => `${c.cycle} checks ${c.checks}, probes ${c.probes}: judged ${c.judged} (output changed), cached ${c.cached}, by code ${c.by_code}${c.selected ? `; selected checks ${reasons(c.selected.checks)}, probes ${reasons(c.selected.probes)}${c.selected.all ? ` (everything: ${c.selected.all})` : `, ${c.selected.changed_functions} changed functions`}` : ""}${c.sweep ? `; full run: checks ${c.sweep.checks}, probes ${c.sweep.probes}, judged ${c.sweep.judged}, cached ${c.sweep.cached}, by code ${c.sweep.by_code}, found ${c.sweep.found.length}, omissions ${c.sweep.omissions.length}` : ""}`).join("; ") || "none"}.`,
-      ...(r.probes.cache ? [`Cache reads of input: writer ${r.probes.cache.writer ?? "n/a"}, judge ${r.probes.cache.judge ?? "n/a"}.`] : []),
-      `Cases: ${r.probes.cases ? `${r.probes.cases.covered}/${r.probes.cases.total} reached, ${r.probes.cases.excused} uncheckable, ${r.probes.cases.open.length} open` : "n/a"}. Discrimination: ${r.probes.discrimination ? `${r.probes.discrimination.killed} of ${r.probes.discrimination.killed + r.probes.discrimination.survived} mutants told apart (${r.probes.discrimination.build_failed} did not build); weak units ${r.probes.discrimination.weak_units.length}, probes added ${r.probes.discrimination.strengthened.length}, still not told apart ${r.probes.discrimination.still_weak}` : "not run"}.`,
-      `Probe writer (${r.probes.models.writer.join(", ") || "?"}): ${r.probes.writer.calls} calls, ${tok(r.probes.writer.tokens)}. Judge (${r.probes.models.judge.join(", ") || "?"}): ${r.probes.judge.calls} calls, ${tok(r.probes.judge.tokens)}. Share of coding tokens: ${r.probes.share.all ?? "n/a"} (uncached ${r.probes.share.uncached ?? "n/a"}).`,
+    ...(v ? [
+      `- Reviewer items: reported ${v.items.reported}, entered a repair list ${v.items.sent} (verified ${v.items.verified}, logged ${v.items.logged}, fallback ${v.items.fallback}), blocked ${v.items.blocked}; every entry ended once: ${v.conservation_errors.length ? "no" : "yes"}; no_input ${r.measures?.items?.no_input ?? 0}; reviews ${v.reviews.length} (void sessions ${v.voided}); blocked by ${by(v.premise_blocked)}.`,
+      ...(v.conservation_errors.length ? [`- Conservation broken: ${v.conservation_errors.join("; ")}.`] : []),
     ] : []),
-    ...(r.wall ? [`Wall time ${(r.wall.round_ms / 1000).toFixed(0)} s. ${r.wall.stages.map(x => `${x.stage} ${(x.ms / 1000).toFixed(1)} s (${x.spans}×, ${(x.first_start_ms / 1000).toFixed(0)}–${(x.last_end_ms / 1000).toFixed(0)} s)`).join("; ")}.`] : []),
-    ...(r.acceptance ? [
-      `Determinations on the final program: ${r.acceptance.by_kind.A} stated values (A), ${r.acceptance.by_kind.B} by a reference (B), ${r.acceptance.by_kind.C} by judgment (C), all A and B compared by code.`,
-      `Open: program wrong ${r.acceptance.open.program_wrong.length}, uncovered ${r.acceptance.open.uncovered.length}, reference disagreement pending ${r.acceptance.open.reference_pending.length}, ambiguous ${r.acceptance.open.ambiguous.length}; closed as uncheckable ${r.acceptance.open.uncheckable.length}${r.acceptance.open.confirmed?.length ? `; confirmed by a ruling ${r.acceptance.open.confirmed.length}` : ""}${r.acceptance.open.uncheckable.length ? ` (${r.acceptance.open.uncheckable.map(u => u.unit).join(", ")})` : ""}.`,
-    ] : []),
-    ...(r.selection ? [`Selection: full run before delivery on ${r.selection.sweep?.cycle ?? "none"}${r.selection.sweep ? ` (checks ${r.selection.sweep.checks}, probes ${r.selection.sweep.probes}, found ${r.selection.sweep.found.length})` : ""}; selection omissions ${r.selection.omissions.length}${r.selection.omissions.length ? ` (${r.selection.omissions.map(o => `${o.id} since ${o.since}`).join(", ")})` : ""}.`] : []),
-    ...(r.review ? renderReview(r.review, r.first_delivery_score ?? null) : []),
-    ...(r.measures ? [renderMeasures(r.measures)] : []),
-    ...(r.ledger ? [`Ledger: open program wrong ${r.ledger.open.program_wrong.length} (confirmed by a ruling ${r.ledger.confirmed?.length ?? 0}), uncovered ${r.ledger.open.uncovered.length}, reference pending ${r.ledger.open.reference_pending.length}; listed only ${r.ledger.report_only.length}${r.ledger.report_only.length ? ` (${tallyBy(r.ledger.report_only.map(x => x.how))})` : ""}; ended this round ${r.ledger.ended.length}${r.ledger.ended.length ? ` (${tallyBy(r.ledger.ended.map(x => x.how))})` : ""}; sent ${r.ledger.sends} times; held ${r.ledger.held.length}.`] : []),
-    `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
-    ...(r.checks.admitted !== undefined ? [`Check writing: admitted ${r.checks.admitted}/${r.checks.entered}, unknown ${r.checks.unknown ?? 0} (never told the model ${r.checks.unknown_not_fed_back ?? 0}); dropped after the repairs ${Object.values(r.checks.dropped ?? {}).reduce((a, b) => a + b, 0)} (${Object.entries(r.checks.dropped ?? {}).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}); read the one way they could mean: ${Object.entries(r.checks.normalized ?? {}).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}; runs refused as an unknown subcommand ${r.checks.refused_calls ?? 0}.`] : []),
-    `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,
+    `- Check writing: admitted ${r.checks.admitted ?? r.checks.entered}/${r.checks.entered}, unknown never told the model ${r.checks.unknown_not_fed_back ?? 0}; dropped after the repairs ${sum(r.checks.dropped)} (${by(r.checks.dropped ?? {})}); runs refused as an unknown subcommand ${r.checks.refused_calls ?? 0}; units no check rests on ${r.checks.uncovered ?? 0} (reported only).`,
+    ...(v ? [`- Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}; flips on changed text ${v.guards.flipped_changed_text.length}${ids(v.guards.flipped_changed_text)}, on unchanged text ${v.guards.flipped_unchanged.length}${ids(v.guards.flipped_unchanged)}, disputed ${v.guards.flipped_disputed?.length ?? 0}${ids(v.guards.flipped_disputed ?? [])}; retired as superseded ${v.guards.retired.length}${ids(v.guards.retired.map(x => x.id))}; repairs reverted ${v.reverted}.`] : []),
+    ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters in ${r.zones.source_blocks} blocks (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all})${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions` : ""}.`] : []),
+    ...(r.revisions ? [`- Revisions recorded: ${r.revisions.cue_paragraphs} paragraphs of this round's text read like a revision, ${r.revisions.recorded} of them are recorded as revising earlier text; ${r.revisions.modifications} modifications this round${r.revisions.unrecorded.length ? `; cue paragraphs with none: ${r.revisions.unrecorded.slice(0, 20).join(", ")}${r.revisions.unrecorded.length > 20 ? ` and ${r.revisions.unrecorded.length - 20} more` : ""}` : ""}.`] : []),
     "",
-    "| Object | Status | Basis |",
-    "|---|---|---|",
-    ...r.objects.map(o => `| ${o.object} ${o.name} | ${o.status} | ${o.status === "landed" ? `strong pass ${o.passing_strong.join(", ")}` : o.status === "not_landed" ? `not landed ${o.not_landed.join(", ")}` : o.reasons.join(", ")}${o.unknown.length ? `; suspect ${o.unknown.join(", ")}` : ""} |`),
+    "Everything else is in report.json.",
     "",
-    `Loss attribution: no checkable expectation ${r.loss.boundary.length}; IC's own ${r.loss.ic.length} (${r.loss.ic.join(", ")}); executor ${r.loss.executor.length} (${r.loss.executor.join(", ")}).`,
-    "",
-  ].join("\n")
+  ]
+  return lines.join("\n")
 }

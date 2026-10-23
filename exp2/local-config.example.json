@@ -32,8 +32,7 @@
       "repairCycles": 3,
       "maxSessions": 3,
       "callTimeoutMs": 2400000
-    },
-    "probe_repairs": 2
+    }
   },
   "runner": {
     "kind": "docker",
@@ -66,21 +65,9 @@
     "label": "gpt-5.6-luna-fast medium (real)"
   },
   "roles": {
-    "probes": {
-      "model": "gpt-6-sol-fast",
-      "variant": "low"
-    },
-    "judge": {
-      "model": "gpt-6-sol-fast",
-      "variant": "low"
-    },
     "checks": {
       "model": "gpt-6-sol-fast",
       "variant": "low"
-    },
-    "adjudicate": {
-      "model": "gpt-5.6-luna-fast",
-      "variant": "medium"
     },
     "review": {
       "model": "gpt-5.6-luna-fast",
@@ -92,9 +79,8 @@
     }
   },
   "acceptance": {
-    "mode": "review",
-    "probes": false,
-    "stale_by_reference": false,
+    "workorder_scope": "delta",
+    "review_scope": "delta",
     "reviews": 3,
     "trial_fixes": 2,
     "review_agent": "build",

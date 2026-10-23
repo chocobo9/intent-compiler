@@ -32,41 +32,12 @@ describe("exp2 block 4: propagation over the real R1–R15 registry", () => {
     registry = store.registry()
   })
 
-  it("refers_to: when the referenced block is revised, a check resting on the citing block goes stale", () => {
+  it("refers_to: a revision of the referenced block no longer stales a check on the citing block (deleted, §12j.5); a flip of a guard says so", () => {
     // R7's lineage correction says "The `manifest` command scans a directory" (refers_to R1.S5.P2); R10 revises R1.S5.P2.
     assert.ok(registry.references.some(e => e.kind === "refers_to" && e.from === "R7.S1.P2" && e.to === "R1.S5.P2"))
     const citing = libraryCheck("K1", 7, id("lineage"), ["R7.S1.P2"])
     const other = libraryCheck("K2", 7, id("lineage"), ["R7.S1.P3"])
-    assert.deepEqual(staleChecks(registry, [citing, other], [], 9), [], "nothing revised yet")
-    const r10 = staleChecks(registry, [citing, other], [], 10)
-    assert.deepEqual(r10.map(e => [e.check, e.cause]), [["K1", { kind: "refers_to", source: "R1.S5.P2" }]])
-    assert.match(r10[0].reason, /R7\.S1\.P2 refers to R1\.S5\.P2, partly revised in round 10/u)
-  })
-
-  it("a shared convention's revision stales exactly the checks that use it, and only those are derived again", () => {
-    // R5 revises transform (the sidecar clause); filter's checks run through transform's command.
-    const uses = libraryCheck("K1", 1, id("filter"), ["R1.S3.P2.s4"], [id("transform")])
-    const plain = libraryCheck("K2", 1, id("filter"), ["R1.S3.P2.s4"])
-    const sort = libraryCheck("K3", 1, id("sort"), ["R1.S3.P9.s2"])
-    const events = staleChecks(registry, [uses, plain, sort], [], 5)
-    assert.deepEqual(events.map(e => [e.check, e.cause?.kind, e.cause?.source]), [["K1", "convention", id("transform")]])
-    const request = buildCheckRequest(registry, 5, [uses, plain, sort], events)
-    assert.deepEqual(request.stale.map(s => s.id), ["K1"])
-    assert.ok(!request.scope.some(s => s.id === id("filter")), "filter did not change in R5")
-    // A replacement for the stale filter check is admitted; a check for sort (nothing stale, not in scope) is not.
-    const draft = (key: string, object: string, blocks: string[]): CheckDraft => ({
-      key, object, blocks, uses: [id("transform")], direction: "holds", note: null, reference_script: { language: "python", code: "print('{}')" },
-      input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [] },
-      assertions: [{ id: "x", role: "business", target: { kind: "exit_code", path: null, line: null, pointer: null, column: null }, expect_json: "0", tolerance: null, source: { kind: "derived", block: null, quote: null } }],
-    })
-    const issues = checkChecks(registry, 5, { checks: [draft("again", id("filter"), ["R1.S3.P2.s4"]), draft("other", id("sort"), ["R1.S3.P9.s2"])], retire: [] }, [uses, plain, sort], events)
-    assert.deepEqual(issues.map(i => `${i.code}:${i.check}`), ["object_not_in_scope:other"])
-    // The work order lists filter under "affected by a convention revision".
-    const w = buildWorkOrder({ registry, round: 5, library: [uses, plain, sort], events, statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [] })
-    const filter = w.task.find(t => t.object === id("filter"))!
-    assert.deepEqual(filter.why, ["convention"])
-    assert.deepEqual(filter.conventions, [{ convention: id("transform"), checks: ["K1"] }])
-    assert.match(renderWorkOrder(w), /affected by the revision of convention O\d+ \(checks K1 to be derived again\)/u)
+    assert.deepEqual(staleChecks(registry, [citing, other], [], 10), [])
   })
 
   it("a check made stale by its basis is derived again in the same round even outside the scope, without entering the task zone", () => {

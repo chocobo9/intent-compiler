@@ -357,7 +357,7 @@ describe("fix block B3, B4: checks written beside the coding; the §12i measures
     const serial = new Serial({
       store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: slowChecks(checkStubTransport(), 400),
       executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
-      reviewer: workingReviewer(join(dir, "rb")), formalize: stubFormalizer({ filter: FILTER_UNIT, sort: FILTER_UNIT }), trial: goTrial(), acceptance: { mode: "review" },
+      reviewer: workingReviewer(join(dir, "rb")), formalize: stubFormalizer({ filter: FILTER_UNIT, sort: FILTER_UNIT }), trial: goTrial(),
       limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 2 } },
     })
     assert.equal((await serial.run({ to: 2 })).status, "done")
@@ -379,9 +379,9 @@ describe("fix block B3, B4: checks written beside the coding; the §12i measures
     assert.deepEqual(lines.map(m => m.round), [1, 2])
     for (const m of lines) {
       assert.ok(m.wall_ms > 0 && m.stages_ms.coding >= 0 && m.first_delivery && m.reviews >= 1)
-      for (const k of ["executor", "attribution", "checks", "reviewer", "formalizer", "probes", "judge", "interrupted_management"] as const) assert.ok(typeof m.tokens[k].uncached_input === "number" && typeof m.tokens[k].cache_read === "number" && typeof m.tokens[k].output === "number", k)
+      for (const k of ["executor", "attribution", "checks", "reviewer", "formalizer", "interrupted_management"] as const) assert.ok(typeof m.tokens[k].uncached_input === "number" && typeof m.tokens[k].cache_read === "number" && typeof m.tokens[k].output === "number", k)
       assert.ok(typeof m.regressions.changed_text === "number" && typeof m.fallback.items === "number" && typeof m.program_runs_zero === "number" && typeof m.premise.logged === "object")
-      const t = m.tokens, cost = Math.round([t.attribution, t.checks, t.reviewer, t.formalizer, t.probes, t.judge, t.interrupted_management].reduce((n, x) => n + x.uncached_input + 0.1 * x.cache_read + x.output, 0))
+      const t = m.tokens, cost = Math.round([t.attribution, t.checks, t.reviewer, t.formalizer, t.interrupted_management].reduce((n, x) => n + x.uncached_input + 0.1 * x.cache_read + x.output, 0))
       assert.equal(m.non_executor_cost, cost)
     }
     assert.match(renderReport(store.inspect().reports[0]), /§12i measures: wall \d+ s; guards \d+→\d+; regressions \d+ .*non-executor cost \d+/u)

@@ -158,7 +158,7 @@ export interface CheckEvent {
    */
   by: "model" | "code"
   /** What set it off (DESIGN §4.3–4.5): the check's own basis, a block it refers to, a convention it uses, … */
-  cause?: { kind: "basis" | "refers_to" | "convention" | "suspect" | "proposal" | "adjudicated"; source: string }
+  cause?: { kind: "basis" | "refers_to" | "convention" | "suspect" | "proposal" | "adjudicated" | "refused"; source: string }
 }
 
 // ---------------------------------------------------------------- staleness (DESIGN §8, block 2 review item 3)
@@ -216,38 +216,25 @@ export function replacedBasis(registry: Registry, units: readonly string[], sinc
 const verb = (kind: string) => kind === "partial" ? "partly revised" : kind === "withdraw" ? "withdrawn" : "replaced"
 
 /**
- * Active checks that code marks stale in `round` (DESIGN §8 review item 3, §4.3, §4.5): their own basis was replaced
- * or modified after they entered; a block their basis refers to (refers_to) was; or a convention in their `uses`
- * changed. Each event names its cause.
+ * Active checks that code marks stale in `round` (DESIGN §8 review item 3): their own basis was replaced or modified
+ * after they entered. Staleness through references, readings and conventions is gone (§12j.5: of 54 such expiries in
+ * block 12, 31 should not have happened); a flip of a guard is what says a check is out of date.
  */
-export function staleChecks(registry: Registry, library: readonly CheckRecord[], events: readonly CheckEvent[], round: number, options: { byReference?: boolean } = {}): CheckEvent[] {
+export function staleChecks(registry: Registry, library: readonly CheckRecord[], events: readonly CheckEvent[], round: number): CheckEvent[] {
   return activeChecks(library, events).flatMap((c): CheckEvent[] => {
-    const basis = basisOf(registry, c)
-    const own = replacedBasis(registry, basis, c.round, round)
-    if (own.length) {
-      const h = own[0]
-      return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "basis", source: h.unit }, reason: `basis ${h.unit}: ${h.parts.join(", ")} ${verb(h.kind)} in round ${h.round} by ${h.by.join(", ")}` }]
-    }
-    // Staleness inferred from what the basis refers to, from unstated readings and from conventions used: off under
-    // DESIGN §12i item 6, where only a deterministic flip of a guard says a check is out of date.
-    if (options.byReference === false) return []
-    const refs = registry.references.filter(e => e.kind === "refers_to" && basis.some(u => within(registry, e.from, u) || within(registry, u, e.from)))
-    for (const e of refs) {
-      const hit = replacedBasis(registry, registry.referredText(e), c.round, round)
-      if (hit.length) return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "refers_to", source: e.to }, reason: `${e.from} refers to ${e.to}, ${verb(hit[0].kind)} in round ${hit[0].round} by ${hit[0].by.join(", ")}` }]
-    }
-    // A check resting on an unstated reading: later text that names its basis or its object may state it (§12d item 10).
-    const readings = c.assertions.filter(a => a.reading)
-    if (readings.length) {
-      const later = registry.references.find(e => e.round > c.round && e.round <= round && (e.to === c.object || basis.some(u => within(registry, e.to, u) || within(registry, u, e.to))))
-      if (later) return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "refers_to", source: later.from }, reason: `${later.from} (round ${later.round}) ${later.kind} ${later.to}, which this check reads as: ${readings.map(a => a.reading).join("; ")}` }]
-    }
-    for (const u of c.uses) {
-      const change = registry.changes.find(ch => ch.object === u && ch.round > c.round && ch.round <= round)
-      if (change) return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "convention", source: u }, reason: `uses ${u} (${registry.objects.get(u)?.name ?? u}), changed in round ${change.round} (${change.id})` }]
-    }
-    return []
+    const own = replacedBasis(registry, basisOf(registry, c), c.round, round)
+    if (!own.length) return []
+    const h = own[0]
+    return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "basis", source: h.unit }, reason: `basis ${h.unit}: ${h.parts.join(", ")} ${verb(h.kind)} in round ${h.round} by ${h.by.join(", ")}` }]
   })
+}
+
+/**
+ * Active checks the program refused in `round - 1` as it refuses an unknown subcommand (§12j.7 item 7): stale in
+ * `round`, so their writer hears why and writes them again. `refused`: the check ids, with what the program answered.
+ */
+export function refusedChecks(library: readonly CheckRecord[], events: readonly CheckEvent[], round: number, refused: ReadonlyMap<string, string>): CheckEvent[] {
+  return activeChecks(library, events).filter(c => refused.has(c.id)).map(c => ({ check: c.id, round, status: "stale" as const, by: "code" as const, cause: { kind: "refused" as const, source: c.id }, reason: `the program refused the call: ${refused.get(c.id)}; write the call the requirements give for this command` }))
 }
 
 // ---------------------------------------------------------------- source facts
@@ -840,7 +827,7 @@ export type AdmitCheck = (k: CheckDraft) => Promise<{ issues: CheckIssue[]; note
 
 const ADMISSION_CODES: ReadonlySet<CheckIssueCode> = new Set(["reference_output", "reference_value_missing", "methods_disagree", "computed_missing"])
 
-export async function deriveChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], transport: ChecksTransport, options: { maxRepairs: number; callId: (n: number) => string; unitsOnce?: boolean; binary?: string | null; admit?: AdmitCheck }): Promise<DeriveOutcome> {
+export async function deriveChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], transport: ChecksTransport, options: { maxRepairs: number; callId: (n: number) => string; unitsOnce?: boolean; binary?: string | null; admit?: AdmitCheck; coverageObligation?: boolean }): Promise<DeriveOutcome> {
   const calls: CheckCallRecord[] = []
   const facts = codeFacts(registry, round)
   let draft = EMPTY_CHECKS
@@ -879,7 +866,8 @@ export async function deriveChecks(registry: Registry, round: number, library: r
     if (shape.length) { issues = shape.map(message => ({ code: "shape" as const, message })); record.issues = issues; continue }
     draft = applyChecksPatch(draft, parsed as ChecksPatch)
     for (const k of draft.checks) { const notes = normalizeDraft(k, options.binary ?? null); if (notes.length) normalized[k.key] = [...new Set([...(normalized[k.key] ?? []), ...notes])] }
-    issues = [...checkChecks(registry, round, draft, library, events, facts, { unitsOnce: options.unitsOnce }), ...coverageIssues(registry, coverage(registry, round, draft, library, events), draft, library, events)]
+    // What the checks leave uncovered is reported, not sent back (§12j.7 item 3), unless the obligation is switched on.
+    issues = [...checkChecks(registry, round, draft, library, events, facts, { unitsOnce: options.unitsOnce }), ...(options.coverageObligation ? coverageIssues(registry, coverage(registry, round, draft, library, events), draft, library, events) : [])]
     // Admission inside the loop (batch C, effect 1): what the reference script gives, for checks with no other problem.
     if (options.admit) for (const k of draft.checks.filter(c => !issues.some(i => i.check === c.key))) {
       const a = await admit(k)
@@ -984,7 +972,7 @@ export const CHECKS_SCHEMA = {
 
 export const CHECKS_SYSTEM_PROMPT = [
   "You write acceptance checks for a command-line program from its requirements. `sources` holds every round so far, annotated with block ids; the original text is the only authority and newer text overrides older text.",
-  "Write checks for the objects in `scope` (they changed this round), and to replace the checks in `stale` (whose source, a block they refer to, or a convention they use changed); for no other object. A check runs the program once: `input.files` are written into an empty directory, the program is called with `input.args`, and each assertion reads one fact of the result. Command names, options and JSON keys must be those the requirements' code fragments show.",
+  "Write checks for the objects in `scope` (they changed this round), and to replace the checks in `stale` (whose source changed, or whose call the program refused; each says why); for no other object. A check runs the program once: `input.files` are written into an empty directory, the program is called with `input.args`, and each assertion reads one fact of the result. Command names, options and JSON keys must be those the requirements' code fragments show.",
   "Every expected value needs a source: verbatim when the requirement states it (give the id of the block, sentence or clause that states it; do not copy the text), derived when you computed it from the input; for derived values also write `reference_script`, an independent computation from the input files that prints {assertion id: value}. Only values on which both agree are kept. Never compute a cryptographic digest yourself: an expected one is source computed, and one an input file needs is written as {{computed:NAME}} in the file, with the reference script printing NAME's value; the code fills it in before the program runs.",
   "One assertion reads one fact. A fact that rests on a reading the text does not state goes in its own assertion, apart from the facts that do not, and names that reading in `reading`; a failure of such an assertion is reported, not counted against the program.",
   "Keep convention facts (a shared error format, an output-formatting rule) in their own assertions with role convention, and list those conventions in `uses`; business facts are the object's own behaviour.",

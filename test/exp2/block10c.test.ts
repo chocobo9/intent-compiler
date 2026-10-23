@@ -11,61 +11,16 @@ import { executeRound, DEFAULT_LIMITS } from "../../src/exp2/execution.js"
 import { initRepo } from "../../src/exp2/git.js"
 import { correctionItems } from "../../src/exp2/judge.js"
 import { activeProbes, runProbes } from "../../src/exp2/probes.js"
-import { renderReport } from "../../src/exp2/report.js"
-import { LocalProcessRunner, LocalScriptSandbox, type ScriptResult } from "../../src/exp2/runner.js"
-import { Serial } from "../../src/exp2/serial.js"
+import { LocalProcessRunner, type ScriptResult } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
-import { checkStubTransport } from "./check-stubs.js"
 import { DROP, FILTER, GO_MOD, MAIN, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
 import { roundText } from "./inputs.js"
 import { stubJudge, stubProbeWriter } from "./probe-stubs.js"
-import { serialExecutor } from "./serial-executor.js"
 import { StubExecutor, write } from "./stub-executor.js"
 import { stubTransport } from "./stubs.js"
 
 /** BLOCK10 §9: probe work off coding's critical path, stage wall times, and limits on the program under test. */
-describe("exp2 block 10c: coding does not wait for probe writing", () => {
-  async function run(dir: string, delayMs: number) {
-    const store = new Exp2Store(join(dir, "store"), "b10c", { checks: false })
-    const writer = stubProbeWriter()
-    const sent: number[] = []
-    const inner = serialExecutor()
-    const serial = new Serial({
-      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
-      executor: round => { const e = inner(round); return { open: async ctx => { const s = await e.open(ctx); return { ...s, id: s.id, send: async (m: string) => { sent.push(Date.now()); return s.send(m) }, close: () => s.close() } } } },
-      executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
-      probes: async r => { await new Promise(res => setTimeout(res, delayMs)); return writer(r) }, judge: stubJudge(),
-      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, mutants: 0, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
-    })
-    assert.equal((await serial.run({ to: 1 })).status, "done")
-    return { store, sent }
-  }
-  let slow: Awaited<ReturnType<typeof run>>, fast: Awaited<ReturnType<typeof run>>
-  before(async () => {
-    slow = await run(mkdtempSync(join(tmpdir(), "exp2-b10c-")), 1500)
-    fast = await run(mkdtempSync(join(tmpdir(), "exp2-b10c-")), 0)
-  })
-
-  it("the first coding message goes out before probe writing ends; the report says when each stage ran", () => {
-    const r1 = slow.store.inspect().reports[0]
-    const stage = (name: string) => r1.wall!.stages.find(s => s.stage === name)!
-    const writing = stage("probe writing"), coding = stage("coding")
-    assert.ok(coding.first_start_ms < writing.last_end_ms, `coding started at ${coding.first_start_ms} ms, probe writing ended at ${writing.last_end_ms} ms`)
-    // Three groups at a time over six groups, 1.5 s a call: writing takes at least 3 s; the first message went out before.
-    assert.ok(writing.ms >= 3000)
-    for (const s of ["attribution", "probe writing", "coding", "build", "probe runs", "judging", "waiting for probes"]) assert.ok(r1.wall!.stages.some(x => x.stage === s), `stage ${s}`)
-    // The full run before delivery is the round's final run (DESIGN §12h E4): no second "final probes" run.
-    assert.ok(r1.selection?.sweep && !r1.wall!.stages.some(x => x.stage === "final probes"))
-    assert.match(renderReport(r1), /Wall time \d+ s\. attribution .*probe writing \d+\.\d s \(1×, \d+–\d+ s\).*coding \d+\.\d s/u)
-  })
-
-  it("the same probes, verdicts and outcome as when the writer is fast", () => {
-    const pick = (s: Exp2Store) => { const x = s.inspect(); return { probes: x.probes, rounds: x.probe_rounds.map(r => ({ ...r, calls: r.calls.length })), judgments: x.judgments.map(j => ({ ...j, call: null })), objects: x.reports[0].objects, open: x.executions[0].open } }
-    assert.deepEqual(pick(slow.store), pick(fast.store))
-  })
-})
-
 describe("exp2 block 10c: a program under test cannot exhaust the host", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-b10m-"))
   const store = new Exp2Store(join(dir, "store"), "b10mem", { checks: false })

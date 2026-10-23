@@ -49,7 +49,8 @@ const resolved = (id: string, t: CheckRecord["assertions"][number]["target"], ex
 /** A library check for the sort (its values worked out already, as an admitted check holds them). */
 const sortCheck = (id: string, object: string): CheckRecord => ({
   id, round: 1, key: "sort-asc", object, blocks: [SORT_UNIT], uses: [], direction: "holds", input: SORT_INPUT,
-  assertions: [resolved("l2", target("file_line", { path: "out.csv", line: 2 }), "3,3"), resolved("l5", target("file_line", { path: "out.csv", line: 5 }), "2,20"), resolved("exit", target("exit_code"), 0)],
+  // Stated values: a failure is the program's (a derived one would be disputed, §12j.7 item 11).
+  assertions: [resolved("l2", target("file_line", { path: "out.csv", line: 2 }), "3,3", "verbatim", SORT_UNIT), resolved("l5", target("file_line", { path: "out.csv", line: 5 }), "2,20", "verbatim", SORT_UNIT), resolved("exit", target("exit_code"), 0, "verbatim", SORT_UNIT)],
   unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
 })
 /** A library check for the R1 sidecar: transform writes <output>.sha256. */
@@ -208,22 +209,24 @@ describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed ite
     assert.deepEqual([e.source, e.units, e.sent, e.end?.how], ["review", [FILTER_UNIT], ["C1.1"], "fixed"])
   })
 
-  it("the repair of the filter breaks the sort guard: the repair is reverted, the lead discarded, the tree back where it was", async () => {
+  it("the repair of the filter breaks the sort guard: the repair is reverted, the tree back where it was; the item it was for is sent once more (§12j.7 item 2)", async () => {
     const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }])
     const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
-    const { record, executor, workdir } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true }))], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
-    const [c1, c2] = record.cycles
+    // The second program fixes the filter and breaks the sort; the third, sent the item again, fixes it alone.
+    const { record, executor, workdir } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true })), wd => write(wd, files())], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
+    const [c1, c2, c3] = record.cycles
     assert.equal(c2.message, "repair")
-    assert.deepEqual(c2.reverted, { to: c1.commit, guards: ["G1"], discarded: ["V1.1.1"] })
+    assert.deepEqual(c2.reverted, { to: c1.commit, guards: ["G1"], resent: ["V1.1.1"] })
     assert.equal(record.accept!.reverted, 1)
-    assert.equal(head(workdir), c1.commit, "the tree is back at the state before the repair")
-    assert.equal(record.kept, "C1.1")
-    assert.ok(git(workdir, ["show", "HEAD:filter.go"]).includes("keep != true"), "the wrong filter is back: the repair is gone")
-    assert.deepEqual(c2.items!.filter(i => i.action === "discarded").map(i => i.id), ["V1.1.1"])
-    // The ledger ends the item as discarded; the guard stays passing (no failing event survives the revert).
+    assert.ok(git(workdir, ["show", `${c2.reverted!.to}:filter.go`]).includes("keep != true"), "the tree went back to the state before the repair")
+    assert.deepEqual(c2.items!.filter(i => i.id === "V1.1.1").map(i => i.action), ["send"])
+    // The item is sent again, with word of the revert; the next repair fixes it, and it is a guard (no discarded end).
+    assert.match(executor.log.messages[2].text, /Keep rows where the column satisfies the condition[^]*reverted by the controller: it made G1 fail[^]*listed above again\./u)
+    assert.equal(record.kept, c3.id)
+    assert.ok(!git(workdir, ["show", "HEAD:filter.go"]).includes("keep != true"), "the filter is fixed on the kept program")
     const ledger = ledgerOf({ ...store.inspect(), executions: [record] }, store.registry())
-    assert.deepEqual([ledger.find(x => x.id === "V1.1.1")!.end?.how, ledger.find(x => x.id === "V1.1.1")!.state], ["discarded", "report_only"])
-    assert.equal(executor.log.messages.length, 2, "the second review (NO ISSUES) sends nothing more")
+    assert.deepEqual(ledger.find(x => x.id === "V1.1.1")!.end?.how, "fixed")
+    assert.ok(!ledger.some(x => x.end?.how === "discarded"))
     assert.ok(executor.log.messages[1].text.startsWith(REPAIR_INTRO))
   })
 
@@ -345,10 +348,9 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
     const serial = new Serial({
       store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
       executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
-      reviewer, formalize, trial: goTrial(), acceptance: { mode: "review" },
+      reviewer, formalize, trial: goTrial(),
       limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 2 } },
     })
-    assert.equal(serial.mode(), "review")
     assert.equal((await serial.run({ to: 3 })).status, "done")
   })
 
@@ -368,12 +370,14 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       const stages = r.wall!.stages.map(x => x.stage)
       for (const st of ["coding", "build", "trial", "guard rerun", "review"]) assert.ok(stages.includes(st), `R${r.round} wall time has ${st}: ${stages.join(", ")}`)
       const text = renderReport(r)
-      assert.match(text, /Review acceptance: first delivery C\d+\.1 [0-9a-f]{8}; trial runs \d+ \(\d+ failed\); reviews \d+ \(void sessions \d+\): #1 on C\d+\.\d+/u)
-      assert.match(text, /Reviewer items: reported \d+, entered a repair list \d+ \(verified \d+, logged \d+, fallback \d+\), blocked \d+; every entry ended once: yes; premise checks blocked \d+ \(/u)
-      assert.match(text, /Guards: \d+ at the start, \d+ at the end, new \d+.*; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
-      assert.match(text, /Guard coverage: \d+\/\d+ live units; uncovered \d+/u)
-      assert.match(text, /Reviewer \(stub:reviewer\): \d+ sessions, in \d+, cache read \d+, out \d+, cache share [\d.]+\. Formalizer \((stub:formalizer|\?)\): \d+ calls/u)
-      assert.match(text, /Ledger: open program wrong \d+/u)
+      // Two groups only (§12j.4): the §12i line and the interface counts; the rest is in report.json.
+      assert.match(text, /^# Round \d+ report\n\nOfficial score: [^\n]*\n\n§12i measures: wall \d+ s; guards \d+→\d+;[^\n]*\n\nInterface counts:\n\n/u)
+      assert.match(text, /- Reviewer items: reported \d+, entered a repair list \d+ \(verified \d+, logged \d+, fallback \d+\), blocked \d+; every entry ended once: yes; no_input \d+; reviews \d+ \(void sessions \d+\)/u)
+      assert.match(text, /- Check writing: admitted \d+\/\d+, unknown never told the model 0; dropped after the repairs \d+ .*; runs refused as an unknown subcommand \d+; units no check rests on \d+ \(reported only\)\./u)
+      assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*, disputed \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
+      assert.match(text, /- Requirements given: work order source zone delta, \d+ characters/u)
+      assert.match(text, /- Revisions recorded: \d+ paragraphs of this round's text read like a revision/u)
+      assert.ok(!/Probes|Ledger:|Guard coverage|Zones:/u.test(text), "nothing else is rendered")
     }
     // R1: the stand-in's sort compares as text; the reviewer reports it; the stand-in cannot fix it; guards were born from the library's passes.
     const r1 = s.reports[0].review!

@@ -5,8 +5,8 @@ import { existsSync, readFileSync } from "node:fs"
 import { isAbsolute, join, posix, relative, resolve, win32 } from "node:path"
 import type { OpenCodeModelClient } from "../model/opencode-transport.js"
 import { GoAnchorExtractor } from "./anchors.js"
-import { binaryFromSource, goBuilder, goBuilderAsync, goTrial } from "./build.js"
-import { dockerGoBuilder, dockerGoBuilderAsync, DockerRunner, DockerScriptSandbox, dockerTrial, type DockerOptions } from "./docker.js"
+import { binaryFromSource, goBuilder, goTrial } from "./build.js"
+import { dockerGoBuilder, DockerRunner, DockerScriptSandbox, dockerTrial, type DockerOptions } from "./docker.js"
 import { DEFAULT_LIMITS, type ExecutionLimits } from "./execution.js"
 import { OpenCodeExecutor, type OpenCodeCodingClient } from "./opencode-executor.js"
 import type { PlatformOptions } from "./platform.js"
@@ -15,11 +15,8 @@ import { Serial, type SerialConfig } from "./serial.js"
 import { Exp2Store } from "./store.js"
 import type { AttributionTransport } from "./attribution.js"
 import type { ChecksTransport } from "./checks.js"
-import type { AdjudicationTransport } from "./adjudication.js"
 import { emptyCassette, loadCassette, recordingTransports, saveCassette } from "./recording.js"
-import { PROBE_CONCURRENCY, type ProbeTransport } from "./probes.js"
-import type { JudgeTransport } from "./judge.js"
-import { createOpenCodeFormalizeTransport, createOpenCodeJudgeTransport, createOpenCodeProbesTransport, createOpenCodeAdjudicationTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
+import { createOpenCodeFormalizeTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
 import { OpenCodeReviewer } from "./review.js"
 import type { FormalizeTransport, Premise } from "./formalize.js"
 
@@ -91,8 +88,12 @@ export interface LocalConfig {
    * regressions, reviewer's items whose check failed) expire after two rounds without progress, as other items do.
    * checks_once (true): library checks are written only for text a round adds or revises (and stale checks).
    * checks_in_background (true): they are written beside the coding, not before the work order.
+   * workorder_scope ("delta"), review_scope ("delta"): what of the requirements the work order and the review request
+   * carry (DESIGN §6a step 3, §12j.7 items 6, 9); "all"/"full" give every round's text, as the control group (ablation).
+   * coverage_obligation (false): units the checks leave uncovered go back to the writer (§12j.7 item 3: reported only).
+   * mode, probes, stale_by_reference: gone with the probes path (§12j.4–5); a file may keep them at review/false.
    */
-  acceptance?: { mode?: "review" | "probes"; probes?: boolean; stale_by_reference?: boolean; reviews?: number; trial_fixes?: number; review_agent?: string; premise_block?: string[]; fallback?: "items" | "review" | "off"; void_without_runs?: boolean; expire_reproduced?: boolean; checks_once?: boolean; checks_in_background?: boolean }
+  acceptance?: { mode?: "review"; probes?: boolean; stale_by_reference?: boolean; workorder_scope?: "delta" | "all"; review_scope?: "delta" | "full"; coverage_obligation?: boolean; reviews?: number; trial_fixes?: number; review_agent?: string; premise_block?: string[]; fallback?: "items" | "review" | "off"; void_without_runs?: boolean; expire_reproduced?: boolean; checks_once?: boolean; checks_in_background?: boolean }
   /**
    * Builds record which functions each run executes (`go build -cover`), so a cycle runs only the checks and probes a
    * change can affect (DESIGN §12h E4). Default true; with false nothing has coverage, so every cycle runs everything.
@@ -146,11 +147,16 @@ export function localConfigProblems(c: LocalConfig): string[] {
   if (c.runner?.kind === "docker" && !c.runner.image) p.push("runner.image is required for docker")
   if (c.rate_limit && (!Array.isArray(c.rate_limit.delays_ms) || !c.rate_limit.delays_ms.every(d => Number.isFinite(d) && d >= 0))) p.push("rate_limit.delays_ms must be an array of non-negative numbers")
   if (c.scoring && (!Array.isArray(c.scoring.command) || !c.scoring.command.length)) p.push("scoring.command must be a non-empty array")
-  if (c.acceptance?.mode !== undefined && c.acceptance.mode !== "review" && c.acceptance.mode !== "probes") p.push("acceptance.mode must be review or probes")
+  // The probes path is out of the round (§12j.4): its switches may stay in a file as their off values, nothing else.
+  if (c.acceptance?.mode !== undefined && c.acceptance.mode !== "review") p.push("acceptance.mode: only review is left (the probes mode is out of the round's path, DESIGN §12j.4)")
+  if (c.acceptance?.probes === true) p.push("acceptance.probes: probes are out of the round's path (DESIGN §12j.4); remove it or set it to false")
+  if (c.acceptance?.stale_by_reference === true) p.push("acceptance.stale_by_reference: staleness by reference is deleted (DESIGN §12j.5); remove it or set it to false")
+  if (c.acceptance?.workorder_scope !== undefined && !["delta", "all"].includes(c.acceptance.workorder_scope)) p.push("acceptance.workorder_scope must be delta or all")
+  if (c.acceptance?.review_scope !== undefined && !["delta", "full"].includes(c.acceptance.review_scope)) p.push("acceptance.review_scope must be delta or full")
   const premises = ["unit_not_in_force", "input_claim_false", "value_not_stated", "value_not_computed", "reference_failed", "no_input", "no_assertion", "not_reproduced", "malformed", "not_formalized", "formalize_failed"]
   if (c.acceptance?.premise_block !== undefined && (!Array.isArray(c.acceptance.premise_block) || c.acceptance.premise_block.some(x => !premises.includes(x)))) p.push(`acceptance.premise_block must list premises among ${premises.join(", ")}`)
   if (c.acceptance?.fallback !== undefined && !["items", "review", "off"].includes(c.acceptance.fallback)) p.push("acceptance.fallback must be items, review or off")
-  if (c.acceptance?.mode !== "probes" && c.roles === null) p.push("acceptance mode review needs the roles (the reviewer and the formalizer); set acceptance.mode to probes with roles null")
+  if (c.roles === null) p.push("roles: null switches the formalizer off, and the round needs it; give the roles or leave them out for the defaults")
   // Checkpoints and builds outside the work tree: restoring a checkpoint cleans the work tree.
   const inside = (parent: string, child: string) => { const r = relative(resolve(parent), resolve(child)); return r === "" || (!r.startsWith("..") && !isAbsolute(r)) }
   if (c.repo_dir && c.checkpoints_dir && inside(c.repo_dir, c.checkpoints_dir)) p.push("checkpoints_dir must be outside repo_dir")
@@ -235,16 +241,15 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   // The program's name comes from the build command the requirements state.
   const texts = Array.from({ length: c.rounds }, (_, i) => join(at(c.inputs_dir), `round-${pad(i + 1)}.md`)).filter(existsSync).map(f => readFileSync(f, "utf8"))
   const binary = binaryFromSource(texts) ?? "app"
-  const mode = c.acceptance?.mode ?? "review"
   const reviewRole = roleOptions({ providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant }, c, "review")
   const config: SerialConfig = {
     store: new Exp2Store(at(c.state_dir), c.run_id, c.ablation),
     workdir: at(c.repo_dir),
     checkpoints: at(c.checkpoints_dir),
     copies: join(at(c.builds_dir), "review-copies"),
-    acceptance: { mode, probes: c.acceptance?.probes === true, staleByReference: c.acceptance?.stale_by_reference === true, ...(c.acceptance?.reviews !== undefined ? { reviews: c.acceptance.reviews } : {}), ...(c.acceptance?.trial_fixes !== undefined ? { trialFixes: c.acceptance.trial_fixes } : {}), ...(c.acceptance?.premise_block ? { premiseBlock: c.acceptance.premise_block as Premise[] } : {}), ...(c.acceptance?.fallback ? { fallback: c.acceptance.fallback } : {}), ...(c.acceptance?.void_without_runs !== undefined ? { voidWithoutRuns: c.acceptance.void_without_runs === true } : {}), ...(c.acceptance?.expire_reproduced !== undefined ? { expireReproduced: c.acceptance.expire_reproduced === true } : {}), ...(c.acceptance?.checks_once !== undefined ? { checksOnce: c.acceptance.checks_once !== false } : {}), ...(c.acceptance?.checks_in_background !== undefined ? { checksInBackground: c.acceptance.checks_in_background !== false } : {}) },
+    acceptance: { ...(c.acceptance?.reviews !== undefined ? { reviews: c.acceptance.reviews } : {}), ...(c.acceptance?.trial_fixes !== undefined ? { trialFixes: c.acceptance.trial_fixes } : {}), ...(c.acceptance?.premise_block ? { premiseBlock: c.acceptance.premise_block as Premise[] } : {}), ...(c.acceptance?.fallback ? { fallback: c.acceptance.fallback } : {}), ...(c.acceptance?.void_without_runs !== undefined ? { voidWithoutRuns: c.acceptance.void_without_runs === true } : {}), ...(c.acceptance?.expire_reproduced !== undefined ? { expireReproduced: c.acceptance.expire_reproduced === true } : {}), ...(c.acceptance?.checks_once !== undefined ? { checksOnce: c.acceptance.checks_once !== false } : {}), ...(c.acceptance?.checks_in_background !== undefined ? { checksInBackground: c.acceptance.checks_in_background !== false } : {}), ...(c.acceptance?.coverage_obligation ? { coverageObligation: true } : {}), ...(c.acceptance?.workorder_scope ? { workorderScope: c.acceptance.workorder_scope } : {}), ...(c.acceptance?.review_scope ? { reviewScope: c.acceptance.review_scope } : {}) },
     // The reviewer runs on the coding server (tools on), in a copy of the program; the formalizer on the management server.
-    ...(mode === "review" ? { reviewer: new OpenCodeReviewer({ client: coding, providerId: reviewRole.providerId, modelId: reviewRole.modelId, variant: reviewRole.variant, agent: c.acceptance?.review_agent ?? c.coding.agent ?? "build", binary, rateLimit }) } : {}),
+    reviewer: new OpenCodeReviewer({ client: coding, providerId: reviewRole.providerId, modelId: reviewRole.modelId, variant: reviewRole.variant, agent: c.acceptance?.review_agent ?? c.coding.agent ?? "build", binary, rateLimit }),
     trial: docker ? dockerTrial(docker, binary) : goTrial(platform, binary),
     text: round => {
       const file = join(at(c.inputs_dir), `round-${pad(round)}.md`)
@@ -252,9 +257,8 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
       return readFileSync(file, "utf8")
     },
     ...recorded(c, at, {
-      attribution: createOpenCodeAttributionTransport(management, rateLimit), checks: createOpenCodeChecksTransport(roleOptions(management, c, "checks"), rateLimit), adjudicate: createOpenCodeAdjudicationTransport(roleOptions(management, c, "adjudicate"), rateLimit),
-      ...(c.roles === null ? {} : { probes: createOpenCodeProbesTransport(roleOptions(management, c, "probes"), rateLimit), judge: createOpenCodeJudgeTransport(roleOptions(management, c, "judge"), rateLimit), ruling: createOpenCodeJudgeTransport(roleOptions(management, c, "adjudicate"), rateLimit) }),
-      ...(c.roles === null ? {} : { formalize: createOpenCodeFormalizeTransport(roleOptions(management, c, "formalize"), rateLimit) }),
+      attribution: createOpenCodeAttributionTransport(management, rateLimit), checks: createOpenCodeChecksTransport(roleOptions(management, c, "checks"), rateLimit),
+      formalize: createOpenCodeFormalizeTransport(roleOptions(management, c, "formalize"), rateLimit),
     }),
     binary,
     platform,
@@ -264,15 +268,11 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
     runner: docker ? new DockerRunner(docker) : new LocalProcessRunner(platform, { ...DEFAULT_RESOURCE_LIMITS, ...c.runner.limits }),
     sandbox: docker ? new DockerScriptSandbox(docker) : new LocalScriptSandbox(platform),
     build: docker ? dockerGoBuilder(at(c.builds_dir), docker, undefined, binary) : goBuilder(at(c.builds_dir), platform, binary, cover),
-    buildAsync: docker ? dockerGoBuilderAsync(at(c.builds_dir), docker, undefined, binary) : goBuilderAsync(at(c.builds_dir), platform, binary),
     limits: {
       attributionRepairs: c.limits?.attribution_repairs ?? 2,
       checkRepairs: c.limits?.check_repairs ?? 2,
       managementTimeoutMs: c.limits?.management_timeout_ms ?? 30 * 60_000,
       checkTimeoutMs: c.limits?.check_timeout_ms ?? 60_000,
-      probeRepairs: c.limits?.probe_repairs ?? 2,
-      mutants: c.limits?.mutants ?? 0,
-      probeConcurrency: c.limits?.probe_concurrency ?? PROBE_CONCURRENCY,
       execution: { ...DEFAULT_LIMITS, ...c.limits?.execution },
     },
     ...(c.scoring ? { score: scoringHook(c.scoring.command, at(c.repo_dir)) } : {}),
@@ -280,14 +280,14 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   return { serial: new Serial(config), config }
 }
 
-function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; adjudicate: AdjudicationTransport; probes?: ProbeTransport; judge?: JudgeTransport; ruling?: JudgeTransport; formalize?: FormalizeTransport }) {
+function recorded(c: LocalConfig, at: (p: string) => string, t: { attribution: AttributionTransport; checks: ChecksTransport; formalize: FormalizeTransport }) {
   if (!c.recording) return t
   const file = at(c.recording.cassette)
   const cassette = existsSync(file) ? loadCassette(file) : emptyCassette(c.recording.label)
   // Written now, so a path that cannot be written stops the run before any call is made.
   saveCassette(file, cassette)
   const r = recordingTransports(t, cassette, file)
-  return { attribution: r.attribution, checks: r.checks, adjudicate: r.adjudicate!, ...(r.probes ? { probes: r.probes, judge: r.judge!, ruling: r.ruling! } : {}), ...(r.formalize ? { formalize: r.formalize } : {}) }
+  return { attribution: r.attribution, checks: r.checks, formalize: r.formalize! }
 }
 
 /** The management transport options with a role's model. */

@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
 import { AuthInvalid, QuotaExhausted, RoleUnavailable, type AttributionTransport, type ModelReply } from "./attribution.js"
-import { codeFacts, coverage, EMPTY_CHECKS, libraryCovers, type ChecksTransport } from "./checks.js"
-import { executeRound, type BuildResult, type CycleRecord, type DetectScope, type DetectedRun, type ExecutionLimits, type ExecutionRecord, type Executor, type SupersededItem } from "./execution.js"
+import { codeFacts, libraryCovers, type ChecksTransport } from "./checks.js"
+import { type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor, type SupersededItem } from "./execution.js"
 import { head, initRepo, resetTo } from "./git.js"
 import { acceptanceFromLedger, acceptanceSummary, buildReport, codingCost, renderReport, type RoundReport, type StageCost } from "./report.js"
 import { runDigest, type ObjectStatus } from "./verdict.js"
@@ -13,20 +13,15 @@ import { freezePrediction } from "./prediction.js"
 import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import type { Exp2State, Exp2Store } from "./store.js"
 import { buildWorkOrder, nameLinks, renderWorkOrder, type PreviousStep, type WorkOrder } from "./workorder.js"
-import type { AdjudicationTransport } from "./adjudication.js"
-import { upheldKinds, type CheckRoundRecord } from "./store.js"
-import { activeProbes, gapState, runProbes, type ProbeRecord, type ProbeRoundRecord, type ProbeTransport } from "./probes.js"
-import { correctionItems, outputDigest, pairKey, probeStatuses, renderCorrections, type CorrectionItem, type Finding, type JudgeTransport } from "./judge.js"
+import { type CheckRoundRecord } from "./store.js"
+import { gapState } from "./probes.js"
 import { ledgerOf, ledgerSummary, renderLedger } from "./ledger.js"
-import { discriminate, remeasure } from "./discrimination.js"
-import type { MeasureRecord } from "./store.js"
 import type { PlatformOptions } from "./platform.js"
-import type { AnchorLink } from "./workorder.js"
-import type { Registry } from "./registry.js"
-import { acceptRound, renderGuardItem, renderReviewList, type CarriedItem, type Lead } from "./accept.js"
+import { acceptRound, renderGuardItem, renderReviewList, type CarriedItem } from "./accept.js"
 import { guardCheck, guardCoverage, liveGuards, runGuards } from "./guards.js"
 import { itemCheckRecord, notInForce, type FormalizeTransport, type Premise } from "./formalize.js"
 import { runChecks, type CheckRun } from "./verdict.js"
+import { packageSources, roundPackage } from "./view.js"
 import type { Reviewer } from "./review.js"
 
 /**
@@ -47,25 +42,14 @@ export interface SerialLimits {
   /** Watchdog on one management call; a stopped call uses up one attempt. */
   managementTimeoutMs: number
   checkTimeoutMs: number
-  /** Repairs of one group's probes (default 2). */
-  probeRepairs?: number
-  /** Mutants the discrimination measure runs a round at most (default 0: off, DESIGN §12g; on to measure check strength). */
-  mutants?: number
-  /** Probe runs side by side (default PROBE_CONCURRENCY). */
-  probeConcurrency?: number
   execution: ExecutionLimits
 }
 
 /**
- * How the round is accepted (DESIGN §12i). mode review (the default when a reviewer is configured): the reviewer is
- * the finder, guards are code's, judgments are leads. mode probes: the block 10–12 flow. probes: under mode review,
- * whether probes are still written (once per unit) and judged as leads (default off, §12i item 5). staleByReference:
- * whether checks and probes go stale through references, readings and conventions (default off, §12i item 6).
+ * How the round is accepted (DESIGN §12i, §12j): the reviewer is the finder, the formalizer turns its list into checks,
+ * guards are code's. Probes, judgments and rulings are out of the round's path (§12j.4); their code stays.
  */
 export interface AcceptanceConfig {
-  mode?: "review" | "probes"
-  probes?: boolean
-  staleByReference?: boolean
   /** Reviews a round at most (default 3), and repairs of a failing trial before the first review (default 2). */
   reviews?: number
   trialFixes?: number
@@ -75,10 +59,19 @@ export interface AcceptanceConfig {
   voidWithoutRuns?: boolean
   /** Fix block B1: whether reproduced items (guard regressions, reviewer's items with a failing check) expire (default false). */
   expireReproduced?: boolean
-  /** Fix block B2: library checks only for text a round adds or revises, and stale checks (default true under mode review). */
+  /** Fix block B2: library checks only for text a round adds or revises, and stale checks (default true). */
   checksOnce?: boolean
-  /** Fix block B3: the round's library checks are written beside the coding, off the critical path (default true under mode review). */
+  /** Fix block B3: the round's library checks are written beside the coding, off the critical path (default true). */
   checksInBackground?: boolean
+  /** §12j.7 item 3: units the checks leave uncovered go back to the writer (default false: the report counts them). */
+  coverageObligation?: boolean
+  /**
+   * §12j.7 items 6, 9 (§6a step 3): what of the requirements the executor's work order and the reviewer's request carry.
+   * delta (default): this round's objects, early objects their relations reach, and what open items rest on. all/full:
+   * every round's text, as the control group gets it (ablation only).
+   */
+  workorderScope?: "delta" | "all"
+  reviewScope?: "delta" | "full"
 }
 
 export interface SerialConfig {
@@ -86,9 +79,9 @@ export interface SerialConfig {
   workdir: string
   checkpoints: string
   acceptance?: AcceptanceConfig
-  /** The reviewer and the formalizer (DESIGN §12i items 1–2); mode review needs both. */
-  reviewer?: Reviewer
-  formalize?: FormalizeTransport
+  /** The reviewer and the formalizer (DESIGN §12i items 1–2). */
+  reviewer: Reviewer
+  formalize: FormalizeTransport
   /** The target environment's trial (build and test, no network); absent, the build alone. */
   trial?: (workdir: string, label: string) => Promise<{ ok: boolean; output: string }>
   /** Where copies of the program for reviews are made (default under the checkpoints). */
@@ -104,19 +97,10 @@ export interface SerialConfig {
   sandbox: ScriptSandbox
   build: (workdir: string, label: string) => BuildResult
   limits: SerialLimits
-  /** Rulings on disputed checks (BLOCK9 §2.3), the same model as the rest; absent, disputed checks just do not count. */
-  adjudicate?: AdjudicationTransport
   /** The program's name as the requirements call it (for the calls in correction lists). */
   binary?: string
   /** Where the local Go tool is, for the mutation helper. */
   platform?: PlatformOptions
-  /** A non-blocking build, so mutants are built side by side (BLOCK10 §9.1). */
-  buildAsync?: (workdir: string, label: string) => Promise<BuildResult>
-  /** Probe writer and judge (BLOCK10): with both, probes are written every round and drive the repairs. */
-  probes?: ProbeTransport
-  judge?: JudgeTransport
-  /** Rules where the judge's computation and the program disagree (DESIGN §12g); without it the judge does. */
-  ruling?: JudgeTransport
   /**
    * Post-round scoring (the official verifier, locally). Its result is written into that round's checkpoint report
    * only, after the round is complete; nothing in the serial ever reads it back.
@@ -288,7 +272,7 @@ export class Serial {
   }
 
   async runRound(round: number): Promise<RoundOutcome> {
-    const { store, workdir, limits } = this.c
+    const { store, limits } = this.c
     this.progress = null
     this.spans = []
     const roundStart = Date.now()
@@ -299,15 +283,14 @@ export class Serial {
 
     // 2. Checks, against the baseline: the last accepted program (the checkpoint's head), or the null program.
     const baseline = this.program(round === 1 ? null : `R${round - 1}-final`)
-    const byRef = this.staleByReference()
     // With the check library switched off (ablation), no checks are derived: every status stays unknown.
-    const review = this.mode() === "review", a = this.c.acceptance ?? {}
+    const a = this.c.acceptance ?? {}
     let checkWriting: Promise<CheckRoundRecord> | null = null
     if (store.ablation.checks !== false) {
-      const deps = { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs, staleByReference: byRef, ...(review && a.checksOnce !== false ? { unitsOnce: true } : {}), ...(review ? { binary: this.c.binary ?? null, admitInLoop: true } : {}) }
-      if (review && a.checksInBackground !== false) {
+      const deps = { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs, ...(a.checksOnce !== false ? { unitsOnce: true } : {}), binary: this.c.binary ?? null, admitInLoop: true, ...(a.coverageObligation ? { coverageObligation: true } : {}) }
+      if (a.checksInBackground !== false) {
         // Fix block B3: the checks are written beside the coding; the work order has the library as the round starts.
-        await store.beginRoundChecks(round, deps)
+        await store.beginRoundChecks(round)
         checkWriting = this.timed("check writing", () => store.writeRoundChecks(round, withWatchdog(this.c.checks, limits.managementTimeoutMs), deps))
         checkWriting.catch(() => {})
       } else {
@@ -315,150 +298,13 @@ export class Serial {
         if (derived.status === "interrupted") throw stopping(derived.issues ?? [], `checks, round ${round}`)
       }
     }
-    if (review) {
-      // A round that stops waits for the background writing to settle first, so its calls are committed before the
-      // checkpoint is restored (and counted with the interrupted attempt), and nothing lands in the restored state later.
-      try {
-        const start = await this.timed("checks", () => store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate, staleByReference: byRef }))
-        return await this.reviewRound(round, baseline, start, roundStart, checkWriting)
-      } finally { await checkWriting?.catch(() => {}) }
-    }
-    const start = await this.timed("checks", () => store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate, staleByReference: byRef }))
-
-    // 2b. Probes for this round's text; earlier probes run on the baseline, so what is still wrong is carried.
-    const probing = this.c.probes && this.c.judge
-    let carried: { findings: Finding[]; text: string; items: Map<string, string> } = { findings: [], text: "", items: new Map() }
-    // The ledger at the round's start (DESIGN §12h E2): its open items are run every cycle; those listed only are not sent.
-    const atStart = store.inspect()
-    const ledger = ledgerOf(atStart, store.registry(atStart))
-    const quiet = new Map(ledger.filter(e => e.state === "report_only" && e.end?.how === "expired" && e.digest).map(e => [e.id, e.digest!]))
-    const confirmed = new Set(ledger.filter(e => e.state === "open" && e.confirmed).map(e => e.id))
-    let units: string[] = coverage(store.registry(atStart), round, EMPTY_CHECKS, [], []).units
-    // The round's probes are written in the background (BLOCK10 §9.1): they need the text, not the program, so coding
-    // does not wait for them. Stale probes are marked first, so the carry-over below never runs one.
-    let writing: Promise<ProbeRoundRecord> | null = null
-    if (probing) {
-      const begun = await store.beginRoundProbes(round)
-      units = [...new Set([...units, ...begun.units])]
-      writing = this.timed("probe writing", () => store.writeRoundProbes(round, begun, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 }))
-      writing.catch(() => {})
-      const old = this.activeProbes().filter(p => p.round < round)
-      if (old.length && baseline.kind !== "null") {
-        const r = await this.timed("carry-over", () => this.probe(round, old, baseline, new Set(), new Map()))
-        const digest = new Map(r.runs.map(x => [x.probe, x.digest]))
-        // Items the ledger lists only, at the same output, are not carried (DESIGN §12h E3).
-        const items = r.items.filter(it => quiet.get(it.key) !== digest.get(it.probe))
-        carried = { findings: r.findings, text: items.length ? `\n${CARRIED_HEADER}\n${renderCorrections(items.map(it => confirmed.has(it.key) ? { ...it, upheld: true as const } : it), programName(baseline))}\n` : "", items: new Map(items.map(it => [it.key, digest.get(it.probe) ?? ""])) }
-      }
-    }
-    // What needs the round's probes waits for them here, and a writer that failed stops the round.
-    const ready = async () => {
-      if (!writing) return
-      const w = await this.timed("waiting for probes", () => writing!)
-      if (w.status === "interrupted") throw stopping(w.issues ?? [], `probes, round ${round}`)
-    }
-
-    // 3. The work order.
-    let state = store.inspect()
-    const registry = store.registry(state)
-    const anchorsNow = this.c.anchors.extract(workdir)
-    const links = [...state.executions.flatMap(e => e.links), ...nameLinks(registry, anchorsNow, round)]
-    // The kept cycle of each earlier round, as the work order reads it: what it finished, and the anchors it changed.
-    const steps: PreviousStep[] = state.executions.flatMap(e => e.cycles.filter(c => c.id === e.kept).map(c => ({ id: c.id, round: c.round, status: "committed", objects: e.task.filter(o => !e.carried.includes(o)).map(object => ({ object, coverage: "full" as const })), anchors: c.anchors })))
-    const previous = state.reports.find(r => r.round === round - 1)
-    const workorder: WorkOrder = buildWorkOrder({
-      registry, round, library: state.checks, events: state.check_events, statuses: probing ? mergeStatuses(start.statuses, probeStatuses(registry, carried.findings)) : start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
-      previous_task: previous ? state.executions.find(x => x.round === round - 1)?.task ?? [] : [],
-      zoning: store.ablation.zoning,
-    })
-    // 4. Execution.
-    const passing = start.runs.filter(r => r.outcome === "pass").map(r => r.check)
-    const passed = new Set(carried.findings.filter(f => f.verdict === "ok").map(f => pairKey(f.probe, f.unit)))
-    const execution = await executeRound(workdir, workorder, renderWorkOrder(workorder) + carried.text, this.c.executor(round), {
-      registry, library: state.checks, events: state.check_events, links, anchors: this.c.anchors, build: this.c.build, runner: this.c.runner,
-      facts: codeFacts(registry, round), passing, checkTimeoutMs: limits.checkTimeoutMs, onProgress: r => { this.progress = r },
-      upheld: check => upheldKinds(store.inspect(), check),
-      // Targeted runs (DESIGN §12h E4): the round's changed text, the ledger's open items, and what the previous round's
-      // full run recorded each check and probe executing.
-      target: {
-        units: new Set(units), open: new Set(ledger.filter(e => e.state === "open" && e.source !== "coverage").map(e => e.id)), quiet, confirmed,
-        seen: seenFrom(state.executions.filter(x => x.round < round).sort((a, b) => a.round - b.round).at(-1)?.coverage),
-        probes: async () => { await ready(); return this.activeProbes() },
-      },
-      carried: carried.items,
-      ...(probing ? { detect: { passed, program: programName(baseline.kind === "null" ? { command: [this.c.binary ?? "program"] } as ProgramRef : baseline), run: async (program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>, scope?: DetectScope) => {
-        await ready()
-        const all = this.activeProbes().filter(p => !scope?.probes || scope.probes.has(p.id))
-        const r = await this.probe(round, all, program, before, contests, { full: scope?.full === true })
-        return { items: r.items, findings: r.findings, runs: r.runs, counts: { probes: all.length, ...verdictCounts(r.findings) } }
-      },
-
-        ...((limits.mutants ?? 0) > 0 ? { measure: async (wd: string, program: ProgramRef, known: readonly AnchorLink[]) => { await ready(); return this.timed("measurement", () => this.measure(round, wd, program, known, new Set(workorder.task.map(t => t.object)))) } } : {}) } } : {}),
-      time: (stage: string, a: number, b: number) => { this.spans.push({ stage, start: a, end: b }) },
-      ...(this.c.adjudicate ? { settle: (disputes: Parameters<Exp2Store["settle"]>[1]) => store.settle(round, disputes, this.c.adjudicate!) } : {}),
-    }, limits.execution)
-
-    // The probes of the round are in before the verdict, even when no cycle built a program.
-    await ready()
-    // 5. Verdict on the final program, report, checkpoint.
-    const final = this.program(`R${round}-final`)
-    const verdict = await store.runRoundChecks(round, final, this.c.runner, { verdict: true, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate, staleByReference: byRef })
-    // The full run on the kept program before delivery is the final one (DESIGN §12h E4); run here only without it.
-    const swept = execution.sweep && this.lastFull?.program === execution.sweep.cycle ? this.lastFull : null
-    const finalProbes = probing && final.kind !== "null" ? swept ?? await this.timed("final probes", () => this.probe(round, this.activeProbes(), final, passed, new Map(), { full: true })) : null
-    this.lastFull = null
-    state = store.inspect()
-    const interrupted = this.interruptedAttempts(round)
-    const events = state.check_events.filter(e => e.round === round)
-    // The round's end in the ledger: what fails on the program it delivers (from the full run, or the final run here).
-    if (!execution.final) {
-      const digests = new Map((finalProbes?.runs ?? []).map(x => [x.probe, x.digest]))
-      execution.final = [
-        ...verdict.runs.filter(r => r.outcome === "fail" && r.failure?.class === "not_landed").map(r => ({ id: r.check, digest: runDigest(r), verdict: "not_landed", action: "none" as const })),
-        ...(finalProbes?.items ?? []).map(it => ({ id: it.key, digest: digests.get(it.probe) ?? "", verdict: "wrong", action: "none" as const })),
-      ]
-    }
-    const ledgerNow = ledgerOf({ ...state, executions: [...state.executions, execution] }, registry)
-    const summary = acceptanceFromLedger(acceptanceSummary({
-      library: state.checks, runs: verdict.runs, events: state.check_events, findings: finalProbes?.findings ?? [],
-      gaps: gapState(registry, state.probe_rounds, libraryCovers(registry, state.checks, state.check_events)),
-    }).by_kind, ledgerNow)
-    const report = buildReport({
-      round, registry, workorder, execution, summary, ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: finalProbes ? mergeStatuses(verdict.statuses, probeStatuses(registry, finalProbes.findings)) : verdict.statuses,
-      probes: probing ? {
-        calls: state.probe_calls.filter(c => c.round === round), judge_calls: state.judge_calls.filter(c => c.round === round), record: state.probe_rounds.find(r => r.round === round && r.status === "accepted") ?? null,
-        active: this.activeProbes().length, findings: finalProbes?.findings ?? [], carried_in: carried.findings.filter(f => f.verdict === "wrong").length,
-      } : null,
-      understand: state.calls.filter(c => c.round === round), acceptance: state.check_calls.filter(c => c.round === round),
-      interrupted: {
-        attempts: interrupted.length, understand: interrupted.flatMap(a => a.calls), acceptance: interrupted.flatMap(a => [...a.check_calls, ...(a.probe_calls ?? []), ...(a.judge_calls ?? [])]),
-        coding: interrupted.reduce((t: StageCost, a) => { const c = codingCost(a.execution, this.c.executorIsStub); return { calls: t.calls + c.calls, tokens: sumUsage(t.tokens, c.tokens), stub_calls: t.stub_calls + c.stub_calls } }, codingCost(null, false)),
-      },
-      checks: {
-        entered: state.checks.filter(k => k.round === round).length, stale: events.filter(e => e.status === "stale").length, retired: events.filter(e => e.status === "retired").length,
-        run: verdict.runs.length, passed: verdict.runs.filter(r => r.outcome === "pass").length, failed: verdict.runs.filter(r => r.outcome === "fail").length,
-      },
-    })
-    await store.recordRound(execution, report)
-    const commit = head(workdir)
-    mkdirSync(this.dir(round), { recursive: true })
-    writeFileSync(join(this.dir(round), "ledger.json"), JSON.stringify(ledgerNow, null, 1) + "\n", "utf8")
-    writeFileSync(join(this.dir(round), "ledger.md"), `# Ledger after round ${round}\n\n${renderLedger(ledgerNow)}\n`, "utf8")
-    this.writeCheckpoint(round, commit, report)
-    this.progress = null
-    if (this.c.score) await this.writeScore(round, commit, report)
-    return { status: "done", report }
+    // A round that stops waits for the background writing to settle first, so its calls are committed before the
+    // checkpoint is restored (and counted with the interrupted attempt), and nothing lands in the restored state later.
+    try {
+      const start = await this.timed("checks", () => store.runRoundChecks(round, baseline, this.c.runner, { verdict: false, timeoutMs: limits.checkTimeoutMs }))
+      return await this.reviewRound(round, baseline, start, roundStart, checkWriting)
+    } finally { await checkWriting?.catch(() => {}) }
   }
-
-  /** review when a reviewer and a formalizer are configured (unless the configuration says probes), else the block 10–12 flow. */
-  mode(): "review" | "probes" {
-    const m = this.c.acceptance?.mode ?? (this.c.reviewer && this.c.formalize ? "review" : "probes")
-    if (m === "review" && (!this.c.reviewer || !this.c.formalize)) throw new Error("acceptance mode review needs a reviewer and a formalizer")
-    return m
-  }
-
-  /** Staleness through references, readings and conventions: off unless the configuration turns it on (DESIGN §12i item 6). */
-  private staleByReference(): boolean { return this.c.acceptance?.staleByReference === true }
 
   /**
    * The round under DESIGN §12i, from the work order to the checkpoint (accept.ts does the cycles): probes only when
@@ -473,25 +319,11 @@ export class Serial {
       if (w.status === "interrupted") throw stopping(w.issues ?? [], `checks, round ${round}`)
     }
     const a = this.c.acceptance ?? {}
-    const probing = a.probes === true && !!this.c.probes && !!this.c.judge
     const atStart = store.inspect()
     const registryStart = store.registry(atStart)
     const ledgerOptions = { expireReproduced: a.expireReproduced === true }
     const ledger = ledgerOf(atStart, registryStart, ledgerOptions)
     const quiet = new Map(ledger.filter(e => e.state === "report_only" && e.end?.how === "expired" && e.digest).map(e => [e.id, e.digest!]))
-    // Probes, when on: for this round's text and the live units of probes whose own text was replaced; no reference
-    // inference, no gap carry-over (§12i item 5). Written beside the coding.
-    let writing: Promise<ProbeRoundRecord> | null = null
-    if (probing) {
-      const begun = await store.beginRoundProbes(round, { byReference: false, gaps: false })
-      writing = this.timed("probe writing", () => store.writeRoundProbes(round, begun, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 }))
-      writing.catch(() => {})
-    }
-    const ready = async () => {
-      if (!writing) return
-      const w = await this.timed("waiting for probes", () => writing!)
-      if (w.status === "interrupted") throw stopping(w.issues ?? [], `probes, round ${round}`)
-    }
     // Carried in: guards failing and review items not fixed at the end of the last round, as far as they still fail on the baseline.
     const facts = codeFacts(registryStart, round)
     const carried: CarriedItem[] = []
@@ -499,7 +331,8 @@ export class Serial {
     if (baseline.kind !== "null") {
       const openGuards = new Set(ledger.filter(e => e.state === "open" && e.source === "guard").map(e => e.id))
       // A guard whose flip is still the reviewer's question (this round's text changed behind it, no answer yet) is not carried as a regression.
-      const asked = (id: string) => { const last = [...atStart.guard_events].reverse().find(e => e.guard === id); return last?.status === "failing" && (last.changed_text?.length ?? 0) > 0 }
+      // A disputed flip is a lead for the reviewer, never a regression (§12j.7 item 11): not carried either.
+      const asked = (id: string) => { const last = [...atStart.guard_events].reverse().find(e => e.guard === id); return last?.status === "failing" && ((last.changed_text?.length ?? 0) > 0 || !!last.disputed) }
       const gs = liveGuards(atStart.guards, atStart.guard_events).filter(g => openGuards.has(g.id) && !asked(g.id))
       const runs = await this.timed("carry-over", () => runGuards(gs, atStart.checks, baseline, this.c.runner, round, registryStart, facts, limits.checkTimeoutMs))
       gs.forEach((g, i) => { if (runs[i].outcome === "fail") carried.push({ id: g.id, text: renderGuardItem(g, guardCheck(g, atStart.checks), runs[i].run, registryStart, true), check: guardCheck(g, atStart.checks), digest: runDigest(runs[i].run) }) })
@@ -526,32 +359,28 @@ export class Serial {
       registry, round, library: state.checks, events: state.check_events, statuses: start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
       previous_task: previous ? state.executions.find(x => x.round === round - 1)?.task ?? [] : [],
       zoning: store.ablation.zoning,
+      // The round's package (§6a step 3) by default; failures in the task zone are confirmed items and guards only.
+      scope: a.workorderScope ?? "delta",
+      confirmed: carried.map(c => ({ id: c.id, object: c.check && c.check.object !== "none" ? c.check.object : null, units: c.check ? [...c.check.blocks] : [], args: c.check?.input.args ?? [], files: c.check?.input.files.map(f => f.path) ?? [] })),
     })
+    // The reviewer reads the same package, laid out by round (§12j.7 item 6); full is the control group's text (ablation).
+    const sources = (a.reviewScope ?? "delta") === "full" ? state.sources.map(x => ({ round: x.round, text: x.text })) : packageSources(registry, round, roundPackage(registry, round, carried.flatMap(c => c.check ? [...c.check.blocks] : [])))
     const carriedText = carried.length ? `\n${CARRIED_HEADER_REVIEW}\n\n${renderReviewList(carried)}\n` : ""
-    // Judgments as leads for the reviewer (when probes are on): never a repair.
     const binary = this.c.binary ?? "app"
-    const leads = probing ? async (program: ProgramRef, _cycle: string): Promise<Lead[]> => {
-      await ready()
-      const r = await this.probe(round, this.activeProbes(), program, new Set(), new Map())
-      const digest = new Map(r.runs.map(x => [x.probe, x.digest]))
-      return r.items.map(it => ({ id: it.key, digest: digest.get(it.probe) ?? "", text: `${it.rule.id} ${JSON.stringify(it.rule.text.trim().slice(0, 300))}: call ${JSON.stringify([binary, ...it.call])}, input files ${it.input_files.map(f => `${f.path} = ${JSON.stringify(f.content.slice(0, 300))}`).join(", ") || "none"}; the judgment: ${it.finding}` }))
-    } : undefined
     // 4. Execution and acceptance.
     const execution = await acceptRound(workdir, workorder, renderWorkOrder(workorder) + carriedText, this.c.executor(round), {
       registry, library: state.checks, events: state.check_events, facts: codeFacts(registry, round), guards: state.guards, guardEvents: state.guard_events,
       runner: this.c.runner, sandbox: this.c.sandbox, anchors: this.c.anchors, build: this.c.build, ...(this.c.trial ? { trial: this.c.trial } : {}),
-      reviewer: this.c.reviewer!, formalize: withWatchdog(this.c.formalize!, limits.managementTimeoutMs), binary, sources: state.sources.map(x => ({ round: x.round, text: x.text })),
+      reviewer: this.c.reviewer, formalize: withWatchdog(this.c.formalize, limits.managementTimeoutMs), binary, sources,
       copyDir: label => join(this.c.copies ?? join(this.c.checkpoints, "review-copies"), label),
-      ...(leads ? { leads } : {}),
       ...(checkWriting ? { libraryNow: async () => { await checksReady(); const n = store.inspect(); return { library: n.checks, events: n.check_events } } } : {}),
       record: { review: r => store.recordReviewCall(r), formalize: c => store.recordFormalizeCalls(c), guards: (b, e) => store.recordGuards(b, e) },
       carried, quiet, superseded, time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
     }, { ...limits.execution, ...(a.reviews !== undefined ? { reviews: a.reviews } : {}), ...(a.trialFixes !== undefined ? { trialFixes: a.trialFixes } : {}), ...(a.premiseBlock ? { premiseBlock: a.premiseBlock } : {}), ...(a.fallback ? { fallback: a.fallback } : {}), ...(a.voidWithoutRuns !== undefined ? { voidWithoutRuns: a.voidWithoutRuns } : {}) })
-    await ready()
     await this.timed("waiting for checks", checksReady)
     // 5. The library's verdict on the final program, the guard coverage, the ledger, the report, the checkpoint.
     const final = this.program(`R${round}-final`)
-    const verdict = await store.runRoundChecks(round, final, this.c.runner, { verdict: true, timeoutMs: limits.checkTimeoutMs, adjudicate: this.c.adjudicate, staleByReference: this.staleByReference() })
+    const verdict = await store.runRoundChecks(round, final, this.c.runner, { verdict: true, timeoutMs: limits.checkTimeoutMs })
     state = store.inspect()
     const live = liveGuards(state.guards, state.guard_events)
     const gc = execution.kept ? guardCoverage(registry, round, live, new Set(live.map(g => g.id))) : null
@@ -562,7 +391,6 @@ export class Serial {
     const summary = acceptanceFromLedger(acceptanceSummary({ library: state.checks, runs: verdict.runs, events: state.check_events, findings: [], gaps: gapState(registry, state.probe_rounds, libraryCovers(registry, state.checks, state.check_events)) }).by_kind, ledgerNow)
     const report = buildReport({
       round, registry, workorder, execution, summary, ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: verdict.statuses,
-      probes: probing ? { calls: state.probe_calls.filter(c => c.round === round), judge_calls: state.judge_calls.filter(c => c.round === round), record: state.probe_rounds.find(r => r.round === round && r.status === "accepted") ?? null, active: this.activeProbes().length, findings: [], carried_in: 0 } : null,
       understand: state.calls.filter(c => c.round === round), acceptance: state.check_calls.filter(c => c.round === round),
       interrupted: {
         attempts: interrupted.length, understand: interrupted.flatMap(x => x.calls), acceptance: interrupted.flatMap(x => [...x.check_calls, ...(x.probe_calls ?? []), ...(x.judge_calls ?? []), ...(x.review_calls ?? []), ...(x.formalize_calls ?? [])]),
@@ -608,45 +436,6 @@ export class Serial {
     if (fd && first) writeFileSync(join(this.c.checkpoints, "scores.jsonl"), JSON.stringify({ round, commit: fd.commit, kind: "first_delivery", ...first }) + "\n", { encoding: "utf8", flag: "a" })
   }
 
-  /**
-   * The discrimination measure on the round's program (BLOCK10 §7.3): mutants in the task objects' code; where no
-   * probe tells one apart, the writer strengthens those units' probes, and the survivors are run again.
-   */
-  private async measure(round: number, workdir: string, program: ProgramRef, links: readonly AnchorLink[], objects: ReadonlySet<string>): Promise<NonNullable<CycleRecord["measure"]>> {
-    const { store, limits } = this.c
-    const deps = { build: this.c.build, ...(this.c.buildAsync ? { buildAsync: this.c.buildAsync } : {}), runner: this.c.runner, registry: store.registry(), anchors: this.c.anchors.extract(workdir), links, timeoutMs: limits.checkTimeoutMs, max: limits.mutants ?? 0, objects, platform: this.c.platform }
-    const d = await discriminate(workdir, program, this.activeProbes(), deps)
-    let strengthen: MeasureRecord["strengthen"] = null, after: MeasureRecord["after"] = null
-    if (d.weak.length) {
-      const s = await this.timed("strengthening", () => store.strengthen(round, d.weak, withWatchdog(this.c.probes!, limits.managementTimeoutMs), { maxRepairs: limits.probeRepairs ?? 2 }))
-      if (s.status === "interrupted") throw stopping(s.issues ?? [], `probes (strengthening), round ${round}`)
-      strengthen = { status: s.status, calls: s.calls, entered: s.entered, dropped: s.dropped }
-      if (s.entered.length) after = await remeasure(workdir, program, this.activeProbes(), d, { ...deps, registry: store.registry() })
-    }
-    await store.recordMeasure({ round, label: "round program", sites: d.sites, counts: d.counts, score: d.score, weak: d.weak.map(w => ({ object: w.object, units: w.units, sites: w.sites })), strengthen, after })
-    return { mutants: d.mutants.length, ...d.counts, score: d.score, weak_units: [...new Set(d.weak.flatMap(w => w.units))], strengthened: strengthen?.entered ?? [], still_weak: after ? after.still.length : d.counts.survived }
-  }
-
-  private activeProbes(): ProbeRecord[] {
-    const s = this.c.store.inspect()
-    return activeProbes(s.probes, s.probe_events)
-  }
-
-  /** The last full run's findings, by the program it ran on: the round's final findings when that is the kept one. */
-  private lastFull: { program: string; findings: Finding[]; items: CorrectionItem[]; runs: DetectedRun[] } | null = null
-
-  /**
-   * Runs probes on a program and judges the runs (kept verdicts reused): the findings, the correction items, and each
-   * run's digest and coverage. A full run judges a changed output only where a regression is suspected: the pair's
-   * last verdict was ok or wrong, or it has none (DESIGN §12h E4).
-   */
-  private async probe(round: number, probes: readonly ProbeRecord[], program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>, options: { full?: boolean } = {}) {
-    const ms = this.c.limits.managementTimeoutMs
-    const out = await runAndJudge({ store: this.c.store, runner: this.c.runner, timeoutMs: this.c.limits.checkTimeoutMs, concurrency: this.c.limits.probeConcurrency, judge: withWatchdog(this.c.judge!, ms), sandbox: this.c.sandbox, ...(this.c.ruling ? { ruling: withWatchdog(this.c.ruling, ms) } : {}), timed: (stage, f) => this.timed(stage, f) }, round, probes, program, before, contests, options)
-    if (options.full) this.lastFull = { program: program.id, ...out }
-    return out
-  }
-
   /** The program at the work tree's current commit, built; the null program when there is nothing to build. */
   private program(label: string | null): ProgramRef {
     if (label) {
@@ -655,32 +444,6 @@ export class Serial {
     }
     return nullBaseline(join(this.c.checkpoints, "null-baseline"))
   }
-}
-
-/**
- * Runs probes on a program and judges the runs (kept verdicts reused): the findings, the correction items, and each
- * run's digest and coverage. Objections are ruled on by `ruling` (DESIGN §12h E3). A full run judges a changed output
- * only where a regression is suspected: the pair's last verdict was ok or wrong, or it has none (E4).
- */
-export async function runAndJudge(d: { store: Exp2Store; runner: CheckRunner; timeoutMs: number; concurrency?: number; judge: JudgeTransport; ruling?: JudgeTransport; sandbox?: ScriptSandbox; timed?: <T>(stage: string, f: () => Promise<T>) => Promise<T> }, round: number, probes: readonly ProbeRecord[], program: ProgramRef, before: ReadonlySet<string>, contests: ReadonlyMap<string, string>, options: { full?: boolean } = {}): Promise<{ findings: Finding[]; items: CorrectionItem[]; runs: DetectedRun[] }> {
-  const timed = d.timed ?? (<T>(_: string, f: () => Promise<T>) => f())
-  const runs = await timed("probe runs", () => runProbes(probes, program, d.runner, d.timeoutMs, d.concurrency))
-  const last = new Map<string, string>()
-  if (options.full) for (const j of d.store.inspect().judgments) last.set(pairKey(j.probe, j.unit), j.verdict)
-  const judgeIf = options.full ? (probe: string, unit: string) => { const v = last.get(pairKey(probe, unit)); return v === undefined || v === "ok" || v === "wrong" } : undefined
-  const findings = (await timed("judging", () => d.store.judge(round, runs, d.judge, { contests, ...(d.sandbox ? { sandbox: d.sandbox } : {}), ...(judgeIf ? { judgeIf } : {}), ...(d.ruling ? { ruling: d.ruling } : {}) }))).filter(f => probes.some(p => p.id === f.probe))
-  return { findings, items: correctionItems(d.store.registry(), probes, runs, findings, before), runs: runs.map(r => ({ probe: r.probe, digest: outputDigest(r.output), ...(r.coverage !== undefined ? { coverage: r.coverage } : {}) })) }
-}
-
-/** What the previous round's full run recorded per check and probe: the functions it executed and its output's digest. */
-export function seenFrom(c: ExecutionRecord["coverage"]): Map<string, { functions?: string[]; digest: string }> {
-  if (!c) return new Map()
-  return new Map(Object.entries(c.ids).map(([id, v]) => [id, { ...(v.f ? { functions: v.f.map(i => c.functions[i]) } : {}), digest: v.d }]))
-}
-
-/** How a cycle's probe verdicts were reached: judged now (an output changed), from the cache, or by code. */
-export function verdictCounts(findings: readonly Finding[]): { judged: number; cached: number; by_code: number } {
-  return { judged: findings.filter(f => !f.cached && f.kind !== "A" && f.kind !== "B").length, cached: findings.filter(f => f.cached).length, by_code: findings.filter(f => !f.cached && (f.kind === "A" || f.kind === "B")).length }
 }
 
 export interface Span { stage: string; start: number; end: number }
@@ -708,27 +471,6 @@ export function wallTimes(spans: readonly Span[], start: number, end: number): {
 /** The section the work order gets for what the ledger still holds open under the review acceptance (DESIGN §12i). */
 export const CARRIED_HEADER_REVIEW = "## Still open from earlier rounds\n\nThese were found on the program as it stands and are not fixed yet. Fix them along with this round's work; the requirements are the authority."
 
-/** The section the work order gets for what earlier rounds' probes still find wrong (BLOCK10 §1.6). */
-export const CARRIED_HEADER = "## Corrections still open from earlier rounds\n\nProbes of earlier rounds, run on the program as it stands now, still show these deviations from the requirements. Fix them along with this round's work; the requirements are the authority."
-
-/** The name a correction list calls the program by: the built file, without a Windows extension. */
-export function programName(program: ProgramRef): string {
-  return (program.command.at(-1) ?? "program").split(/[\\/]/u).pop()!.replace(/\.exe$/iu, "")
-}
-
-/** Check statuses and probe statuses together: not landed by either is not landed; otherwise a known one wins. */
-export function mergeStatuses(checks: readonly ObjectStatus[], probes: readonly ObjectStatus[]): ObjectStatus[] {
-  const byProbe = new Map(probes.map(p => [p.object, p]))
-  const out = checks.map(c => {
-    const p = byProbe.get(c.object)
-    if (!p || p.status === "unknown" || c.status === "not_landed") return c
-    if (p.status === "not_landed" || c.status === "unknown") return { ...p, passing_strong: [...c.passing_strong, ...p.passing_strong], not_landed: [...c.not_landed, ...p.not_landed], unknown: [...c.unknown, ...p.unknown] }
-    return c
-  })
-  for (const p of probes) if (!checks.some(c => c.object === p.object)) out.push(p)
-  return out
-}
-
 /** The error a stopped management step stands for: a spent quota, or an invalid login. */
 function stopping(issues: { code: string; message: string }[], where: string): Error {
   const auth = issues.find(i => i.code === "auth"), gone = issues.find(i => i.code === "unavailable")
@@ -742,7 +484,7 @@ function sumUsage(a: StageCost["tokens"], b: StageCost["tokens"]): StageCost["to
 export type { ModelReply }
 
 /** What became of the round's check writing (batch C, effects 1–2), from the state and the round's runs. */
-export function checkWritingCounts(state: Pick<Exp2State, "checks" | "check_rounds">, round: number, execution: ExecutionRecord): Pick<RoundReport["checks"], "admitted" | "unknown" | "unknown_not_fed_back" | "dropped" | "normalized" | "refused_calls"> {
+export function checkWritingCounts(state: Pick<Exp2State, "checks" | "check_rounds">, round: number, execution: ExecutionRecord): Pick<RoundReport["checks"], "admitted" | "unknown" | "unknown_not_fed_back" | "dropped" | "normalized" | "refused_calls" | "uncovered"> {
   const mine = state.checks.filter(k => k.round === round)
   const tally = (list: string[]) => list.reduce((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {} as Record<string, number>)
   const record = state.check_rounds.find(r => r.round === round && r.status === "accepted")
@@ -752,5 +494,6 @@ export function checkWritingCounts(state: Pick<Exp2State, "checks" | "check_roun
     dropped: tally((record?.dropped ?? []).flatMap(d => [...new Set(d.issues.map(i => i.code))])),
     normalized: tally(mine.flatMap(k => (k.normalized ?? []).map(n => n.startsWith("args") ? "leading program name" : n.includes("expect_json") ? "unquoted expected string" : n.includes("Python dict") ? "Python dict output" : n.includes("several lines") ? "JSON on several lines" : n.includes("backslash") ? "doubled escapes" : "other"))),
     refused_calls: execution.cycles.reduce((n, c) => n + c.runs.filter(r => r.failure === "not_landed/refused_call").length, 0),
+    uncovered: (record?.coverage?.gaps ?? []).reduce((n, g) => n + g.units.length, 0),
   }
 }

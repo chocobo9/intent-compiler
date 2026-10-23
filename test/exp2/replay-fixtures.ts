@@ -46,7 +46,7 @@ export async function replayChecks(run: Run) {
   const requests: CheckRequest[] = []
   let n = 0
   const record = await store.deriveRoundChecks(1, async request => { requests.push(request); return reply(run.check_replies[Math.min(n++, run.check_replies.length - 1)]) }, {
-    sandbox: new LocalScriptSandbox(), runner: new LocalProcessRunner(), baseline: nullBaseline(mkdtempSync(join(tmpdir(), "exp2-c-null-"))), maxRepairs: 2, timeoutMs: 10_000, staleByReference: false, binary: "dpipe", admitInLoop: true,
+    sandbox: new LocalScriptSandbox(), runner: new LocalProcessRunner(), baseline: nullBaseline(mkdtempSync(join(tmpdir(), "exp2-c-null-"))), maxRepairs: 2, timeoutMs: 10_000, binary: "dpipe", admitInLoop: true,
   })
   return { store, record, requests }
 }

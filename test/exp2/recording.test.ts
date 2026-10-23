@@ -20,6 +20,7 @@ import { Exp2Store } from "../../src/exp2/store.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { roundText } from "./inputs.js"
 import { stubTransport } from "./stubs.js"
+import { standInReview } from "./review-stubs.js"
 
 const HAIKU = resolve(process.cwd(), "exp2/recordings/haiku-reference")
 const BATCH2 = join(HAIKU, "batch2")
@@ -45,7 +46,7 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
     assert.ok(calls.every(c => c.usage_unknown === true && c.stub === false && /haiku/u.test(c.model ?? "")), "no usage recorded: unknown, not zero")
   })
 
-  it("R6 (§12d item 1): refers_to an object is accepted, and a later revision of that object's text stales checks resting on the citing block", () => {
+  it("R6 (§12d item 1): refers_to an object is accepted; a later revision of that object's text no longer stales checks on the citing block (§12j.5)", () => {
     const r6 = sourced(before(6), 6)
     const checked = checkAnswer(r6, 6, applyPatch(EMPTY_DRAFT, answer("R6-ans1.json")))
     assert.deepEqual(checked.issues, [])
@@ -53,13 +54,10 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
     // An id that does not exist is named as such, with the ids there are.
     const wrong = applyPatch(EMPTY_DRAFT, { ...answer("R6-ans1.json"), edges_add: [{ from: "R6.S2.P3", to: "O999", kind: "refers_to" }] })
     assert.match(checkAnswer(r6, 6, wrong).issues[0].message, /There is no object O999 yet \(objects so far: O1–O\d+\)/u)
-    // R7 partly revises lineage (O40), which R6.S2.P3 refers to: a check resting on R6.S2.P3 goes stale through the edge.
+    // R7 partly revises lineage (O40), which R6.S2.P3 refers to: staleness through the edge is deleted (§12j.5).
     const all = store.registry()
     const check = { id: "K1", round: 6, key: "k", object: all.coverOf("R6.S2.P3")!.owner, blocks: ["R6.S2.P3"], uses: [], direction: "holds", input: { args: [], files: [] }, assertions: [], unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [] } as unknown as CheckRecord
-    assert.deepEqual(staleChecks(all, [check], [], 6), [])
-    const stale = staleChecks(all, [check], [], 7)
-    assert.deepEqual(stale.map(e => e.cause), [{ kind: "refers_to", source: "O40" }])
-    assert.match(stale[0].reason, /R6\.S2\.P3 refers to O40, partly revised in round 7/u)
+    assert.deepEqual(staleChecks(all, [check], [], 7), [])
   })
 
   it("R9 (§12d item 2): a section and its subsections given to the same object is one assignment", () => {
@@ -108,7 +106,7 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
     const r = replayByRound(loadCassette(join(BATCH2, "cassette.json")))
     const serialStore = new Exp2Store(join(dir, "store"), "b2-checks")
     const serial = new Serial({
-      store: serialStore, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: r.attribution, checks: r.checks,
+      ...standInReview(dir), store: serialStore, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: r.attribution, checks: r.checks,
       executor: serialExecutor([], new Set()), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(),
       build: goBuilder(join(dir, "builds"), {}, "dpipe"),
       limits: { attributionRepairs: 2, checkRepairs: 1, managementTimeoutMs: 60_000, checkTimeoutMs: 20_000, execution: DEFAULT_LIMITS },
@@ -239,7 +237,8 @@ describe("exp2 readings the text does not state (§12d item 10), on the real R4 
     // Later text that names the check's basis may state the reading: the check goes stale.
     const later = materialize(store.inspect().sources, store.inspect().rounds.map(x => x.acceptance!))
     later.references.push({ from: "R5.S1.P1", to: "R4.S3.P1", kind: "refers_to", round: 5 })
-    assert.deepEqual(staleChecks(later, [k], [], 5).map(e => e.cause), [{ kind: "refers_to", source: "R5.S1.P1" }])
+    // A later mention no longer stales it (§12j.5): a flip of a guard is what says a check is out of date.
+    assert.deepEqual(staleChecks(later, [k], [], 5), [])
     assert.deepEqual(staleChecks(later, [record(draft.assertions)], [], 5), [], "a check without a reading is not staled by a mere mention")
   })
 })

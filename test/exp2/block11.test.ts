@@ -8,7 +8,7 @@ import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { goBuilder } from "../../src/exp2/build.js"
 import { activeChecks, codeFacts } from "../../src/exp2/checks.js"
 import type { AdjudicationRequest } from "../../src/exp2/adjudication.js"
-import { acceptanceSummary, libraryKind, renderReport } from "../../src/exp2/report.js"
+import { acceptanceSummary, libraryKind } from "../../src/exp2/report.js"
 import { runChecks } from "../../src/exp2/verdict.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { batchResult, batchScript } from "../../src/exp2/docker.js"
@@ -18,8 +18,7 @@ import { correctionItems, judgeRuns, pairKey, type JudgeRequest } from "../../sr
 import { activeProbes, gapState, openGaps, runProbes, type ProbeRecord, type ProbeRequest } from "../../src/exp2/probes.js"
 import { LocalProcessRunner, LocalScriptSandbox, nullBaseline, type ProgramRef } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
-import { Serial, verdictCounts } from "../../src/exp2/serial.js"
-import { serialExecutor } from "./serial-executor.js"
+import { verdictCounts } from "../../src/exp2/probe-run.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
 import { DROP, FILTER, GO_MOD, MAIN, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
 import { roundText } from "./inputs.js"
@@ -318,29 +317,5 @@ describe("exp2 block 11 §5 (DESIGN §12g): one acceptance model; A and B are co
     assert.deepEqual(g.closed.map(c => [c.unit, c.reason]), [[X, "uncheckable: no probe exercised it in 2 writings (rounds 1, 2)"]])
     const summary = acceptanceSummary({ library: [], runs: [], events: [], findings: [], gaps: g })
     assert.deepEqual(summary.open.uncheckable.map(u => u.unit), [X])
-  })
-})
-
-describe("exp2 block 11 §6: the round report shows determinations by kind, open items by reason, and what each cycle ran", () => {
-  it("a stand-in R1 with the check library on, probes, judge and adjudicator", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "exp2-b11p-"))
-    const store = new Exp2Store(join(dir, "store"), "b11p")
-    const serial = new Serial({
-      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
-      executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
-      probes: stubProbeWriter(), judge: stubJudge(), adjudicate: async () => ({ stub: true, text: JSON.stringify({ verdict: "check_right", basis: ["R1.S3"], reason: "the text" }) }),
-      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
-    })
-    assert.equal((await serial.run({ to: 1 })).status, "done")
-    const r1 = store.inspect().reports[0]
-    const a = r1.acceptance!
-    assert.ok(a.by_kind.A > 0 && a.by_kind.B > 0 && a.by_kind.C > 0, JSON.stringify(a.by_kind))
-    assert.deepEqual(Object.keys(a.open).sort(), ["ambiguous", "confirmed", "expired", "program_wrong", "reference_pending", "uncheckable", "uncovered"])
-    const cycles = r1.probes!.runs_by_cycle
-    assert.ok(cycles.length > 0 && cycles.every(c => c.checks > 0 && c.probes > 0), JSON.stringify(cycles))
-    const text = renderReport(r1)
-    assert.match(text, /Determinations on the final program: \d+ stated values \(A\), \d+ by a reference \(B\), \d+ by judgment \(C\)/u)
-    assert.match(text, /Open: program wrong \d+, uncovered \d+, reference disagreement pending \d+, ambiguous \d+; closed as uncheckable \d+/u)
-    assert.match(text, /Runs per cycle \(in batches\): \S+ checks \d+, probes \d+: judged \d+ \(output changed\), cached \d+, by code \d+/u)
   })
 })

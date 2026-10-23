@@ -21,6 +21,7 @@ import { checkStubTransport } from "./check-stubs.js"
 import { roundText } from "./inputs.js"
 import { serialExecutor } from "./serial-executor.js"
 import { stubTransport } from "./stubs.js"
+import { standInReview } from "./review-stubs.js"
 
 /** Error texts as providers and OpenCode report them (the first is the one seen locally). */
 const AUTH_TEXTS = [
@@ -127,7 +128,7 @@ describe("exp2 local: provider errors", () => {
     const real = goBuilder(join(dir, "builds"))
     const store = new Exp2Store(join(dir, "store"), "env")
     const serial = new Serial({
-      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
+      ...standInReview(dir), store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
       executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(),
       build: (workdir, label) => { if (label.startsWith("C2.")) throw new EnvironmentBlocked("the host blocked C2.1/dpipe.exe 3 times: Error: spawn UNKNOWN"); return real(workdir, label) },
       limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
@@ -146,7 +147,7 @@ describe("exp2 local: provider errors", () => {
     const scored: number[] = []
     const store = new Exp2Store(join(dir, "store"), "auth")
     const serial = new Serial({
-      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution, checks: checkStubTransport(),
+      ...standInReview(dir), store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution, checks: checkStubTransport(),
       executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds")),
       limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
       score: async round => { scored.push(round); return { passed: 200 + round, total: 219 } },
@@ -158,7 +159,8 @@ describe("exp2 local: provider errors", () => {
     assert.equal(serial.interruptedAttempts(2).length, 1)
     assert.equal(store.inspect().calls.filter(c => c.round === 2).length, 0, "the state is back at the R1 checkpoint")
     // The score goes into the checkpoint's report and the score log, never into the state.
-    assert.deepEqual(scored, [1])
+    // Round 1 and its first delivery (the review acceptance scores both, DESIGN §12i).
+    assert.deepEqual(scored, [1, 1])
     const report = JSON.parse(readFileSync(join(dir, "checkpoints", "round-01", "report.json"), "utf8"))
     assert.deepEqual(report.official_score, { passed: 201, total: 219 })
     assert.equal(store.inspect().reports[0].official_score, null)
@@ -167,7 +169,7 @@ describe("exp2 local: provider errors", () => {
     // The statuses were frozen before scoring, and the score line names the frozen hash.
     const frozen = JSON.parse(readFileSync(join(dir, "checkpoints", "round-01", "prediction.json"), "utf8"))
     assert.ok(predictionIntact(frozen))
-    assert.equal(JSON.parse(readFileSync(join(dir, "checkpoints", "scores.jsonl"), "utf8").trim()).prediction_sha256, frozen.sha256)
+    assert.equal(JSON.parse(readFileSync(join(dir, "checkpoints", "scores.jsonl"), "utf8").trim().split("\n")[0]).prediction_sha256, frozen.sha256)
   })
 })
 

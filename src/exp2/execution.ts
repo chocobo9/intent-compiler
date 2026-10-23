@@ -176,8 +176,11 @@ export interface CycleRecord {
   probe_runs?: CheckRunCounts
   /** The guards run on this cycle's program (DESIGN §12i items 3–4): counts, flips (passing before, failing now), guards born. */
   guards?: { run: number; passed: number; failed: number; unknown: number; flipped: string[]; born: string[] }
-  /** This cycle's repair was reverted: it made passing guards fail; the leads it answered were discarded (§12i item 4). */
-  reverted?: { to: string; guards: string[]; discarded: string[] }
+  /**
+   * This cycle's repair was reverted: it made passing guards fail on text this round left as it was. The code change
+   * went; what it was sent for (`resent`) went out again (§12j.7 items 2, 11). Older records name them `discarded`.
+   */
+  reverted?: { to: string; guards: string[]; resent?: string[]; discarded?: string[] }
   /** The review held on this cycle's program (§12i item 1). */
   review?: Omit<ReviewSummary, "cycle">
   /** The target environment's trial (go build and go test) on this cycle's tree. */
@@ -288,7 +291,8 @@ export interface AcceptRoundRecord {
   program_runs_zero?: number
   /** Reviews whose entries did not each end once (batch C, effect 4); absent when all did. */
   conservation_errors?: string[]
-  guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; retired: { id: string; reason: string }[] }
+  /** flipped_disputed: flips whose run was disputed, given to the reviewer as leads, not regressions (§12j.7 item 11). */
+  guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; flipped_disputed?: string[]; retired: { id: string; reason: string }[] }
   reverted: number
   trial: { runs: number; failures: number }
   /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind. */
@@ -420,6 +424,14 @@ export class Sends {
     if (this.sent.get(id) !== digest) return { action: "send" }
     if (this.confirmed.has(id)) return { action: "hold", why: "confirmed by a ruling; sent once this round, no progress" }
     return { action: "hold", why: this.ruledAt.get(id) === digest ? "no progress after a ruling" : "no progress, and no ruling possible" }
+  }
+  private readonly reopened = new Set<string>()
+  /** After a reverted repair: the item may go once more at the output it was sent at (§12j.7 item 2). False when it already has. */
+  reopen(id: string): boolean {
+    if (this.reopened.has(id)) return false
+    this.reopened.add(id)
+    this.sent.delete(id)
+    return true
   }
   mark(id: string, digest: string, plan: { action: "send" | "hold"; why?: string }): void {
     if (plan.action === "send") this.sent.set(id, digest)

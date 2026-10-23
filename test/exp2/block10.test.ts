@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync } from "node:fs"
+import { mkdirSync, mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { before, describe, it } from "node:test"
@@ -9,7 +9,7 @@ import { codeFacts, replacedBasis } from "../../src/exp2/checks.js"
 import { executeRound, DEFAULT_LIMITS } from "../../src/exp2/execution.js"
 import { initRepo } from "../../src/exp2/git.js"
 import { correctionItems, judgeRuns, pairKey, probeStatuses } from "../../src/exp2/judge.js"
-import { activeProbes, groupUnit, MAX_UNITS, normalizeOutput, probeProblems, probeUnits, runProbes, type ProbeRun } from "../../src/exp2/probes.js"
+import { activeProbes, groupUnit, normalizeOutput, probeProblems, probeUnits, runProbes, type ProbeRun } from "../../src/exp2/probes.js"
 import { LocalProcessRunner } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
@@ -18,13 +18,8 @@ import { roundText } from "./inputs.js"
 import { filterProbe, stubJudge, stubProbeWriter } from "./probe-stubs.js"
 import { StubExecutor, write, remove, type Action } from "./stub-executor.js"
 import { stubTransport } from "./stubs.js"
-import { checkStubTransport } from "./check-stubs.js"
-import { serialExecutor } from "./serial-executor.js"
-import { Serial } from "../../src/exp2/serial.js"
-import { renderReport } from "../../src/exp2/report.js"
 import { discriminate, remeasure } from "../../src/exp2/discrimination.js"
-import { casesFromLog, compareCases, officialScore, probeDetect, repairProducts, scoreDefects } from "../../src/exp2/acceptance.js"
-import { LocalScriptSandbox } from "../../src/exp2/runner.js"
+import { casesFromLog, compareCases } from "../../src/exp2/acceptance.js"
 
 const out = (o: Partial<ProbeRun["output"]> = {}): ProbeRun["output"] => ({ exit_code: 0, timed_out: false, stdout: "", stderr: "", files: {}, ...o })
 
@@ -258,126 +253,7 @@ describe("exp2 block 10: repairs from correction lists in the execution session"
   })
 })
 
-describe("exp2 block 10: the serial with probes and judge (stand-ins), checks off", () => {
-  const dir = mkdtempSync(join(tmpdir(), "exp2-b10s-"))
-  const store = new Exp2Store(join(dir, "store"), "b10s", { checks: false })
-  const first: Record<number, string> = {}
-  // The judge finds every profile unit wrong (the stand-in executor only stubs profile), and reads filter and sort for real.
-  let profile = new Set<string>()
-  const judge = stubJudge((_item, unit) => profile.has(unit) ? { verdict: "wrong", reason: "profile prints nothing the text requires" } : null)
-  const inner = serialExecutor()
-  const serial = new Serial({
-    store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: checkStubTransport(),
-    executor: round => { const e = inner(round); return { open: async ctx => { first[round] ??= ctx.text; return e.open(ctx) } } }, executorIsStub: true,
-    anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
-    probes: stubProbeWriter(), judge: async r => { const reg = store.registry(); profile = new Set([...reg.assigned.entries()].filter(([, o]) => o === reg.objectByName("profile")?.id).flatMap(([b]) => [b, ...[...reg.blocks.values()].filter(x => reg.lineage(x.id).some(y => y.id === b)).map(x => x.id)])); return judge(r) },
-    limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 5000, checkTimeoutMs: 10_000, mutants: 4, execution: { ...DEFAULT_LIMITS, repairCycles: 1 } },
-  })
-  let outcome: Awaited<ReturnType<Serial["run"]>>
-  before(async () => { outcome = await serial.run({ to: 3 }) })
-
-  it("probes are written each round; what stays wrong is carried into the next round's first message and task zone", () => {
-    assert.deepEqual(outcome, { status: "done", last_checkpoint: 3, resumes: 0 })
-    const s = store.inspect()
-    assert.deepEqual(s.checks, [], "no precomputed checks")
-    assert.deepEqual(s.probe_rounds.map(r => [r.round, r.status]), [[1, "accepted"], [2, "accepted"], [3, "accepted"]])
-    const r2 = s.executions.find(e => e.round === 2)!
-    // Left open in R2: profile, and the text sort from R1 (the stand-in never repairs).
-    assert.ok(r2.open.some(k => profile.has(k.split("/")[1])))
-    const sortUnit = s.probes.find(p => p.key.endsWith("sort-asc"))!.covers[0].unit
-    assert.ok(r2.open.some(k => k.endsWith(`/${sortUnit}`)))
-    assert.match(first[2], /## Corrections still open from earlier rounds[\s\S]*not ascending/u)
-    assert.match(first[3], /## Corrections still open from earlier rounds[\s\S]*profile prints nothing the text requires/u)
-    const r3 = s.reports.find(r => r.round === 3)!
-    const pid = store.registry().objectByName("profile")!.id
-    assert.ok(r3.objects.find(o => o.object === pid)!.status === "not_landed")
-    assert.ok(r3.probes!.carried_in > 0)
-    // Filter and sort, judged on what the stand-in wrote: filter is right; the stand-in's sort compares as text.
-    const r1 = s.reports.find(r => r.round === 1)!
-    assert.equal(r1.objects.find(o => o.name === "filter")!.status, "landed")
-    assert.equal(r1.objects.find(o => o.name === "sort")!.status, "not_landed")
-  })
-
-  it("the report gives the writer's and the judge's calls and tokens, and their share of the coding tokens", () => {
-    const r1 = store.inspect().reports.find(r => r.round === 1)!
-    const m1 = store.inspect().probe_measures.find(m => m.round === 1)!
-    assert.equal(r1.probes!.writer.calls, 6 + (m1.strengthen?.calls.length ?? 0), "six groups, and the strengthening calls")
-    assert.ok(r1.probes!.judge.calls > 0)
-    assert.equal(r1.probes!.written, 133, "a probe per unit, and two more where a real probe covers one case and a generic one the rest")
-    // Case-level coverage and the measure, in the report.
-    assert.deepEqual([r1.probes!.cases!.total, r1.probes!.cases!.covered, r1.probes!.cases!.open], [155, 155, []])
-    assert.ok(r1.probes!.discrimination && r1.probes!.discrimination.mutants > 0 && r1.probes!.discrimination.mutants <= 4)
-    assert.match(renderReport(r1), /Cases: 155\/155 reached, 0 uncheckable, 0 open\. Discrimination: \d+ of \d+ mutants told apart/u)
-    // Rerunning unchanged probes costs nothing: the judge is asked only about outputs it has not seen.
-    const s = store.inspect()
-    const asked = s.judge_calls.filter(c => c.round === 3).reduce((n, c) => n + c.items, 0)
-    assert.ok(asked < activeProbes(s.probes, s.probe_events).length, `${asked} items judged in R3`)
-  })
-})
-
-describe("exp2 block 10: the offline acceptance harnesses (detection on products, repair with official before/after)", () => {
-  const dir = mkdtempSync(join(tmpdir(), "exp2-b10h-"))
-  const store = new Exp2Store(join(dir, "store"), "b10h")
-  const runner = new LocalProcessRunner()
-  const SORT_NUM = SORT.replace('import "sort"', 'import (\n\t"sort"\n\t"strconv"\n)').replace("return t.rows[a][i] < t.rows[b][i]", "x, _ := strconv.ParseFloat(t.rows[a][i], 64)\n\t\ty, _ := strconv.ParseFloat(t.rows[b][i], 64)\n\t\treturn x < y")
-  const product = (name: string, filterWrong: boolean, textSort: boolean) => {
-    const p = join(dir, "products", name)
-    mkdirSync(p, { recursive: true })
-    write(p, { "go.mod": GO_MOD, "main.go": MAIN, "verify.go": VERIFY(), "transform.go": TRANSFORM(["filter", "sort", "rename", "drop"]), "filter.go": FILTER(filterWrong), "sort.go": textSort ? SORT : SORT_NUM, "rename.go": RENAME, "drop.go": DROP })
-    return p
-  }
-  // The official verdict, faked from the code: a case per defect; and one case the text leaves open that a careless fix would break.
-  const scorer = join(dir, "score.mjs")
-  before(async () => {
-    await store.ingestRound(1, roundText(1), stubTransport())
-    const { writeFileSync } = await import("node:fs")
-    writeFileSync(scorer, `import { readFileSync } from "node:fs"
-const repo = process.argv[2], f = readFileSync(repo + "/filter.go", "utf8"), s = readFileSync(repo + "/sort.go", "utf8")
-const cases = { "R1 | filter keeps rows above | gt": !f.includes("keep != true"), "R1 | sort numeric | asc": s.includes("strconv"), "R1 | verify | ok": true }
-console.log(JSON.stringify({ passed: Object.values(cases).filter(Boolean).length, total: 3, cases }))
-`)
-  })
-
-  it("detection: a correction list per product, hits on the defect table, nothing on the clean product", async () => {
-    const products = [
-      { name: "clean", round: 1, path: product("clean", false, false) },
-      { name: "wrong-filter", round: 1, path: product("wrong-filter", true, false) },
-      { name: "text-sort", round: 1, path: product("text-sort", false, true) },
-    ]
-    const judge = stubJudge()
-    const r = await probeDetect({ store, probes: stubProbeWriter(), judge, build: goBuilder(join(dir, "builds"), {}, "dpipe"), runner, timeoutMs: 10_000, root: join(dir, "detect") }, products)
-    assert.equal(r.written!.entered.length, 133)
-    const keyOf = (id: string) => store.inspect().probes.find(p => p.id === id)!.key
-    const score = scoreDefects({ clean: ["clean"], defects: [{ name: "filter", products: ["wrong-filter"], pattern: "value > 10" }, { name: "sort numeric", products: ["text-sort"], pattern: "sort[\\s\\S]*ascending" }] }, r.products.map(p => ({ product: p.product.name, items: p.items, findings: p.findings, probeKey: keyOf })))
-    assert.equal(`${score.hits}/${score.total}`, "2/2")
-    assert.deepEqual(score.clean, [{ product: "clean", items: 0 }])
-    // Each product is judged on its own copy of the state: no verdict carries over from another product.
-    assert.deepEqual(r.products.map(p => p.judge_calls), [6, 6, 6])
-    assert.ok(existsSync(join(dir, "detect", "products", "text-sort", "store", "exp2-state.json")))
-  })
-
-  it("repair: a copy of each product is repaired in one session from its correction list; official cases compared before and after", async () => {
-    const products = [{ name: "wrong-filter", round: 1, path: join(dir, "products", "wrong-filter") }, { name: "text-sort", round: 1, path: join(dir, "products", "text-sort") }]
-    const executor = new StubExecutor({ messages: [wd => { write(wd, { "filter.go": FILTER(false), "sort.go": SORT_NUM }) }] })
-    const results = await repairProducts({
-      store, judge: stubJudge(), build: goBuilder(join(dir, "rbuilds"), {}, "dpipe"), runner, timeoutMs: 10_000, executor: () => executor, anchors: new GoAnchorExtractor(),
-      limits: { ...DEFAULT_LIMITS, repairCycles: 2 }, binary: "dpipe", text: roundText, score: (commit, repo, round) => officialScore([process.execPath, scorer, "{repo}"], round, commit, repo),
-    }, products, join(dir, "repair"))
-    for (const r of results) {
-      assert.equal(r.items_before.length, 1)
-      assert.deepEqual(r.open_after, [])
-      assert.equal(r.official_after!.passed, 3)
-      assert.deepEqual(r.cases!.broke, [])
-      assert.equal(r.cases!.fixed.length, 1)
-    }
-    // The first message: the requirements and the correction list, and the instruction not to touch other behaviour.
-    const first = executor.log.messages[0].text
-    assert.ok(first.includes("# Requirements") && first.includes("Build a deterministic data pipeline tool") && first.includes("# Correction list") && first.includes("Do not change behaviour the items do not concern"))
-    // The products themselves are untouched; the repair works on a copy.
-    const { readFileSync } = await import("node:fs")
-    assert.ok(readFileSync(join(dir, "products", "wrong-filter", "filter.go"), "utf8").includes("keep != true"))
-  })
-
+describe("exp2 block 10: official results for the local comparison", () => {
   it("official cases from a verifier log, by requirement, intent and scenario", () => {
     const log = 'CASE_RESULT case_id=c001 x requirement_ref=R1.3 case_type=t status=pass intent="filter" scenario="gt"\nCASE_RESULT case_id=c002 x requirement_ref=R1.3 case_type=t status=fail intent="sort" scenario="numeric"\n'
     assert.deepEqual([...casesFromLog(log)], [["R1.3 | filter | gt", true], ["R1.3 | sort | numeric", false]])

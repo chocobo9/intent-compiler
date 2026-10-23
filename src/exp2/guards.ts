@@ -43,6 +43,8 @@ export interface GuardEvent {
   program?: string
   /** failing: the round's text changes behind the flip, when there are any (§12i item 6); none: a regression. */
   changed_text?: string[]
+  /** failing: the run was disputed (the check's own reading or reference against the program's), not a regression (§12j.7 item 11). */
+  disputed?: string
   reason?: string
 }
 
@@ -104,7 +106,10 @@ function inputWords(input: CheckInput | undefined): Set<string> {
  * guard's input invokes (a command, a step type, a field). Empty: the text behind the guard did not change, and a
  * flip is a regression.
  */
-export function changedTextBehind(registry: Registry, guard: Pick<GuardRecord, "units" | "input">, library: readonly CheckRecord[], round: number, check?: string): string[] {
+export function changedTextBehind(registry: Registry, guard: Pick<GuardRecord, "units" | "input"> & { round?: number }, library: readonly CheckRecord[], round: number, check?: string): string[] {
+  // A guard born this round rests on this round's text: nothing changed behind it (with classification before the
+  // revert, §12j.7 item 11, every flip of a round-1 guard would otherwise read as a change of text).
+  if (guard.round !== undefined && guard.round >= round) return []
   const out = new Set<string>()
   const input = guard.input ?? (check ? library.find(c => c.id === check)?.input : undefined)
   for (const m of replacedBasis(registry, guard.units, round - 1, round)) out.add(`${m.unit}: ${m.parts.join(", ")} ${m.kind === "partial" ? "partly revised" : m.kind === "withdraw" ? "withdrawn" : "replaced"} by ${m.by.join(", ")}`)

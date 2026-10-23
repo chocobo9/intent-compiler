@@ -2,7 +2,7 @@ import type { Anchor } from "./anchors.js"
 import { activeChecks, type CheckEvent, type CheckRecord } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import type { CheckRun, ObjectStatus } from "./verdict.js"
-import { contextOf } from "./view.js"
+import { contextOf, roundPackage } from "./view.js"
 
 /**
  * The round's work order (DESIGN §6): five zones computed by code. Zones other than the source zone cite ids only;
@@ -43,7 +43,15 @@ export interface WorkOrder {
   anchors: { object: string; anchors: { id: string; file: string; lines: string }[]; last_steps: { step: string; round: number; status: string; anchors: string[] }[] }[]
   /** Edges of task objects, for reference only (never an order constraint). */
   edges: { from: string; to: string; kind: string }[]
+  /**
+   * What of the requirements the source zone holds (§12j.7 item 9): delta, the round's package (§6a step 3), or all.
+   * Characters of the source zone as rendered, and what it would be with every round's text (all), for the report.
+   */
+  scope?: { kind: "delta" | "all"; source_chars: number; source_chars_all: number; blocks: number; blocks_all: number }
 }
+
+/** A failure the round must fix: a confirmed item (the reviewer's, verified) or a guard failing; never a hypothesis. */
+export interface ConfirmedFailure { id: string; object: string | null; units: string[]; args: string[]; files: string[] }
 
 export interface PreviousStep { id: string; round: number; status: string; objects: { object: string; coverage: "full" | "partial" }[]; anchors: string[] }
 
@@ -66,6 +74,13 @@ export interface WorkOrderInput {
    * is protection or status. Default true.
    */
   zoning?: boolean
+  /** The source zone: the round's package (delta) or every round's text (all, the default here; ablation in the serial). */
+  scope?: "delta" | "all"
+  /**
+   * Under the review acceptance (§12j.7 items 4, 10): the failures that make an object a task are these (confirmed items
+   * and guards), not the library's hypotheses, and there is no status zone. Absent: the library's statuses, as before.
+   */
+  confirmed?: readonly ConfirmedFailure[]
 }
 
 /**
@@ -97,7 +112,14 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
     return t
   }
   for (const c of registry.roundScope(round)) { const t = entry(c.object); t.why.push("changed"); t.change = c.id }
-  for (const s of input.statuses) {
+  for (const f of input.confirmed ?? []) {
+    const object = f.object && registry.objects.has(f.object) ? f.object : f.units.map(u => registry.coverOf(u)?.owner).find((o): o is string => !!o && o !== "none" && registry.objects.has(o))
+    if (!object) continue
+    const t = entry(object)
+    if (!t.why.includes("not_landed")) t.why.push("not_landed")
+    t.evidence.push({ check: f.id, reason: /^G\d+$/u.test(f.id) ? "guard failing" : "confirmed", args: f.args, files: f.files, mismatches: [] })
+  }
+  for (const s of input.confirmed ? [] : input.statuses) {
     if (s.status !== "not_landed" || !registry.objects.has(s.object)) continue
     const t = entry(s.object)
     t.why.push("not_landed")
@@ -132,7 +154,7 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   if (input.zoning === false) for (const o of registry.objects.values()) if (o.blocks.some(b => LIVE_STATES.has(b.state))) entry(o.id)
   // Failures that rest on an unstated reading go next to the evidence of objects that are tasks anyway, marked as
   // such; they make nothing a task (DESIGN §12d item 10).
-  for (const run of input.runs.filter(r => r.failure?.reason === "reading")) {
+  for (const run of input.confirmed ? [] : input.runs.filter(r => r.failure?.reason === "reading")) {
     const k = checks.get(run.check), t = k && tasks.get(k.object)
     if (!k || !t) continue
     t.evidence.push({
@@ -153,7 +175,7 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
     return [{ object: s.object, name: name(s.object), checks: [...new Set(passing)], shared_anchors: shared }]
   })
 
-  const statusZone = input.statuses.filter(s => s.status === "unknown" && !inTask.has(s.object) && registry.objects.has(s.object))
+  const statusZone = (input.confirmed ? [] : input.statuses).filter(s => s.status === "unknown" && !inTask.has(s.object) && registry.objects.has(s.object))
     .map(s => {
       const readings = s.unknown.flatMap(id => {
         const run = input.runs.find(r => r.check === id && r.failure?.reason === "reading"), k = checks.get(id)
@@ -180,8 +202,20 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
       groups.set(key, [...(groups.get(key) ?? []), { id: b.id, state: states.get(b.id) ?? "none", heading_path: path, text: markRevisions(registry, b.id, round) }])
     }
   }
-  const order = [...groups.keys()].sort((a, b) => a === null ? 1 : b === null ? -1 : Number(a.slice(1)) - Number(b.slice(1)))
-  const source = order.map(k => ({ object: k, name: k === null ? "(no requirement)" : name(k), blocks: groups.get(k)! }))
+  const order = (g: Map<string | null, unknown>) => [...g.keys()].sort((a, b) => a === null ? 1 : b === null ? -1 : Number(a.slice(1)) - Number(b.slice(1)))
+  const all = order(groups).map(k => ({ object: k, name: k === null ? "(no requirement)" : name(k), blocks: groups.get(k)! }))
+  let source = all
+  if (input.scope === "delta") {
+    // The round's package (DESIGN §6a step 3): earlier text in force as it stands, the rest held by the guards.
+    const units = (input.confirmed ?? []).flatMap(f => f.units)
+    const delta = new Map<string | null, { id: string; state: string; heading_path: string[]; text: string }[]>()
+    for (const b of roundPackage(registry, round, units)) {
+      const ctx = contextOf(registry, b.id)
+      const path = registry.lineage(ctx.id).slice(ctx.level === "section" ? 1 : 0).filter(x => x.level === "section" && x.heading).map(x => x.heading!.trim()).reverse()
+      delta.set(b.object, [...(delta.get(b.object) ?? []), { id: b.id, state: b.why === "this round" ? "active" : b.why, heading_path: path, text: b.text }])
+    }
+    source = order(delta).map(k => ({ object: k, name: k === null ? "(no requirement)" : name(k), blocks: delta.get(k)! }))
+  }
 
   const anchorZone = [...task.map(t => t.object), ...protect.map(p => p.object)].map(object => ({
     object,
@@ -193,7 +227,17 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
     const to = /^O\d+$/u.test(e.to) ? e.to : registry.coverOf(e.to)?.owner
     return (from && inTask.has(from)) || (to && inTask.has(to))
   }).map(e => ({ from: e.from, to: e.to, kind: e.kind }))
-  return { round, task, protect, status: statusZone, source, anchors: anchorZone, edges }
+  const chars = (zone: WorkOrder["source"]) => renderSource(zone).length
+  return { round, task, protect, status: statusZone, source, anchors: anchorZone, edges, scope: { kind: input.scope ?? "all", source_chars: chars(source), source_chars_all: chars(all), blocks: source.reduce((n, g) => n + g.blocks.length, 0), blocks_all: all.reduce((n, g) => n + g.blocks.length, 0) } }
+}
+
+function renderSource(zone: WorkOrder["source"]): string {
+  const out: string[] = []
+  for (const g of zone) {
+    out.push(`### ${g.object ?? "—"} ${g.name}`, "")
+    for (const b of g.blocks) out.push(`[${b.id}${b.state !== "active" && b.state !== "none" ? ` · ${b.state}` : ""}${b.heading_path.length ? ` · ${b.heading_path.join(" › ")}` : ""}]`, b.text.trimEnd(), "")
+  }
+  return out.join("\n")
 }
 
 /**
@@ -228,7 +272,8 @@ export function renderWorkOrder(w: WorkOrder): string {
   }
   out.push("", "## Protection zone (must not break; these checks are rerun)", "")
   for (const p of w.protect) out.push(`- ${p.object} ${p.name}: checks ${p.checks.join(", ") || "(none)"}; shared anchors ${p.shared_anchors.join(", ")}`)
-  out.push("", "## Status zone (for information, not tasks)", "")
+  // Under the review acceptance there is no status zone (§12j.7 item 4); an empty one is not printed.
+  if (w.status.length || !w.scope) out.push("", "## Status zone (for information, not tasks)", "")
   for (const s of w.status) {
     out.push(`- ${s.object} ${s.name}: unknown (${s.reasons.join(", ") || "no reason recorded"})`)
     for (const r of s.readings ?? []) out.push(`  - ${r.check} ${r.assertion} expected ${JSON.stringify(r.expected)}, got ${JSON.stringify(r.actual)}; the expectation rests on a reading the text does not state: ${r.reading}`)
@@ -236,10 +281,7 @@ export function renderWorkOrder(w: WorkOrder): string {
   out.push("", "## Anchor zone", "")
   for (const a of w.anchors) out.push(`- ${a.object}: ${a.anchors.map(x => `${x.id} (${x.file}:${x.lines})`).join(", ") || "(no anchors yet)"}${a.last_steps.length ? `; last steps ${a.last_steps.map(s => `${s.step} ${s.status}`).join(", ")}` : ""}`)
   if (w.edges.length) out.push("", "Edges (reference only): " + w.edges.map(e => `${e.from} ${e.kind} ${e.to}`).join("; "))
-  out.push("", "## Source zone (the requirements; the only authority)", "")
-  for (const g of w.source) {
-    out.push(`### ${g.object ?? "—"} ${g.name}`, "")
-    for (const b of g.blocks) out.push(`[${b.id}${b.state !== "active" && b.state !== "none" ? ` · ${b.state}` : ""}${b.heading_path.length ? ` · ${b.heading_path.join(" › ")}` : ""}]`, b.text.trimEnd(), "")
-  }
+  out.push("", w.scope?.kind === "delta" && w.round > 1 ? "## Source zone (the requirements this round concerns, earlier text as it stands now; the only authority)" : "## Source zone (the requirements; the only authority)", "")
+  out.push(renderSource(w.source))
   return out.join("\n") + "\n"
 }

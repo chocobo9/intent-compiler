@@ -9,7 +9,7 @@ import * as checks from "../../src/exp2/checks.js"
 import * as executor from "../../src/exp2/opencode-executor.js"
 import * as judge from "../../src/exp2/judge.js"
 import * as probes from "../../src/exp2/probes.js"
-import { CARRIED_HEADER } from "../../src/exp2/serial.js"
+import { CARRIED_HEADER_REVIEW } from "../../src/exp2/serial.js"
 import { REPAIR_INTRO } from "../../src/exp2/acceptance.js"
 import { repairMessage, RESUME_NOTE } from "../../src/exp2/execution.js"
 
@@ -82,7 +82,7 @@ function rendered(): { where: string; text: string }[] {
   }
   out.push({ where: "repairMessage", text: repairMessage("", { ok: true, output: "" }, "") }, { where: "repairMessage(build)", text: repairMessage("", { ok: false, output: "" }) })
   out.push({ where: "correction note", text: judge.renderCorrections([{ key: "P1/U1", probe: "P1", rule: { id: "U1", text: "" }, call: [], input_files: [], actual: { exit_code: 0, timed_out: false, stdout: "", stderr: "", files: {} }, finding: "", passed_before: true }], "prog") })
-  out.push({ where: "CARRIED_HEADER", text: CARRIED_HEADER }, { where: "REPAIR_INTRO", text: REPAIR_INTRO }, { where: "RESUME_NOTE", text: RESUME_NOTE })
+  out.push({ where: "CARRIED_HEADER_REVIEW", text: CARRIED_HEADER_REVIEW }, { where: "REPAIR_INTRO", text: REPAIR_INTRO }, { where: "RESUME_NOTE", text: RESUME_NOTE })
   return out
 }
 

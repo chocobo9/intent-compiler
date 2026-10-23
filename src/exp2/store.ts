@@ -4,7 +4,7 @@ import { attributeRound, RoleUnavailable, type AttributionTransport, type Issue,
 import { writing } from "./platform.js"
 import { materialize, type Registry, type RoundAcceptance, type Signal } from "./registry.js"
 import { contentHash } from "./source.js"
-import { activeChecks, admissionIssues, basisOf, codeFacts, deriveChecks, type AdmitCheck, libraryCovers, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport, type Coverage } from "./checks.js"
+import { activeChecks, admissionIssues, basisOf, codeFacts, deriveChecks, type AdmitCheck, libraryCovers, methodB, refusedChecks, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport, type Coverage } from "./checks.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import type { ExecutionRecord } from "./execution.js"
 import type { RoundReport } from "./report.js"
@@ -111,8 +111,8 @@ export interface DeriveDeps {
   baseline: ProgramRef
   maxRepairs?: number
   timeoutMs?: number
-  /** Whether a check goes stale when text it refers to, a convention it uses or its object's later text changes (default true; off under DESIGN §12i item 6). */
-  staleByReference?: boolean
+  /** Whether units the checks leave uncovered go back to the writer as issues (default false: reported only, §12j.7 item 3). */
+  coverageObligation?: boolean
   /** Checks only for text this round added or revised, and for stale checks (fix block B2). */
   unitsOnce?: boolean
   /** The program's name as the requirements give it: arguments that start with it are read as starting after it (batch C, effect 1). */
@@ -187,16 +187,20 @@ export class Exp2Store {
 
   /** Derives checks for the objects round `round` changed, admits what verifies, and judges strength on the baseline. */
   async deriveRoundChecks(round: number, transport: ChecksTransport, deps: DeriveDeps): Promise<CheckRoundRecord> {
-    await this.beginRoundChecks(round, deps)
+    await this.beginRoundChecks(round)
     return this.writeRoundChecks(round, transport, deps)
   }
 
-  /** The short first part of deriving a round's checks: checks whose text changed are marked stale at once. No model call. */
-  async beginRoundChecks(round: number, deps: Pick<DeriveDeps, "staleByReference">): Promise<void> {
+  /**
+   * The short first part of deriving a round's checks, no model call: checks whose text changed are marked stale at
+   * once, and checks the program refused last round as an unknown subcommand (§12j.7 item 7), so they are written again.
+   */
+  async beginRoundChecks(round: number): Promise<void> {
     await this.transaction(s => {
       if (!s.rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} has no accepted attribution`)
       if (s.check_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} already has its checks`)
-      s.check_events.push(...staleChecks(this.registry(s), s.checks, s.check_events, round, { byReference: deps.staleByReference }))
+      const stale = staleChecks(this.registry(s), s.checks, s.check_events, round)
+      s.check_events.push(...stale, ...refusedChecks(s.checks, [...s.check_events, ...stale], round, refusedIn(s, round - 1)))
     })
   }
 
@@ -210,7 +214,7 @@ export class Exp2Store {
     const timeout = deps.timeoutMs ?? 10_000
     // Admission runs inside the writing loop, so what the reference script gives goes back to the model (batch C, effect 1).
     const admit: AdmitCheck = async k => { const b = await methodB(k, deps.sandbox, timeout); return { issues: admissionIssues(k, b), notes: b.normalized ?? [] } }
-    const outcome = await deriveChecks(registry, round, s0.checks, s0.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `~M${n}`, unitsOnce: deps.unitsOnce, binary: deps.binary ?? null, ...(deps.admitInLoop ? { admit } : {}) })
+    const outcome = await deriveChecks(registry, round, s0.checks, s0.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `~M${n}`, unitsOnce: deps.unitsOnce, binary: deps.binary ?? null, ...(deps.admitInLoop ? { admit } : {}), ...(deps.coverageObligation ? { coverageObligation: true } : {}) })
     const facts = codeFacts(registry, round)
     const drafted: Omit<CheckRecord, "id" | "calls">[] = []
     if (outcome.status === "accepted") for (const draft of outcome.draft!.checks) {
@@ -253,24 +257,15 @@ export class Exp2Store {
   }
 
   /** Reruns the whole active library on `program` (the regression), records the runs, and returns the statuses. */
-  async runRoundChecks(round: number, program: ProgramRef, runner: CheckRunner, options: { verdict?: boolean; timeoutMs?: number; adjudicate?: AdjudicationTransport; staleByReference?: boolean } = {}): Promise<{ runs: CheckRun[]; statuses: ObjectStatus[] }> {
+  async runRoundChecks(round: number, program: ProgramRef, runner: CheckRunner, options: { verdict?: boolean; timeoutMs?: number } = {}): Promise<{ runs: CheckRun[]; statuses: ObjectStatus[] }> {
     const verdict = options.verdict ?? true, timeoutMs = options.timeoutMs ?? 10_000
     return this.transaction(async s => {
       const registry = this.registry(s)
-      s.check_events.push(...staleChecks(registry, s.checks.filter(c => c.round <= round), s.check_events, round, { byReference: options.staleByReference }))
+      s.check_events.push(...staleChecks(registry, s.checks.filter(c => c.round <= round), s.check_events, round))
       const facts = codeFacts(registry, round)
       const library = activeChecks(s.checks.filter(c => c.round <= round), s.check_events.filter(e => e.round <= round))
-      let runs: CheckRun[] = (await runChecks(library, program, runner, round, registry, facts, timeoutMs, id => upheldKinds(s, id))).map(r => ({ ...r, verdict }))
-      // Disputed failures are ruled on against the text (BLOCK9 §2.3): a wrong check leaves, a right one is run again.
-      if (options.adjudicate) {
-        const disputes = runs.filter(r => r.failure?.class === "disputed").map(r => ({ check: r.check, run: r, kind: r.failure!.reason as DisputeKind, detail: r.failure!.detail }))
-        const settled = await this.settleIn(s, registry, round, disputes, options.adjudicate)
-        runs = await Promise.all(runs.map(async r => {
-          if (settled.wrong.has(r.check)) return null
-          if (!settled.right.has(r.check)) return r
-          return { ...await runCheck(library.find(c => c.id === r.check)!, program, runner, round, registry, facts, timeoutMs, upheldKinds(s, r.check)), verdict }
-        })).then(x => x.filter((r): r is CheckRun => !!r))
-      }
+      const runs: CheckRun[] = (await runChecks(library, program, runner, round, registry, facts, timeoutMs, id => upheldKinds(s, id))).map(r => ({ ...r, verdict }))
+      // Disputed failures are not ruled on here any more (§12j.7 item 1): no model judges a check right or wrong.
       s.check_runs.push(...runs)
       return { runs, statuses: objectStatuses(registry, s.checks, s.check_events, runs, round) }
     })
@@ -507,4 +502,12 @@ export function appendOnly(before: Exp2State, after: Exp2State): void {
     if (b.length < a.length || a.some((x, i) => JSON.stringify(x) !== JSON.stringify(b[i]))) throw new Error(`Exp2 state ${key} is append-only`)
   }
   if (before.profile !== after.profile || before.run_id !== after.run_id) throw new Error("Exp2 state identity changed")
+}
+
+/** Library checks the program refused in `round` as an unknown subcommand, on any program of that round, with what it said. */
+export function refusedIn(s: Pick<Exp2State, "executions" | "check_runs">, round: number): Map<string, string> {
+  const out = new Map<string, string>()
+  for (const r of s.check_runs.filter(x => x.round === round && x.failure?.reason === "refused_call")) out.set(r.check, r.failure!.detail)
+  for (const c of s.executions.filter(e => e.round === round).flatMap(e => e.cycles)) for (const r of c.runs.filter(x => x.failure === "not_landed/refused_call" && /^K\d+$/u.test(x.check))) if (!out.has(r.check)) out.set(r.check, "it answered the call as it answers an unknown subcommand")
+  return out
 }

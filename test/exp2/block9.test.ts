@@ -1,18 +1,13 @@
-import { mkdirSync, mkdtempSync } from "node:fs"
+import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { before, describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { goBuilder } from "../../src/exp2/build.js"
 import { codeFacts, type CheckRecord } from "../../src/exp2/checks.js"
-import { detect, parseProducts, renderDetect } from "../../src/exp2/detect.js"
-import { LocalProcessRunner, LocalScriptSandbox, nullBaseline, type RunOutput } from "../../src/exp2/runner.js"
+import { type RunOutput } from "../../src/exp2/runner.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { classify, compare, crashed } from "../../src/exp2/verdict.js"
-import { checkStubTransport } from "./check-stubs.js"
-import { FILTER, GO_MOD, MAIN, TRANSFORM, VERIFY } from "./go-fixtures.js"
 import { roundText } from "./inputs.js"
-import { write } from "./stub-executor.js"
 import { stubTransport } from "./stubs.js"
 
 const out = (o: Partial<RunOutput>): RunOutput => ({ exit_code: 0, stdout: "", stderr: "", files: {}, timed_out: false, ...o })
@@ -59,41 +54,5 @@ describe("exp2 block 9: failure classes (BLOCK9 §2.3)", () => {
     assert.deepEqual([refused.class, refused.reason], ["not_landed", "refused"])
     const incomplete = judge(k, out({ exit_code: 1, stderr: "ERROR: file not found: data.csv\n" }))
     assert.deepEqual([incomplete.class, incomplete.reason], ["disputed", "input_incomplete"])
-  })
-})
-
-describe("exp2 block 9: the offline acceptance harness (products with known official results)", () => {
-  const dir = mkdtempSync(join(tmpdir(), "exp2-detect-"))
-  const store = new Exp2Store(join(dir, "store"), "detect")
-  const product = (name: string, files: Record<string, string>) => { const p = join(dir, name); mkdirSync(p, { recursive: true }); write(p, files); return p }
-  const base = { "go.mod": GO_MOD, "main.go": MAIN, "verify.go": VERIFY() }
-  before(async () => {
-    await store.ingestRound(1, roundText(1), stubTransport())
-    await store.deriveRoundChecks(1, checkStubTransport(), { sandbox: new LocalScriptSandbox(), runner: new LocalProcessRunner(), baseline: nullBaseline(join(dir, "null")) })
-  })
-
-  it("prints a table per product: a panic and a missing operation are not landed, a correct product lands, a check wrong for all shows up", async () => {
-    const products = parseProducts([
-      `correct\t1\t${product("correct", { ...base, "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(false) })}\t219\t`,
-      `# a comment line`,
-      `wrong-value\t1\t${product("wrong", { ...base, "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(true) })}\t210`,
-      `panic\t1\t${product("panic", { ...base, "transform.go": TRANSFORM(["filter"]), "filter.go": FILTER(false).replace("func opFilter(t table, op map[string]any) (table, error) {", "func opFilter(t table, op map[string]any) (table, error) {\n\tvar xs []int\n\t_ = xs[len(t.rows)]") })}\t191`,
-      `stopped-early\t1\t${product("early", { ...base, "transform.go": TRANSFORM([]) })}\t91`,
-    ].join("\n"))
-    // The stand-in adjudicator upholds the references (DESIGN §12g): their failures then count against the program.
-    const upholds = async (r: { check: { blocks: string[] } }) => ({ stub: true, text: JSON.stringify({ verdict: "check_right", basis: [r.check.blocks[0]], reason: "stand-in" }) })
-    const report = await detect(store.inspect(), products, { build: goBuilder(join(dir, "builds"), {}, "dpipe"), runner: new LocalProcessRunner(), adjudicate: upholds })
-    assert.ok(report.rulings.length > 0 && report.rulings.every(r => r.verdict === "check_right"))
-    const by = (n: string) => report.products.find(p => p.product.name === n)!
-    assert.ok(by("correct").landed.includes("filter"))
-    assert.ok(by("wrong-value").not_landed.includes("filter"))
-    assert.ok(by("panic").not_landed.includes("filter") && by("panic").failures["not_landed/crash"]?.length)
-    assert.ok(by("stopped-early").not_landed.includes("filter") && by("stopped-early").failures["not_landed/missing_name"]?.length)
-    // The badly built verify check fails on every product, and as disputed: it never counts against any of them.
-    const verify2 = store.inspect().checks.find(c => c.key === "verify-match-2")!.id
-    assert.deepEqual(report.fail_everywhere.find(c => c.check === verify2)?.classes, ["disputed/input_incomplete"])
-    const md = renderDetect(report, store.inspect())
-    assert.match(md, /\| panic \| 1 \| 191 \| yes \|.*crash: filter-gt/u)
-    assert.match(md, /## Checks that fail on every product that ran them\n\n- K\d+ verify-match-2/u)
   })
 })

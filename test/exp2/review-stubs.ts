@@ -171,3 +171,8 @@ export function stubFormalizer(units: { filter: string; sort: string }, extra: (
   }
   return Object.assign(f, { requests })
 }
+
+/** The review acceptance's stand-ins for a serial (the only flow left, §12j.4): the working reviewer and the formalizer. */
+export function standInReview(dir: string): { reviewer: Reviewer; formalize: FormalizeTransport } {
+  return { reviewer: workingReviewer(join(dir, "review-builds")), formalize: stubFormalizer({ filter: "R1.S3.P2.s4", sort: "R1.S3.P9.s2" }) }
+}

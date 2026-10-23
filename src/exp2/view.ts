@@ -119,3 +119,81 @@ export function renderObjectView(view: ObjectView): string {
   }
   return out.join("\n") + "\n"
 }
+
+/**
+ * A block as it is in force after `round` (DESIGN §6a step 2): text later rounds replaced or withdrew inside it is left
+ * out, with the id of what replaced it in its place; amended parts (code, tables) stay, with what amends them. Null when
+ * the block as a whole is no longer in force.
+ */
+export function effectiveText(registry: Registry, block: string, round: number): string | null {
+  const b = registry.block(block)!
+  const own = registry.objects.get(registry.assigned.get(block) ?? "")?.blocks.find(x => x.block === block)
+  const mods = own?.modifications.filter(m => m.round <= round) ?? []
+  if (mods.some(m => m.parts.includes(block) && !(m.amended ?? []).includes(block))) return null
+  const cuts: { start: number; end: number; note: string }[] = []
+  for (const m of mods) for (const p of m.parts) {
+    const part = registry.block(p)
+    if (!part || part.start < b.start || part.end > b.end) continue
+    const amended = (m.amended ?? []).includes(p)
+    const note = amended ? `⟦${p} amended by ${m.by.join(", ")}; where they differ, ${m.by.join(", ")} wins⟧ ` : m.kind === "withdraw" ? `⟦${p} withdrawn⟧ ` : `⟦${p} replaced by ${m.by.join(", ")}⟧ `
+    // The replaced text goes; it ends where its content ends, so the layout around it stays.
+    cuts.push(amended ? { start: part.start - b.start, end: part.start - b.start, note } : { start: part.start - b.start, end: part.start - b.start + part.text.trimEnd().length, note })
+  }
+  let text = b.text
+  for (const c of cuts.sort((x, y) => y.start - x.start)) text = `${text.slice(0, c.start)}${c.note}${text.slice(c.end)}`
+  return text
+}
+
+export interface PackageBlock { id: string; round: number; object: string | null; text: string; why: "this round" | "object changed" | "related" | "open item" }
+
+/**
+ * The round's package (DESIGN §6a step 3, §12j.7 items 6, 9): what the executor and the reviewer are given of the
+ * requirements. This round's text; every block in force of the objects this round adds or revises; the blocks of
+ * earlier objects a relation edge connects to those objects; the blocks open items rest on. Each block once, in force
+ * as it stands now, in round and document order.
+ */
+export function roundPackage(registry: Registry, round: number, openUnits: readonly string[] = []): PackageBlock[] {
+  const changed = new Set(registry.roundScope(round).map(c => c.object))
+  const ownerOf = (id: string) => /^O\d+$/u.test(id) ? id : registry.coverOf(id)?.owner
+  const related = new Set<string>()
+  for (const e of registry.references.filter(x => x.round <= round)) {
+    const from = ownerOf(e.from), to = ownerOf(e.to)
+    if (from && changed.has(from) && to && to !== "none" && !changed.has(to)) related.add(to)
+    if (to && changed.has(to) && from && from !== "none" && !changed.has(from)) related.add(from)
+  }
+  const within = (inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
+  const open = new Set<string>()
+  for (const u of openUnits) for (const [id] of registry.assigned) if (within(u, id) || within(id, u)) open.add(id)
+  const out: PackageBlock[] = []
+  for (const source of [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)) {
+    for (const b of source.blocks) {
+      const owner = registry.assigned.get(b.id)
+      if (owner === undefined) continue
+      const why: PackageBlock["why"] | null = b.round === round ? "this round" : changed.has(owner) ? "object changed" : related.has(owner) ? "related" : open.has(b.id) ? "open item" : null
+      if (!why) continue
+      const text = b.round === round ? b.text : effectiveText(registry, b.id, round)
+      if (text === null) continue
+      out.push({ id: b.id, round: b.round, object: owner === "none" ? null : owner, text, why })
+    }
+  }
+  return out
+}
+
+/**
+ * The package as the reviewer reads it, round by round as the control group's text is laid out (§12j.7 item 6): this
+ * round's text whole, and of each earlier round the package's blocks, adjacent ones joined as in the source.
+ */
+export function packageSources(registry: Registry, round: number, blocks: readonly PackageBlock[]): { round: number; text: string }[] {
+  const out: { round: number; text: string }[] = []
+  for (const r of [...new Set(blocks.map(b => b.round))].sort((a, b) => a - b)) {
+    if (r === round) { out.push({ round: r, text: registry.sources.get(r)!.text }); continue }
+    let text = "", end = -1
+    for (const b of blocks.filter(x => x.round === r)) {
+      const at = registry.block(b.id)!
+      text += end === at.start ? b.text : `${text ? "\n\n" : ""}${b.text.replace(/^\n+/u, "")}`
+      end = at.end
+    }
+    out.push({ round: r, text: text.trimEnd() + "\n" })
+  }
+  return out
+}
