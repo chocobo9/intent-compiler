@@ -1,0 +1,1344 @@
+[
+ {
+  "id": "V1.1.1",
+  "source": "review",
+  "unit": "R1.S3.P2.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s5",
+   "R1.S3.P8.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "56bcc79ad266410627266973faada6d911bef64ca46b55f8c9a883af98444436",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.2",
+  "source": "review",
+  "unit": "R1.S3.P9.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s5",
+   "R1.S3.P9.s6",
+   "R1.S3.P9.s7",
+   "R1.S3.P9.s8",
+   "R1.S3.P10.s1",
+   "R1.S3.P10.s2",
+   "R1.S3.P11.s1",
+   "R1.S3.P11.s7"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "505901c87759ae839fc11d9c9aba1e5036d7ca4433e41ce7c13f3958cefa2f30",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.3",
+  "source": "review",
+  "unit": "R1.S3.P12.s6",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s6",
+   "R1.S3.P12.s7",
+   "R1.S3.P12.s9"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "eeceea65ee836b1c3bed70cebc3e4db57b9f2cc5a4f88cb897a646c2cf43eae3",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.4",
+  "source": "review",
+  "unit": "R1.S3.P13.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s1",
+   "R1.S3.P14.s2",
+   "R1.S3.P15.s1",
+   "R1.S3.P15.s2",
+   "R1.S3.P16.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2",
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Window `rank` now appends the configured `as` column.\n- Window ordering honors ascending/descending order.\n- `row_number` now produces unique sequential values.\n- Sampling uses the supplied seed.\n- Aggregate `count` counts all non-empty values.\n- Expression `&&` now has",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "00b735c384955872a0b11b1f6eddb5fe2dda0e4db42b2f42494958f0409acb0c",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.5",
+  "source": "review",
+  "unit": "R1.S3.P18.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s1",
+   "R1.S3.P19.s2",
+   "R1.S3.P19.s3",
+   "R1.S3.P19.s4",
+   "R1.S3.P19.s5",
+   "R1.S3.P19.s6",
+   "R1.S3.P19.s7"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "1b150a748cc58687d23356a2439ed080e7b95689bec407d4a8d94e1da9c6de7a",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.6",
+  "source": "review",
+  "unit": "R1.S3.P20.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P20.s1",
+   "R1.S3.P21.s2",
+   "R1.S3.P21.s3",
+   "R1.S3.P21.s4",
+   "R1.S3.P21.s5"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "2530fb6080c8b38dbb08dbad908a08c788dff1f9fc00e87eaebdba0836abe1f2",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.7",
+  "source": "review",
+  "unit": "R1.S3.P22.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P22.s1",
+   "R1.S3.P23.s2",
+   "R1.S3.P23.s5",
+   "R1.S3.P23.s6"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "4552f3a0b442c1dd44d458c51c10ecef1d0310a9ff458cccccd3b43e4a065250",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.8",
+  "source": "review",
+  "unit": "R1.S8.P1.s3",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "2da260f0eef89cd59912ecca7ec935a763d51992a019b60d53a285f3800bbcf9",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.9",
+  "source": "review",
+  "unit": "R1.S6.P2.s1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s1",
+   "R1.S6.P2.s2",
+   "R1.S6.P2.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "abd5c7561e9be5ec6991400173d6ed4dc0005deca122a88b8ba6978fbae8ce33",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.12",
+  "source": "review",
+  "unit": "R1.S2.P6.s2",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2",
+   "R1.S2.P6.s2.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "d42ece88819ba5e586cf9e0c8d507af4059a4e8f5d734db3778ec8075877f63a",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.10",
+  "source": "review",
+  "unit": "R1.S4.P2.s2",
+  "case": null,
+  "units": [
+   "R1.S4.P2.s2"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_assertion",
+    "detail": "the input is known (the command the item quotes, with the files of the reviewer's session) but the formalizer wrote no assertion for the item"
+   }
+  ]
+ },
+ {
+  "id": "V1.1.11",
+  "source": "review",
+  "unit": "R1.S5.P2.s3",
+  "case": null,
+  "units": [
+   "R1.S5.P2.s3"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed the reported issues and confirmed the project builds successfully.\n\nImplemented fixes include:\n\n- Derive operation support\n- Aggregate operation support\n- Join operation support\n- Window operation support\n- Pivot and unpivot operations\n- Forward, backward, and constant fill\n- Unknown opera",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_assertion",
+    "detail": "the input is known (the command the item quotes, with the files of the reviewer's session) but the formalizer wrote no assertion for the item"
+   }
+  ]
+ },
+ {
+  "id": "V1.2.1",
+  "source": "review",
+  "unit": "R1.S3.P13.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s2.c1",
+   "R1.S3.P14.s2",
+   "R1.S3.P15.s1",
+   "R1.S3.P15.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Window `rank` now appends the configured `as` column.\n- Window ordering honors ascending/descending order.\n- `row_number` now produces unique sequential values.\n- Sampling uses the supplied seed.\n- Aggregate `count` counts all non-empty values.\n- Expression `&&` now has",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "ecbbd54d6ea8d21d47d2fb219d51c11669d89a1e2aae708f136e880c5481a929",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.2",
+  "source": "review",
+  "unit": "R1.S3.P18.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s2.c1",
+   "R1.S3.P18.s3",
+   "R1.S3.P18.s4",
+   "R1.S3.P19.s8.c2",
+   "R1.S3.P19.s8.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "a072f08e3629bb08dabca06d73572e93f3687b09a73a147938a66b0431be1138",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.3",
+  "source": "review",
+  "unit": "R1.S3.P9.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s1.c1",
+   "R1.S3.P9.s1.c2",
+   "R1.S3.P9.s1.c3",
+   "R1.S3.P9.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Window `rank` now appends the configured `as` column.\n- Window ordering honors ascending/descending order.\n- `row_number` now produces unique sequential values.\n- Sampling uses the supplied seed.\n- Aggregate `count` counts all non-empty values.\n- Expression `&&` now has",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "836b0fecba7f19083da5e1392c7f40ba7f1460241c9bfb9bbb77899c95e7957d",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.4",
+  "source": "review",
+  "unit": "R1.S3.P9.s9",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s9",
+   "R1.S3.P10.s1",
+   "R1.S3.P10.s2",
+   "R1.S3.P11.s7",
+   "R1.S3.P11.s8.c1",
+   "R1.S3.P11.s8.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "d030b7b965d62552932526eccb7d41ba15bfb792975576aca84190c482a0fad8",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.5",
+  "source": "review",
+  "unit": "R1.S3.P22.s4.c2",
+  "case": null,
+  "units": [
+   "R1.S3.P22.s4.c2",
+   "R1.S3.P23.s4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "9621daba9245fe1760683c2abf2aaf4fea612a0dd8b6b02e89bb3ef0824a927d",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.6",
+  "source": "review",
+  "unit": "R1.S6.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s3.c1",
+   "R1.S6.P2.s3.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "0ab2fe2a6f7b4bc7dc2f828b356c5669e1eb19d2b14b4b7fcd68ec934a523150",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.7",
+  "source": "review",
+  "unit": "R1.S8.P1.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "86e13e1a84947fdbb58cebf31155b7851841621958dcad4c72c5c8ea98ff3bb4",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a2: \"ERROR: invalid recipe: column missing not found\" is not stated in R1.S8.P1.s3.c2, which reads \"(unknown op, referencing non-existent column in filter/sort/aggregate/join):\""
+   }
+  ]
+ },
+ {
+  "id": "V1.2.8",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues and verified the program builds successfully.\n\nUpdated:\n\n- Partitioned window ranking with input-order preservation\n- Pivot column validation and reshaping\n- Deterministic seeded sampling\n- Aggregate `min`, `max`, and `having`\n- Constant fill value handling\n- Pipeline trans",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "21770fd665c6c03fb5e4b0d976c960c628d1165f5cfe4a17f52993a075981213",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.1",
+  "source": "review",
+  "unit": "R1.S3.P13.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s4",
+   "R1.S3.P15.s1.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Window `rank` now appends the configured `as` column.\n- Window ordering honors ascending/descending order.\n- `row_number` now produces unique sequential values.\n- Sampling uses the supplied seed.\n- Aggregate `count` counts all non-empty values.\n- Expression `&&` now has",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "abc43c634fe1980085bba70bddadc8566e253ae28d502570905c4eff5c7a5970",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.2",
+  "source": "review",
+  "unit": "R1.S3.P13.s3.c6",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s3.c6",
+   "R1.S3.P13.s3.c7",
+   "R1.S3.P13.s3.c8",
+   "R1.S3.P14.s4",
+   "R1.S3.P15.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Window `rank` now appends the configured `as` column.\n- Window ordering honors ascending/descending order.\n- `row_number` now produces unique sequential values.\n- Sampling uses the supplied seed.\n- Aggregate `count` counts all non-empty values.\n- Expression `&&` now has",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "c1a433fca8eec5f0d1fecaa89b22dba0343290a12a76cd55880450d4506f430f",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.3",
+  "source": "review",
+  "unit": "R1.S3.P9.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s1.c1",
+   "R1.S3.P9.s1.c2",
+   "R1.S3.P9.s1.c3",
+   "R1.S3.P9.s1.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Window `rank` now appends the configured `as` column.\n- Window ordering honors ascending/descending order.\n- `row_number` now produces unique sequential values.\n- Sampling uses the supplied seed.\n- Aggregate `count` counts all non-empty values.\n- Expression `&&` now has",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "94ea7258bf4574b0aad80cb76de3149a067c7869580de79c1b05e2ad0ab07142",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.4",
+  "source": "review",
+  "unit": "R1.S3.P9.s8",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s8"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Window `rank` now appends the configured `as` column.\n- Window ordering honors ascending/descending order.\n- `row_number` now produces unique sequential values.\n- Sampling uses the supplied seed.\n- Aggregate `count` counts all non-empty values.\n- Expression `&&` now has",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "24ea710447ddb5395ad04c1ef153fce6facaeff5543cf6192127b3d4fa3b7fa7",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.5",
+  "source": "review",
+  "unit": "R1.S3.P3.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P3.s2.c1",
+   "R1.S3.P3.s3.c1",
+   "R1.S3.P3.s3.c2",
+   "R1.S3.P3.s3.c3",
+   "R1.S3.P3.s3.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported issues:\n\n- Window `rank` now appends the configured `as` column.\n- Window ordering honors ascending/descending order.\n- `row_number` now produces unique sequential values.\n- Sampling uses the supplied seed.\n- Aggregate `count` counts all non-empty values.\n- Expression `&&` now has",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "7325ad558f0ee9892eddf868d36bf8b6d8b5d692040babde2555d3a853715d45",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "K2",
+  "source": "check",
+  "unit": "R1.S2.P1",
+  "case": null,
+  "units": [
+   "R1.S2.P1",
+   "R1.S2.P2.s1",
+   "R1.S2.P2.s2",
+   "R1.S2.P3.s2",
+   "R1.S2.P3.s3",
+   "R1.S2.P3.s4",
+   "R1.S2.P4.s1",
+   "R1.S2.P4.s2",
+   "R1.S2.P5",
+   "R1.S2.P6.s1",
+   "R1.S2.P6.s2",
+   "R1.S2.P6.s3"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The schema marks only `id` as unique; `value` is not unique, so row 4 must remain valid despite sharing value 20 with row 2. The check incorrectly expects it to be rejected as a duplicate of `value`. [R1.S2.P2.s2, R1.S2.P3.s2, R1.S2.P4.s2]"
+  }
+ }
+]

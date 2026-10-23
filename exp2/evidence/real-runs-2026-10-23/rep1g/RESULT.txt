@@ -1,0 +1,13 @@
+Run 7 (rep1g), 2026-10-23 15:40-15:56, code ccr-992739b3-u5bcay @ fe6562d (batches 1+2 + batch C stage 2). Valid.
+
+Scores: first delivery C1.1 56/219, final C1.4 187/219 (+131). Wall 935 s. All 3 repair cycles used (cycles_spent); 4 reviewer
+items still open (carried), 2 unverified (no_assertion), 1 logged (value_not_stated).
+
+Interface counters (the smoke bar; all met):
+- reviews 3 valid, void 0; reported 25 = entered 25 (verified 22, logged 1, fallback 2) + blocked 0; every entry ended once: yes.
+- no_input 0 (inputs: 22 from formalizer/leads, 2 from the reviewer's session files, 1 from lead K11).
+- check writing: admitted 13/13, unknown never-told 0, dropped 1 (verbatim_mismatch), refused runs 0.
+- guards 30 (19 from reviewer items fixed, 11 library); no passing run is a refused call; flips 0, reverts 0.
+- reviewer tokens 106k uncached / 1.69M cache read / 12k out (cache share 0.94); formalizer 58k / 17k / 15k.
+Compared with run 4 (107→142, 1/17 sent) and run 5 (108→108, 20/20 fallback, 1 false guard), the repair loop now carries the
+reviewer's findings through code verification into guards. Executor variance remains (first delivery 56 here vs 107/108).

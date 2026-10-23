@@ -1,0 +1,520 @@
+{
+  "round": 1,
+  "official_score": null,
+  "status": "done",
+  "stages": {
+    "understand": {
+      "calls": 1,
+      "tokens": {
+        "input_tokens": 14199,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 363,
+        "reasoning_tokens": 327
+      },
+      "stub_calls": 0
+    },
+    "acceptance": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 37528,
+        "cache_read_tokens": 28160,
+        "cache_write_tokens": 0,
+        "output_tokens": 21798,
+        "reasoning_tokens": 2773
+      },
+      "stub_calls": 0
+    },
+    "coding": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 29183,
+        "cache_read_tokens": 495488,
+        "cache_write_tokens": 0,
+        "output_tokens": 8678,
+        "reasoning_tokens": 1313
+      },
+      "stub_calls": 0
+    }
+  },
+  "interrupted": {
+    "attempts": 0,
+    "stages": {
+      "understand": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "acceptance": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "coding": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      }
+    }
+  },
+  "scope": [
+    "O1",
+    "O2",
+    "O3",
+    "O4",
+    "O5",
+    "O6",
+    "O7",
+    "O8"
+  ],
+  "zones": {
+    "task": 8,
+    "protect": 0,
+    "status": 0,
+    "source_blocks": 8,
+    "anchors": 0
+  },
+  "execution": {
+    "status": "trial_spent",
+    "cycles": 3,
+    "repairs": 0,
+    "kept": null,
+    "failing_at_end": 0,
+    "contests": 0,
+    "carried_objects": [
+      "O1",
+      "O2",
+      "O3",
+      "O4",
+      "O5",
+      "O6",
+      "O7",
+      "O8"
+    ],
+    "sessions": 1,
+    "broken_sessions": 0
+  },
+  "checks": {
+    "entered": 13,
+    "stale": 0,
+    "retired": 0,
+    "run": 6,
+    "passed": 0,
+    "failed": 6,
+    "admitted": 6,
+    "unknown": 7,
+    "unknown_not_fed_back": 0,
+    "dropped": {
+      "verbatim_mismatch": 1,
+      "computed_by_hand": 1,
+      "reference_output": 1
+    },
+    "normalized": {
+      "unquoted expected string": 17
+    },
+    "refused_calls": 0
+  },
+  "probes": null,
+  "objects": [
+    {
+      "object": "O1",
+      "name": "dpipe CLI",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O2",
+      "name": "ingest command",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O3",
+      "name": "transform command",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K1"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O4",
+      "name": "verify command",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O5",
+      "name": "manifest command",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O6",
+      "name": "pipeline command",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K9"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O7",
+      "name": "determinism contract",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O8",
+      "name": "error handling and build requirements",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K10",
+        "K11",
+        "K12",
+        "K13"
+      ],
+      "unknown": []
+    }
+  ],
+  "loss": {
+    "boundary": [
+      "O1",
+      "O2",
+      "O4",
+      "O5",
+      "O7"
+    ],
+    "ic": [],
+    "executor": [
+      "O3",
+      "O6",
+      "O8"
+    ]
+  },
+  "management_calls": 4,
+  "wall": {
+    "round_ms": 136439,
+    "stages": [
+      {
+        "stage": "attribution",
+        "ms": 10716,
+        "spans": 1,
+        "first_start_ms": 0,
+        "last_end_ms": 10716
+      },
+      {
+        "stage": "check writing",
+        "ms": 125542,
+        "spans": 1,
+        "first_start_ms": 10721,
+        "last_end_ms": 136263
+      },
+      {
+        "stage": "checks",
+        "ms": 6,
+        "spans": 1,
+        "first_start_ms": 10732,
+        "last_end_ms": 10738
+      },
+      {
+        "stage": "coding",
+        "ms": 78256,
+        "spans": 1,
+        "first_start_ms": 10831,
+        "last_end_ms": 89087
+      },
+      {
+        "stage": "build",
+        "ms": 455,
+        "spans": 3,
+        "first_start_ms": 89087,
+        "last_end_ms": 135577
+      },
+      {
+        "stage": "trial",
+        "ms": 432,
+        "spans": 3,
+        "first_start_ms": 89270,
+        "last_end_ms": 135738
+      },
+      {
+        "stage": "trial fix",
+        "ms": 45233,
+        "spans": 2,
+        "first_start_ms": 89658,
+        "last_end_ms": 135435
+      },
+      {
+        "stage": "waiting for checks",
+        "ms": 263,
+        "spans": 1,
+        "first_start_ms": 136000,
+        "last_end_ms": 136263
+      }
+    ]
+  },
+  "acceptance": {
+    "by_kind": {
+      "A": 6,
+      "B": 0,
+      "C": 0
+    },
+    "open": {
+      "program_wrong": [],
+      "uncovered": [],
+      "reference_pending": [],
+      "ambiguous": [],
+      "uncheckable": [],
+      "expired": [],
+      "confirmed": []
+    }
+  },
+  "ledger": {
+    "open": {
+      "program_wrong": [],
+      "uncovered": [],
+      "reference_pending": []
+    },
+    "confirmed": [],
+    "report_only": [],
+    "ended": [],
+    "sends": 0,
+    "held": []
+  },
+  "review": {
+    "first_delivery": null,
+    "reviews": [],
+    "voided": 0,
+    "reviewer": {
+      "calls": 0,
+      "tokens": {
+        "input_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      },
+      "stub_calls": 0
+    },
+    "formalizer": {
+      "calls": 0,
+      "tokens": {
+        "input_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 0,
+        "reasoning_tokens": 0
+      },
+      "stub_calls": 0
+    },
+    "models": {
+      "reviewer": [],
+      "formalizer": []
+    },
+    "items": {
+      "reported": 0,
+      "sent": 0,
+      "malformed": 0,
+      "verified": 0,
+      "logged": 0,
+      "fallback": 0,
+      "blocked": 0
+    },
+    "conservation_errors": [],
+    "premise_blocked": {},
+    "premise_logged": {},
+    "fallback": {
+      "reviews": 0,
+      "whole": 0,
+      "items": 0,
+      "reasons": {}
+    },
+    "program_runs_zero": 0,
+    "guards": {
+      "at_start": 0,
+      "at_end": 0,
+      "born": [],
+      "flipped_changed_text": [],
+      "flipped_unchanged": [],
+      "retired": []
+    },
+    "reverted": 0,
+    "trial": {
+      "runs": 3,
+      "failures": 3
+    },
+    "leads": {
+      "library": 0,
+      "judgment": 0
+    },
+    "coverage": null,
+    "cache": {
+      "reviewer": null,
+      "formalizer": null
+    }
+  },
+  "measures": {
+    "round": 1,
+    "wall_ms": 136439,
+    "stages_ms": {
+      "attribution": 10716,
+      "check writing": 125542,
+      "checks": 6,
+      "coding": 78256,
+      "build": 455,
+      "trial": 432,
+      "trial fix": 45233,
+      "waiting for checks": 263
+    },
+    "first_delivery": null,
+    "guards": {
+      "at_start": 0,
+      "at_end": 0,
+      "born": 0
+    },
+    "regressions": {
+      "changed_text": 0,
+      "unchanged": 0
+    },
+    "reverted": 0,
+    "premise": {
+      "blocked": {},
+      "logged": {}
+    },
+    "fallback": {
+      "reviews": 0,
+      "whole": 0,
+      "items": 0,
+      "reasons": {}
+    },
+    "reviews": 0,
+    "program_runs_zero": 0,
+    "checks": {
+      "entered": 13,
+      "admitted": 6,
+      "unknown_not_fed_back": 0,
+      "dropped": 3,
+      "refused_calls": 0
+    },
+    "items": {
+      "reported": 0,
+      "entered": 0,
+      "verified": 0,
+      "logged": 0,
+      "fallback": 0,
+      "blocked": 0,
+      "no_input": 0,
+      "conservation_errors": 0
+    },
+    "tokens": {
+      "executor": {
+        "calls": 3,
+        "uncached_input": 29183,
+        "cache_read": 495488,
+        "output": 8678,
+        "cache_write": 0
+      },
+      "attribution": {
+        "calls": 1,
+        "uncached_input": 14199,
+        "cache_read": 0,
+        "output": 363,
+        "cache_write": 0
+      },
+      "checks": {
+        "calls": 3,
+        "uncached_input": 37528,
+        "cache_read": 28160,
+        "output": 21798,
+        "cache_write": 0
+      },
+      "reviewer": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      },
+      "formalizer": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      },
+      "probes": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      },
+      "judge": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      },
+      "interrupted_management": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      }
+    },
+    "non_executor_cost": 76704
+  }
+}

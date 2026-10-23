@@ -1,0 +1,7 @@
+Void (environment) 2026-10-23 15:39: Docker Desktop was not running after the host reboot. All 3 trial runs and the
+official scoring failed with "failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine".
+No first delivery, no review. Code fe6562d was not exercised past check writing (13 entered, admitted 6/13,
+never-told-the-model 0, unquoted-expected read 17 times).
+Design observation for the next batch: the harness treated the docker-daemon error as the program's trial failure and sent
+it to the executor as something to fix (2 trial fixes, 29k uncached executor tokens). An environment error should stop the
+round (wait/resume), not be handed to the executor. Rerun as rep1g with the same code once docker is up.

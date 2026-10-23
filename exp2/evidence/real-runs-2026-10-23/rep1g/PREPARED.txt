@@ -1,0 +1,5 @@
+Run 7 (rep1g), prepared 2026-10-23 by the design session.
+Code: branch ccr-992739b3-u5bcay @ fe6562d (fix batches 1+2 + batch C stage 2), worktree scratchpad/bfix.
+Config: copied from rep1e; only run id, ports (45993/45994) and cache keys changed.
+Purpose: smoke of batch C on real R1. Bar = interface counters, not score: checks admitted close to entered, "never told the model" 0,
+reported = entered + blocked, conservation ok, no_input only when no material exists, no refused run passes, no false guard.
