@@ -1,0 +1,1552 @@
+{
+"run": "exp2-icacc-r1-luna56-low-rep1g-20261023",
+"round1_text": "Build a deterministic data pipeline tool in Go called `dpipe`. The tool operates as a CLI that reads structured data from CSV files, applies a chain of transformations, and writes results to output files — with every step producing bit-identical output across repeated runs given the same input and configuration.\n\n## Core behaviors\n\n### Ingestion\n\n`dpipe ingest --input <path> --schema <path> --output <path>`\n\n- Reads a CSV file at `<path>`. The first row is a header.\n- Validates every row against a JSON schema file. The schema has this structure:\n  ```json\n  {\n    \"columns\": [\n      {\"name\": \"id\", \"type\": \"int\", \"required\": true, \"unique\": true},\n      {\"name\": \"value\", \"type\": \"float\", \"required\": true, \"min\": 0, \"max\": 1000},\n      {\"name\": \"label\", \"type\": \"string\", \"required\": false, \"pattern\": \"^[A-Z]\"},\n      {\"name\": \"timestamp\", \"type\": \"datetime\", \"required\": true}\n    ],\n    \"primary_key\": [\"id\"]\n  }\n  ```\n  Supported types: `int`, `float`, `string`, `datetime` (RFC 3339 format).\n\n  Column constraints (all optional):\n  - `unique` (boolean): No two valid rows may have the same value in this column. When a duplicate is encountered (checked in input file order after all other validations pass), the later row is rejected with reason `duplicate value for unique column: <name>`.\n  - `min`, `max` (number): For `int` and `float` columns only. Value must be within `[min, max]` inclusive. Rejected rows get reason `value out of range for column <name>: <value>`.\n  - `pattern` (string): For `string` columns only. Value must match the Go regular expression. Rejected rows get reason `value does not match pattern for column <name>: <value>`.\n\n  Validation order for each row: (1) required/type checks, (2) range checks, (3) pattern checks. After all rows pass steps 1-3, uniqueness is checked across valid rows in input file order — the first occurrence is kept, subsequent duplicates are rejected.\n\n  `primary_key` is always an array of one or more column names (composite key support).\n\n- Rows that fail validation are written to `<output>.rejected` (same CSV format, with an appended `rejection_reason` column). Valid rows are written to `<output>` in CSV format.\n- Output rows are sorted by the primary key columns in declaration order: first by the first primary key column, then by the second, etc. Each column is sorted in ascending order using its declared type (numeric sort for int/float, lexicographic for string, chronological for datetime).\n- A SHA-256 checksum of the output file (computed on the raw bytes) is written to `<output>.sha256` as a single hex string followed by a newline.\n\n### Transformation\n\n`dpipe transform --input <path> --recipe <path> --output <path> --seed <uint64>`\n\n- Reads a CSV file with a header row. In typical usage this will be a previously ingested (valid) CSV file, but any headered CSV input is allowed.\n- Applies transformations defined in a JSON recipe file, in order. Each transformation is an object in an array:\n  ```json\n  [\n    {\"op\": \"filter\", \"column\": \"value\", \"condition\": \"gt\", \"threshold\": 10.0},\n    {\"op\": \"derive\", \"name\": \"score\", \"expression\": \"value * 2 + 1\"},\n    {\"op\": \"sample\", \"fraction\": 0.5},\n    {\"op\": \"sort\", \"column\": \"score\", \"order\": \"desc\"},\n    {\"op\": \"rename\", \"from\": \"label\", \"to\": \"category\"},\n    {\"op\": \"drop\", \"columns\": [\"timestamp\"]},\n    {\"op\": \"aggregate\", \"group_by\": [\"label\"], \"aggregations\": [\n      {\"column\": \"value\", \"function\": \"sum\", \"as\": \"total_value\"},\n      {\"column\": \"value\", \"function\": \"avg\", \"as\": \"avg_value\"},\n      {\"column\": \"id\", \"function\": \"count\", \"as\": \"num_items\"}\n    ]},\n    {\"op\": \"join\", \"right\": \"other.csv\", \"on\": \"id\", \"type\": \"left\"},\n    {\"op\": \"window\", \"function\": \"rank\", \"partition_by\": [\"label\"], \"order_by\": [{\"column\": \"value\", \"order\": \"desc\"}], \"as\": \"value_rank\"},\n    {\"op\": \"pivot\", \"index\": [\"id\"], \"column\": \"label\", \"value\": \"value\"},\n    {\"op\": \"unpivot\", \"index\": [\"id\"], \"columns\": [\"q1\", \"q2\", \"q3\"], \"name_to\": \"quarter\", \"value_to\": \"amount\"},\n    {\"op\": \"fill\", \"columns\": [\"value\"], \"strategy\": \"forward\"}\n  ]\n  ```\n- Supported operations:\n  - `filter`: Keep rows where `column` satisfies `condition` against `threshold`. Conditions: `gt`, `gte`, `lt`, `lte`, `eq`, `neq`.\n  - `derive`: Add a new column computed from an expression over existing numeric columns.\n\n    **Operator precedence** (lowest to highest):\n    1. `||` (logical OR): returns `1` if either operand is > 0, otherwise `0`\n    2. `&&` (logical AND): returns `1` if both operands are > 0, otherwise `0`\n    3. `==`, `!=` (equality): numeric comparison, returns `1` (true) or `0` (false)\n    4. `>`, `>=`, `<`, `<=` (relational): numeric comparison, returns `1` or `0`\n    5. `+`, `-` (addition, subtraction)\n    6. `*`, `/`, `%` (multiplication, division, modulo)\n    7. Unary `-` (negation)\n    8. Function calls, parentheses, column references, numeric literals\n\n    Division by zero produces `NaN`. Modulo by zero produces `NaN`. Any comparison involving `NaN` (on either side) produces `0`.\n\n    The expression evaluator also supports function calls with parenthesized, comma-separated arguments:\n    - `abs(x)` — absolute value\n    - `sqrt(x)` — square root; returns `NaN` for negative input\n    - `ceil(x)` — smallest integer >= x\n    - `floor(x)` — largest integer <= x\n    - `round(x, n)` — round x to n decimal places (n is a non-negative integer; half-values round away from zero)\n    - `pow(x, y)` — x raised to the power y\n    - `log(x)` — natural logarithm; returns `NaN` for non-positive input\n    - `min(x, y)` — minimum of two values\n    - `max(x, y)` — maximum of two values\n    - `if(cond, x, y)` — returns x if cond > 0, otherwise returns y\n    - `clamp(x, lo, hi)` — returns lo if x < lo, hi if x > hi, otherwise x\n    - `coalesce(x, y)` — returns x if x is not NaN, otherwise returns y\n\n    Functions can be nested: `round(sqrt(abs(value)), 2)`.\n\n    Comparison and logical operators enable inline conditions without `if`: e.g., `(value > 10 && value < 100) * value` yields `value` when in range, `0` otherwise.\n\n    Formatting: derive results are written using the shortest decimal representation that preserves the computed value, without unnecessary trailing zeros or a trailing decimal point (e.g., `11` not `11.0`, `2.5` not `2.50`). `NaN` is written as the literal string `NaN`.\n\n  - `sample`: Retain the given fraction of rows. The selection must be deterministic given `--seed`. Use the seed to initialize a deterministic PRNG (use Go's `math/rand` with the given seed). Rows are selected by generating a random float for each row in input order; keep the row if the float is < fraction.\n  - `sort`: Sort rows by the given column. `asc` or `desc`. Ties are broken by the original row order (stable sort).\n  - `rename`: Rename a column.\n  - `drop`: Remove the listed columns.\n  - `aggregate`: Group rows by the `group_by` columns and compute aggregations on each group.\n    Supported aggregation functions:\n    - `sum`: sum of numeric values in the column for this group. Empty/non-numeric values are skipped. Result is `0` if no numeric values exist.\n    - `avg`: arithmetic mean of numeric values. Empty/non-numeric values are skipped. Result is `NaN` if no numeric values exist.\n    - `count`: number of non-empty values in the specified column for this group.\n    - `min`: minimum numeric value. Empty/non-numeric values are skipped. Result is `NaN` if no numeric values exist.\n    - `max`: maximum numeric value. Empty/non-numeric values are skipped. Result is `NaN` if no numeric values exist.\n\n    Output columns: the group_by columns (in declaration order), followed by the aggregation result columns (in declaration order, using the `as` name). Output rows are sorted by the group_by columns in ascending lexicographic order, comparing left to right. Numeric aggregation results are formatted without unnecessary trailing zeros (e.g., `10` not `10.0`, `2.5` not `2.50`).\n\n    Optional `having` clause: after aggregation results are computed and formatted, filter output rows based on an aggregated column. Example:\n    ```json\n    {\"op\": \"aggregate\", \"group_by\": [\"label\"], \"aggregations\": [\n      {\"column\": \"value\", \"function\": \"sum\", \"as\": \"total\"}\n    ], \"having\": {\"column\": \"total\", \"condition\": \"gt\", \"threshold\": 100}}\n    ```\n    The `having` object uses the same condition operators as `filter` (`gt`, `gte`, `lt`, `lte`, `eq`, `neq`). The `column` must reference one of the `as` names from the aggregations. The threshold comparison is numeric (the aggregated result string is parsed as a float). Groups whose aggregated value does not satisfy the condition are excluded from output. The `having` clause is applied after sorting — it only removes rows, it does not change the relative order of remaining rows.\n\n  - `join`: Join current dataset with another CSV file.\n    - `right`: path to the other CSV file\n    - `on`: column name that must exist in both datasets (the join key)\n    - `type`: `\"inner\"` or `\"left\"`\n      - `inner`: output only rows where the join key value exists in both datasets\n      - `left`: output all rows from the current (left) dataset; for rows where the join key has no match in the right dataset, all right-side columns are filled with empty strings\n    - Output columns: all columns from the left dataset, followed by all columns from the right dataset *except* the join key column (to avoid duplication).\n    - If multiple rows in the right dataset share the same join key, only the first one (by file order) is used.\n    - Output rows preserve the order of the left (current) dataset.\n    - If the join key column does not exist in either dataset, exit with error: `ERROR: invalid recipe: join key <name> not found in <left|right> dataset`.\n\n  - `window`: Add a new column computed by a window function over partitions of the data.\n    - `partition_by` (optional): array of column names to partition by. If omitted or empty, all rows are in one partition.\n    - `order_by`: array of ordering specifications, each an object with `\"column\"` (string) and `\"order\"` (`\"asc\"` or `\"desc\"`). Rows within each partition are ordered by these columns (first column is primary, etc.). Ties in all order_by columns are broken by input row order.\n    - `as`: name of the new column to create.\n\n    Supported window functions (specified in the `\"function\"` field):\n    - `rank`: 1-based rank within the partition. Rows with equal values in all `order_by` columns receive the same rank. The next rank after a group of ties skips ahead by the group size (e.g., two rows tied at rank 1 → next rank is 3).\n    - `dense_rank`: Like `rank` but without gaps (e.g., two rows tied at rank 1 → next rank is 2).\n    - `row_number`: Unique sequential number starting from 1 within the partition. Ties are broken by input row order.\n    - `lag`: Value of a source column from a preceding row in partition order. Additional operation fields: `\"source_column\"` (string), `\"offset\"` (positive integer, number of rows back), `\"default\"` (string, value to use when no preceding row exists at that offset). Example:\n      ```json\n      {\"op\": \"window\", \"function\": \"lag\", \"source_column\": \"value\", \"offset\": 1, \"default\": \"0\", \"partition_by\": [\"cat\"], \"order_by\": [{\"column\": \"id\", \"order\": \"asc\"}], \"as\": \"prev_value\"}\n      ```\n    - `lead`: Like `lag` but looks forward (rows ahead in partition order). Same additional fields as `lag`.\n    - `running_sum`: Cumulative sum of a source column's values up to and including the current row within the partition (in partition order). Additional field: `\"source_column\"`. Non-numeric values are treated as 0. Example:\n      ```json\n      {\"op\": \"window\", \"function\": \"running_sum\", \"source_column\": \"value\", \"partition_by\": [\"cat\"], \"order_by\": [{\"column\": \"id\", \"order\": \"asc\"}], \"as\": \"cum_value\"}\n      ```\n    - `running_avg`: Cumulative average of a source column's numeric values up to and including the current row. Additional field: `\"source_column\"`. Non-numeric values are skipped from both numerator and denominator. If no numeric values exist up to the current row, the result is `NaN`.\n    - `ntile`: Divide the partition into `n` roughly equal groups numbered 1 through `n`. Additional field: `\"n\"` (positive integer). If the partition has `k` rows, the first `k mod n` groups have `ceil(k/n)` rows each, and the remaining groups have `floor(k/n)` rows each. Example:\n      ```json\n      {\"op\": \"window\", \"function\": \"ntile\", \"n\": 4, \"partition_by\": [], \"order_by\": [{\"column\": \"id\", \"order\": \"asc\"}], \"as\": \"quartile\"}\n      ```\n\n    Output: all original columns in their original order, plus the new column appended. Output rows preserve the original input row order (not the partition order).\n\n    Formatting: `rank`, `dense_rank`, `row_number`, and `ntile` results are formatted as integers (no decimal point). `running_sum`, `running_avg`, `lag`, and `lead` results are formatted without unnecessary trailing zeros.\n\n    If any referenced column (in `partition_by`, `order_by`, or `source_column`) does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\n\n  - `pivot`: Reshape data from long format to wide format.\n    - `index`: array of column names that identify each output row (the row keys).\n    - `column`: the column whose unique values become new column headers.\n    - `value`: the column whose values fill the cells.\n\n    Behavior:\n    - Output rows are identified by the unique combinations of `index` column values.\n    - For each unique value found in `column`, a new output column is created with that value as its header.\n    - The cell at a given (index combination, column value) is filled with the `value` from the first matching input row (by input order) that has that index combination and that column value.\n    - Missing combinations (an index combination that has no row with a particular column value) are filled with empty string.\n    - Output columns: `index` columns (in declaration order), followed by the new pivot columns sorted in ascending lexicographic order.\n    - Output rows are sorted by the `index` columns in ascending lexicographic order, comparing left to right.\n    - If any referenced column (`index`, `column`, or `value`) does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\n\n  - `unpivot`: Reshape data from wide format to long format (reverse of pivot).\n    - `index`: array of column names to keep as-is (the row identifiers).\n    - `columns`: array of column names to \"melt\" into rows.\n    - `name_to`: name of the new column that will contain the original column names.\n    - `value_to`: name of the new column that will contain the values.\n\n    Behavior:\n    - For each input row, produces one output row per column listed in `columns`.\n    - Output columns: `index` columns (in declaration order), then `name_to`, then `value_to`.\n    - Output rows: for each input row (in original input order), one output row per melted column (in `columns` declaration order).\n    - Empty values are preserved (not skipped).\n    - If any referenced column (in `index` or `columns`) does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\n\n  - `fill`: Fill empty values in specified columns.\n    - `columns`: array of column names whose empty values should be filled.\n    - `strategy`: one of `\"forward\"`, `\"backward\"`, `\"constant\"`.\n    - `value` (required only for `\"constant\"` strategy): the replacement value string.\n\n    Behavior:\n    - `\"forward\"`: scan rows top to bottom. For each specified column, replace each empty value with the most recent non-empty value seen above it in the same column. Leading empty values (no non-empty value above) remain empty.\n    - `\"backward\"`: scan rows bottom to top. For each specified column, replace each empty value with the nearest non-empty value below it in the same column. Trailing empty values (no non-empty value below) remain empty.\n    - `\"constant\"`: replace all empty values in the specified columns with the given `value` string.\n    - Non-empty values are never modified.\n    - Output preserves the original row order and all columns.\n    - If any referenced column does not exist, exit with error: `ERROR: invalid recipe: column <name> not found`.\n\n- After all transformations, write the result CSV to `<output>`, its SHA-256 to `<output>.sha256`.\n\n### Verification\n\n`dpipe verify --file <path> --checksum <path>`\n\n- Reads `<path>`, computes SHA-256, compares against the hex string in `<checksum>`.\n- Exit code 0 and prints `VERIFIED` to stdout if they match; exit code 1 and prints `MISMATCH expected=<expected> actual=<actual>` if they differ.\n\n### Manifest\n\n`dpipe manifest --dir <path> --output <path>`\n\n- Recursively scans `<dir>` for all `.csv` files.\n- For each file, computes its SHA-256.\n- Writes a JSON manifest to `<output>`:\n  ```json\n  {\n    \"generated_at\": \"<RFC 3339 UTC timestamp>\",\n    \"files\": [\n      {\"path\": \"relative/to/dir/file.csv\", \"sha256\": \"abcdef...\", \"rows\": 42, \"size_bytes\": 1234}\n    ]\n  }\n  ```\n- The `files` array is sorted by `path` lexicographically.\n- The `generated_at` timestamp must reflect the actual time of generation.\n\n### Pipeline\n\n`dpipe pipeline --config <path>`\n\n- Reads a pipeline config (JSON):\n  ```json\n  {\n    \"seed\": 12345,\n    \"steps\": [\n      {\"type\": \"ingest\", \"input\": \"raw.csv\", \"schema\": \"schema.json\", \"output\": \"clean.csv\"},\n      {\"type\": \"transform\", \"input\": \"clean.csv\", \"recipe\": \"recipe.json\", \"output\": \"final.csv\"},\n      {\"type\": \"verify\", \"file\": \"final.csv\", \"checksum\": \"final.csv.sha256\"},\n      {\"type\": \"manifest\", \"dir\": \".\", \"output\": \"manifest.json\"}\n    ]\n  }\n  ```\n- Executes each step sequentially. If any step fails, the pipeline stops and exits with code 1, printing `PIPELINE FAILED at step N: <error>` (N is 1-indexed).\n- On success, exits with code 0 and prints `PIPELINE OK: N steps completed`.\n\n### Determinism contract\n\nRunning the same command with the same inputs and seed must always produce byte-identical output files. This applies to all commands. The only exception is `generated_at` in manifest output, which reflects wall-clock time.\n\n### Error handling\n\n- Missing input files: exit code 1, stderr message `ERROR: file not found: <path>`.\n- Schema validation failures during ingest: do not exit with error; write rejected rows to `.rejected` file.\n- Invalid recipe operations (unknown op, referencing non-existent column in filter/sort/aggregate/join): exit code 1, stderr `ERROR: invalid recipe: <detail>`.\n- Malformed JSON config/schema/recipe: exit code 1, stderr `ERROR: malformed JSON: <path>`.\n- Invalid regex pattern in schema: exit code 1, stderr `ERROR: invalid pattern: <pattern>`.\n\nThe tool must be buildable with `go build -o dpipe ./...` from `/app/`.\n",
+"attribution_replies": [
+"{\"edges_add\":[{\"from\":\"R1.S6.P2\",\"kind\":\"applies_to\",\"to\":\"ingestion\"},{\"from\":\"R1.S6.P2\",\"kind\":\"applies_to\",\"to\":\"transformation\"},{\"from\":\"R1.S6.P2\",\"kind\":\"applies_to\",\"to\":\"verification\"},{\"from\":\"R1.S6.P2\",\"kind\":\"applies_to\",\"to\":\"manifest generation\"}],\"edges_remove\":[],\"interpretations_add\":[],\"remove\":[],\"upsert\":[{\"block\":\"R1.S0\",\"change\":\"add\",\"new_object\":\"dpipe CLI\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S1\",\"change\":\"none\",\"new_object\":null,\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S2\",\"change\":\"add\",\"new_object\":\"ingestion\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S2.P1\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"ingestion\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S2.P2\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"ingestion\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S2.P3\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"ingestion\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S2.P4\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"ingestion\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S2.P5\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"ingestion\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S2.P6\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"ingestion\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3\",\"change\":\"add\",\"new_object\":\"transformation\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P1\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P2\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P3\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P4\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P5\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P6\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P7\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P8\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P9\",\"change\":\"add\",\"new_object\":\"transformation operations\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P10\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation operations\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P11\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation operations\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P12\",\"change\":\"add\",\"new_object\":\"join operation\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P13\",\"change\":\"add\",\"new_object\":\"window operation\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P14\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"window operation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P15\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"window operation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P16\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"window operation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P17\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"window operation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P18\",\"change\":\"add\",\"new_object\":\"pivot operation\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P19\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"pivot operation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P20\",\"change\":\"add\",\"new_object\":\"unpivot operation\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P21\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"unpivot operation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P22\",\"change\":\"add\",\"new_object\":\"fill operation\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P23\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"fill operation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S3.P24\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"transformation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S4\",\"change\":\"add\",\"new_object\":\"verification\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S4.P1\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"verification\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S4.P2\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"verification\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S5\",\"change\":\"add\",\"new_object\":\"manifest generation\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S5.P1\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"manifest generation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S5.P2\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"manifest generation\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S6\",\"change\":\"add\",\"new_object\":\"pipeline orchestration\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S6.P1\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"pipeline orchestration\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S6.P2\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"pipeline orchestration\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S7\",\"change\":\"add\",\"new_object\":\"determinism contract\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S7.P1\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"determinism contract\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S8\",\"change\":\"add\",\"new_object\":\"error handling\",\"note\":null,\"object_id\":null,\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S8.P1\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"error handling\",\"overrides\":[],\"replaces\":[]},{\"block\":\"R1.S8.P2\",\"change\":\"add\",\"new_object\":null,\"note\":null,\"object_id\":\"dpipe CLI\",\"overrides\":[],\"replaces\":[]}]}"
+],
+"check_replies": [
+"{\"remove\":[],\"retire_add\":[],\"retire_remove\":[],\"uncheckable_add\":[{\"block\":\"R1.S0\",\"reason\":\"The introductory statement names the tool and its broad purpose but does not specify an independently observable output beyond the command/build requirements.\"},{\"block\":\"R1.S5.P2\",\"reason\":\"The requirement that generated_at reflect the actual generation instant cannot be asserted as an exact fixed value in a deterministic single-run check.\"}],\"upsert\":[{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S8.P2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S0\",\"R1.S8.P2\"],\"direction\":\"holds\",\"input\":{\"args\":[\"build\"],\"files\":[]},\"key\":\"cli-build\",\"note\":\"Checks that the Go CLI is buildable with the required command.\",\"object\":\"O1\",\"reference_script\":null,\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S2.P6\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value,label,timestamp\\\\n1,5,A,2024-01-01T00:00:00Z\\\\n2,20,B,2024-01-02T00:00:00Z\\\\n\\\"\",\"id\":\"valid_csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S2.P6\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"clean.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value,label,timestamp,rejection_reason\\\\n3,2000,C,2024-01-03T00:00:00Z,value out of range for column value: 2000\\\\n4,20,D,2024-01-04T00:00:00Z,duplicate value for unique column: value\\\\n\\\"\",\"id\":\"rejected_csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S2.P3\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"clean.csv.rejected\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"checksum_file\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S2.P6\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"clean.csv.sha256\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S2.P1\",\"R1.S2.P2\",\"R1.S2.P3\",\"R1.S2.P4\",\"R1.S2.P5\",\"R1.S2.P6\"],\"direction\":\"holds\",\"input\":{\"args\":[\"ingest\",\"--input\",\"input.csv\",\"--schema\",\"schema.json\",\"--output\",\"clean.csv\"],\"files\":[{\"content\":\"id,value,label,timestamp\\n2,20,B,2024-01-02T00:00:00Z\\n1,5,A,2024-01-01T00:00:00Z\\n3,2000,C,2024-01-03T00:00:00Z\\n4,20,D,2024-01-04T00:00:00Z\\n\",\"path\":\"input.csv\"},{\"content\":\"{\\\"columns\\\":[{\\\"name\\\":\\\"id\\\",\\\"type\\\":\\\"int\\\",\\\"required\\\":true,\\\"unique\\\":true},{\\\"name\\\":\\\"value\\\",\\\"type\\\":\\\"float\\\",\\\"required\\\":true,\\\"min\\\":0,\\\"max\\\":1000},{\\\"name\\\":\\\"label\\\",\\\"type\\\":\\\"string\\\",\\\"required\\\":false,\\\"pattern\\\":\\\"^[A-Z]\\\"},{\\\"name\\\":\\\"timestamp\\\",\\\"type\\\":\\\"datetime\\\",\\\"required\\\":true}],\\\"primary_key\\\":[\\\"id\\\"]}\",\"path\":\"schema.json\"}]},\"key\":\"ingest-validation-sort-reject\",\"note\":null,\"object\":\"O2\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({\\\"valid_csv\\\":\\\"id,value,label,timestamp\\\\n1,5,A,2024-01-01T00:00:00Z\\\\n2,20,B,2024-01-02T00:00:00Z\\\\n\\\",\\\"rejected_csv\\\":\\\"id,value,label,timestamp,rejection_reason\\\\n3,2000,C,2024-01-03T00:00:00Z,value out of range for column value: 2000\\\\n4,20,D,2024-01-04T00:00:00Z,duplicate value for unique column: value\\\\n\\\"}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P24\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value,score\\\\n1,4,2\\\\n2,16,4\\\\n3,0,0\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P8\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"sha_exists\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P24\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"out.csv.sha256\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P1\",\"R1.S3.P2\",\"R1.S3.P3\",\"R1.S3.P4\",\"R1.S3.P5\",\"R1.S3.P6\",\"R1.S3.P7\",\"R1.S3.P8\",\"R1.S3.P24\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"7\"],\"files\":[{\"content\":\"id,value\\n1,4\\n2,16\\n3,0\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"derive\\\",\\\"name\\\":\\\"score\\\",\\\"expression\\\":\\\"round(sqrt(abs(value)), 2)\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"transform-expression\",\"note\":null,\"object\":\"O3\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({\\\"csv\\\":\\\"id,value,score\\\\n1,4,2\\\\n2,16,4\\\\n3,0,0\\\\n\\\"}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P9\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"label,total,average,n\\\\nA,110,55,2\\\\nB,110,55,2\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P10\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"sha_exists\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P24\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"out.csv.sha256\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P9\",\"R1.S3.P10\",\"R1.S3.P11\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"label,value,id\\nB,60,1\\nA,40,2\\nB,50,3\\nA,70,4\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"aggregate\\\",\\\"group_by\\\":[\\\"label\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"sum\\\",\\\"as\\\":\\\"total\\\"},{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"avg\\\",\\\"as\\\":\\\"average\\\"},{\\\"column\\\":\\\"id\\\",\\\"function\\\":\\\"count\\\",\\\"as\\\":\\\"n\\\"}],\\\"having\\\":{\\\"column\\\":\\\"total\\\",\\\"condition\\\":\\\"gt\\\",\\\"threshold\\\":100}}]\",\"path\":\"recipe.json\"}]},\"key\":\"transform-aggregate-having\",\"note\":null,\"object\":\"O4\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({\\\"csv\\\":\\\"label,total,average,n\\\\nA,110,55,2\\\\nB,110,55,2\\\\n\\\"}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P12\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,name,score\\\\n2,B,20\\\\n1,A,10\\\\n3,C,\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P12\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P12\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"left.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,name\\n2,B\\n1,A\\n3,C\\n\",\"path\":\"left.csv\"},{\"content\":\"id,score\\n1,10\\n1,11\\n2,20\\n\",\"path\":\"right.csv\"},{\"content\":\"[{\\\"op\\\":\\\"join\\\",\\\"right\\\":\\\"right.csv\\\",\\\"on\\\":\\\"id\\\",\\\"type\\\":\\\"left\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"join\",\"note\":null,\"object\":\"O5\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({\\\"csv\\\":\\\"id,name,score\\\\n2,B,20\\\\n1,A,10\\\\n3,C,\\\\n\\\"}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P14\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"cat,id,value,r\\\\nA,2,10,1\\\\nB,1,8,1\\\\nA,1,10,1\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P15\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"ERROR: invalid recipe: column <name> not found\\\"\",\"id\":\"missing_column_error\",\"reading\":\"The exact missing column name is represented by <name>.\",\"role\":\"convention\",\"source\":{\"block\":\"R1.S3.P17\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stderr\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P13\",\"R1.S3.P14\",\"R1.S3.P15\",\"R1.S3.P16\",\"R1.S3.P17\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"cat,id,value\\nA,2,10\\nB,1,8\\nA,1,10\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"rank\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"window\",\"note\":null,\"object\":\"O6\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({\\\"csv\\\":\\\"cat,id,value,r\\\\nA,2,10,1\\\\nB,1,8,1\\\\nA,1,10,1\\\\n\\\"}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P19\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,A,B,C\\\\n1,z,,y\\\\n2,,x,\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P19\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P18\",\"R1.S3.P19\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,label,value\\n2,B,x\\n1,C,y\\n1,A,z\\n1,A,w\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"pivot\\\",\\\"index\\\":[\\\"id\\\"],\\\"column\\\":\\\"label\\\",\\\"value\\\":\\\"value\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"pivot\",\"note\":null,\"object\":\"O7\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({\\\"csv\\\":\\\"id,A,B,C\\\\n1,z,,y\\\\n2,,x,\\\\n\\\"}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P21\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,quarter,amount\\\\n1,q1,a\\\\n1,q2,\\\\n2,q1,\\\\n2,q2,b\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P21\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P20\",\"R1.S3.P21\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,q1,q2\\n1,a,\\n2,,b\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"unpivot\\\",\\\"index\\\":[\\\"id\\\"],\\\"columns\\\":[\\\"q1\\\",\\\"q2\\\"],\\\"name_to\\\":\\\"quarter\\\",\\\"value_to\\\":\\\"amount\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"unpivot\",\"note\":null,\"object\":\"O8\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({\\\"csv\\\":\\\"id,quarter,amount\\\\n1,q1,a\\\\n1,q2,\\\\n2,q1,\\\\n2,q2,b\\\\n\\\"}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P23\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value\\\\n1,\\\\n2,a\\\\n3,a\\\\n4,a\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P23\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P22\",\"R1.S3.P23\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,value\\n1,\\n2,a\\n3,\\n4,\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"fill\\\",\\\"columns\\\":[\\\"value\\\"],\\\"strategy\\\":\\\"forward\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"fill\",\"note\":null,\"object\":\"O9\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({\\\"csv\\\":\\\"id,value\\\\n1,\\\\n2,a\\\\n3,a\\\\n4,a\\\\n\\\"}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S4.P2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"VERIFIED\",\"id\":\"stdout\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S4.P2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stdout_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S4.P1\",\"R1.S4.P2\"],\"direction\":\"holds\",\"input\":{\"args\":[\"verify\",\"--file\",\"data.csv\",\"--checksum\",\"data.sha256\"],\"files\":[{\"content\":\"a,b\\n1,2\\n\",\"path\":\"data.csv\"},{\"content\":\"{{computed:sha}}\\n\",\"path\":\"data.sha256\"}]},\"key\":\"verify\",\"note\":null,\"object\":\"O10\",\"reference_script\":{\"code\":\"import hashlib,json\\nb=open('data.csv','rb').read()\\nprint(json.dumps({'sha':hashlib.sha256(b).hexdigest()}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"[{\\\"path\\\":\\\"a.csv\\\",\\\"sha256\\\":\\\"{{computed:a}}\\\",\\\"rows\\\":1,\\\"size_bytes\\\":8},{\\\"path\\\":\\\"z.csv\\\",\\\"sha256\\\":\\\"{{computed:z}}\\\",\\\"rows\\\":1,\\\"size_bytes\\\":8}]\",\"id\":\"paths\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"json\",\"line\":null,\"path\":\"manifest.json\",\"pointer\":\"/files\"},\"tolerance\":null},{\"expect_json\":\"null\",\"id\":\"timestamp_field\",\"reading\":\"The timestamp is checked for presence and RFC 3339 UTC validity rather than an exact wall-clock value.\",\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"json\",\"line\":null,\"path\":\"manifest.json\",\"pointer\":\"/generated_at\"},\"tolerance\":null}],\"blocks\":[\"R1.S5.P1\",\"R1.S5.P2\"],\"direction\":\"holds\",\"input\":{\"args\":[\"manifest\",\"--dir\",\"data\",\"--output\",\"manifest.json\"],\"files\":[{\"content\":\"a,b\\n1,2\\n\",\"path\":\"data/z.csv\"},{\"content\":\"a,b\\n3,4\\n\",\"path\":\"data/a.csv\"},{\"content\":\"ignore\",\"path\":\"data/no.txt\"}]},\"key\":\"manifest\",\"note\":null,\"object\":\"O11\",\"reference_script\":{\"code\":\"import hashlib,json\\nout={}\\nfor n in ['a','z']:\\n b=open('data/'+n+'.csv','rb').read(); out[n]=hashlib.sha256(b).hexdigest()\\nprint(json.dumps({'a':out['a'],'z':out['z']}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S6.P2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"PIPELINE OK: 1 steps completed\",\"id\":\"stdout\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S6.P2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stdout_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S6.P1\",\"R1.S6.P2\"],\"direction\":\"holds\",\"input\":{\"args\":[\"pipeline\",\"--config\",\"config.json\"],\"files\":[{\"content\":\"{\\\"seed\\\":12345,\\\"steps\\\":[{\\\"type\\\":\\\"verify\\\",\\\"file\\\":\\\"data.csv\\\",\\\"checksum\\\":\\\"data.sha256\\\"}]}\",\"path\":\"config.json\"}]},\"key\":\"pipeline\",\"note\":\"The referenced verify inputs are intentionally omitted, so this check is valid only when the runner supplies them; use as a pipeline contract check.\",\"object\":\"O12\",\"reference_script\":null,\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S7.P1\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value\\\\n1,2\\\\n2,3\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S7.P1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S7.P1\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"42\"],\"files\":[{\"content\":\"id,value\\n1,2\\n2,3\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"sample\\\",\\\"fraction\\\":1}]\",\"path\":\"recipe.json\"}]},\"key\":\"determinism\",\"note\":null,\"object\":\"O13\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'csv':'id,value\\\\n1,2\\\\n2,3\\\\n'}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"1\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S8.P1\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"ERROR: file not found: missing.csv\",\"id\":\"stderr\",\"reading\":null,\"role\":\"convention\",\"source\":{\"block\":\"R1.S8.P1\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stderr_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S8.P1\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"missing.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"[]\",\"path\":\"recipe.json\"}]},\"key\":\"errors\",\"note\":null,\"object\":\"O14\",\"reference_script\":null,\"uses\":[]}]}",
+"{\"remove\":[],\"retire_add\":[],\"retire_remove\":[],\"uncheckable_add\":[],\"upsert\":[{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S8.P2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S0\",\"R1.S8.P2\"],\"direction\":\"holds\",\"input\":{\"args\":[\"build\"],\"files\":[]},\"key\":\"cli-build\",\"note\":\"The build requirement states that the command must be buildable; successful build is represented by exit code 0.\",\"object\":\"O1\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S2.P6.s1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value,label,timestamp\\\\n1,5,A,2024-01-01T00:00:00Z\\\\n2,20,B,2024-01-02T00:00:00Z\\\\n\\\"\",\"id\":\"valid_csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S2.P6.s2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"clean.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value,label,timestamp,rejection_reason\\\\n3,2000,C,2024-01-03T00:00:00Z,value out of range for column value: 2000\\\\n4,20,D,2024-01-04T00:00:00Z,duplicate value for unique column: value\\\\n\\\"\",\"id\":\"rejected_csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S2.P3.s2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"clean.csv.rejected\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"checksum_file\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S2.P6.s3\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"clean.csv.sha256\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S2.P1\",\"R1.S2.P2.s1\",\"R1.S2.P2.s2\",\"R1.S2.P3.s2\",\"R1.S2.P3.s3\",\"R1.S2.P3.s4\",\"R1.S2.P4.s1\",\"R1.S2.P4.s2\",\"R1.S2.P5\",\"R1.S2.P6.s1\",\"R1.S2.P6.s2\",\"R1.S2.P6.s3\"],\"direction\":\"holds\",\"input\":{\"args\":[\"ingest\",\"--input\",\"input.csv\",\"--schema\",\"schema.json\",\"--output\",\"clean.csv\"],\"files\":[{\"content\":\"id,value,label,timestamp\\n2,20,B,2024-01-02T00:00:00Z\\n1,5,A,2024-01-01T00:00:00Z\\n3,2000,C,2024-01-03T00:00:00Z\\n4,20,D,2024-01-04T00:00:00Z\\n\",\"path\":\"input.csv\"},{\"content\":\"{\\\"columns\\\":[{\\\"name\\\":\\\"id\\\",\\\"type\\\":\\\"int\\\",\\\"required\\\":true,\\\"unique\\\":true},{\\\"name\\\":\\\"value\\\",\\\"type\\\":\\\"float\\\",\\\"required\\\":true,\\\"min\\\":0,\\\"max\\\":1000},{\\\"name\\\":\\\"label\\\",\\\"type\\\":\\\"string\\\",\\\"required\\\":false,\\\"pattern\\\":\\\"^[A-Z]\\\"},{\\\"name\\\":\\\"timestamp\\\",\\\"type\\\":\\\"datetime\\\",\\\"required\\\":true}],\\\"primary_key\\\":[\\\"id\\\"]}\",\"path\":\"schema.json\"}]},\"key\":\"ingest-validation-sort-reject\",\"note\":null,\"object\":\"O2\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0,'valid_csv':'id,value,label,timestamp\\\\n1,5,A,2024-01-01T00:00:00Z\\\\n2,20,B,2024-01-02T00:00:00Z\\\\n','rejected_csv':'id,value,label,timestamp,rejection_reason\\\\n3,2000,C,2024-01-03T00:00:00Z,value out of range for column value: 2000\\\\n4,20,D,2024-01-04T00:00:00Z,duplicate value for unique column: value\\\\n','checksum_file':True}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P24\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value,score\\\\n1,4,2\\\\n2,16,4\\\\n3,0,0\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P8.s1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"sha_exists\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P24\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"out.csv.sha256\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P1\",\"R1.S3.P2.s2\",\"R1.S3.P2.s4\",\"R1.S3.P2.s5\",\"R1.S3.P3.s1\",\"R1.S3.P3.s2\",\"R1.S3.P3.s3\",\"R1.S3.P3.s4\",\"R1.S3.P3.s5\",\"R1.S3.P3.s6\",\"R1.S3.P3.s7\",\"R1.S3.P3.s8\",\"R1.S3.P3.s9\",\"R1.S3.P4.s1\",\"R1.S3.P4.s2\",\"R1.S3.P4.s3\",\"R1.S3.P5.s2\",\"R1.S3.P5.s3\",\"R1.S3.P5.s4\",\"R1.S3.P5.s5\",\"R1.S3.P5.s6\",\"R1.S3.P5.s7\",\"R1.S3.P5.s8\",\"R1.S3.P5.s9\",\"R1.S3.P5.s10\",\"R1.S3.P5.s11\",\"R1.S3.P5.s12\",\"R1.S3.P5.s13\",\"R1.S3.P6\",\"R1.S3.P7.s1\",\"R1.S3.P8.s1\",\"R1.S3.P8.s2\",\"R1.S3.P24\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"7\"],\"files\":[{\"content\":\"id,value\\n1,4\\n2,16\\n3,0\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"derive\\\",\\\"name\\\":\\\"score\\\",\\\"expression\\\":\\\"round(sqrt(abs(value)), 2)\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"transform-expression\",\"note\":null,\"object\":\"O3\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0,'csv':'id,value,score\\\\n1,4,2\\\\n2,16,4\\\\n3,0,0\\\\n','sha_exists':True}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P9.s5\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"label,total,average,n\\\\nA,110,55,2\\\\nB,110,55,2\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P10.s1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"sha_exists\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P24\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"out.csv.sha256\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P9.s1\",\"R1.S3.P9.s2\",\"R1.S3.P9.s3\",\"R1.S3.P9.s4\",\"R1.S3.P9.s5\",\"R1.S3.P9.s6\",\"R1.S3.P9.s7\",\"R1.S3.P9.s8\",\"R1.S3.P9.s9\",\"R1.S3.P9.s10\",\"R1.S3.P10.s1\",\"R1.S3.P10.s2\",\"R1.S3.P10.s3\",\"R1.S3.P11.s1\",\"R1.S3.P11.s3\",\"R1.S3.P11.s4\",\"R1.S3.P11.s5\",\"R1.S3.P11.s6\",\"R1.S3.P11.s7\",\"R1.S3.P11.s8\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"label,value,id\\nB,60,1\\nA,40,2\\nB,50,3\\nA,70,4\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"aggregate\\\",\\\"group_by\\\":[\\\"label\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"sum\\\",\\\"as\\\":\\\"total\\\"},{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"avg\\\",\\\"as\\\":\\\"average\\\"},{\\\"column\\\":\\\"id\\\",\\\"function\\\":\\\"count\\\",\\\"as\\\":\\\"n\\\"}],\\\"having\\\":{\\\"column\\\":\\\"total\\\",\\\"condition\\\":\\\"gt\\\",\\\"threshold\\\":100}}]\",\"path\":\"recipe.json\"}]},\"key\":\"transform-aggregate-having\",\"note\":null,\"object\":\"O4\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0,'csv':'label,total,average,n\\\\nA,110,55,2\\\\nB,110,55,2\\\\n','sha_exists':True}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P12.s1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,name,score\\\\n2,B,20\\\\n1,A,10\\\\n3,C,\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P12.s6\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P12.s1\",\"R1.S3.P12.s2\",\"R1.S3.P12.s3\",\"R1.S3.P12.s4\",\"R1.S3.P12.s5\",\"R1.S3.P12.s6\",\"R1.S3.P12.s7\",\"R1.S3.P12.s8\",\"R1.S3.P12.s9\",\"R1.S3.P12.s10\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"left.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,name\\n2,B\\n1,A\\n3,C\\n\",\"path\":\"left.csv\"},{\"content\":\"id,score\\n1,10\\n1,11\\n2,20\\n\",\"path\":\"right.csv\"},{\"content\":\"[{\\\"op\\\":\\\"join\\\",\\\"right\\\":\\\"right.csv\\\",\\\"on\\\":\\\"id\\\",\\\"type\\\":\\\"left\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"join\",\"note\":null,\"object\":\"O5\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0,'csv':'id,name,score\\\\n2,B,20\\\\n1,A,10\\\\n3,C,\\\\n'}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P14.s2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"cat,id,value,r\\\\nA,2,10,1\\\\nB,1,8,1\\\\nA,1,10,1\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P15.s1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P13.s1\",\"R1.S3.P13.s2\",\"R1.S3.P13.s3\",\"R1.S3.P13.s4\",\"R1.S3.P14.s1\",\"R1.S3.P14.s2\",\"R1.S3.P14.s3\",\"R1.S3.P14.s4\",\"R1.S3.P14.s5\",\"R1.S3.P14.s6\",\"R1.S3.P14.s7\",\"R1.S3.P14.s8\",\"R1.S3.P14.s9\",\"R1.S3.P15.s1\",\"R1.S3.P15.s2\",\"R1.S3.P16.s1\",\"R1.S3.P16.s2\",\"R1.S3.P17\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"cat,id,value\\nA,2,10\\nB,1,8\\nA,1,10\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"rank\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"window\",\"note\":null,\"object\":\"O6\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0,'csv':'cat,id,value,r\\\\nA,2,10,1\\\\nB,1,8,1\\\\nA,1,10,1\\\\n'}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P19.s2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,A,B,C\\\\n1,z,,y\\\\n2,,x,\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P19.s4\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P18.s1\",\"R1.S3.P18.s2\",\"R1.S3.P18.s3\",\"R1.S3.P18.s4\",\"R1.S3.P19.s2\",\"R1.S3.P19.s3\",\"R1.S3.P19.s4\",\"R1.S3.P19.s5\",\"R1.S3.P19.s6\",\"R1.S3.P19.s7\",\"R1.S3.P19.s8\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,label,value\\n2,B,x\\n1,C,y\\n1,A,z\\n1,A,w\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"pivot\\\",\\\"index\\\":[\\\"id\\\"],\\\"column\\\":\\\"label\\\",\\\"value\\\":\\\"value\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"pivot\",\"note\":null,\"object\":\"O7\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0,'csv':'id,A,B,C\\\\n1,z,,y\\\\n2,,x,\\\\n'}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P21.s2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,quarter,amount\\\\n1,q1,a\\\\n1,q2,\\\\n2,q1,\\\\n2,q2,b\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P21.s3\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P20.s1\",\"R1.S3.P20.s2\",\"R1.S3.P20.s3\",\"R1.S3.P20.s4\",\"R1.S3.P20.s5\",\"R1.S3.P21.s2\",\"R1.S3.P21.s3\",\"R1.S3.P21.s4\",\"R1.S3.P21.s5\",\"R1.S3.P21.s6\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,q1,q2\\n1,a,\\n2,,b\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"unpivot\\\",\\\"index\\\":[\\\"id\\\"],\\\"columns\\\":[\\\"q1\\\",\\\"q2\\\"],\\\"name_to\\\":\\\"quarter\\\",\\\"value_to\\\":\\\"amount\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"unpivot\",\"note\":null,\"object\":\"O8\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0,'csv':'id,quarter,amount\\\\n1,q1,a\\\\n1,q2,\\\\n2,q1,\\\\n2,q2,b\\\\n'}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P23.s2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value\\\\n1,\\\\n2,a\\\\n3,a\\\\n4,a\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S3.P23.s2\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S3.P22.s1\",\"R1.S3.P22.s2\",\"R1.S3.P22.s3\",\"R1.S3.P22.s4\",\"R1.S3.P23.s1\",\"R1.S3.P23.s2\",\"R1.S3.P23.s3\",\"R1.S3.P23.s4\",\"R1.S3.P23.s5\",\"R1.S3.P23.s6\",\"R1.S3.P23.s7\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,value\\n1,\\n2,a\\n3,\\n4,\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"fill\\\",\\\"columns\\\":[\\\"value\\\"],\\\"strategy\\\":\\\"forward\\\"}]\",\"path\":\"recipe.json\"}]},\"key\":\"fill\",\"note\":null,\"object\":\"O9\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'exit':0,'csv':'id,value\\\\n1,\\\\n2,a\\\\n3,a\\\\n4,a\\\\n'}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S4.P2.s2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"VERIFIED\\\"\",\"id\":\"stdout\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S4.P2.s2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stdout_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S4.P1\",\"R1.S4.P2.s1\",\"R1.S4.P2.s2\"],\"direction\":\"holds\",\"input\":{\"args\":[\"verify\",\"--file\",\"data.csv\",\"--checksum\",\"data.sha256\"],\"files\":[{\"content\":\"a,b\\n1,2\\n\",\"path\":\"data.csv\"},{\"content\":\"{{computed:sha}}\\n\",\"path\":\"data.sha256\"}]},\"key\":\"verify\",\"note\":null,\"object\":\"O10\",\"reference_script\":{\"code\":\"import hashlib,json\\nb=open('data.csv','rb').read()\\nprint(json.dumps({'sha':hashlib.sha256(b).hexdigest()}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2.s3\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"[{\\\"path\\\":\\\"a.csv\\\",\\\"sha256\\\":\\\"{{computed:a}}\\\",\\\"rows\\\":1,\\\"size_bytes\\\":8},{\\\"path\\\":\\\"z.csv\\\",\\\"sha256\\\":\\\"{{computed:z}}\\\",\\\"rows\\\":1,\\\"size_bytes\\\":8}]\",\"id\":\"files\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2.s4\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"json\",\"line\":null,\"path\":\"manifest.json\",\"pointer\":\"/files\"},\"tolerance\":null},{\"expect_json\":\"null\",\"id\":\"generated_at\",\"reading\":\"The exact wall-clock value is not fixed; the field must be present and contain an RFC 3339 UTC timestamp.\",\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2.s3\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"json\",\"line\":null,\"path\":\"manifest.json\",\"pointer\":\"/generated_at\"},\"tolerance\":null}],\"blocks\":[\"R1.S5.P1\",\"R1.S5.P2.s1\",\"R1.S5.P2.s2\",\"R1.S5.P2.s3\",\"R1.S5.P2.s4\",\"R1.S5.P2.s5\"],\"direction\":\"holds\",\"input\":{\"args\":[\"manifest\",\"--dir\",\"data\",\"--output\",\"manifest.json\"],\"files\":[{\"content\":\"a,b\\n1,2\\n\",\"path\":\"data/z.csv\"},{\"content\":\"a,b\\n3,4\\n\",\"path\":\"data/a.csv\"},{\"content\":\"ignore\",\"path\":\"data/no.txt\"}]},\"key\":\"manifest\",\"note\":null,\"object\":\"O11\",\"reference_script\":{\"code\":\"import hashlib,json\\nout={}\\nfor n in ['a','z']:\\n b=open('data/'+n+'.csv','rb').read(); out[n]=hashlib.sha256(b).hexdigest()\\nprint(json.dumps({'a':out['a'],'z':out['z']}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S6.P2.s3\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"PIPELINE OK: 1 steps completed\\\"\",\"id\":\"stdout\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S6.P2.s3\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stdout_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S6.P1\",\"R1.S6.P2.s1\",\"R1.S6.P2.s2\",\"R1.S6.P2.s3\"],\"direction\":\"holds\",\"input\":{\"args\":[\"pipeline\",\"--config\",\"config.json\"],\"files\":[{\"content\":\"{\\\"seed\\\":12345,\\\"steps\\\":[{\\\"type\\\":\\\"verify\\\",\\\"file\\\":\\\"data.csv\\\",\\\"checksum\\\":\\\"data.sha256\\\"}]}\",\"path\":\"config.json\"},{\"content\":\"a,b\\n1,2\\n\",\"path\":\"data.csv\"},{\"content\":\"{{computed:sha}}\\n\",\"path\":\"data.sha256\"}]},\"key\":\"pipeline\",\"note\":null,\"object\":\"O12\",\"reference_script\":{\"code\":\"import hashlib,json\\nprint(json.dumps({'sha':hashlib.sha256(open('data.csv','rb').read()).hexdigest()}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"\\\"id,value\\\\n1,2\\\\n2,3\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S7.P1.s1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S7.P1.s1\",\"R1.S7.P1.s2\",\"R1.S7.P1.s3\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"42\"],\"files\":[{\"content\":\"id,value\\n1,2\\n2,3\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"sample\\\",\\\"fraction\\\":1}]\",\"path\":\"recipe.json\"}]},\"key\":\"determinism\",\"note\":\"Repeated execution with identical inputs and seed is expected to produce byte-identical output; manifest generated_at is the stated exception.\",\"object\":\"O13\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'csv':'id,value\\\\n1,2\\\\n2,3\\\\n'}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"1\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S8.P1.s1\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"ERROR: file not found: missing.csv\\\"\",\"id\":\"stderr\",\"reading\":null,\"role\":\"convention\",\"source\":{\"block\":\"R1.S8.P1.s1\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stderr_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S8.P1.s1\",\"R1.S8.P1.s2\",\"R1.S8.P1.s3\",\"R1.S8.P1.s4\",\"R1.S8.P1.s5\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"missing.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"[]\",\"path\":\"recipe.json\"}]},\"key\":\"errors\",\"note\":\"The check exercises the specified missing-file error; the remaining error clauses are covered by the same command-line error contract.\",\"object\":\"O14\",\"reference_script\":null,\"uses\":[]}]}",
+"{\"remove\":[],\"retire_add\":[],\"retire_remove\":[],\"uncheckable_add\":[{\"block\":\"R1.S5.P2.s3\",\"reason\":\"The exact generated_at value must reflect the actual wall-clock generation time, so it cannot be asserted as a fixed value in a deterministic single-run check; manifest existence and its deterministic files array remain checked.\"}],\"upsert\":[{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2.s3\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"[{\\\"path\\\":\\\"a.csv\\\",\\\"sha256\\\":\\\"{{computed:a}}\\\",\\\"rows\\\":1,\\\"size_bytes\\\":8},{\\\"path\\\":\\\"z.csv\\\",\\\"sha256\\\":\\\"{{computed:z}}\\\",\\\"rows\\\":1,\\\"size_bytes\\\":8}]\",\"id\":\"files\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2.s4\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"json\",\"line\":null,\"path\":\"manifest.json\",\"pointer\":\"/files\"},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"manifest_exists\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S5.P2.s3\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"manifest.json\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S5.P1\",\"R1.S5.P2.s1\",\"R1.S5.P2.s2\",\"R1.S5.P2.s3\",\"R1.S5.P2.s4\",\"R1.S5.P2.s5\"],\"direction\":\"holds\",\"input\":{\"args\":[\"manifest\",\"--dir\",\"data\",\"--output\",\"manifest.json\"],\"files\":[{\"content\":\"a,b\\n1,2\\n\",\"path\":\"data/z.csv\"},{\"content\":\"a,b\\n3,4\\n\",\"path\":\"data/a.csv\"},{\"content\":\"ignore\",\"path\":\"data/no.txt\"}]},\"key\":\"manifest\",\"note\":\"The exact generated_at value is wall-clock dependent and is listed as uncheckable.\",\"object\":\"O11\",\"reference_script\":{\"code\":\"import hashlib,json\\nout={}\\nfor n in ['a','z']:\\n b=open('data/'+n+'.csv','rb').read(); out[n]=hashlib.sha256(b).hexdigest()\\nprint(json.dumps({'a':out['a'],'z':out['z']}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S6.P2.s3\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"PIPELINE OK: 1 steps completed\\\"\",\"id\":\"stdout\",\"reading\":\"N is derived as the number of steps in the supplied configuration, which is 1.\",\"role\":\"business\",\"source\":{\"block\":\"R1.S6.P2.s3\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"stdout_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S6.P1\",\"R1.S6.P2.s1\",\"R1.S6.P2.s2\",\"R1.S6.P2.s3\"],\"direction\":\"holds\",\"input\":{\"args\":[\"pipeline\",\"--config\",\"config.json\"],\"files\":[{\"content\":\"{\\\"seed\\\":12345,\\\"steps\\\":[{\\\"type\\\":\\\"verify\\\",\\\"file\\\":\\\"data.csv\\\",\\\"checksum\\\":\\\"data.sha256\\\"}]}\",\"path\":\"config.json\"}]},\"key\":\"pipeline\",\"note\":null,\"object\":\"O12\",\"reference_script\":{\"code\":\"import json\\nconfig=json.load(open('config.json'))\\nprint(json.dumps({'stdout':'PIPELINE OK: %d steps completed' % len(config['steps'])}))\",\"language\":\"python\"},\"uses\":[]},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"exit\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S7.P1.s1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,value\\\\n1,2\\\\n2,3\\\\n\\\"\",\"id\":\"csv\",\"reading\":null,\"role\":\"business\",\"source\":{\"block\":\"R1.S7.P1.s1\",\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"blocks\":[\"R1.S7.P1.s1\",\"R1.S7.P1.s2\",\"R1.S7.P1.s3\"],\"direction\":\"holds\",\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"42\"],\"files\":[{\"content\":\"id,value\\n1,2\\n2,3\\n\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"sample\\\",\\\"fraction\\\":1}]\",\"path\":\"recipe.json\"}]},\"key\":\"determinism\",\"note\":\"The output content and successful exit are checked for a deterministic transform run; repeated byte identity is the contract represented by this fixed-input check.\",\"object\":\"O13\",\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'csv':'id,value\\\\n1,2\\\\n2,3\\\\n','exit':0}))\",\"language\":\"python\"},\"uses\":[]}]}"
+],
+"checks": [
+{
+"id": "K1",
+"round": 1,
+"key": "cli-build",
+"object": "O1",
+"blocks": [
+"R1.S0",
+"R1.S8.P2"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"build"
+],
+"files": []
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S8.P2",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": false,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [],
+"reason": "no assertion about data (only exit code, existence or help)"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K2",
+"round": 1,
+"key": "ingest-validation-sort-reject",
+"object": "O2",
+"blocks": [
+"R1.S2.P1",
+"R1.S2.P2.s1",
+"R1.S2.P2.s2",
+"R1.S2.P3.s2",
+"R1.S2.P3.s3",
+"R1.S2.P3.s4",
+"R1.S2.P4.s1",
+"R1.S2.P4.s2",
+"R1.S2.P5",
+"R1.S2.P6.s1",
+"R1.S2.P6.s2",
+"R1.S2.P6.s3"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"ingest",
+"--input",
+"input.csv",
+"--schema",
+"schema.json",
+"--output",
+"clean.csv"
+],
+"files": [
+{
+"content": "id,value,label,timestamp\n2,20,B,2024-01-02T00:00:00Z\n1,5,A,2024-01-01T00:00:00Z\n3,2000,C,2024-01-03T00:00:00Z\n4,20,D,2024-01-04T00:00:00Z\n",
+"path": "input.csv"
+},
+{
+"content": "{\"columns\":[{\"name\":\"id\",\"type\":\"int\",\"required\":true,\"unique\":true},{\"name\":\"value\",\"type\":\"float\",\"required\":true,\"min\":0,\"max\":1000},{\"name\":\"label\",\"type\":\"string\",\"required\":false,\"pattern\":\"^[A-Z]\"},{\"name\":\"timestamp\",\"type\":\"datetime\",\"required\":true}],\"primary_key\":[\"id\"]}",
+"path": "schema.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S2.P6.s1",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "valid_csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S2.P6.s2",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "clean.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "id,value,label,timestamp\n1,5,A,2024-01-01T00:00:00Z\n2,20,B,2024-01-02T00:00:00Z\n",
+"method_b": "id,value,label,timestamp\n1,5,A,2024-01-01T00:00:00Z\n2,20,B,2024-01-02T00:00:00Z\n"
+},
+{
+"id": "rejected_csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S2.P3.s2",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "clean.csv.rejected",
+"pointer": null
+},
+"tolerance": null,
+"expect": "id,value,label,timestamp,rejection_reason\n3,2000,C,2024-01-03T00:00:00Z,value out of range for column value: 2000\n4,20,D,2024-01-04T00:00:00Z,duplicate value for unique column: value\n",
+"method_b": "id,value,label,timestamp,rejection_reason\n3,2000,C,2024-01-03T00:00:00Z,value out of range for column value: 2000\n4,20,D,2024-01-04T00:00:00Z,duplicate value for unique column: value\n"
+},
+{
+"id": "checksum_file",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S2.P6.s3",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file_exists",
+"line": null,
+"path": "clean.csv.sha256",
+"pointer": null
+},
+"tolerance": null,
+"expect": true,
+"method_b": true
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0,'valid_csv':'id,value,label,timestamp\\n1,5,A,2024-01-01T00:00:00Z\\n2,20,B,2024-01-02T00:00:00Z\\n','rejected_csv':'id,value,label,timestamp,rejection_reason\\n3,2000,C,2024-01-03T00:00:00Z,value out of range for column value: 2000\\n4,20,D,2024-01-04T00:00:00Z,duplicate value for unique column: value\\n','checksum_file':True}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"valid_csv",
+"rejected_csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K3",
+"round": 1,
+"key": "transform-expression",
+"object": "O3",
+"blocks": [
+"R1.S3.P1",
+"R1.S3.P2.s2",
+"R1.S3.P2.s4",
+"R1.S3.P2.s5",
+"R1.S3.P3.s1",
+"R1.S3.P3.s2",
+"R1.S3.P3.s3",
+"R1.S3.P3.s4",
+"R1.S3.P3.s5",
+"R1.S3.P3.s6",
+"R1.S3.P3.s7",
+"R1.S3.P3.s8",
+"R1.S3.P3.s9",
+"R1.S3.P4.s1",
+"R1.S3.P4.s2",
+"R1.S3.P4.s3",
+"R1.S3.P5.s2",
+"R1.S3.P5.s3",
+"R1.S3.P5.s4",
+"R1.S3.P5.s5",
+"R1.S3.P5.s6",
+"R1.S3.P5.s7",
+"R1.S3.P5.s8",
+"R1.S3.P5.s9",
+"R1.S3.P5.s10",
+"R1.S3.P5.s11",
+"R1.S3.P5.s12",
+"R1.S3.P5.s13",
+"R1.S3.P6",
+"R1.S3.P7.s1",
+"R1.S3.P8.s1",
+"R1.S3.P8.s2",
+"R1.S3.P24"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"input.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"7"
+],
+"files": [
+{
+"content": "id,value\n1,4\n2,16\n3,0\n",
+"path": "input.csv"
+},
+{
+"content": "[{\"op\":\"derive\",\"name\":\"score\",\"expression\":\"round(sqrt(abs(value)), 2)\"}]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P24",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P8.s1",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "out.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "id,value,score\n1,4,2\n2,16,4\n3,0,0\n",
+"method_b": "id,value,score\n1,4,2\n2,16,4\n3,0,0\n"
+},
+{
+"id": "sha_exists",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P24",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file_exists",
+"line": null,
+"path": "out.csv.sha256",
+"pointer": null
+},
+"tolerance": null,
+"expect": true,
+"method_b": true
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0,'csv':'id,value,score\\n1,4,2\\n2,16,4\\n3,0,0\\n','sha_exists':True}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K4",
+"round": 1,
+"key": "transform-aggregate-having",
+"object": "O4",
+"blocks": [
+"R1.S3.P9.s1",
+"R1.S3.P9.s2",
+"R1.S3.P9.s3",
+"R1.S3.P9.s4",
+"R1.S3.P9.s5",
+"R1.S3.P9.s6",
+"R1.S3.P9.s7",
+"R1.S3.P9.s8",
+"R1.S3.P9.s9",
+"R1.S3.P9.s10",
+"R1.S3.P10.s1",
+"R1.S3.P10.s2",
+"R1.S3.P10.s3",
+"R1.S3.P11.s1",
+"R1.S3.P11.s3",
+"R1.S3.P11.s4",
+"R1.S3.P11.s5",
+"R1.S3.P11.s6",
+"R1.S3.P11.s7",
+"R1.S3.P11.s8"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"input.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"1"
+],
+"files": [
+{
+"content": "label,value,id\nB,60,1\nA,40,2\nB,50,3\nA,70,4\n",
+"path": "input.csv"
+},
+{
+"content": "[{\"op\":\"aggregate\",\"group_by\":[\"label\"],\"aggregations\":[{\"column\":\"value\",\"function\":\"sum\",\"as\":\"total\"},{\"column\":\"value\",\"function\":\"avg\",\"as\":\"average\"},{\"column\":\"id\",\"function\":\"count\",\"as\":\"n\"}],\"having\":{\"column\":\"total\",\"condition\":\"gt\",\"threshold\":100}}]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P9.s5",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P10.s1",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "out.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "label,total,average,n\nA,110,55,2\nB,110,55,2\n",
+"method_b": "label,total,average,n\nA,110,55,2\nB,110,55,2\n"
+},
+{
+"id": "sha_exists",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P24",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file_exists",
+"line": null,
+"path": "out.csv.sha256",
+"pointer": null
+},
+"tolerance": null,
+"expect": true,
+"method_b": true
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0,'csv':'label,total,average,n\\nA,110,55,2\\nB,110,55,2\\n','sha_exists':True}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K5",
+"round": 1,
+"key": "join",
+"object": "O5",
+"blocks": [
+"R1.S3.P12.s1",
+"R1.S3.P12.s2",
+"R1.S3.P12.s3",
+"R1.S3.P12.s4",
+"R1.S3.P12.s5",
+"R1.S3.P12.s6",
+"R1.S3.P12.s7",
+"R1.S3.P12.s8",
+"R1.S3.P12.s9",
+"R1.S3.P12.s10"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"left.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"1"
+],
+"files": [
+{
+"content": "id,name\n2,B\n1,A\n3,C\n",
+"path": "left.csv"
+},
+{
+"content": "id,score\n1,10\n1,11\n2,20\n",
+"path": "right.csv"
+},
+{
+"content": "[{\"op\":\"join\",\"right\":\"right.csv\",\"on\":\"id\",\"type\":\"left\"}]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P12.s1",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P12.s6",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "out.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "id,name,score\n2,B,20\n1,A,10\n3,C,\n",
+"method_b": "id,name,score\n2,B,20\n1,A,10\n3,C,\n"
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0,'csv':'id,name,score\\n2,B,20\\n1,A,10\\n3,C,\\n'}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K6",
+"round": 1,
+"key": "window",
+"object": "O6",
+"blocks": [
+"R1.S3.P13.s1",
+"R1.S3.P13.s2",
+"R1.S3.P13.s3",
+"R1.S3.P13.s4",
+"R1.S3.P14.s1",
+"R1.S3.P14.s2",
+"R1.S3.P14.s3",
+"R1.S3.P14.s4",
+"R1.S3.P14.s5",
+"R1.S3.P14.s6",
+"R1.S3.P14.s7",
+"R1.S3.P14.s8",
+"R1.S3.P14.s9",
+"R1.S3.P15.s1",
+"R1.S3.P15.s2",
+"R1.S3.P16.s1",
+"R1.S3.P16.s2",
+"R1.S3.P17"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"input.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"1"
+],
+"files": [
+{
+"content": "cat,id,value\nA,2,10\nB,1,8\nA,1,10\n",
+"path": "input.csv"
+},
+{
+"content": "[{\"op\":\"window\",\"function\":\"rank\",\"partition_by\":[\"cat\"],\"order_by\":[{\"column\":\"value\",\"order\":\"desc\"}],\"as\":\"r\"}]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P14.s2",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P15.s1",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "out.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "cat,id,value,r\nA,2,10,1\nB,1,8,1\nA,1,10,1\n",
+"method_b": "cat,id,value,r\nA,2,10,1\nB,1,8,1\nA,1,10,1\n"
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0,'csv':'cat,id,value,r\\nA,2,10,1\\nB,1,8,1\\nA,1,10,1\\n'}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K7",
+"round": 1,
+"key": "pivot",
+"object": "O7",
+"blocks": [
+"R1.S3.P18.s1",
+"R1.S3.P18.s2",
+"R1.S3.P18.s3",
+"R1.S3.P18.s4",
+"R1.S3.P19.s2",
+"R1.S3.P19.s3",
+"R1.S3.P19.s4",
+"R1.S3.P19.s5",
+"R1.S3.P19.s6",
+"R1.S3.P19.s7",
+"R1.S3.P19.s8"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"input.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"1"
+],
+"files": [
+{
+"content": "id,label,value\n2,B,x\n1,C,y\n1,A,z\n1,A,w\n",
+"path": "input.csv"
+},
+{
+"content": "[{\"op\":\"pivot\",\"index\":[\"id\"],\"column\":\"label\",\"value\":\"value\"}]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P19.s2",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P19.s4",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "out.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "id,A,B,C\n1,z,,y\n2,,x,\n",
+"method_b": "id,A,B,C\n1,z,,y\n2,,x,\n"
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0,'csv':'id,A,B,C\\n1,z,,y\\n2,,x,\\n'}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K8",
+"round": 1,
+"key": "unpivot",
+"object": "O8",
+"blocks": [
+"R1.S3.P20.s1",
+"R1.S3.P20.s2",
+"R1.S3.P20.s3",
+"R1.S3.P20.s4",
+"R1.S3.P20.s5",
+"R1.S3.P21.s2",
+"R1.S3.P21.s3",
+"R1.S3.P21.s4",
+"R1.S3.P21.s5",
+"R1.S3.P21.s6"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"input.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"1"
+],
+"files": [
+{
+"content": "id,q1,q2\n1,a,\n2,,b\n",
+"path": "input.csv"
+},
+{
+"content": "[{\"op\":\"unpivot\",\"index\":[\"id\"],\"columns\":[\"q1\",\"q2\"],\"name_to\":\"quarter\",\"value_to\":\"amount\"}]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P21.s2",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P21.s3",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "out.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "id,quarter,amount\n1,q1,a\n1,q2,\n2,q1,\n2,q2,b\n",
+"method_b": "id,quarter,amount\n1,q1,a\n1,q2,\n2,q1,\n2,q2,b\n"
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0,'csv':'id,quarter,amount\\n1,q1,a\\n1,q2,\\n2,q1,\\n2,q2,b\\n'}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K9",
+"round": 1,
+"key": "fill",
+"object": "O9",
+"blocks": [
+"R1.S3.P22.s1",
+"R1.S3.P22.s2",
+"R1.S3.P22.s3",
+"R1.S3.P22.s4",
+"R1.S3.P23.s1",
+"R1.S3.P23.s2",
+"R1.S3.P23.s3",
+"R1.S3.P23.s4",
+"R1.S3.P23.s5",
+"R1.S3.P23.s6",
+"R1.S3.P23.s7"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"input.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"1"
+],
+"files": [
+{
+"content": "id,value\n1,\n2,a\n3,\n4,\n",
+"path": "input.csv"
+},
+{
+"content": "[{\"op\":\"fill\",\"columns\":[\"value\"],\"strategy\":\"forward\"}]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P23.s2",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S3.P23.s2",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "out.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "id,value\n1,\n2,a\n3,a\n4,a\n",
+"method_b": "id,value\n1,\n2,a\n3,a\n4,a\n"
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'exit':0,'csv':'id,value\\n1,\\n2,a\\n3,a\\n4,a\\n'}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K10",
+"round": 1,
+"key": "verify",
+"object": "O10",
+"blocks": [
+"R1.S4.P1",
+"R1.S4.P2.s1",
+"R1.S4.P2.s2"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"verify",
+"--file",
+"data.csv",
+"--checksum",
+"data.sha256"
+],
+"files": [
+{
+"path": "data.csv",
+"content": "a,b\n1,2\n"
+},
+{
+"path": "data.sha256",
+"content": "492d5ea496056f1a6a6592241032fab764c321596317930b4fa0e1e8bc3b7470\n"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S4.P2.s2",
+"kind": "verbatim"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0
+},
+{
+"id": "stdout",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S4.P2.s2",
+"kind": "verbatim"
+},
+"target": {
+"column": null,
+"kind": "stdout_line",
+"line": 1,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": "VERIFIED"
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import hashlib,json\nb=open('data.csv','rb').read()\nprint(json.dumps({'sha':hashlib.sha256(b).hexdigest()}))",
+"language": "python"
+},
+"computed_inputs": [
+"sha"
+],
+"admission": "admitted",
+"admission_reason": null,
+"normalized": [
+"assertion stdout: expect_json read as the string written"
+],
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"stdout"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K11",
+"round": 1,
+"key": "pipeline",
+"object": "O12",
+"blocks": [
+"R1.S6.P1",
+"R1.S6.P2.s1",
+"R1.S6.P2.s2",
+"R1.S6.P2.s3"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"pipeline",
+"--config",
+"config.json"
+],
+"files": [
+{
+"content": "{\"seed\":12345,\"steps\":[{\"type\":\"verify\",\"file\":\"data.csv\",\"checksum\":\"data.sha256\"}]}",
+"path": "config.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S6.P2.s3",
+"kind": "verbatim"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0
+},
+{
+"id": "stdout",
+"reading": "N is derived as the number of steps in the supplied configuration, which is 1.",
+"role": "business",
+"source": {
+"block": "R1.S6.P2.s3",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "stdout_line",
+"line": 1,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": "PIPELINE OK: 1 steps completed",
+"method_b": "PIPELINE OK: 1 steps completed"
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nconfig=json.load(open('config.json'))\nprint(json.dumps({'stdout':'PIPELINE OK: %d steps completed' % len(config['steps'])}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"normalized": [
+"assertion stdout: expect_json read as the string written"
+],
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"stdout"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K12",
+"round": 1,
+"key": "determinism",
+"object": "O13",
+"blocks": [
+"R1.S7.P1.s1",
+"R1.S7.P1.s2",
+"R1.S7.P1.s3"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"input.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"42"
+],
+"files": [
+{
+"content": "id,value\n1,2\n2,3\n",
+"path": "input.csv"
+},
+{
+"content": "[{\"op\":\"sample\",\"fraction\":1}]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S7.P1.s1",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 0,
+"method_b": 0
+},
+{
+"id": "csv",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S7.P1.s1",
+"kind": "derived"
+},
+"target": {
+"column": null,
+"kind": "file",
+"line": null,
+"path": "out.csv",
+"pointer": null
+},
+"tolerance": null,
+"expect": "id,value\n1,2\n2,3\n",
+"method_b": "id,value\n1,2\n2,3\n"
+}
+],
+"unknown": [],
+"reference_script": {
+"code": "import json\nprint(json.dumps({'csv':'id,value\\n1,2\\n2,3\\n','exit':0}))",
+"language": "python"
+},
+"admission": "admitted",
+"admission_reason": null,
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"csv"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+},
+{
+"id": "K13",
+"round": 1,
+"key": "errors",
+"object": "O14",
+"blocks": [
+"R1.S8.P1.s1",
+"R1.S8.P1.s2",
+"R1.S8.P1.s3",
+"R1.S8.P1.s4",
+"R1.S8.P1.s5"
+],
+"uses": [],
+"direction": "holds",
+"input": {
+"args": [
+"transform",
+"--input",
+"missing.csv",
+"--recipe",
+"recipe.json",
+"--output",
+"out.csv",
+"--seed",
+"1"
+],
+"files": [
+{
+"content": "[]",
+"path": "recipe.json"
+}
+]
+},
+"assertions": [
+{
+"id": "exit",
+"reading": null,
+"role": "business",
+"source": {
+"block": "R1.S8.P1.s1",
+"kind": "verbatim"
+},
+"target": {
+"column": null,
+"kind": "exit_code",
+"line": null,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": 1
+},
+{
+"id": "stderr",
+"reading": null,
+"role": "convention",
+"source": {
+"block": "R1.S8.P1.s1",
+"kind": "verbatim"
+},
+"target": {
+"column": null,
+"kind": "stderr_line",
+"line": 1,
+"path": null,
+"pointer": null
+},
+"tolerance": null,
+"expect": "ERROR: file not found: missing.csv"
+}
+],
+"unknown": [],
+"reference_script": null,
+"admission": "admitted",
+"admission_reason": null,
+"normalized": [
+"assertion stderr: expect_json read as the string written"
+],
+"strength": {
+"strong": true,
+"baseline": "baseline:null",
+"baseline_ok": true,
+"data_assertions": [
+"stderr"
+],
+"reason": "fails on the previous program and asserts data"
+},
+"status": "active",
+"calls": [
+"M2",
+"M3",
+"M4"
+]
+}
+],
+"first_cycle_runs": [
+{
+"check": "K1",
+"outcome": "pass",
+"failure": null
+},
+{
+"check": "K2",
+"outcome": "fail",
+"failure": "disputed/reference"
+},
+{
+"check": "K3",
+"outcome": "fail",
+"failure": "not_landed/missing_name"
+},
+{
+"check": "K4",
+"outcome": "fail",
+"failure": "not_landed/missing_name"
+},
+{
+"check": "K5",
+"outcome": "fail",
+"failure": "not_landed/missing_name"
+},
+{
+"check": "K6",
+"outcome": "fail",
+"failure": "not_landed/missing_name"
+},
+{
+"check": "K7",
+"outcome": "fail",
+"failure": "not_landed/missing_name"
+},
+{
+"check": "K8",
+"outcome": "fail",
+"failure": "not_landed/missing_name"
+},
+{
+"check": "K9",
+"outcome": "fail",
+"failure": "not_landed/missing_name"
+},
+{
+"check": "K10",
+"outcome": "pass",
+"failure": null
+},
+{
+"check": "K11",
+"outcome": "fail",
+"failure": "not_landed/missing_name"
+},
+{
+"check": "K12",
+"outcome": "pass",
+"failure": null
+},
+{
+"check": "K13",
+"outcome": "pass",
+"failure": null
+}
+],
+"review_calls": [
+{
+"id": "V1.1.1",
+"review": 1,
+"attempt": 1,
+"cycle": "C1.1",
+"session": "ses_e95b57d97ffeqIio7dod1iPRRF",
+"response_text": "- **Transform derive (K3):** Requirement says derive must append `score`. Command: `go run . transform --input input.csv --recipe recipe.json --output out.csv --seed 7`, with `input.csv` containing `id,value` rows and recipe `round(sqrt(abs(value)), 2)`. Program produced the unchanged `id,value` CSV without `score`.\n\n- **Transform aggregate (K4):** Requirement says aggregate groups and applies `having`. Command: `go run . transform --input agg.csv --recipe agg-recipe.json --output agg-out.csv --seed 1`. Program produced the unchanged source rows instead of `label,total,average,n`.\n\n- **Transform join (K5):** Requirement says left join must append right-side columns. Command: `go run . transform --input left.csv --recipe join-recipe.json --output join-out.csv --seed 1`. Program produced only `id,name`, without `score`.\n\n- **Transform window (K6):** Requirement says window rank must append the computed column. Command: `go run . transform --input window.csv --recipe window-recipe.json --output window-out.csv --seed 1`. Program produced the unchanged `cat,id,value` CSV without `r`.\n\n- **Transform pivot (K7):** Requirement says pivot must reshape rows into `id,A,B,C`. Command: `go run . transform --input pivot.csv --recipe pivot-recipe.json --output pivot-out.csv --seed 1`. Program produced the unchanged long-format `id,label,value` CSV.\n\n- **Transform unpivot (K8):** Requirement says unpivot must produce `id,quarter,amount` rows. Command: `go run . transform --input unpivot.csv --recipe unpivot-recipe.json --output unpivot-out.csv --seed 1`. Program produced the unchanged `id,q1,q2` CSV.\n\n- **Transform fill (K9):** Requirement says forward fill should replace rows 3 and 4 with `a`. Command: `go run . transform --input fill.csv --recipe fill-recipe.json --output fill-out.csv --seed 1`. Program left those values empty.\n\n- **Unknown transform operations:** Requirement says an unknown operation must exit with `ERROR: invalid recipe: <detail>`. Command: `go run . transform --input input.csv --recipe bad-recipe.json --output bad-out.csv --seed 1`, where the recipe is `[{\"op\":\"bogus\"}]`. Program exited successfully and copied the input unchanged.\n\n- **Pipeline orchestration (K11):** Requirement says the pipeline must execute configured steps and print `PIPELINE OK: 1 steps completed`. Command: `go run . pipeline --config config.json`, with one `verify` step. Program produced no stdout and performed no pipeline step.\n\n- **Verify mismatch reporting:** Requirement says mismatches print `MISMATCH expected=<expected> actual=<actual>`. Command: `go run . verify --file clean.csv --checksum clean.csv.rejected`. Program printed only `MISMATCH`.\n\n- **Manifest row counts:** Requirement requires each manifest file entry to include `rows`. Command: `go run . manifest --dir . --output manifest.json`. Program emitted entries with `path`, `sha256`, and `size_bytes`, but no `rows`.\n\n- **Typed ingestion sorting:** Requirement says primary-key sorting uses declared types. Command: `go run . ingest --input numeric.csv --schema numeric-schema.json --output numeric-clean.csv`, with integer IDs `10` and `2`. Program ordered rows as `10,2` lexicographically instead of numerically as `2,10`.",
+"program_runs": 13,
+"valid": true
+},
+{
+"id": "V1.2.1",
+"review": 2,
+"attempt": 1,
+"cycle": "C1.2",
+"session": "ses_e95b052cfffeu8ZNlbMgq9bfjL",
+"response_text": "- **Window operation is not implemented.** Requirement: `rank` must compute partitioned ranks and preserve input order. Command: `dpipe transform --input review_input.csv --recipe review_window.json --output review_window_out.csv --seed 1`, with `review_input.csv` containing `cat,id,value` rows `A,2,10`, `B,1,8`, `A,1,10`, and a rank recipe partitioned by `cat`. Program exited `1` with `ERROR: invalid recipe: column not found`.\n\n- **Pivot operation rejects valid recipes.** Requirement: pivot must accept existing `index`, `column`, and `value` columns. Command: `dpipe transform --input review_pivot_input.csv --recipe review_pivot.json --output review_pivot_out.csv --seed 1`, with columns `id,label,value`. Program exited `1` with `ERROR: invalid recipe: column not found`.\n\n- **Sampling is a no-op.** Requirement: retain each row based on a deterministic PRNG initialized with `--seed`. Command: `dpipe transform --input review_sample_input.csv --recipe review_sample.json --output review_sample_out.csv --seed 1`, with 10 input rows and `{\"op\":\"sample\",\"fraction\":0.5}`. Program exited `0` but output all 10 rows.\n\n- **Aggregate `min` and `having` are incorrect.** Requirement: compute `min` and apply `having` after sorting. Command: `dpipe transform --input review_aggregate_input.csv --recipe review_aggregate.json --output review_aggregate_out.csv --seed 1`, with `A,1`, `A,3`, `B,x`, aggregating average/min and filtering average `> 1`. Program output:\n  ```text\n  group,avg,min\n  A,2,0\n  B,0,0\n  ```\n  Expected only group `A`, with `min=1`.\n\n- **Constant fill ignores the replacement value.** Requirement: replace empty values with the recipe’s `value`. Command: `dpipe transform --input review_fill_input.csv --recipe review_fill.json --output review_fill_out.csv --seed 1`, with values `a`, empty, `b` and `{\"strategy\":\"constant\",\"value\":\"X\"}`. Program output an empty value instead of `X`.\n\n- **Pipeline cannot execute transform steps.** Requirement: pipeline must execute ingest, transform, verify, and manifest steps sequentially. Command: `dpipe pipeline --config review_transform_pipeline.json`, containing one transform step. Program exited `1` with `PIPELINE FAILED at step 1: transform pipeline unsupported`.\n\n- **Invalid aggregate column causes a panic instead of the required error.** Requirement: invalid recipe references must exit `1` with `ERROR: invalid recipe: column <name> not found`. Command: `dpipe transform --input review_aggregate_input.csv --recipe review_bad_agg.json --output review_bad_agg_out.csv --seed 1`, where the aggregation references column `missing`. Program exited `2` with a Go `runtime error: index out of range` panic.\n\n- **Verify mishandles missing files.** Requirement: missing input files must exit `1` with `ERROR: file not found: <path>`. Command: `dpipe verify --file no_such.csv --checksum no_such.sha256`. Program exited `0` and printed `VERIFIED`.",
+"program_runs": 14,
+"valid": true
+},
+{
+"id": "V1.3.1",
+"review": 3,
+"attempt": 1,
+"cycle": "C1.3",
+"session": "ses_e95acedf7ffeUIw0TdhrBsjsZv",
+"response_text": "- **Window `as` column is ignored.** Requirement: append the new column using `\"as\"`. Command: `dpipe transform --input input.csv --recipe recipe.json --output out.csv --seed 1`, with the supplied K6 input/recipe. Output header was `cat,id,value,` instead of `cat,id,value,r`.\n\n- **Window ordering and function are ignored.** Requirement: `row_number` with descending order should rank rows `3,1,2` for values `1,3,3`. Command: same transform using `w.csv` (`A,1,1`, `A,2,3`, `A,3,3`) and recipe `row_number`, descending by `value`. Output was `A,1,1,1`, `A,2,3,2`, `A,3,3,2`, using ascending `rank` behavior.\n\n- **Transform seed is ignored.** Requirement: sampling must use the supplied `--seed`. Running the sample recipe on a 10-row input with `--seed 1` and `--seed 2` produced byte-identical outputs, because the CLI always passes seed `0`.\n\n- **Aggregate `count` counts numeric values instead of non-empty values.** Requirement: count all non-empty values. Command: aggregate `value` on input `A,1`, `A,x`, `B,2`, `B,4`. Output was `A,1,1`; expected count for A was `2`.\n\n- **Expression operator precedence is incorrect.** Requirement: `&&` has higher precedence than `||`. Command: derive `a || b && c` for input `a=1,b=0,c=0`. Output was `0`; expected `1`.",
+"program_runs": 7,
+"valid": true
+}
+],
+"formalize_calls": [
+{
+"id": "F1",
+"review": "R1.1",
+"attempt": 1,
+"response_text": "{\"items\":[{\"assertions\":[{\"expect_json\":\"\\\"id,value,score\\\\n1,4,2\\\\n2,16,4\\\\n3,0,0\\\\n\\\"\",\"id\":\"derive_output\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"7\"],\"files\":[{\"content\":\"id,value\\n1,4\\n2,16\\n3,0\\n\",\"from\":\"K3\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"derive\\\",\\\"name\\\":\\\"score\\\",\\\"expression\\\":\\\"round(sqrt(abs(value)), 2)\\\"}]\",\"from\":\"K3\",\"path\":\"recipe.json\"}]},\"item\":1,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'derive_output':'id,value,score\\\\n1,4,2\\\\n2,16,4\\\\n3,0,0\\\\n'}))\",\"language\":\"python\"},\"text\":\"**Transform derive (K3):** Requirement says derive must append `score`. Command: `go run . transform --input input.csv --recipe recipe.json --output out.csv --seed 7`, with `input.csv` containing `id,value` rows and recipe `round(sqrt(abs(value)), 2)`. Program produced the unchanged `id,value` CSV without `score`.\",\"units\":[\"R1.S3.P2.s5\",\"R1.S3.P8.s1\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"label,total,average,n\\\\nA,110,55,2\\\\nB,110,55,2\\\\n\\\"\",\"id\":\"aggregate_output\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"agg-out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"label\",\"value\",\"id\"],\"empty_cells\":0,\"parses\":true,\"path\":\"agg.csv\",\"records\":4},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"agg-recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"agg.csv\",\"--recipe\",\"agg-recipe.json\",\"--output\",\"agg-out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"label,value,id\\nB,60,1\\nA,40,2\\nB,50,3\\nA,70,4\\n\",\"from\":\"K4\",\"path\":\"agg.csv\"},{\"content\":\"[{\\\"op\\\":\\\"aggregate\\\",\\\"group_by\\\":[\\\"label\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"sum\\\",\\\"as\\\":\\\"total\\\"},{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"avg\\\",\\\"as\\\":\\\"average\\\"},{\\\"column\\\":\\\"id\\\",\\\"function\\\":\\\"count\\\",\\\"as\\\":\\\"n\\\"}],\\\"having\\\":{\\\"column\\\":\\\"total\\\",\\\"condition\\\":\\\"gt\\\",\\\"threshold\\\":100}}]\",\"from\":\"K4\",\"path\":\"agg-recipe.json\"}]},\"item\":2,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'aggregate_output':'label,total,average,n\\\\nA,110,55,2\\\\nB,110,55,2\\\\n'}))\",\"language\":\"python\"},\"text\":\"**Transform aggregate (K4):** Requirement says aggregate groups and applies `having`. Command: `go run . transform --input agg.csv --recipe agg-recipe.json --output agg-out.csv --seed 1`. Program produced the unchanged source rows instead of `label,total,average,n`.\",\"units\":[\"R1.S3.P9.s5\",\"R1.S3.P9.s6\",\"R1.S3.P9.s7\",\"R1.S3.P9.s8\",\"R1.S3.P10.s1\",\"R1.S3.P10.s2\",\"R1.S3.P11.s1\",\"R1.S3.P11.s7\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"id,name,score\\\\n2,B,20\\\\n1,A,10\\\\n3,C,\\\\n\\\"\",\"id\":\"join_output\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"name\"],\"empty_cells\":0,\"parses\":true,\"path\":\"left.csv\",\"records\":3},{\"columns\":[\"id\",\"score\"],\"empty_cells\":0,\"parses\":true,\"path\":\"right.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"join-recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"left.csv\",\"--recipe\",\"join-recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,name\\n2,B\\n1,A\\n3,C\\n\",\"from\":\"K5\",\"path\":\"left.csv\"},{\"content\":\"id,score\\n1,10\\n1,11\\n2,20\\n\",\"from\":\"K5\",\"path\":\"right.csv\"},{\"content\":\"[{\\\"op\\\":\\\"join\\\",\\\"right\\\":\\\"right.csv\\\",\\\"on\\\":\\\"id\\\",\\\"type\\\":\\\"left\\\"}]\",\"from\":\"K5\",\"path\":\"join-recipe.json\"}]},\"item\":3,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'join_output':'id,name,score\\\\n2,B,20\\\\n1,A,10\\\\n3,C,\\\\n'}))\",\"language\":\"python\"},\"text\":\"**Transform join (K5):** Requirement says left join must append right-side columns. Command: `go run . transform --input left.csv --recipe join-recipe.json --output join-out.csv --seed 1`. Program produced only `id,name`, without `score`.\",\"units\":[\"R1.S3.P12.s6\",\"R1.S3.P12.s7\",\"R1.S3.P12.s9\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"cat,id,value,r\\\\nA,2,10,1\\\\nB,1,8,1\\\\nA,1,10,1\\\\n\\\"\",\"id\":\"window_output\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"cat\",\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"window.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"window-recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"window.csv\",\"--recipe\",\"window-recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"cat,id,value\\nA,2,10\\nB,1,8\\nA,1,10\\n\",\"from\":\"K6\",\"path\":\"window.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"rank\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\",\"from\":\"K6\",\"path\":\"window-recipe.json\"}]},\"item\":4,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'window_output':'cat,id,value,r\\\\nA,2,10,1\\\\nB,1,8,1\\\\nA,1,10,1\\\\n'}))\",\"language\":\"python\"},\"text\":\"**Transform window (K6):** Requirement says window rank must append the computed column. Command: `go run . transform --input window.csv --recipe window-recipe.json --output window-out.csv --seed 1`. Program produced the unchanged `cat,id,value` CSV without `r`.\",\"units\":[\"R1.S3.P13.s1\",\"R1.S3.P14.s2\",\"R1.S3.P15.s1\",\"R1.S3.P15.s2\",\"R1.S3.P16.s1\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"id,A,B,C\\\\n1,z,,y\\\\n2,,x,\\\\n\\\"\",\"id\":\"pivot_output\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"label\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"pivot.csv\",\"records\":4},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"pivot-recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"pivot.csv\",\"--recipe\",\"pivot-recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,label,value\\n2,B,x\\n1,C,y\\n1,A,z\\n1,A,w\\n\",\"from\":\"K7\",\"path\":\"pivot.csv\"},{\"content\":\"[{\\\"op\\\":\\\"pivot\\\",\\\"index\\\":[\\\"id\\\"],\\\"column\\\":\\\"label\\\",\\\"value\\\":\\\"value\\\"}]\",\"from\":\"K7\",\"path\":\"pivot-recipe.json\"}]},\"item\":5,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'pivot_output':'id,A,B,C\\\\n1,z,,y\\\\n2,,x,\\\\n'}))\",\"language\":\"python\"},\"text\":\"**Transform pivot (K7):** Requirement says pivot must reshape rows into `id,A,B,C`. Command: `go run . transform --input pivot.csv --recipe pivot-recipe.json --output pivot-out.csv --seed 1`. Program produced the unchanged long-format `id,label,value` CSV.\",\"units\":[\"R1.S3.P18.s1\",\"R1.S3.P19.s2\",\"R1.S3.P19.s3\",\"R1.S3.P19.s4\",\"R1.S3.P19.s5\",\"R1.S3.P19.s6\",\"R1.S3.P19.s7\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"id,quarter,amount\\\\n1,q1,a\\\\n1,q2,\\\\n2,q1,\\\\n2,q2,b\\\\n\\\"\",\"id\":\"unpivot_output\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"q1\",\"q2\"],\"empty_cells\":2,\"parses\":true,\"path\":\"unpivot.csv\",\"records\":2},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"unpivot-recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"unpivot.csv\",\"--recipe\",\"unpivot-recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,q1,q2\\n1,a,\\n2,,b\\n\",\"from\":\"K8\",\"path\":\"unpivot.csv\"},{\"content\":\"[{\\\"op\\\":\\\"unpivot\\\",\\\"index\\\":[\\\"id\\\"],\\\"columns\\\":[\\\"q1\\\",\\\"q2\\\"],\\\"name_to\\\":\\\"quarter\\\",\\\"value_to\\\":\\\"amount\\\"}]\",\"from\":\"K8\",\"path\":\"unpivot-recipe.json\"}]},\"item\":6,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'unpivot_output':'id,quarter,amount\\\\n1,q1,a\\\\n1,q2,\\\\n2,q1,\\\\n2,q2,b\\\\n'}))\",\"language\":\"python\"},\"text\":\"**Transform unpivot (K8):** Requirement says unpivot must produce `id,quarter,amount` rows. Command: `go run . transform --input unpivot.csv --recipe unpivot-recipe.json --output unpivot-out.csv --seed 1`. Program produced the unchanged `id,q1,q2` CSV.\",\"units\":[\"R1.S3.P20.s1\",\"R1.S3.P21.s2\",\"R1.S3.P21.s3\",\"R1.S3.P21.s4\",\"R1.S3.P21.s5\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"id,value\\\\n1,\\\\n2,a\\\\n3,a\\\\n4,a\\\\n\\\"\",\"id\":\"fill_output\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"value\"],\"empty_cells\":3,\"parses\":true,\"path\":\"fill.csv\",\"records\":4},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"fill-recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"fill.csv\",\"--recipe\",\"fill-recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,value\\n1,\\n2,a\\n3,\\n4,\\n\",\"from\":\"K9\",\"path\":\"fill.csv\"},{\"content\":\"[{\\\"op\\\":\\\"fill\\\",\\\"columns\\\":[\\\"value\\\"],\\\"strategy\\\":\\\"forward\\\"}]\",\"from\":\"K9\",\"path\":\"fill-recipe.json\"}]},\"item\":7,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'fill_output':'id,value\\\\n1,\\\\n2,a\\\\n3,a\\\\n4,a\\\\n'}))\",\"language\":\"python\"},\"text\":\"**Transform fill (K9):** Requirement says forward fill should replace rows 3 and 4 with `a`. Command: `go run . transform --input fill.csv --recipe fill-recipe.json --output fill-out.csv --seed 1`. Program left those values empty.\",\"units\":[\"R1.S3.P22.s1\",\"R1.S3.P23.s2\",\"R1.S3.P23.s5\",\"R1.S3.P23.s6\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"1\",\"id\":\"unknown_op_exit\",\"source\":{\"block\":\"R1.S8.P1.s3\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"value\",\"label\",\"timestamp\"],\"empty_cells\":0,\"parses\":true,\"path\":\"input.csv\",\"records\":4},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"bad-recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"bad-recipe.json\",\"--output\",\"bad-out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,value,label,timestamp\\n2,20,B,2024-01-02T00:00:00Z\\n1,5,A,2024-01-01T00:00:00Z\\n3,2000,C,2024-01-03T00:00:00Z\\n4,20,D,2024-01-04T00:00:00Z\\n\",\"from\":\"session\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"bogus\\\"}]\\n\",\"from\":\"session\",\"path\":\"bad-recipe.json\"}]},\"item\":8,\"reference_script\":null,\"text\":\"**Unknown transform operations:** Requirement says an unknown operation must exit with `ERROR: invalid recipe: <detail>`. Command: `go run . transform --input input.csv --recipe bad-recipe.json --output bad-out.csv --seed 1`, where the recipe is `[{\\\"op\\\":\\\"bogus\\\"}]`. Program exited successfully and copied the input unchanged.\",\"units\":[\"R1.S8.P1.s3\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"1\",\"id\":\"pipeline_missing_input_exit\",\"source\":{\"block\":\"R1.S8.P1.s1\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"claims\":[],\"input\":null,\"item\":9,\"reference_script\":null,\"text\":\"**Pipeline orchestration (K11):** Requirement says the pipeline must execute configured steps and print `PIPELINE OK: 1 steps completed`. Command: `go run . pipeline --config config.json`, with one `verify` step. Program produced no stdout and performed no pipeline step.\",\"units\":[\"R1.S6.P2.s1\",\"R1.S6.P2.s2\",\"R1.S6.P2.s3\"],\"why_no_input\":\"The config file is provided, but its verify step references data.csv and data.sha256; their complete contents are not provided, so the call cannot be rebuilt exactly with every input file.\"},{\"assertions\":[],\"claims\":[],\"input\":null,\"item\":10,\"reference_script\":null,\"text\":\"**Verify mismatch reporting:** Requirement says mismatches print `MISMATCH expected=<expected> actual=<actual>`. Command: `go run . verify --file clean.csv --checksum clean.csv.rejected`. Program printed only `MISMATCH`.\",\"units\":[\"R1.S4.P2.s2\"],\"why_no_input\":\"The reviewed command depends on the generated contents of clean.csv and clean.csv.rejected, whose complete contents are not provided.\"},{\"assertions\":[],\"claims\":[],\"input\":null,\"item\":11,\"reference_script\":null,\"text\":\"**Manifest row counts:** Requirement requires each manifest file entry to include `rows`. Command: `go run . manifest --dir . --output manifest.json`. Program emitted entries with `path`, `sha256`, and `size_bytes`, but no `rows`.\",\"units\":[\"R1.S5.P2.s3\"],\"why_no_input\":\"The recursive directory input is not fully provided, so the command and its complete input file set cannot be rebuilt exactly.\"},{\"assertions\":[{\"expect_json\":\"\\\"id,value\\\\n2,2\\\\n10,1\\\\n\\\"\",\"id\":\"numeric_sort_output\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file\",\"line\":null,\"path\":\"numeric-clean.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"numeric.csv\",\"records\":2},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"numeric-schema.json\",\"records\":null}],\"input\":{\"args\":[\"ingest\",\"--input\",\"numeric.csv\",\"--schema\",\"numeric-schema.json\",\"--output\",\"numeric-clean.csv\"],\"files\":[{\"content\":\"id,value\\n10,1\\n2,2\\n\",\"from\":\"session\",\"path\":\"numeric.csv\"},{\"content\":\"{\\\"columns\\\":[{\\\"name\\\":\\\"id\\\",\\\"type\\\":\\\"int\\\",\\\"required\\\":true},{\\\"name\\\":\\\"value\\\",\\\"type\\\":\\\"int\\\",\\\"required\\\":true}],\\\"primary_key\\\":[\\\"id\\\"]}\\n\",\"from\":\"session\",\"path\":\"numeric-schema.json\"}]},\"item\":12,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'numeric_sort_output':'id,value\\\\n2,2\\\\n10,1\\\\n'}))\",\"language\":\"python\"},\"text\":\"**Typed ingestion sorting:** Requirement says primary-key sorting uses declared types. Command: `go run . ingest --input numeric.csv --schema numeric-schema.json --output numeric-clean.csv`, with integer IDs `10` and `2`. Program ordered rows as `10,2` lexicographically instead of numerically as `2,10`.\",\"units\":[\"R1.S2.P6.s2\",\"R1.S2.P6.s2.c3\"],\"why_no_input\":null}]}",
+"problems": []
+},
+{
+"id": "F2",
+"review": "R1.2",
+"attempt": 1,
+"response_text": "{\"items\":[{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"cat,id,value,r\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"review_window_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,2,10,1\\\"\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"review_window_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"B,1,8,1\\\"\",\"id\":\"a4\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"review_window_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,1,10,1\\\"\",\"id\":\"a5\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":4,\"path\":\"review_window_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"cat\",\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_window.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_input.csv\",\"--recipe\",\"review_window.json\",\"--output\",\"review_window_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"cat,id,value\\nA,2,10\\nB,1,8\\nA,1,10\\n\",\"from\":\"session\",\"path\":\"review_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"rank\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\\n\",\"from\":\"session\",\"path\":\"review_window.json\"}]},\"item\":1,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'a1':0,'a2':'cat,id,value,r','a3':'A,2,10,1','a4':'B,1,8,1','a5':'A,1,10,1'}))\",\"language\":\"python\"},\"text\":\"Window operation is not implemented. Requirement: `rank` must compute partitioned ranks and preserve input order. Command: `dpipe transform --input review_input.csv --recipe review_window.json --output review_window_out.csv --seed 1`, with `review_input.csv` containing `cat,id,value` rows `A,2,10`, `B,1,8`, `A,1,10`, and a rank recipe partitioned by `cat`. Program exited `1` with `ERROR: invalid recipe: column not found`.\",\"units\":[\"R1.S3.P13.s2.c1\",\"R1.S3.P14.s2\",\"R1.S3.P15.s1\",\"R1.S3.P15.s2\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,A,B,C\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"review_pivot_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"1,z,,y\\\"\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"review_pivot_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"2,,x,\\\"\",\"id\":\"a4\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"review_pivot_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"label\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_pivot_input.csv\",\"records\":4},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_pivot.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_pivot_input.csv\",\"--recipe\",\"review_pivot.json\",\"--output\",\"review_pivot_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,label,value\\n2,B,x\\n1,C,y\\n1,A,z\\n1,A,w\\n\",\"from\":\"session\",\"path\":\"review_pivot_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"pivot\\\",\\\"index\\\":[\\\"id\\\"],\\\"column\\\":\\\"label\\\",\\\"value\\\":\\\"value\\\"}]\\n\",\"from\":\"session\",\"path\":\"review_pivot.json\"}]},\"item\":2,\"reference_script\":{\"code\":\"print('{\\\"a1\\\":0,\\\"a2\\\":\\\"id,A,B,C\\\",\\\"a3\\\":\\\"1,z,,y\\\",\\\"a4\\\":\\\"2,,x,\\\"}')\",\"language\":\"python\"},\"text\":\"Pivot operation rejects valid recipes. Requirement: pivot must accept existing `index`, `column`, and `value` columns. Command: `dpipe transform --input review_pivot_input.csv --recipe review_pivot.json --output review_pivot_out.csv --seed 1`, with columns `id,label,value`. Program exited `1` with `ERROR: invalid recipe: column not found`.\",\"units\":[\"R1.S3.P18.s2.c1\",\"R1.S3.P18.s3\",\"R1.S3.P18.s4\",\"R1.S3.P19.s8.c2\",\"R1.S3.P19.s8.c4\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"4\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"review_sample_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"5\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"review_sample_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_sample_input.csv\",\"records\":10},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_sample.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_sample_input.csv\",\"--recipe\",\"review_sample.json\",\"--output\",\"review_sample_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id\\n1\\n2\\n3\\n4\\n5\\n6\\n7\\n8\\n9\\n10\\n\",\"from\":\"session\",\"path\":\"review_sample_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"sample\\\",\\\"fraction\\\":0.5}]\\n\",\"from\":\"session\",\"path\":\"review_sample.json\"}]},\"item\":3,\"reference_script\":{\"code\":\"print('{\\\"a1\\\":\\\"4\\\",\\\"a2\\\":\\\"5\\\"}')\",\"language\":\"python\"},\"text\":\"Sampling is a no-op. Requirement: retain each row based on a deterministic PRNG initialized with `--seed`. Command: `dpipe transform --input review_sample_input.csv --recipe review_sample.json --output review_sample_out.csv --seed 1`, with 10 input rows and `{\\\"op\\\":\\\"sample\\\",\\\"fraction\\\":0.5}`. Program exited `0` but output all 10 rows.\",\"units\":[\"R1.S3.P9.s1.c1\",\"R1.S3.P9.s1.c2\",\"R1.S3.P9.s1.c3\",\"R1.S3.P9.s1.c4\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"group,avg,min\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"review_aggregate_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,2,1\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"review_aggregate_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"review_aggregate_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"group\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_aggregate_input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_aggregate.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_aggregate_input.csv\",\"--recipe\",\"review_aggregate.json\",\"--output\",\"review_aggregate_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"group,value\\nA,1\\nA,3\\nB,x\\n\",\"from\":\"session\",\"path\":\"review_aggregate_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"aggregate\\\",\\\"group_by\\\":[\\\"group\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"avg\\\",\\\"as\\\":\\\"avg\\\"},{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"min\\\",\\\"as\\\":\\\"min\\\"}],\\\"having\\\":{\\\"column\\\":\\\"avg\\\",\\\"condition\\\":\\\"gt\\\",\\\"threshold\\\":1}}]\\n\",\"from\":\"session\",\"path\":\"review_aggregate.json\"}]},\"item\":4,\"reference_script\":{\"code\":\"print('{\\\"a1\\\":\\\"group,avg,min\\\",\\\"a2\\\":\\\"A,2,1\\\",\\\"a3\\\":true}')\",\"language\":\"python\"},\"text\":\"Aggregate `min` and `having` are incorrect. Requirement: compute `min` and apply `having` after sorting. Command: `dpipe transform --input review_aggregate_input.csv --recipe review_aggregate.json --output review_aggregate_out.csv --seed 1`, with `A,1`, `A,3`, `B,x`, aggregating average/min and filtering average `> 1`. Program output:\\n```text\\ngroup,avg,min\\nA,2,0\\nB,0,0\\n```\\nExpected only group `A`, with `min=1`.\",\"units\":[\"R1.S3.P9.s9\",\"R1.S3.P10.s1\",\"R1.S3.P10.s2\",\"R1.S3.P11.s7\",\"R1.S3.P11.s8.c1\",\"R1.S3.P11.s8.c2\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"X\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"review_fill_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_fill_input.csv\",\"records\":2},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_fill.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_fill_input.csv\",\"--recipe\",\"review_fill.json\",\"--output\",\"review_fill_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"value\\na\\n\\nb\\n\",\"from\":\"session\",\"path\":\"review_fill_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"fill\\\",\\\"columns\\\":[\\\"value\\\"],\\\"strategy\\\":\\\"constant\\\",\\\"value\\\":\\\"X\\\"}]\\n\",\"from\":\"session\",\"path\":\"review_fill.json\"}]},\"item\":5,\"reference_script\":{\"code\":\"print('{\\\"a1\\\":\\\"X\\\"}')\",\"language\":\"python\"},\"text\":\"Constant fill ignores the replacement value. Requirement: replace empty values with the recipe’s `value`. Command: `dpipe transform --input review_fill_input.csv --recipe review_fill.json --output review_fill_out.csv --seed 1`, with values `a`, empty, `b` and `{\\\"strategy\\\":\\\"constant\\\",\\\"value\\\":\\\"X\\\"}`. Program output an empty value instead of `X`.\",\"units\":[\"R1.S3.P22.s4.c2\",\"R1.S3.P23.s4\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"PIPELINE OK: 1 steps completed\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"stdout_line\",\"line\":1,\"path\":\"-\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_transform_pipeline.json\",\"records\":null},{\"columns\":[\"cat\",\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_window.json\",\"records\":null}],\"input\":{\"args\":[\"pipeline\",\"--config\",\"review_transform_pipeline.json\"],\"files\":[{\"content\":\"{\\\"seed\\\":1,\\\"steps\\\":[{\\\"type\\\":\\\"transform\\\",\\\"input\\\":\\\"review_input.csv\\\",\\\"recipe\\\":\\\"review_window.json\\\",\\\"output\\\":\\\"pipeline.csv\\\"}]}\\n\",\"from\":\"session\",\"path\":\"review_transform_pipeline.json\"},{\"content\":\"cat,id,value\\nA,2,10\\nB,1,8\\nA,1,10\\n\",\"from\":\"session\",\"path\":\"review_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"rank\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\\n\",\"from\":\"session\",\"path\":\"review_window.json\"}]},\"item\":6,\"reference_script\":{\"code\":\"import json\\nwith open('review_transform_pipeline.json') as f: n=len(json.load(f)['steps'])\\nprint(json.dumps({'a1':0,'a2':f'PIPELINE OK: {n} steps completed'}))\",\"language\":\"python\"},\"text\":\"Pipeline cannot execute transform steps. Requirement: pipeline must execute ingest, transform, verify, and manifest steps sequentially. Command: `dpipe pipeline --config review_transform_pipeline.json`, containing one transform step. Program exited `1` with `PIPELINE FAILED at step 1: transform pipeline unsupported`.\",\"units\":[\"R1.S6.P2.s2.c1\",\"R1.S6.P2.s2.c2\",\"R1.S6.P2.s3.c1\",\"R1.S6.P2.s3.c2\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"1\",\"id\":\"a1\",\"source\":{\"block\":\"R1.S8.P1.s3.c3\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"ERROR: invalid recipe: column missing not found\\\"\",\"id\":\"a2\",\"source\":{\"block\":\"R1.S8.P1.s3.c2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stderr_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"group\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_aggregate_input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_bad_agg.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_aggregate_input.csv\",\"--recipe\",\"review_bad_agg.json\",\"--output\",\"review_bad_agg_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"group,value\\nA,1\\nA,3\\nB,x\\n\",\"from\":\"session\",\"path\":\"review_aggregate_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"aggregate\\\",\\\"group_by\\\":[\\\"group\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"missing\\\",\\\"function\\\":\\\"sum\\\",\\\"as\\\":\\\"total\\\"}]}]\\n\",\"from\":\"session\",\"path\":\"review_bad_agg.json\"}]},\"item\":7,\"reference_script\":null,\"text\":\"Invalid aggregate column causes a panic instead of the required error. Requirement: invalid recipe references must exit `1` with `ERROR: invalid recipe: column <name> not found`. Command: `dpipe transform --input review_aggregate_input.csv --recipe review_bad_agg.json --output review_bad_agg_out.csv --seed 1`, where the aggregation references column `missing`. Program exited `2` with a Go `runtime error: index out of range` panic.\",\"units\":[\"R1.S8.P1.s3.c1\",\"R1.S8.P1.s3.c3\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"1\",\"id\":\"a1\",\"source\":{\"block\":\"R1.S8.P1.s1.c1\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"ERROR: file not found: no_such.csv\\\"\",\"id\":\"a2\",\"source\":{\"block\":\"R1.S8.P1.s1.c2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stderr_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"claims\":[],\"input\":{\"args\":[\"verify\",\"--file\",\"no_such.csv\",\"--checksum\",\"no_such.sha256\"],\"files\":[{\"content\":null,\"from\":null,\"path\":\"no_such.csv\"},{\"content\":null,\"from\":null,\"path\":\"no_such.sha256\"}]},\"item\":8,\"reference_script\":null,\"text\":\"Verify mishandles missing files. Requirement: missing input files must exit `1` with `ERROR: file not found: <path>`. Command: `dpipe verify --file no_such.csv --checksum no_such.sha256`. Program exited `0` and printed `VERIFIED`.\",\"units\":[\"R1.S8.P1.s1.c1\",\"R1.S8.P1.s1.c2\"],\"why_no_input\":null}]}",
+"problems": [
+"item 6: assertion a2: path \"-\" (stdout) is for json only",
+"item 8: input file no_such.csv: content is null and materials.files has no file no_such.csv",
+"item 8: input file no_such.sha256: content is null and materials.files has no file no_such.sha256",
+"item 8: input must be {args: string[], files: {path, content}[]}"
+]
+},
+{
+"id": "F3",
+"review": "R1.2",
+"attempt": 2,
+"response_text": "{\"items\":[{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"cat,id,value,r\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"review_window_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,2,10,1\\\"\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"review_window_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"B,1,8,1\\\"\",\"id\":\"a4\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"review_window_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,1,10,1\\\"\",\"id\":\"a5\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":4,\"path\":\"review_window_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"cat\",\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_window.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_input.csv\",\"--recipe\",\"review_window.json\",\"--output\",\"review_window_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"cat,id,value\\nA,2,10\\nB,1,8\\nA,1,10\\n\",\"from\":\"session\",\"path\":\"review_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"rank\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\\n\",\"from\":\"session\",\"path\":\"review_window.json\"}]},\"item\":1,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'a1':0,'a2':'cat,id,value,r','a3':'A,2,10,1','a4':'B,1,8,1','a5':'A,1,10,1'}))\",\"language\":\"python\"},\"text\":\"Window operation is not implemented. Requirement: `rank` must compute partitioned ranks and preserve input order. Command: `dpipe transform --input review_input.csv --recipe review_window.json --output review_window_out.csv --seed 1`, with `review_input.csv` containing `cat,id,value` rows `A,2,10`, `B,1,8`, `A,1,10`, and a rank recipe partitioned by `cat`. Program exited `1` with `ERROR: invalid recipe: column not found`.\",\"units\":[\"R1.S3.P13.s2.c1\",\"R1.S3.P14.s2\",\"R1.S3.P15.s1\",\"R1.S3.P15.s2\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"id,A,B,C\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"review_pivot_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"1,z,,y\\\"\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"review_pivot_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"2,,x,\\\"\",\"id\":\"a4\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"review_pivot_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\",\"label\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_pivot_input.csv\",\"records\":4},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_pivot.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_pivot_input.csv\",\"--recipe\",\"review_pivot.json\",\"--output\",\"review_pivot_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id,label,value\\n2,B,x\\n1,C,y\\n1,A,z\\n1,A,w\\n\",\"from\":\"session\",\"path\":\"review_pivot_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"pivot\\\",\\\"index\\\":[\\\"id\\\"],\\\"column\\\":\\\"label\\\",\\\"value\\\":\\\"value\\\"}]\\n\",\"from\":\"session\",\"path\":\"review_pivot.json\"}]},\"item\":2,\"reference_script\":{\"code\":\"print('{\\\"a1\\\":0,\\\"a2\\\":\\\"id,A,B,C\\\",\\\"a3\\\":\\\"1,z,,y\\\",\\\"a4\\\":\\\"2,,x,\\\"}')\",\"language\":\"python\"},\"text\":\"Pivot operation rejects valid recipes. Requirement: pivot must accept existing `index`, `column`, and `value` columns. Command: `dpipe transform --input review_pivot_input.csv --recipe review_pivot.json --output review_pivot_out.csv --seed 1`, with columns `id,label,value`. Program exited `1` with `ERROR: invalid recipe: column not found`.\",\"units\":[\"R1.S3.P18.s2.c1\",\"R1.S3.P18.s3\",\"R1.S3.P18.s4\",\"R1.S3.P19.s8.c2\",\"R1.S3.P19.s8.c4\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"4\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"review_sample_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"5\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"review_sample_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_sample_input.csv\",\"records\":10},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_sample.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_sample_input.csv\",\"--recipe\",\"review_sample.json\",\"--output\",\"review_sample_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id\\n1\\n2\\n3\\n4\\n5\\n6\\n7\\n8\\n9\\n10\\n\",\"from\":\"session\",\"path\":\"review_sample_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"sample\\\",\\\"fraction\\\":0.5}]\\n\",\"from\":\"session\",\"path\":\"review_sample.json\"}]},\"item\":3,\"reference_script\":{\"code\":\"print('{\\\"a1\\\":\\\"4\\\",\\\"a2\\\":\\\"5\\\"}')\",\"language\":\"python\"},\"text\":\"Sampling is a no-op. Requirement: retain each row based on a deterministic PRNG initialized with `--seed`. Command: `dpipe transform --input review_sample_input.csv --recipe review_sample.json --output review_sample_out.csv --seed 1`, with 10 input rows and `{\\\"op\\\":\\\"sample\\\",\\\"fraction\\\":0.5}`. Program exited `0` but output all 10 rows.\",\"units\":[\"R1.S3.P9.s1.c1\",\"R1.S3.P9.s1.c2\",\"R1.S3.P9.s1.c3\",\"R1.S3.P9.s1.c4\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"group,avg,min\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"review_aggregate_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,2,1\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"review_aggregate_out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"true\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_exists\",\"line\":null,\"path\":\"review_aggregate_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"group\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_aggregate_input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_aggregate.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_aggregate_input.csv\",\"--recipe\",\"review_aggregate.json\",\"--output\",\"review_aggregate_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"group,value\\nA,1\\nA,3\\nB,x\\n\",\"from\":\"session\",\"path\":\"review_aggregate_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"aggregate\\\",\\\"group_by\\\":[\\\"group\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"avg\\\",\\\"as\\\":\\\"avg\\\"},{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"min\\\",\\\"as\\\":\\\"min\\\"}],\\\"having\\\":{\\\"column\\\":\\\"avg\\\",\\\"condition\\\":\\\"gt\\\",\\\"threshold\\\":1}}]\\n\",\"from\":\"session\",\"path\":\"review_aggregate.json\"}]},\"item\":4,\"reference_script\":{\"code\":\"print('{\\\"a1\\\":\\\"group,avg,min\\\",\\\"a2\\\":\\\"A,2,1\\\",\\\"a3\\\":true}')\",\"language\":\"python\"},\"text\":\"Aggregate `min` and `having` are incorrect. Requirement: compute `min` and apply `having` after sorting. Command: `dpipe transform --input review_aggregate_input.csv --recipe review_aggregate.json --output review_aggregate_out.csv --seed 1`, with `A,1`, `A,3`, `B,x`, aggregating average/min and filtering average `> 1`. Program output:\\n```text\\ngroup,avg,min\\nA,2,0\\nB,0,0\\n```\\nExpected only group `A`, with `min=1`.\",\"units\":[\"R1.S3.P9.s9\",\"R1.S3.P10.s1\",\"R1.S3.P10.s2\",\"R1.S3.P11.s7\",\"R1.S3.P11.s8.c1\",\"R1.S3.P11.s8.c2\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"X\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"review_fill_out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_fill_input.csv\",\"records\":2},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_fill.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_fill_input.csv\",\"--recipe\",\"review_fill.json\",\"--output\",\"review_fill_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"value\\na\\n\\nb\\n\",\"from\":\"session\",\"path\":\"review_fill_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"fill\\\",\\\"columns\\\":[\\\"value\\\"],\\\"strategy\\\":\\\"constant\\\",\\\"value\\\":\\\"X\\\"}]\\n\",\"from\":\"session\",\"path\":\"review_fill.json\"}]},\"item\":5,\"reference_script\":{\"code\":\"print('{\\\"a1\\\":\\\"X\\\"}')\",\"language\":\"python\"},\"text\":\"Constant fill ignores the replacement value. Requirement: replace empty values with the recipe’s `value`. Command: `dpipe transform --input review_fill_input.csv --recipe review_fill.json --output review_fill_out.csv --seed 1`, with values `a`, empty, `b` and `{\\\"strategy\\\":\\\"constant\\\",\\\"value\\\":\\\"X\\\"}`. Program output an empty value instead of `X`.\",\"units\":[\"R1.S3.P22.s4.c2\",\"R1.S3.P23.s4\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"0\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"PIPELINE OK: 1 steps completed\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"stdout_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_transform_pipeline.json\",\"records\":null},{\"columns\":[\"cat\",\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_window.json\",\"records\":null}],\"input\":{\"args\":[\"pipeline\",\"--config\",\"review_transform_pipeline.json\"],\"files\":[{\"content\":\"{\\\"seed\\\":1,\\\"steps\\\":[{\\\"type\\\":\\\"transform\\\",\\\"input\\\":\\\"review_input.csv\\\",\\\"recipe\\\":\\\"review_window.json\\\",\\\"output\\\":\\\"pipeline.csv\\\"}]}\\n\",\"from\":\"session\",\"path\":\"review_transform_pipeline.json\"},{\"content\":\"cat,id,value\\nA,2,10\\nB,1,8\\nA,1,10\\n\",\"from\":\"session\",\"path\":\"review_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"rank\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\\n\",\"from\":\"session\",\"path\":\"review_window.json\"}]},\"item\":6,\"reference_script\":{\"code\":\"import json\\nwith open('review_transform_pipeline.json') as f: n=len(json.load(f)['steps'])\\nprint(json.dumps({'a1':0,'a2':f'PIPELINE OK: {n} steps completed'}))\",\"language\":\"python\"},\"text\":\"Pipeline cannot execute transform steps. Requirement: pipeline must execute ingest, transform, verify, and manifest steps sequentially. Command: `dpipe pipeline --config review_transform_pipeline.json`, containing one transform step. Program exited `1` with `PIPELINE FAILED at step 1: transform pipeline unsupported`.\",\"units\":[\"R1.S6.P2.s2.c1\",\"R1.S6.P2.s2.c2\",\"R1.S6.P2.s3.c1\",\"R1.S6.P2.s3.c2\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"1\",\"id\":\"a1\",\"source\":{\"block\":\"R1.S8.P1.s3.c3\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"ERROR: invalid recipe: column missing not found\\\"\",\"id\":\"a2\",\"source\":{\"block\":\"R1.S8.P1.s3.c2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stderr_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"group\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"review_aggregate_input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"review_bad_agg.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"review_aggregate_input.csv\",\"--recipe\",\"review_bad_agg.json\",\"--output\",\"review_bad_agg_out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"group,value\\nA,1\\nA,3\\nB,x\\n\",\"from\":\"session\",\"path\":\"review_aggregate_input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"aggregate\\\",\\\"group_by\\\":[\\\"group\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"missing\\\",\\\"function\\\":\\\"sum\\\",\\\"as\\\":\\\"total\\\"}]}]\\n\",\"from\":\"session\",\"path\":\"review_bad_agg.json\"}]},\"item\":7,\"reference_script\":null,\"text\":\"Invalid aggregate column causes a panic instead of the required error. Requirement: invalid recipe references must exit `1` with `ERROR: invalid recipe: column <name> not found`. Command: `dpipe transform --input review_aggregate_input.csv --recipe review_bad_agg.json --output review_bad_agg_out.csv --seed 1`, where the aggregation references column `missing`. Program exited `2` with a Go `runtime error: index out of range` panic.\",\"units\":[\"R1.S8.P1.s3.c1\",\"R1.S8.P1.s3.c3\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"1\",\"id\":\"a1\",\"source\":{\"block\":\"R1.S8.P1.s1.c1\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"exit_code\",\"line\":null,\"path\":null,\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"ERROR: file not found: no_such.csv\\\"\",\"id\":\"a2\",\"source\":{\"block\":\"R1.S8.P1.s1.c2\",\"kind\":\"verbatim\"},\"target\":{\"column\":null,\"kind\":\"stderr_line\",\"line\":1,\"path\":null,\"pointer\":null},\"tolerance\":null}],\"claims\":[],\"input\":{\"args\":[\"verify\",\"--file\",\"no_such.csv\",\"--checksum\",\"no_such.sha256\"],\"files\":[]},\"item\":8,\"reference_script\":null,\"text\":\"Verify mishandles missing files. Requirement: missing input files must exit `1` with `ERROR: file not found: <path>`. Command: `dpipe verify --file no_such.csv --checksum no_such.sha256`. Program exited `0` and printed `VERIFIED`.\",\"units\":[\"R1.S8.P1.s1.c1\",\"R1.S8.P1.s1.c2\"],\"why_no_input\":null}]}",
+"problems": []
+},
+{
+"id": "F4",
+"review": "R1.3",
+"attempt": 1,
+"response_text": "{\"items\":[{\"assertions\":[{\"expect_json\":\"\\\"cat,id,value,r\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,2,10,1\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"B,1,8,1\\\"\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,1,10,1\\\"\",\"id\":\"a4\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":4,\"path\":\"out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"cat\",\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"input.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"recipe.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"input.csv\",\"--recipe\",\"recipe.json\",\"--output\",\"out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"cat,id,value\\nA,2,10\\nB,1,8\\nA,1,10\\n\",\"from\":\"K6\",\"path\":\"input.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"rank\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\",\"from\":\"K6\",\"path\":\"recipe.json\"}]},\"item\":1,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'a1':'cat,id,value,r','a2':'A,2,10,1','a3':'B,1,8,1','a4':'A,1,10,1'}))\",\"language\":\"python\"},\"text\":\"Window `as` column is ignored. Requirement: append the new column using `\\\"as\\\"`. Command: `dpipe transform --input input.csv --recipe recipe.json --output out.csv --seed 1`, with the supplied K6 input/recipe. Output header was `cat,id,value,` instead of `cat,id,value,r`.\",\"units\":[\"R1.S3.P13.s4\",\"R1.S3.P15.s1.c1\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"cat,id,value,r\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"w.out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,1,1,3\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"w.out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,2,3,1\\\"\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"w.out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,3,3,2\\\"\",\"id\":\"a4\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":4,\"path\":\"w.out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"cat\",\"id\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"w.csv\",\"records\":3},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"wdesc.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"w.csv\",\"--recipe\",\"wdesc.json\",\"--output\",\"w.out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"cat,id,value\\nA,1,1\\nA,2,3\\nA,3,3\\n\",\"from\":\"session\",\"path\":\"w.csv\"},{\"content\":\"[{\\\"op\\\":\\\"window\\\",\\\"function\\\":\\\"row_number\\\",\\\"partition_by\\\":[\\\"cat\\\"],\\\"order_by\\\":[{\\\"column\\\":\\\"value\\\",\\\"order\\\":\\\"desc\\\"}],\\\"as\\\":\\\"r\\\"}]\\n\",\"from\":\"session\",\"path\":\"wdesc.json\"}]},\"item\":2,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'a1':'cat,id,value,r','a2':'A,1,1,3','a3':'A,2,3,1','a4':'A,3,3,2'}))\",\"language\":\"python\"},\"text\":\"Window ordering and function are ignored. Requirement: `row_number` with descending order should rank rows `3,1,2` for values `1,3,3`. Command: same transform using `w.csv` (`A,1,1`, `A,2,3`, `A,3,3`) and recipe `row_number`, descending by `value`. Output was `A,1,1,1`, `A,2,3,2`, `A,3,3,2`, using ascending `rank` behavior.\",\"units\":[\"R1.S3.P13.s3.c6\",\"R1.S3.P13.s3.c7\",\"R1.S3.P13.s3.c8\",\"R1.S3.P14.s4\",\"R1.S3.P15.s2\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"4\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"s1.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"id\"],\"empty_cells\":0,\"parses\":true,\"path\":\"many.csv\",\"records\":10},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"sample.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"many.csv\",\"--recipe\",\"sample.json\",\"--output\",\"s1.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"id\\n1\\n2\\n3\\n4\\n5\\n6\\n7\\n8\\n9\\n10\\n\",\"from\":\"session\",\"path\":\"many.csv\"},{\"content\":\"[{\\\"op\\\":\\\"sample\\\",\\\"fraction\\\":0.5}]\\n\",\"from\":\"session\",\"path\":\"sample.json\"}]},\"item\":3,\"reference_script\":{\"code\":\"import json\\n# Go math/rand with seed 1 produces a first sample value above .5, then the fourth row is the first retained row.\\nprint(json.dumps({'a1':'4'}))\",\"language\":\"python\"},\"text\":\"Transform seed is ignored. Requirement: sampling must use the supplied `--seed`. Running the sample recipe on a 10-row input with `--seed 1` and `--seed 2` produced byte-identical outputs, because the CLI always passes seed `0`.\",\"units\":[\"R1.S3.P9.s1.c1\",\"R1.S3.P9.s1.c2\",\"R1.S3.P9.s1.c3\",\"R1.S3.P9.s1.c4\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"label,n,avg\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"agg.out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"A,2,1\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"agg.out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"B,2,3\\\"\",\"id\":\"a3\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":3,\"path\":\"agg.out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"label\",\"value\"],\"empty_cells\":0,\"parses\":true,\"path\":\"agg.csv\",\"records\":4},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"agg.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"agg.csv\",\"--recipe\",\"agg.json\",\"--output\",\"agg.out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"label,value\\nA,1\\nA,x\\nB,2\\nB,4\\n\",\"from\":\"session\",\"path\":\"agg.csv\"},{\"content\":\"[{\\\"op\\\":\\\"aggregate\\\",\\\"group_by\\\":[\\\"label\\\"],\\\"aggregations\\\":[{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"count\\\",\\\"as\\\":\\\"n\\\"},{\\\"column\\\":\\\"value\\\",\\\"function\\\":\\\"avg\\\",\\\"as\\\":\\\"avg\\\"}]}]\\n\",\"from\":\"session\",\"path\":\"agg.json\"}]},\"item\":4,\"reference_script\":{\"code\":\"import json\\nprint(json.dumps({'a1':'label,n,avg','a2':'A,2,1','a3':'B,2,3'}))\",\"language\":\"python\"},\"text\":\"Aggregate `count` counts numeric values instead of non-empty values. Requirement: count all non-empty values. Command: aggregate `value` on input `A,1`, `A,x`, `B,2`, `B,4`. Output was `A,1,1`; expected count for A was `2`.\",\"units\":[\"R1.S3.P9.s8\"],\"why_no_input\":null},{\"assertions\":[{\"expect_json\":\"\\\"a,b,c,x\\\"\",\"id\":\"a1\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":1,\"path\":\"expr.out.csv\",\"pointer\":null},\"tolerance\":null},{\"expect_json\":\"\\\"1,0,0,1\\\"\",\"id\":\"a2\",\"source\":{\"block\":null,\"kind\":\"derived\"},\"target\":{\"column\":null,\"kind\":\"file_line\",\"line\":2,\"path\":\"expr.out.csv\",\"pointer\":null},\"tolerance\":null}],\"claims\":[{\"columns\":[\"a\",\"b\",\"c\"],\"empty_cells\":0,\"parses\":true,\"path\":\"expr.csv\",\"records\":1},{\"columns\":null,\"empty_cells\":null,\"parses\":true,\"path\":\"expr.json\",\"records\":null}],\"input\":{\"args\":[\"transform\",\"--input\",\"expr.csv\",\"--recipe\",\"expr.json\",\"--output\",\"expr.out.csv\",\"--seed\",\"1\"],\"files\":[{\"content\":\"a,b,c\\n1,0,0\\n\",\"from\":\"session\",\"path\":\"expr.csv\"},{\"content\":\"[{\\\"op\\\":\\\"derive\\\",\\\"name\\\":\\\"x\\\",\\\"expression\\\":\\\"a || b && c\\\"}]\\n\",\"from\":\"session\",\"path\":\"expr.json\"}]},\"item\":5,\"reference_script\":{\"code\":\"import csv,json\\nwith open('expr.csv',newline='') as f:\\n    row=next(csv.DictReader(f))\\nvalue=1 if (float(row['a'])>0 or (float(row['b'])>0 and float(row['c'])>0)) else 0\\nprint(json.dumps({'a1':'a,b,c,x','a2':f\\\"{row['a']},{row['b']},{row['c']},{value}\\\"}))\",\"language\":\"python\"},\"text\":\"Expression operator precedence is incorrect. Requirement: `&&` has higher precedence than `||`. Command: derive `a || b && c` for input `a=1,b=0,c=0`. Output was `0`; expected `1`.\",\"units\":[\"R1.S3.P3.s2.c1\",\"R1.S3.P3.s3.c1\",\"R1.S3.P3.s3.c2\",\"R1.S3.P3.s3.c3\",\"R1.S3.P3.s3.c4\"],\"why_no_input\":null}]}",
+"problems": []
+}
+]
+}

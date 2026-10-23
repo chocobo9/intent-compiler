@@ -1,0 +1,124 @@
+{
+ "rep1": {
+  "checks": {
+   "entered": 30,
+   "admitted": 28,
+   "unknown": 2,
+   "unknown_not_fed_back": 0,
+   "dropped": 4,
+   "normalized": 25
+  },
+  "review": null
+ },
+ "rep1b": {
+  "checks": {
+   "entered": 20,
+   "admitted": 20,
+   "unknown": 0,
+   "unknown_not_fed_back": 0,
+   "dropped": 1,
+   "normalized": 18
+  },
+  "review": {
+   "reported": 8,
+   "entered": 8,
+   "verified": 0,
+   "fallback": 8,
+   "blocked": 0,
+   "inputs_from_materials": 0,
+   "no_input": 8,
+   "conservation_errors": 0
+  }
+ },
+ "rep1c": {
+  "checks": {
+   "entered": 21,
+   "admitted": 21,
+   "unknown": 0,
+   "unknown_not_fed_back": 0,
+   "dropped": 8,
+   "normalized": 0
+  },
+  "review": {
+   "reported": 32,
+   "entered": 32,
+   "verified": 0,
+   "fallback": 32,
+   "blocked": 0,
+   "inputs_from_materials": 0,
+   "no_input": 32,
+   "conservation_errors": 0
+  }
+ },
+ "rep1d": {
+  "checks": {
+   "entered": 21,
+   "admitted": 21,
+   "unknown": 0,
+   "unknown_not_fed_back": 0,
+   "dropped": 2,
+   "normalized": 0
+  },
+  "review": {
+   "reported": 20,
+   "entered": 20,
+   "verified": 8,
+   "fallback": 12,
+   "blocked": 0,
+   "inputs_from_materials": 6,
+   "no_input": 12,
+   "conservation_errors": 0
+  }
+ },
+ "rep1e": {
+  "checks": {
+   "entered": 23,
+   "admitted": 22,
+   "unknown": 1,
+   "unknown_not_fed_back": 0,
+   "dropped": 6,
+   "normalized": 23
+  },
+  "review": {
+   "reported": 20,
+   "entered": 20,
+   "verified": 15,
+   "fallback": 1,
+   "blocked": 0,
+   "inputs_from_materials": 20,
+   "no_input": 0,
+   "conservation_errors": 0
+  }
+ },
+ "rep1f": {
+  "checks": {
+   "entered": 14,
+   "admitted": 14,
+   "unknown": 0,
+   "unknown_not_fed_back": 0,
+   "dropped": 2,
+   "normalized": 13
+  },
+  "review": null
+ },
+ "rep1g": {
+  "checks": {
+   "entered": 13,
+   "admitted": 13,
+   "unknown": 0,
+   "unknown_not_fed_back": 0,
+   "dropped": 1,
+   "normalized": 3
+  },
+  "review": {
+   "reported": 25,
+   "entered": 25,
+   "verified": 22,
+   "fallback": 2,
+   "blocked": 0,
+   "inputs_from_materials": 1,
+   "no_input": 2,
+   "conservation_errors": 0
+  }
+ }
+}
