@@ -210,6 +210,8 @@ export interface ExecutionRecord {
   usage: TokenUsage
   /** Items the work order carried in, as sent with the work message (DESIGN §12h E3). */
   carried_in?: { id: string; digest: string }[]
+  /** Open reviewer's items not carried because this round replaced the text they rest on (fix block B1). */
+  superseded_in?: SupersededItem[]
   /** The full run on the kept cycle's program (DESIGN §12h E4). */
   sweep?: SweepRecord
   /** Items failing on the kept cycle's program after the full run: the round's end in the ledger (DESIGN §12h E2). */
@@ -225,6 +227,9 @@ export interface ExecutionRecord {
 }
 
 /** One item of a review (DESIGN §12i): the reviewer's words, the units, and what the code made of it. */
+/** A reviewer's item open from an earlier round whose text this round replaced: not carried, ended as superseded (fix block B1). */
+export interface SupersededItem { id: string; reason: string }
+
 export interface ReviewItemRecord {
   /** V<round>.<review>.<item>. */
   id: string

@@ -2,7 +2,7 @@ import type { AnchorExtractor } from "./anchors.js"
 import { diffAnchors, touched } from "./anchors.js"
 import { RoleUnavailable, type TokenUsage } from "./attribution.js"
 import { activeChecks, coverage, EMPTY_CHECKS, type CheckEvent, type CheckRecord, type CodeFacts } from "./checks.js"
-import { renderEvidence, SessionBroken, Sends, type AcceptRoundRecord, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor, type ExecutorReply, type ItemSighting, type ReviewItemRecord, type ReviewSummary } from "./execution.js"
+import { renderEvidence, SessionBroken, Sends, type AcceptRoundRecord, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor, type ExecutorReply, type ItemSighting, type ReviewItemRecord, type ReviewSummary, type SupersededItem } from "./execution.js"
 import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
 import { commitStep, head, resetTo } from "./git.js"
 import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, type GuardEvent, type GuardRecord } from "./guards.js"
@@ -67,11 +67,18 @@ export interface AcceptDeps {
   copyDir: (label: string) => string
   /** Judgments on this program (probes and judge, when on): wrong verdicts as leads for the reviewer, never repairs. */
   leads?: (program: ProgramRef, cycle: string) => Promise<Lead[]>
+  /**
+   * The library once the round's checks are written (fix block B3): awaited before the first guard run, after the
+   * coding; absent when the checks were written before the work order.
+   */
+  libraryNow?: () => Promise<{ library: readonly CheckRecord[]; events: readonly CheckEvent[] }>
   /** The store's writers: calls and guards are kept as they happen, so an interrupted round loses nothing it spent. */
   record: { review: (r: ReviewCallRecord) => Promise<void>; formalize: (calls: FormalizeCallRecord[]) => Promise<void>; guards: (born: GuardRecord[], events: GuardEvent[]) => Promise<void> }
   /** Items the work order carried in (their checks run every cycle); `quiet`: items listed only, at the output they were stuck at. */
   carried?: readonly CarriedItem[]
   quiet?: ReadonlyMap<string, string>
+  /** Open items not carried because this round replaced their text: recorded for the ledger (fix block B1). */
+  superseded?: readonly SupersededItem[]
   time?: (stage: string, startedAt: number, endedAt: number) => void
   onProgress?: (record: ExecutionRecord) => void
   checkTimeoutMs?: number
@@ -133,12 +140,14 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   const status = guardStatuses(events)
   const live = () => guards.filter(g => status.get(g.id) !== "retired")
   let nextGuard = guards.length + 1
-  const library = deps.library
+  // The library as the round starts; the round's own checks join when their writing (beside the coding) is done (fix block B3).
+  let library = deps.library, libraryEvents = deps.events, libraryJoined = !deps.libraryNow
   const guarded = new Set(guards.filter(g => g.source === "library").map(g => g.check!))
   const note = async (born: GuardRecord[], evs: GuardEvent[]) => { guards.push(...born); events.push(...evs); for (const e of evs) status.set(e.guard, e.status); for (const g of born) if (g.check) guarded.add(g.check); await deps.record.guards(born, evs) }
   // Items of the ledger this round: carried in, guard regressions, review items.
   const carried = new Map((deps.carried ?? []).map(c => [c.id, c]))
   if (carried.size) record.carried_in = [...carried.values()].map(c => ({ id: c.id, digest: c.digest ?? "" }))
+  if (deps.superseded?.length) record.superseded_in = [...deps.superseded]
   const sends = new Sends(new Map([...carried.values()].map(c => [c.id, c.digest ?? ""])), deps.quiet)
   const itemChecks = new Map<string, { text: string; record: CheckRecord; item?: ReviewItemRecord; key?: string }>()
   const keyOf = (r: CheckRecord) => JSON.stringify([[...r.blocks].sort(), r.input])
@@ -250,10 +259,11 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     }
     current = { cycle: id, commit, program: build.program! }
     record.first_delivery ??= { cycle: id, commit }
+    if (!libraryJoined) { const l = await timed("waiting for checks", () => deps.libraryNow!()); library = l.library; libraryEvents = l.events; libraryJoined = true }
     // 1. Every guard, in one batch; library checks not yet guards in another: the ones that pass are born as guards.
     const statusBefore = new Map(status)
     const guardRuns = await timed("guard rerun", () => runGuards(live(), library, current!.program, deps.runner, round, registry, deps.facts, timeout))
-    const unguarded = activeChecks(library, deps.events).filter(c => !guarded.has(c.id))
+    const unguarded = activeChecks(library, libraryEvents).filter(c => !guarded.has(c.id))
     const libRuns = unguarded.length ? await timed("guard rerun", () => runChecks(unguarded, current!.program, deps.runner, round, registry, deps.facts, timeout)) : []
     cycle.runs = [...guardRuns.map(r => ({ check: r.guard, outcome: r.run.outcome, failure: r.run.failure ? `${r.run.failure.class}/${r.run.failure.reason}` : null })), ...libRuns.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null }))]
     const flipped = guardRuns.filter(r => r.outcome === "fail" && statusBefore.get(r.guard) === "passing").map(r => r.guard)

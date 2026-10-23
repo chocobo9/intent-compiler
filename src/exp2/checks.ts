@@ -319,7 +319,7 @@ export interface CheckRequest {
 export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
-  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth" | "unavailable"
+  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth" | "unavailable" | "unit_unchanged"
 
 /** `blocks`: for code, the units an `uncovered` issue names. */
 export interface CheckIssue { code: CheckIssueCode; check?: string; message: string; blocks?: string[] }
@@ -432,8 +432,21 @@ export function activeChecks(library: readonly CheckRecord[], events: readonly C
 // ---------------------------------------------------------------- admission check
 
 /** Definite errors only: the model's choice of what to check, and how, is not judged here. */
-export function checkChecks(registry: Registry, round: number, draft: ChecksDraft, library: readonly CheckRecord[], events: readonly CheckEvent[], facts: CodeFacts = codeFacts(registry, round)): CheckIssue[] {
+/**
+ * The text a round's checks are written for, under "once per unit" (fix block B2): blocks this round added or that
+ * revise or apply to an object, and the blocks of checks that went stale this round (they are derived again).
+ */
+export function roundTextForChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[]): Set<string> {
+  const out = new Set<string>()
+  for (const c of registry.roundScope(round)) { for (const e of c.entries) out.add(e.block); for (const m of c.received) for (const b of m.by) out.add(b); for (const a of c.applied) out.add(a.from) }
+  for (const e of deriveAgain(events, round)) for (const b of library.find(k => k.id === e.check)?.blocks ?? []) out.add(parseRef(b).id)
+  return out
+}
+
+export function checkChecks(registry: Registry, round: number, draft: ChecksDraft, library: readonly CheckRecord[], events: readonly CheckEvent[], facts: CodeFacts = codeFacts(registry, round), options: { unitsOnce?: boolean } = {}): CheckIssue[] {
   const issues: CheckIssue[] = []
+  const fresh = options.unitsOnce ? roundTextForChecks(registry, round, library, events) : null
+  const related = (a: string, b: string) => a === b || registry.lineage(a).some(x => x.id === b) || registry.lineage(b).some(x => x.id === a)
   // Checks may be written for this round's objects, and again for the objects of checks that went stale this round.
   const scope = new Set([...registry.roundScope(round).map(c => c.object), ...deriveAgain(events, round).map(e => library.find(c => c.id === e.check)?.object).filter((x): x is string => !!x)])
   const add = (code: CheckIssueCode, message: string, check?: string) => issues.push({ code, message, ...(check ? { check } : {}) })
@@ -450,6 +463,8 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
     const blocks = k.blocks.map(b => parseRef(b).id)
     const missing = blocks.filter(b => !registry.block(b) || roundOf(b) > round)
     for (const b of missing) add("unknown_block", `${w}: block ${b} does not exist`, k.key)
+    // Once per unit (fix block B2): a check rests on text this round added or revised, or on a stale check's text.
+    if (fresh && !missing.length && !blocks.some(b => [...fresh].some(f => related(b, f)))) add("unit_unchanged", `${w}: none of ${blocks.join(", ")} is text that enters, is revised or applies in this round, or text of a stale check; a unit gets its checks when it enters or is revised, and the checks written before keep running`, k.key)
     const applied = new Set(registry.changes.filter(c => c.object === k.object).flatMap(c => c.applied.map(a => a.from)))
     // The basis is the object's own text, text that applies to it, or the text of a convention in its uses (§12d item 5).
     const owners = new Set([k.object, ...k.uses])
@@ -738,7 +753,7 @@ export interface DeriveOutcome {
   coverage?: Coverage
 }
 
-export async function deriveChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], transport: ChecksTransport, options: { maxRepairs: number; callId: (n: number) => string }): Promise<DeriveOutcome> {
+export async function deriveChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], transport: ChecksTransport, options: { maxRepairs: number; callId: (n: number) => string; unitsOnce?: boolean }): Promise<DeriveOutcome> {
   const calls: CheckCallRecord[] = []
   const facts = codeFacts(registry, round)
   let draft = EMPTY_CHECKS
@@ -768,7 +783,7 @@ export async function deriveChecks(registry: Registry, round: number, library: r
     const shape = checksShapeProblems(parsed)
     if (shape.length) { issues = shape.map(message => ({ code: "shape" as const, message })); record.issues = issues; continue }
     draft = applyChecksPatch(draft, parsed as ChecksPatch)
-    issues = [...checkChecks(registry, round, draft, library, events, facts), ...coverageIssues(registry, coverage(registry, round, draft, library, events), draft, library, events)]
+    issues = [...checkChecks(registry, round, draft, library, events, facts, { unitsOnce: options.unitsOnce }), ...coverageIssues(registry, coverage(registry, round, draft, library, events), draft, library, events)]
     record.issues = issues
     parsedOnce = true
     if (!issues.length) return { status: "accepted", draft, calls, issues, dropped: [], coverage: coverage(registry, round, draft, library, events) }

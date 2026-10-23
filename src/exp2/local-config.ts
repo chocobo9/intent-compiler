@@ -86,9 +86,12 @@ export interface LocalConfig {
    * any other failing is logged and the item sent. fallback ("items"): items code cannot verify for its own reasons
    * (formalizer malformed or no input, entries it left out, the call failing) go out in the reviewer's words; "review"
    * only when nothing else of that review was sent or verified; "off" blocks them. void_without_runs (false): void and
-   * redo a review in which no run of the program was seen.
+   * redo a review in which no run of the program was seen. expire_reproduced (false): items code reproduced (guard
+   * regressions, reviewer's items whose check failed) expire after two rounds without progress, as other items do.
+   * checks_once (true): library checks are written only for text a round adds or revises (and stale checks).
+   * checks_in_background (true): they are written beside the coding, not before the work order.
    */
-  acceptance?: { mode?: "review" | "probes"; probes?: boolean; stale_by_reference?: boolean; reviews?: number; trial_fixes?: number; review_agent?: string; premise_block?: string[]; fallback?: "items" | "review" | "off"; void_without_runs?: boolean }
+  acceptance?: { mode?: "review" | "probes"; probes?: boolean; stale_by_reference?: boolean; reviews?: number; trial_fixes?: number; review_agent?: string; premise_block?: string[]; fallback?: "items" | "review" | "off"; void_without_runs?: boolean; expire_reproduced?: boolean; checks_once?: boolean; checks_in_background?: boolean }
   /**
    * Builds record which functions each run executes (`go build -cover`), so a cycle runs only the checks and probes a
    * change can affect (DESIGN §12h E4). Default true; with false nothing has coverage, so every cycle runs everything.
@@ -238,7 +241,7 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
     workdir: at(c.repo_dir),
     checkpoints: at(c.checkpoints_dir),
     copies: join(at(c.builds_dir), "review-copies"),
-    acceptance: { mode, probes: c.acceptance?.probes === true, staleByReference: c.acceptance?.stale_by_reference === true, ...(c.acceptance?.reviews !== undefined ? { reviews: c.acceptance.reviews } : {}), ...(c.acceptance?.trial_fixes !== undefined ? { trialFixes: c.acceptance.trial_fixes } : {}), ...(c.acceptance?.premise_block ? { premiseBlock: c.acceptance.premise_block as Premise[] } : {}), ...(c.acceptance?.fallback ? { fallback: c.acceptance.fallback } : {}), ...(c.acceptance?.void_without_runs !== undefined ? { voidWithoutRuns: c.acceptance.void_without_runs === true } : {}) },
+    acceptance: { mode, probes: c.acceptance?.probes === true, staleByReference: c.acceptance?.stale_by_reference === true, ...(c.acceptance?.reviews !== undefined ? { reviews: c.acceptance.reviews } : {}), ...(c.acceptance?.trial_fixes !== undefined ? { trialFixes: c.acceptance.trial_fixes } : {}), ...(c.acceptance?.premise_block ? { premiseBlock: c.acceptance.premise_block as Premise[] } : {}), ...(c.acceptance?.fallback ? { fallback: c.acceptance.fallback } : {}), ...(c.acceptance?.void_without_runs !== undefined ? { voidWithoutRuns: c.acceptance.void_without_runs === true } : {}), ...(c.acceptance?.expire_reproduced !== undefined ? { expireReproduced: c.acceptance.expire_reproduced === true } : {}), ...(c.acceptance?.checks_once !== undefined ? { checksOnce: c.acceptance.checks_once !== false } : {}), ...(c.acceptance?.checks_in_background !== undefined ? { checksInBackground: c.acceptance.checks_in_background !== false } : {}) },
     // The reviewer runs on the coding server (tools on), in a copy of the program; the formalizer on the management server.
     ...(mode === "review" ? { reviewer: new OpenCodeReviewer({ client: coding, providerId: reviewRole.providerId, modelId: reviewRole.modelId, variant: reviewRole.variant, agent: c.acceptance?.review_agent ?? c.coding.agent ?? "build", binary, rateLimit }) } : {}),
     trial: docker ? dockerTrial(docker, binary) : goTrial(platform, binary),

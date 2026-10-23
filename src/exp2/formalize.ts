@@ -391,6 +391,20 @@ export interface ItemCheck { input: CheckInput; assertions: Assertion[]; referen
 const within = (registry: Registry, inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
 
 /**
+ * Why a unit is not a requirement in force in `round` (premise 1), or null when it is: it exists, is owned and live,
+ * and no round after its own wholly replaced or withdrew it.
+ */
+export function notInForce(registry: Registry, round: number, u: string): string | null {
+  const b = registry.block(u)
+  if (!b) return `${u} does not exist`
+  const own = registry.ownership(u)
+  if (!own) return `${u} is not a requirement (text assigned to no object)`
+  if (!LIVE_STATES.has(own.state)) return `${u} is ${own.state} (${own.modifications.map(m => `${m.kind} in round ${m.round} by ${m.by.join(", ")}`).join("; ")})`
+  const gone = replacedBasis(registry, [u], b.round, round).filter(m => m.parts.some(p => within(registry, u, p)))
+  return gone.length ? `${u}: ${gone[0].parts.join(", ")} ${gone[0].kind === "withdraw" ? "withdrawn" : "replaced"} in round ${gone[0].round} by ${gone[0].by.join(", ")}` : null
+}
+
+/**
  * Every premise the code checks before an item is sent (no model), each one, not only the first that fails: every
  * cited unit is a requirement in force (owned, live, not wholly replaced by a later round); the input's files show
  * what the item claims under their standard parser; each stated value occurs in the unit cited for it, or else in one
@@ -401,15 +415,7 @@ const within = (registry: Registry, inner: string, outer: string) => registry.li
 export async function assessPremises(registry: Registry, round: number, item: FormalItem, sandbox: ScriptSandbox, timeoutMs: number): Promise<{ failures: PremiseFailure[]; check: ItemCheck | null }> {
   const failures: PremiseFailure[] = []
   const fail = (premise: Premise, detail: string) => { if (!failures.some(f => f.premise === premise)) failures.push({ premise, detail }) }
-  for (const u of item.units) {
-    const b = registry.block(u)
-    if (!b) { fail("unit_not_in_force", `${u} does not exist`); continue }
-    const own = registry.ownership(u)
-    if (!own) { fail("unit_not_in_force", `${u} is not a requirement (text assigned to no object)`); continue }
-    if (!LIVE_STATES.has(own.state)) { fail("unit_not_in_force", `${u} is ${own.state} (${own.modifications.map(m => `${m.kind} in round ${m.round} by ${m.by.join(", ")}`).join("; ")})`); continue }
-    const gone = replacedBasis(registry, [u], b.round, round).filter(m => m.parts.some(p => within(registry, u, p)))
-    if (gone.length) fail("unit_not_in_force", `${u}: ${gone[0].parts.join(", ")} ${gone[0].kind === "withdraw" ? "withdrawn" : "replaced"} in round ${gone[0].round} by ${gone[0].by.join(", ")}`)
-  }
+  for (const u of item.units) { const why = notInForce(registry, round, u); if (why) fail("unit_not_in_force", why) }
   if (!item.input) { fail("no_input", item.why_no_input ?? "the review does not give the input"); return { failures, check: null } }
   const claims = claimProblems(item.input, item.claims)
   if (claims.length) fail("input_claim_false", claims.join("; "))

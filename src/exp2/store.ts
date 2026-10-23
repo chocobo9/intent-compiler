@@ -113,6 +113,8 @@ export interface DeriveDeps {
   timeoutMs?: number
   /** Whether a check goes stale when text it refers to, a convention it uses or its object's later text changes (default true; off under DESIGN §12i item 6). */
   staleByReference?: boolean
+  /** Checks only for text this round added or revised, and for stale checks (fix block B2). */
+  unitsOnce?: boolean
 }
 
 export interface IngestOptions { maxRepairs?: number }
@@ -181,13 +183,45 @@ export class Exp2Store {
 
   /** Derives checks for the objects round `round` changed, admits what verifies, and judges strength on the baseline. */
   async deriveRoundChecks(round: number, transport: ChecksTransport, deps: DeriveDeps): Promise<CheckRoundRecord> {
-    return this.transaction(async s => {
+    await this.beginRoundChecks(round, deps)
+    return this.writeRoundChecks(round, transport, deps)
+  }
+
+  /** The short first part of deriving a round's checks: checks whose text changed are marked stale at once. No model call. */
+  async beginRoundChecks(round: number, deps: Pick<DeriveDeps, "staleByReference">): Promise<void> {
+    await this.transaction(s => {
       if (!s.rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} has no accepted attribution`)
       if (s.check_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} already has its checks`)
-      const registry = this.registry(s)
-      s.check_events.push(...staleChecks(registry, s.checks, s.check_events, round, { byReference: deps.staleByReference }))
-      const nextCall = () => s.calls.length + s.check_calls.length
-      const outcome = await deriveChecks(registry, round, s.checks, s.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `M${nextCall() + n}` })
+      s.check_events.push(...staleChecks(this.registry(s), s.checks, s.check_events, round, { byReference: deps.staleByReference }))
+    })
+  }
+
+  /**
+   * The model part of deriving a round's checks, and their admission on the baseline, outside the store's lock (so
+   * coding goes on meanwhile, fix block B3); one commit at the end, where the checks and calls get their ids.
+   */
+  async writeRoundChecks(round: number, transport: ChecksTransport, deps: DeriveDeps): Promise<CheckRoundRecord> {
+    const s0 = this.inspect()
+    const registry = this.registry(s0)
+    const outcome = await deriveChecks(registry, round, s0.checks, s0.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `~M${n}`, unitsOnce: deps.unitsOnce })
+    const timeout = deps.timeoutMs ?? 10_000
+    const facts = codeFacts(registry, round)
+    const drafted: Omit<CheckRecord, "id" | "calls">[] = []
+    if (outcome.status === "accepted") for (const draft of outcome.draft!.checks) {
+      const b = await methodB(draft, deps.sandbox, timeout)
+      const record: Omit<CheckRecord, "id" | "calls"> = {
+        round, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses, direction: draft.direction,
+        input: b.input ?? draft.input, assertions: b.assertions, unknown: b.unknown, reference_script: draft.reference_script,
+        ...(b.computed_inputs.length ? { computed_inputs: b.computed_inputs } : {}),
+        admission: b.assertions.length ? "admitted" : "unknown", admission_reason: b.assertions.length ? null : b.unknown.map(u => `${u.assertion.id}: ${u.reason}`).join("; "),
+        strength: null, status: "active",
+      }
+      if (record.admission === "admitted") record.strength = strength({ ...record, id: "~", calls: [] }, await runCheck({ ...record, id: "~", calls: [] }, deps.baseline, deps.runner, round, registry, facts, timeout), deps.baseline)
+      drafted.push(record)
+    }
+    return this.transaction(s => {
+      if (s.check_rounds.some(r => r.round === round && r.status === "accepted")) throw new Error(`Round ${round} already has its checks`)
+      renumber(outcome.calls, "M", s.calls.length + s.check_calls.length)
       s.check_calls.push(...outcome.calls)
       const calls = outcome.calls.map(c => c.id)
       if (outcome.status !== "accepted") {
@@ -195,22 +229,8 @@ export class Exp2Store {
         s.check_rounds.push(record)
         return record
       }
-      const timeout = deps.timeoutMs ?? 10_000
-      const facts = codeFacts(registry, round)
       const entered: string[] = []
-      for (const draft of outcome.draft!.checks) {
-        const b = await methodB(draft, deps.sandbox, timeout)
-        const record: CheckRecord = {
-          id: `K${s.checks.length + 1}`, round, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses, direction: draft.direction,
-          input: b.input ?? draft.input, assertions: b.assertions, unknown: b.unknown, reference_script: draft.reference_script,
-          ...(b.computed_inputs.length ? { computed_inputs: b.computed_inputs } : {}),
-          admission: b.assertions.length ? "admitted" : "unknown", admission_reason: b.assertions.length ? null : b.unknown.map(u => `${u.assertion.id}: ${u.reason}`).join("; "),
-          strength: null, status: "active", calls,
-        }
-        if (record.admission === "admitted") record.strength = strength(record, await runCheck(record, deps.baseline, deps.runner, round, registry, facts, timeout), deps.baseline)
-        s.checks.push(record)
-        entered.push(record.id)
-      }
+      for (const d of drafted) { const id = `K${s.checks.length + 1}`; s.checks.push({ id, ...d, calls } as CheckRecord); entered.push(id) }
       // A retire proposal is accepted only when the check's basis was in fact revised after it entered.
       const retired: string[] = [], rejected: { check: string; reason: string }[] = []
       for (const r of outcome.draft!.retire) {

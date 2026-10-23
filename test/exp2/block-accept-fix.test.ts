@@ -7,20 +7,24 @@ import { acceptRound, trialMessage, type AcceptDeps, type AcceptLimits } from ".
 import { replayReview } from "../../src/exp2/acceptance.js"
 import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { RoleUnavailable, type ModelReply } from "../../src/exp2/attribution.js"
-import { goBuilder } from "../../src/exp2/build.js"
-import { codeFacts, type CheckRecord } from "../../src/exp2/checks.js"
-import { DEFAULT_LIMITS } from "../../src/exp2/execution.js"
-import { assessPremises, canonicalUnit, FORMALIZE_SCHEMA, FORMALIZE_SYSTEM_PROMPT, formalizeProblems, UNIT_ID_PATTERN, type FormalItem, type FormalizeTransport } from "../../src/exp2/formalize.js"
+import { goBuilder, goTrial } from "../../src/exp2/build.js"
+import { checkChecks, codeFacts, roundTextForChecks, type CheckRecord, type ChecksTransport } from "../../src/exp2/checks.js"
+import { DEFAULT_LIMITS, type ExecutionRecord } from "../../src/exp2/execution.js"
+import { assessPremises, canonicalUnit, notInForce, FORMALIZE_SCHEMA, FORMALIZE_SYSTEM_PROMPT, formalizeProblems, UNIT_ID_PATTERN, type FormalItem, type FormalizeTransport } from "../../src/exp2/formalize.js"
 import { initRepo } from "../../src/exp2/git.js"
 import { ledgerOf } from "../../src/exp2/ledger.js"
 import { programRunsIn, REPAIR_INTRO, replyAsList, REVIEW_INTRO, REVIEW_REPLY, reviewBaseText, reviewEntries, type ProgramRun } from "../../src/exp2/review.js"
+import { renderMeasures, summarizeMeasures } from "../../src/exp2/measures.js"
+import { renderReport, type RoundMeasures } from "../../src/exp2/report.js"
 import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
+import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { DROP, FILTER, GO_MOD, MAIN, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
 import { roundText } from "./inputs.js"
 import { FILTER_ITEM_TEXT, filterItem, scriptedReviewer, stubFormalizer, workingReviewer } from "./review-stubs.js"
+import { serialExecutor } from "./serial-executor.js"
 import { StubExecutor, write } from "./stub-executor.js"
 import { stubTransport } from "./stubs.js"
 
@@ -299,3 +303,104 @@ describe("fix block A3: two tiers of premises", () => {
     assert.ok(clean.items.length > 0 && clean.items.every(i => i.disposition === "fallback"), JSON.stringify(clean.items.map(i => [i.item, i.strict, i.disposition])))
   })
 })
+
+describe("fix block B1: an item code reproduced is sent once a round until fixed or superseded", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-fix-b1-"))
+  const store = new Exp2Store(join(dir, "store"), "fixb1")
+  before(async () => { for (const r of [1, 2, 3, 4, 5]) await store.ingestRound(r, roundText(r), stubTransport()) })
+  const check = { input: { args: ["transform"], files: [] }, assertions: [], reference_script: null, object: null }
+  const exec = (round: number, o: { item?: boolean; superseded?: boolean } = {}): ExecutionRecord => ({
+    round, base: "b", head: "h", status: "done", task: [], sessions: [], cycles: [{ id: `C${round}.1`, round, session: "s", message: round === 1 ? "work" : "repair", commit: "c", build: { ok: true, output: "" }, runs: [], failing: [], contests: [], corrections: [], ambiguous: [], broke: [], anchors: [], note: "", usage: { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 }, items: o.superseded ? [] : [{ id: "V1.1.1", digest: "d1", verdict: "wrong", action: round === 1 ? "send" : "hold" }] }],
+    kept: `C${round}.1`, carried: [], open: [], links: [], usage: { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 },
+    ...(round > 1 && !o.superseded ? { carried_in: [{ id: "V1.1.1", digest: "d1" }] } : {}),
+    ...(o.superseded ? { superseded_in: [{ id: "V1.1.1", reason: "round 5: R1.S3.P24.s1.c3 withdrawn" }] } : {}),
+    final: o.superseded ? [] : [{ id: "V1.1.1", digest: "d1", verdict: "wrong", action: "none" }],
+    review_items: o.item ? [{ id: "V1.1.1", round: 1, review: "R1.1", item: 1, text: "x", units: ["R1.S3.P24.s1.c3"], premise: null, check, disposition: "sent" }] : [],
+  })
+
+  it("the same output at the end of three rounds: not expired (default); expired with expire_reproduced, as before", () => {
+    const executions = [exec(1, { item: true }), exec(2), exec(3)]
+    const state = { ...store.inspect(), executions }
+    const e = ledgerOf(state, store.registry()).find(x => x.id === "V1.1.1")!
+    assert.deepEqual([e.state, e.end, e.sent], ["open", null, ["C1.1", "R2 work order", "R3 work order"]])
+    assert.deepEqual(ledgerOf(state, store.registry(), { expireReproduced: true }).find(x => x.id === "V1.1.1")!.end?.how, "expired")
+  })
+
+  it("the text it rests on was withdrawn: not carried, ended as superseded", () => {
+    assert.equal(notInForce(store.registry(), 4, "R1.S3.P24.s1.c3"), null)
+    assert.match(notInForce(store.registry(), 5, "R1.S3.P24.s1.c3")!, /withdrawn in round 5/u)
+    const e = ledgerOf({ ...store.inspect(), executions: [exec(1, { item: true }), exec(2), exec(3), exec(4), exec(5, { superseded: true })] }, store.registry()).find(x => x.id === "V1.1.1")!
+    assert.deepEqual([e.state, e.end?.how, e.end?.round], ["closed", "superseded", 5])
+  })
+})
+
+describe("fix block B2: library checks are written once per unit, when it enters or is revised", () => {
+  it("a check resting only on round-1 text of an object round 2 changed is refused; one on the round's own text is not", async () => {
+    const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-fix-b2-")), "fixb2")
+    for (const r of [1, 2]) await store.ingestRound(r, roundText(r), stubTransport())
+    const reg = store.registry()
+    const fresh = roundTextForChecks(reg, 2, [], [])
+    const related = (a: string, b: string) => a === b || reg.lineage(a).some(x => x.id === b) || reg.lineage(b).some(x => x.id === a)
+    const scope = reg.roundScope(2).find(c => c.entries.length && reg.objects.get(c.object)!.blocks.some(b => b.block.startsWith("R1.") && ![...fresh].some(f => related(b.block, f))))!
+    const old = reg.objects.get(scope.object)!.blocks.find(b => b.block.startsWith("R1.") && ![...fresh].some(f => related(b.block, f)))!.block
+    const draft = (blocks: string[]) => ({ checks: [{ key: "k", object: scope.object, blocks, uses: [], direction: "holds" as const, input: { args: ["transform"], files: [] }, assertions: [], reference_script: null, note: null }], retire: [] })
+    const codes = (blocks: string[], unitsOnce: boolean) => checkChecks(reg, 2, draft(blocks), [], [], codeFacts(reg, 2), { unitsOnce }).map(i => i.code)
+    assert.ok(codes([old], true).includes("unit_unchanged"))
+    assert.ok(!codes([old], false).includes("unit_unchanged"), "off: the block 12 rule")
+    assert.ok(!codes([scope.entries[0].block], true).includes("unit_unchanged"))
+  })
+})
+
+describe("fix block B3, B4: checks written beside the coding; the §12i measures in the report and in measures.jsonl", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-fix-serial-"))
+  const store = new Exp2Store(join(dir, "store"), "fixs")
+  before(async () => {
+    const serial = new Serial({
+      store, workdir: join(dir, "work"), checkpoints: join(dir, "checkpoints"), text: roundText, attribution: stubTransport(), checks: slowChecks(checkStubTransport(), 400),
+      executor: serialExecutor(), executorIsStub: true, anchors: new GoAnchorExtractor(), runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), build: goBuilder(join(dir, "builds"), {}, "dpipe"), binary: "dpipe",
+      reviewer: workingReviewer(join(dir, "rb")), formalize: stubFormalizer({ filter: FILTER_UNIT, sort: FILTER_UNIT }), trial: goTrial(), acceptance: { mode: "review" },
+      limits: { attributionRepairs: 2, checkRepairs: 2, managementTimeoutMs: 60_000, checkTimeoutMs: 10_000, execution: { ...DEFAULT_LIMITS, repairCycles: 2 } },
+    })
+    assert.equal((await serial.run({ to: 2 })).status, "done")
+  })
+
+  it("the check writing starts before the coding ends; the round's checks still become guards", () => {
+    for (const r of store.inspect().reports) {
+      const st = new Map(r.wall!.stages.map(x => [x.stage, x]))
+      assert.ok(st.has("check writing") && st.has("coding"), [...st.keys()].join(", "))
+      assert.ok(st.get("check writing")!.first_start_ms < st.get("coding")!.last_end_ms, `R${r.round}: check writing starts before coding ends`)
+    }
+    const s = store.inspect()
+    assert.ok(s.checks.some(k => k.round === 1) && s.guards.some(g => g.source === "library" && s.checks.find(k => k.id === g.check)?.round === 1), "round-1 checks written in the background became guards")
+    assert.deepEqual(s.check_calls.map(c => c.id), s.check_calls.map((_, i) => s.check_calls[i].id).filter(id => /^M\d+$/u.test(id)), "check calls numbered in the state")
+  })
+
+  it("measures: in the report, a line a round in measures.jsonl, and the comparison table with the verdict", () => {
+    const lines = readFileSync(join(dir, "checkpoints", "measures.jsonl"), "utf8").trim().split("\n").map(l => JSON.parse(l) as RoundMeasures)
+    assert.deepEqual(lines.map(m => m.round), [1, 2])
+    for (const m of lines) {
+      assert.ok(m.wall_ms > 0 && m.stages_ms.coding >= 0 && m.first_delivery && m.reviews >= 1)
+      for (const k of ["executor", "attribution", "checks", "reviewer", "formalizer", "probes", "judge", "interrupted_management"] as const) assert.ok(typeof m.tokens[k].uncached_input === "number" && typeof m.tokens[k].cache_read === "number" && typeof m.tokens[k].output === "number", k)
+      assert.ok(typeof m.regressions.changed_text === "number" && typeof m.fallback.items === "number" && typeof m.program_runs_zero === "number" && typeof m.premise.logged === "object")
+      const t = m.tokens, cost = Math.round([t.attribution, t.checks, t.reviewer, t.formalizer, t.probes, t.judge, t.interrupted_management].reduce((n, x) => n + x.uncached_input + 0.1 * x.cache_read + x.output, 0))
+      assert.equal(m.non_executor_cost, cost)
+    }
+    assert.match(renderReport(store.inspect().reports[0]), /§12i measures: wall \d+ s; guards \d+→\d+; regressions \d+ .*non-executor cost \d+/u)
+    const fake = (round: number, cost: number): RoundMeasures => ({ ...lines[0], round, non_executor_cost: cost })
+    const ms = Array.from({ length: 15 }, (_, i) => fake(i + 1, 100))
+    const scores = [{ round: 15, passed: 950, total: 960 }, { round: 15, kind: "first_delivery", passed: 940, total: 960 }]
+    const win = summarizeMeasures(ms, scores, { controlCost: 2400 })
+    assert.deepEqual([win.window.non_executor_cost, win.window.rounds, win.verdict?.ratio, win.verdict?.outcome], [1100, 11, 0.458, "IC wins"])
+    assert.equal(summarizeMeasures(ms, scores, { controlCost: 1300 }).verdict?.outcome, "fails")
+    assert.equal(summarizeMeasures(ms, scores, { controlCost: 1800 }).verdict?.outcome, "not shown")
+    assert.equal(summarizeMeasures(ms, [{ round: 15, passed: 940, total: 960 }], { controlCost: 2400 }).verdict?.outcome, "fails", "below the bar")
+    const text = renderMeasures(win)
+    assert.match(text, /\| R15 \| 950\/960 \| 940\/960 \|/u)
+    assert.match(text, /\*\*IC wins\*\*/u)
+  })
+})
+
+/** The check stand-in, slowed down as a model call is, so the overlap with the coding is real. */
+function slowChecks(inner: ChecksTransport, ms: number): ChecksTransport {
+  return async request => { await new Promise(r => setTimeout(r, ms)); return inner(request) }
+}

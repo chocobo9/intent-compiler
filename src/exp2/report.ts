@@ -77,6 +77,32 @@ export interface RoundReport {
   review?: ReviewReport
   /** The first delivery's official score, scored locally like the round's (DESIGN §12i); never read by the system. */
   first_delivery_score?: null | { passed: number; total: number }
+  /** What §12i asks to report beside the decision, in one place (fix block B4); review mode only. */
+  measures?: RoundMeasures
+}
+
+/** Tokens of one role: uncached input, cache reads, output (cache writes, when a provider reports them, apart). */
+export interface RoleTokens { calls: number; uncached_input: number; cache_read: number; output: number; cache_write: number }
+
+/**
+ * The §12i measures of a round (fix block B4). cost is the preregistered unit: uncached input + 0.1 × cache read +
+ * output, summed over the roles other than the executor (attempts interrupted and rerun included).
+ */
+export interface RoundMeasures {
+  round: number
+  wall_ms: number
+  stages_ms: Record<string, number>
+  first_delivery: { cycle: string; commit: string } | null
+  guards: { at_start: number; at_end: number; born: number }
+  /** Guards that passed and fail now (§12i "退化次数"), on changed text and on unchanged text. */
+  regressions: { changed_text: number; unchanged: number }
+  reverted: number
+  premise: { blocked: Record<string, number>; logged: Record<string, number> }
+  fallback: { reviews: number; whole: number; items: number; reasons: Record<string, number> }
+  reviews: number
+  program_runs_zero: number
+  tokens: Record<"executor" | "attribution" | "checks" | "reviewer" | "formalizer" | "probes" | "judge" | "interrupted_management", RoleTokens>
+  non_executor_cost: number
 }
 
 export interface ReviewReport {
@@ -203,6 +229,12 @@ const uncached = (u: TokenUsage) => u.input_tokens + u.cache_write_tokens + u.ou
 const ratio = (a: number, b: number) => b > 0 ? Math.round(a / b * 1000) / 1000 : null
 
 export function buildReport(i: ReportInput): RoundReport {
+  const r = reportOf(i)
+  const m = roundMeasures(r)
+  return m ? { ...r, measures: m } : r
+}
+
+function reportOf(i: ReportInput): RoundReport {
   const name = (id: string) => i.registry.objects.get(id)?.name ?? id
   const inTask = new Set(i.workorder.task.map(t => t.object))
   const loss: RoundReport["loss"] = { boundary: [], ic: [], executor: [] }
@@ -253,6 +285,32 @@ export function buildReport(i: ReportInput): RoundReport {
   }
 }
 
+const roleTokens = (c: StageCost): RoleTokens => ({ calls: c.calls, uncached_input: c.tokens.input_tokens, cache_read: c.tokens.cache_read_tokens, output: c.tokens.output_tokens, cache_write: c.tokens.cache_write_tokens })
+export const costOf = (t: RoleTokens) => t.uncached_input + 0.1 * t.cache_read + t.output
+
+/** The §12i measures from a round's report (fix block B4). */
+export function roundMeasures(r: RoundReport): RoundMeasures | null {
+  const v = r.review
+  if (!v) return null
+  const plus = (a: StageCost, b: StageCost): StageCost => ({ calls: a.calls + b.calls, tokens: addUsage(a.tokens, b.tokens), stub_calls: a.stub_calls + b.stub_calls })
+  const none: StageCost = { calls: 0, tokens: zeroUsage(), stub_calls: 0 }
+  const tokens: RoundMeasures["tokens"] = {
+    executor: roleTokens(plus(r.stages.coding, r.interrupted.stages.coding)),
+    attribution: roleTokens(r.stages.understand), checks: roleTokens(r.stages.acceptance),
+    reviewer: roleTokens(v.reviewer), formalizer: roleTokens(v.formalizer),
+    probes: roleTokens(r.probes?.writer ?? none), judge: roleTokens(r.probes?.judge ?? none),
+    interrupted_management: roleTokens(plus(r.interrupted.stages.understand, r.interrupted.stages.acceptance)),
+  }
+  return {
+    round: r.round, wall_ms: r.wall?.round_ms ?? 0, stages_ms: Object.fromEntries((r.wall?.stages ?? []).map(x => [x.stage, x.ms])),
+    first_delivery: v.first_delivery,
+    guards: { at_start: v.guards.at_start, at_end: v.guards.at_end, born: v.guards.born.length },
+    regressions: { changed_text: v.guards.flipped_changed_text.length, unchanged: v.guards.flipped_unchanged.length },
+    reverted: v.reverted, premise: { blocked: v.premise_blocked, logged: v.premise_logged }, fallback: v.fallback, reviews: v.reviews.length, program_runs_zero: v.program_runs_zero,
+    tokens, non_executor_cost: Math.round(Object.entries(tokens).filter(([k]) => k !== "executor").reduce((n, [, t]) => n + costOf(t), 0)),
+  }
+}
+
 function reviewReport(r: NonNullable<ReportInput["review"]>): ReviewReport {
   const reviewer = stageCost(r.review_calls), formalizer = stageCost(r.formalize_calls)
   const a = r.accept
@@ -282,6 +340,11 @@ function renderReview(v: ReviewReport, firstScore: null | { passed: number; tota
     `Guard coverage: ${v.coverage ? `${v.coverage.covered}/${v.coverage.units} live units; uncovered ${v.coverage.uncovered.length}${v.coverage.uncovered.length ? ` (${v.coverage.uncovered.slice(0, 25).join(", ")}${v.coverage.uncovered.length > 25 ? ` and ${v.coverage.uncovered.length - 25} more; the full list is in report.json` : ""})` : ""}` : "n/a"}. Leads to the reviewer: library ${v.leads.library}, judgment ${v.leads.judgment}.`,
     `Reviewer (${v.models.reviewer.join(", ") || "?"}): ${v.reviewer.calls} sessions, ${tok(v.reviewer.tokens)}, cache share ${v.cache.reviewer ?? "n/a"}. Formalizer (${v.models.formalizer.join(", ") || "?"}): ${v.formalizer.calls} calls, ${tok(v.formalizer.tokens)}, cache share ${v.cache.formalizer ?? "n/a"}.`,
   ]
+}
+
+function renderMeasures(m: RoundMeasures): string {
+  const t = (k: keyof RoundMeasures["tokens"]) => `${k} ${m.tokens[k].uncached_input}/${m.tokens[k].cache_read}/${m.tokens[k].output}`
+  return `§12i measures: wall ${(m.wall_ms / 1000).toFixed(0)} s; guards ${m.guards.at_start}→${m.guards.at_end}; regressions ${m.regressions.changed_text + m.regressions.unchanged} (changed text ${m.regressions.changed_text}, unchanged ${m.regressions.unchanged}); reverted ${m.reverted}; fallback reviews ${m.fallback.reviews} (items ${m.fallback.items}); no program run seen ${m.program_runs_zero}; tokens uncached/cache read/out: ${(["executor", "attribution", "checks", "reviewer", "formalizer", "probes", "judge", "interrupted_management"] as const).map(t).join(", ")}; non-executor cost ${m.non_executor_cost} (uncached + 0.1 × cache read + out).`
 }
 
 export function renderReport(r: RoundReport): string {
@@ -317,6 +380,7 @@ export function renderReport(r: RoundReport): string {
     ] : []),
     ...(r.selection ? [`Selection: full run before delivery on ${r.selection.sweep?.cycle ?? "none"}${r.selection.sweep ? ` (checks ${r.selection.sweep.checks}, probes ${r.selection.sweep.probes}, found ${r.selection.sweep.found.length})` : ""}; selection omissions ${r.selection.omissions.length}${r.selection.omissions.length ? ` (${r.selection.omissions.map(o => `${o.id} since ${o.since}`).join(", ")})` : ""}.`] : []),
     ...(r.review ? renderReview(r.review, r.first_delivery_score ?? null) : []),
+    ...(r.measures ? [renderMeasures(r.measures)] : []),
     ...(r.ledger ? [`Ledger: open program wrong ${r.ledger.open.program_wrong.length} (confirmed by a ruling ${r.ledger.confirmed?.length ?? 0}), uncovered ${r.ledger.open.uncovered.length}, reference pending ${r.ledger.open.reference_pending.length}; listed only ${r.ledger.report_only.length}${r.ledger.report_only.length ? ` (${tallyBy(r.ledger.report_only.map(x => x.how))})` : ""}; ended this round ${r.ledger.ended.length}${r.ledger.ended.length ? ` (${tallyBy(r.ledger.ended.map(x => x.how))})` : ""}; sent ${r.ledger.sends} times; held ${r.ledger.held.length}.`] : []),
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,

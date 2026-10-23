@@ -77,6 +77,11 @@ export interface LedgerInput {
   /** Guards, for the units a guard item rests on, and their retirements (DESIGN §12i). */
   guards?: readonly { id: string; units: readonly string[] }[]
   guard_events?: readonly { guard: string; round: number; status: string; reason?: string }[]
+  /**
+   * Whether items code reproduced (a guard regression, a reviewer's item whose check failed on the program) expire like
+   * the others (fix block B1; default false: they are sent once a round until fixed or superseded).
+   */
+  expireReproduced?: boolean
 }
 
 const failingVerdict = (v: string) => v === "wrong" || v === "not_landed"
@@ -132,6 +137,7 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
     for (const ev of i.probe_events.filter(v => v.round === r)) for (const e of entries.values()) if (e.source === "probe" && e.id.startsWith(`${ev.probe}/`) && !e.end) close(e, r, "superseded", ev.reason)
     for (const ev of i.check_events.filter(v => v.round === r && v.status === "stale")) { const e = entries.get(ev.check); if (e && !e.end) close(e, r, "superseded", ev.reason) }
     for (const ev of (i.guard_events ?? []).filter(v => v.round === r && v.status === "retired")) { const e = entries.get(ev.guard); if (e && !e.end) close(e, r, "superseded", ev.reason ?? "retired") }
+    for (const sup of x.superseded_in ?? []) { const e = entries.get(sup.id); if (e && !e.end) close(e, r, "superseded", sup.reason) }
     for (const c of x.carried_in ?? []) { const e = make(c.id, r, null); reopen(e, c.digest); e.sent.push(`R${r} work order`); e.lastDigest = c.digest }
     let sentBefore = new Set((x.carried_in ?? []).map(c => c.id))
     for (const c of x.cycles) {
@@ -182,7 +188,8 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
       // No progress over rounds: the same output at the end of EXPIRE_ROUNDS rounds in a row, sent in between; an item
       // a ruling confirmed stays, sent once a round, until it is fixed, superseded or ruled otherwise.
       const last = e.ends.slice(-EXPIRE_ROUNDS)
-      if (!e.end && !e.confirmed && last.length === EXPIRE_ROUNDS && last.every((y, k) => y.digest && y.digest === last[0].digest && (k === 0 || y.round === last[k - 1].round + 1)) && e.sent.length) close(e, r, "expired", `the same output at the end of rounds ${last.map(y => y.round).join(", ")}`)
+      const reproduced = e.source === "guard" || (e.source === "review" && !!reviewOf.get(e.id)?.check)
+      if (!e.end && !e.confirmed && !(reproduced && !i.expireReproduced) && last.length === EXPIRE_ROUNDS && last.every((y, k) => y.digest && y.digest === last[0].digest && (k === 0 || y.round === last[k - 1].round + 1)) && e.sent.length) close(e, r, "expired", `the same output at the end of rounds ${last.map(y => y.round).join(", ")}`)
     }
     if (kept) {
       for (const e of entries.values()) if (!e.end && e.source !== "coverage" && e.reason === "program_wrong" && !failingAtEnd.has(e.id) && e.opened.round <= r) close(e, r, "fixed", `no longer failing on ${x.kept}`)
@@ -210,8 +217,8 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
 }
 
 /** The ledger from a state (DESIGN §12h E2). */
-export function ledgerOf(state: { executions: readonly ExecutionRecord[]; probes: readonly ProbeRecord[]; probe_events: readonly ProbeEvent[]; probe_rounds: readonly ProbeRoundRecord[]; checks: readonly CheckRecord[]; check_events: readonly CheckEvent[]; judgments?: LedgerInput["judgments"]; rulings?: LedgerInput["rulings"]; guards?: LedgerInput["guards"]; guard_events?: LedgerInput["guard_events"] }, registry: Registry): LedgerEntry[] {
-  return buildLedger({ registry, executions: state.executions, probes: state.probes, probe_events: state.probe_events, probe_rounds: state.probe_rounds, checks: state.checks, check_events: state.check_events, judgments: state.judgments ?? [], rulings: state.rulings ?? [], guards: state.guards ?? [], guard_events: state.guard_events ?? [] })
+export function ledgerOf(state: { executions: readonly ExecutionRecord[]; probes: readonly ProbeRecord[]; probe_events: readonly ProbeEvent[]; probe_rounds: readonly ProbeRoundRecord[]; checks: readonly CheckRecord[]; check_events: readonly CheckEvent[]; judgments?: LedgerInput["judgments"]; rulings?: LedgerInput["rulings"]; guards?: LedgerInput["guards"]; guard_events?: LedgerInput["guard_events"] }, registry: Registry, options: { expireReproduced?: boolean } = {}): LedgerEntry[] {
+  return buildLedger({ registry, executions: state.executions, probes: state.probes, probe_events: state.probe_events, probe_rounds: state.probe_rounds, checks: state.checks, check_events: state.check_events, judgments: state.judgments ?? [], rulings: state.rulings ?? [], guards: state.guards ?? [], guard_events: state.guard_events ?? [], ...(options.expireReproduced ? { expireReproduced: true } : {}) })
 }
 
 /** The report's projection of the ledger for one round (DESIGN §12h E2): open by reason, listed only, and how items ended. */

@@ -176,25 +176,30 @@
 
 ## 14. 本地运行（我们做）
 
-（修正块第一批起按本节；旧版的四步并入下面。）
+（修正块起按本节；旧版的四步并入下面。）
 
-1. **构建与离线测试**：拉取本分支到新工作树，`npm ci && npm test`。预期 922 项、915 通过、6 跳过、1 失败（原有的 `repair-batch`）。
-2. **配置**：照 `exp2/local-config.example.json`。`coding.variant` 按比较口径设 low；`roles.review`、`roles.formalize` 为 gpt-5.6-luna-fast medium；`acceptance` 新增三项，默认即修正块的行为，不写也一样：
-   - `premise_block: ["unit_not_in_force", "not_reproduced", "input_claim_false"]`
-   - `fallback: "items"`（`off` 是 29158c1 的行为，`review` 是 A1 字面）
-   - `void_without_runs: false`
-   镜像要有 `go`、`timeout`、支持 `%N` 的 `date`，试跑会在容器里用 `/app`（复制源码进去，不需要可写挂载）。
-3. **真实 R1**：`intent-exp2-serial --config <配置> --to 1`。先看 `checkpoints/round-01/report.md` 的这几行：
-   - `Review acceptance: … #1 on C1.1: reported N, blocked b, malformed m, sent s (fallback f, …: no_input …), …, program runs seen k`
-   - `Reviewer items: … premise checks blocked …, logged and sent …; fallback in … review(s), … item(s), whole reply …; reviews with no program run seen …`
-   - `scores.jsonl` 里 `kind: "first_delivery"` 的分和最终分。达标看最终分高于首次交付。
+1. **构建与离线测试**：拉取本分支到新工作树，`npm ci && npm test`。预期 927 项、920 通过、6 跳过、1 失败（原有的 `repair-batch`）。
+2. **配置**：照 `exp2/local-config.example.json`。`coding.variant` 按比较口径设 low；`roles.review`、`roles.formalize` 为 gpt-5.6-luna-fast medium。`acceptance` 里修正块的项，默认即修正块的行为，不写也一样：
+   - `premise_block: ["unit_not_in_force", "not_reproduced", "input_claim_false"]`（A3）
+   - `fallback: "items"`（A1；`off` 是 29158c1 的行为，`review` 是 A1 字面）
+   - `void_without_runs: false`（A2）
+   - `expire_reproduced: false`（B1）
+   - `checks_once: true`、`checks_in_background: true`（B2、B3）
+   `scoring.command` 配上就会对每轮最终提交和首次交付各计一次分（`scores.jsonl`）。镜像要有 `go`、`timeout`、支持 `%N` 的 `date`；试跑在容器里把源码复制到 `/app` 再构建，不需要可写挂载。
+3. **真实 R1**：`intent-exp2-serial --config <配置> --to 1`，然后 `intent-exp2-measures --checkpoints <checkpoints_dir>`。看：
+   - `measures.md`：R1 的 official 与 first delivery 两列（达标：前者高于后者）、blocked / logged / fallback、no run seen、各角色 token、阶段墙钟（`check writing` 应与 `coding` 重叠，`waiting for checks` 应接近 0）。
+   - `checkpoints/round-01/report.md` 的 `Review acceptance` 行：每次审查 `reported / blocked / sent (fallback …)`，以及 `program runs seen`。
    出问题时对照：`exp2-state.json` 的 `review_calls`（`program_runs`、`valid`）、`formalize_calls`（`problems`）、`executions[].review_items`（`disposition`、`logged`、`premise`）。
 4. **冻结产物的离线回放（A3 验收）**：
    ```
    intent-exp2-replay --config <配置> --products <list.tsv> --out <目录-k> --mode review --defects <缺陷表>
    ```
    `replay.md` 的总表并列 strict（每个前提都挡，第 12 块）和 tiers（档位加退化）；缺陷表一节有 raw / strict / tiers 三列命中数，以及干净产物上三列的条目数。判定：tiers 命中数等于 raw，干净产物条目数 tiers < raw。每份产物 `products/<name>/review.md` 有逐条的 tiers 结局、strict 前提、挡下或记日志的原因。
-5. **15 轮 ×2**：`intent-exp2-serial --config <配置>`，按 §12i 的预先登记判定与对照组 L 比。各角色 token 在每轮报告的 "Reviewer … Formalizer" 行和阶段表；首次交付分在 `scores.jsonl`。
+5. **15 轮 ×2**：每次 `intent-exp2-serial --config <配置>`（各用自己的 state、checkpoints、OpenCode 服务和缓存键），跑完后
+   ```
+   intent-exp2-measures --checkpoints <checkpoints_dir> --control-cost <对照组 L 同次 R5–R15 的非执行方成本>
+   ```
+   对照组的成本按同一口径（未缓存输入 + 0.1 × 缓存读 + 输出，审查员即其全部非执行方）从 OBSERVATIONS §17 的逐轮 token 算。`measures.md` 末行给出 §12i 的判定；两次各算一次，口径待用户最终确认这一点不变。
 
 ---
 
@@ -329,3 +334,59 @@ replay 工具（`intent-exp2-replay --mode review`）复用到 A3 的离线回�
 ### 离线验证
 
 `npm test`：922 项，915 通过，6 项跳过，失败 1 项仍是原有的 `repair-batch`（"R3 original counterexample…"），与 29158c1 相同。新增 19 项在 `block-accept-fix.test.ts`；`block-accept.test.ts` 改了 3 处：审查请求的拼接（A5）、作废重做的测试显式打开 `voidWithoutRuns`（A2）。所有模型调用都是替身或真实回复的重放；没有运行真实模型。
+
+## 17. 第二批：成本与稳定（B1–B4）
+
+### B1 复现过的条目每轮送一次，直到修好或被原文取代
+
+**做法**：台账的到期规则（同一输出连续两轮、送过）对"复现过"的条目不再适用：守卫退化（`source: guard`），和有检查的审查条目（检查在程序上失败过）。它们照旧由下一轮的工单带入（在基线上仍失败才带）、本轮送一次（同一输出不重送，`Sends` 不变），直到修好或被取代。`acceptance.expire_reproduced: true` 恢复第 12 块的规则。
+
+被取代：轮初带入时，对每个打开的审查条目用前提 1（`notInForce`，与送修前的单位核验同一个函数）核它依据的单位；本轮有单位被整体替换或撤回的，不带入，记进 `ExecutionRecord.superseded_in`，台账以 superseded 结束。守卫的取代仍按第 6 节（翻转时交审查员）。
+**证据**：第 12 块的到期规则是为裁决之前的"判断翻来覆去"设的；复现过的条目由代码在程序上确认，没有"无法裁决"的问题，到期等于放弃一个已确认的缺陷。没有检查的条目（退化送出的）不复现，不在此列：它们在送出那一轮以 `unverified` 结束（第 16 节）。
+**新增**：`superseded_in` 和 `notInForce`（从前提核验里抽出）。现有的取代只有库检查的 stale 事件和守卫的 retired 事件，审查条目没有。
+
+### B2 库检查按单位只写一次
+
+**做法**：`checkChecks` 加一条确定的规则（`unitsOnce`，review 模式默认开，`acceptance.checks_once`）：一条检查依据的块里，至少一个是本轮新增、修订、适用的文字，或本轮过期检查的文字（`roundTextForChecks`，与覆盖义务取的是同一组块），否则退回为 `unit_unchanged`。原来作用域只按对象给：本轮改动了某个对象，模型可以给它没改动的旧单位再写检查，退回规则不拦。
+**证据**：§12i 第 5 条对探针的同一要求；上文 15.2 第 9 条：真实状态里这类检查有多少，我没有数据，所以这一条的成本收益未经真实运行核对。
+**新增**：一个退回码。
+
+### B3 墙钟：库检查移出关键路径
+
+**做法**：review 模式下（`acceptance.checks_in_background`，默认开）库检查的推导分两段，与探针写作同一种写法：
+1. `beginRoundChecks`：标过期，在锁内，没有模型调用；
+2. `writeRoundChecks`：模型调用和准入运行（参考脚本、基线上的强度）都在锁外，最后一次提交时给检查和调用编号。
+
+它和编码并行。工单用开轮时已有的库；本轮的新检查在第一个周期的守卫运行之前加入（`AcceptDeps.libraryNow`，等待计入 `waiting for checks` 阶段），照旧在通过时成为守卫。轮末的终判之前也会等它。报告里写作 `check writing`（后台）和 `waiting for checks`（关键路径上真正等的时间）。工单内容的变化见 15.2 第 8 条。
+
+**不随轮次线性增长**：关键路径上剩下的非模型时间是四次成批运行：轮初基线上的库、每个周期的守卫、带入条目、轮末终判。每次都是一个容器跑一批，随检查数增长，但单条检查是毫秒到秒级的进程。模型时间里随轮次增长的只有审查（审查员读全部原文，与对照组相同）和 formalizer（它的请求也带全部原文）。本块没有真实数据核对这四次批量运行的实际耗时，所以每轮报告按阶段分列，本地看 `measures.md` 的阶段表就能知道是否有阶段在线性增长。
+**证据**：第 4 次 R1：写库检查 150 秒，串行排在编码之前；编码约 1.5 分钟（对照组 L 同档位）。
+**新增**：`deriveRoundChecks` 拆成两段，`libraryNow`。`deriveRoundChecks` 保留（两段顺序调用），probes 模式和回放仍用它。
+
+### B4 报告字段
+
+**做法**：每轮报告新增 `measures`（`RoundMeasures`），并按轮追加到 `checkpoints/measures.jsonl`：
+
+| §12i "同时报告"要的 | 字段 |
+|---|---|
+| 每轮墙钟、分阶段 | `wall_ms`、`stages_ms` |
+| 首次交付诊断分 | `first_delivery`（周期、提交）；分数在 `scores.jsonl` 的 `kind: "first_delivery"`（由配置的 `scoring` 命令算，命令给官方分还是诊断分由本地决定） |
+| 守卫数 | `guards.at_start / at_end / born` |
+| 退化次数（守卫由通过变失败） | `regressions.changed_text / unchanged` |
+| 回退修补数 | `reverted` |
+| 前提挡下数（分档） | `premise.blocked`（拦截）、`premise.logged`（记日志后送出） |
+| fallback 次数 | `fallback.reviews / whole / items / reasons` |
+| program_runs=0 次数 | `program_runs_zero` |
+| 各角色 token（未缓存/缓存读/输出） | `tokens.{executor, attribution, checks, reviewer, formalizer, probes, judge, interrupted_management}`，各有 `calls / uncached_input / cache_read / output / cache_write` |
+| 预先登记的成本 | `non_executor_cost` = 执行方以外各角色（含被中断后重跑的管理调用）的 未缓存输入 + 0.1 × 缓存读 + 输出 |
+
+`intent-exp2-measures --checkpoints <dir> [--control-cost <n>]` 把 `measures.jsonl` 和 `scores.jsonl` 并成一张表（每轮一行，外加分阶段墙钟表），算 R5–R15 的非执行方成本；给出对照组同口径的成本时，按 §12i 判：比值 ≤ 0.5 且 R15 ≥ 948 为胜，比值 ≥ 0.8 或不过门槛为失败，之间为未证明。写 `measures.md` 并打印。一轮被中断后重跑会再写一行，取每轮最后一行。
+**中断时的后台写作**：一轮因额度、登录或会话问题中断时，代码先等后台的检查写作结束（它有管理调用的看门狗），再回到检查点。这样它的调用在恢复之前已经提交，算进被中断的那次尝试（`interrupted_management`），也不会在恢复之后再写进状态。探针的后台写作没有做同样的处理（probes 默认关）。
+**新增**：`measures.ts` 和一个 CLI。现有报告的这些数分散在 report.json 的各处、报告行和 scores.jsonl 里，没有按轮可汇总的形式，也不算成本。
+
+### 离线验证
+
+`npm test`：927 项，920 通过，6 项跳过，失败 1 项仍是原有的 `repair-batch`。新增 5 项（共 24 项在 `block-accept-fix.test.ts`）：
+- B1：同一输出连续三轮的复现条目：默认不到期、三轮都在带入；`expire_reproduced` 时到期。依据单位在 R5 被撤回：`notInForce` R4 为空、R5 写明撤回；台账以 superseded 结束。
+- B2：R2 改动的对象，只依据其 R1 未改动文字的检查被退回为 `unit_unchanged`；依据 R2 新文字的不退回；开关关时不退回。
+- B3/B4：替身串行 R1–R2（检查替身每次调用延迟 400 ms）：每轮 `check writing` 在编码结束之前开始；R1 的库检查在后台写成后照样成为守卫；检查调用在 state 里编号为 M<n>；`measures.jsonl` 每轮一行，各角色 token 字段齐全，`non_executor_cost` 等于按口径重算的值；报告有 `§12i measures` 一行；`summarizeMeasures` 的四种判定（胜、比值过高失败、未证明、不过门槛失败）。
