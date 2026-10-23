@@ -176,14 +176,25 @@
 
 ## 14. 本地运行（我们做）
 
-1. `npm run build`。配置照 `exp2/local-config.example.json`：`roles.review`、`roles.formalize`、`acceptance`；`coding.variant` 按比较口径设为 low。镜像需要 `go`（试跑和覆盖）、`timeout`、支持 `%N` 的 `date`。
-2. 18 份冻结产物（`exp2-b12-accept-20261022`）的比较，各跑 3 次：
+（修正块第一批起按本节；旧版的四步并入下面。）
+
+1. **构建与离线测试**：拉取本分支到新工作树，`npm ci && npm test`。预期 922 项、915 通过、6 跳过、1 失败（原有的 `repair-batch`）。
+2. **配置**：照 `exp2/local-config.example.json`。`coding.variant` 按比较口径设 low；`roles.review`、`roles.formalize` 为 gpt-5.6-luna-fast medium；`acceptance` 新增三项，默认即修正块的行为，不写也一样：
+   - `premise_block: ["unit_not_in_force", "not_reproduced", "input_claim_false"]`
+   - `fallback: "items"`（`off` 是 29158c1 的行为，`review` 是 A1 字面）
+   - `void_without_runs: false`
+   镜像要有 `go`、`timeout`、支持 `%N` 的 `date`，试跑会在容器里用 `/app`（复制源码进去，不需要可写挂载）。
+3. **真实 R1**：`intent-exp2-serial --config <配置> --to 1`。先看 `checkpoints/round-01/report.md` 的这几行：
+   - `Review acceptance: … #1 on C1.1: reported N, blocked b, malformed m, sent s (fallback f, …: no_input …), …, program runs seen k`
+   - `Reviewer items: … premise checks blocked …, logged and sent …; fallback in … review(s), … item(s), whole reply …; reviews with no program run seen …`
+   - `scores.jsonl` 里 `kind: "first_delivery"` 的分和最终分。达标看最终分高于首次交付。
+   出问题时对照：`exp2-state.json` 的 `review_calls`（`program_runs`、`valid`）、`formalize_calls`（`problems`）、`executions[].review_items`（`disposition`、`logged`、`premise`）。
+4. **冻结产物的离线回放（A3 验收）**：
    ```
    intent-exp2-replay --config <配置> --products <list.tsv> --out <目录-k> --mode review --defects <缺陷表>
    ```
-   每份产物看 `products/<name>/review.md`：审查员原话、逐条前提判定；`replay.md` 的表给出原始条目数、挡下数（按前提）、会送修的数，缺陷表对原话和对过了前提的条目分别命中。"对照组审查员原样"就是其中的原话一列，同一次运行给出两边，不需要另跑；要多次样本就多跑 `--out`。人工核实误报仍要像 VERIFY-2026-10-22 那样逐条做。
-3. §12i 的预先登记判定：`intent-exp2-serial --config <配置>`，15 轮 ×2，对照组 L 已有数据。每轮报告的 "Review acceptance"、"Guards"、"Reviewer … Formalizer" 几行给出 §12i 要求同时报告的量；成本按 `未缓存输入 + 0.1×缓存读 + 输出` 从各角色的 token 行算（口径待确认）。首次交付的诊断分由 `scores.jsonl` 里 `kind: "first_delivery"` 的行给出（配置 `scoring` 后自动计）。
-4. 真实运行先看：审查请求的大小（原文累积到 R15 约 30k token，与对照组相同）、作废率（`void sessions`，如果 OpenCode 的 tool parts 没有退出码，这个数应为 0，是检测失效的信号而不是审查质量）、formalizer 退回次数（`formalize_calls` 里 `problems` 非空的）、前提挡下的分布。
+   `replay.md` 的总表并列 strict（每个前提都挡，第 12 块）和 tiers（档位加退化）；缺陷表一节有 raw / strict / tiers 三列命中数，以及干净产物上三列的条目数。判定：tiers 命中数等于 raw，干净产物条目数 tiers < raw。每份产物 `products/<name>/review.md` 有逐条的 tiers 结局、strict 前提、挡下或记日志的原因。
+5. **15 轮 ×2**：`intent-exp2-serial --config <配置>`，按 §12i 的预先登记判定与对照组 L 比。各角色 token 在每轮报告的 "Reviewer … Formalizer" 行和阶段表；首次交付分在 `scores.jsonl`。
 
 ---
 
