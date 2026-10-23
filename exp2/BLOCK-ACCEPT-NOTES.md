@@ -784,7 +784,7 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 **已推送**：d5c31ce（重放基线）、48de051（批 4）。本节所在的提交是批 1，可以直接在本地接着做。
 
 **本地还要做的**
-1. 跑全量 `npm test`。会话里第二遍 exp2 测试的状态：未跑完（会话中断）。全量预期是会话结果加上原有的 1 个失败（repair-batch "R3 original counterexample…"）。
+1. 跑全量 `npm test`。会话里第二遍 exp2 测试：261 通过、1 失败，即 serial.test 的"interrupted by spent quotas and a crash…"。R1 第 2 条消息的额度注入在 review 流程里没有按预期停两次，需要换一个确实有第二条消息的轮次，或者调整等待次数的断言。全量预期是会话结果加上原有的 1 个失败（repair-batch "R3 original counterexample…"）。
 2. 回写第 14 节第 1 步的预期数字；第 4 步的回放命令去掉 `--mode review`（该参数已删）。
 3. G77 的真实重放：把 15 轮 R3 的真实状态（exp2-state.json 和 checkpoints）推到 origin/exp2-pure-ic。然后照 batch-1.test.ts 中 item 11 那组测试的写法，用真实的 guards、guard_events 和 R3 归属重放三次修补，确认翻转走的是分类而不是回退。
 4. 冒烟：等 15 轮（all 档消融）跑完，本地排队跑真实 R1。看接口计数，加上 report.md 的 "Requirements given"、"Revisions recorded" 两行。
