@@ -1,0 +1,225 @@
+[
+ {
+  "id": "K3",
+  "source": "check",
+  "unit": "R1.S3.P1",
+  "case": null,
+  "units": [
+   "R1.S3.P1",
+   "R1.S3.P2",
+   "R1.S3.P24"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K4",
+  "source": "check",
+  "unit": "R1.S3.P3",
+  "case": null,
+  "units": [
+   "R1.S3.P3",
+   "R1.S3.P4",
+   "R1.S3.P5",
+   "R1.S3.P6",
+   "R1.S3.P7",
+   "R1.S3.P8"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The command and first expected row are supported, but `sqrt(0)` is 0: the text says `sqrt(x)` returns NaN for negative input only. Therefore the third field of the zero row should be `0`, making the expected row `0,0,NaN,0`, not `0,0,NaN,NaN`. [R1.S3.P2, R1.S3.P4, R1.S3.P5]"
+  }
+ },
+ {
+  "id": "K5",
+  "source": "check",
+  "unit": "R1.S3.P2",
+  "case": null,
+  "units": [
+   "R1.S3.P2",
+   "R1.S3.P9"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K8",
+  "source": "check",
+  "unit": "R1.S3.P13",
+  "case": null,
+  "units": [
+   "R1.S3.P13",
+   "R1.S3.P14",
+   "R1.S3.P15",
+   "R1.S3.P16",
+   "R1.S3.P17"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K10",
+  "source": "check",
+  "unit": "R1.S3.P20",
+  "case": null,
+  "units": [
+   "R1.S3.P20",
+   "R1.S3.P21"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K13",
+  "source": "check",
+  "unit": "R1.S5.P1",
+  "case": null,
+  "units": [
+   "R1.S5.P1",
+   "R1.S5.P2"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K18",
+  "source": "check",
+  "unit": "R1.S3.P2.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s2",
+   "R1.S3.P2.s4",
+   "R1.S3.P2.s5"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K19",
+  "source": "check",
+  "unit": "R1.S3.P9.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s1",
+   "R1.S3.P9.s2",
+   "R1.S3.P9.s3",
+   "R1.S3.P9.s4"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ }
+]

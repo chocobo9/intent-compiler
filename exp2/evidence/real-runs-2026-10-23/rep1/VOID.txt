@@ -1,0 +1,1 @@
+﻿Void 2026-10-23 11:08: run stopped in R1 at the first review, EPERM when deleting the review copy on Windows (review.ts discardCopy). Rerun with a local one-line fix (ignore the delete failure, like the control arm's script) in exp2-icacc-r1-luna56-low-rep1b-20261023.

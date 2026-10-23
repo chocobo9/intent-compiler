@@ -1,0 +1,909 @@
+{
+  "round": 1,
+  "official_score": {
+    "passed": 142,
+    "total": 219
+  },
+  "status": "done",
+  "stages": {
+    "understand": {
+      "calls": 1,
+      "tokens": {
+        "input_tokens": 14199,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 2482,
+        "reasoning_tokens": 341
+      },
+      "stub_calls": 0
+    },
+    "acceptance": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 38890,
+        "cache_read_tokens": 30208,
+        "cache_write_tokens": 0,
+        "output_tokens": 17605,
+        "reasoning_tokens": 3255
+      },
+      "stub_calls": 0
+    },
+    "coding": {
+      "calls": 2,
+      "tokens": {
+        "input_tokens": 26099,
+        "cache_read_tokens": 262016,
+        "cache_write_tokens": 0,
+        "output_tokens": 6405,
+        "reasoning_tokens": 301
+      },
+      "stub_calls": 0
+    }
+  },
+  "interrupted": {
+    "attempts": 0,
+    "stages": {
+      "understand": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "acceptance": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "coding": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      }
+    }
+  },
+  "scope": [
+    "O1",
+    "O2",
+    "O3",
+    "O4",
+    "O5",
+    "O6",
+    "O7",
+    "O8",
+    "O9",
+    "O10",
+    "O11",
+    "O12",
+    "O13",
+    "O14",
+    "O15",
+    "O16",
+    "O17",
+    "O18",
+    "O19",
+    "O20",
+    "O21"
+  ],
+  "zones": {
+    "task": 21,
+    "protect": 0,
+    "status": 1,
+    "source_blocks": 50,
+    "anchors": 0
+  },
+  "execution": {
+    "status": "done",
+    "cycles": 2,
+    "repairs": 1,
+    "kept": "C1.2",
+    "failing_at_end": 0,
+    "contests": 0,
+    "carried_objects": [],
+    "sessions": 1,
+    "broken_sessions": 0
+  },
+  "checks": {
+    "entered": 21,
+    "stale": 0,
+    "retired": 1,
+    "run": 20,
+    "passed": 8,
+    "failed": 12
+  },
+  "probes": null,
+  "objects": [
+    {
+      "object": "O1",
+      "name": "dpipe CLI",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O2",
+      "name": "ingestion",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O3",
+      "name": "schema validation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K3"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O4",
+      "name": "transformation",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O5",
+      "name": "expression evaluator",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K4"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O6",
+      "name": "sampling",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O7",
+      "name": "sorting",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K6"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O8",
+      "name": "rename operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K7"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O9",
+      "name": "drop operation",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O10",
+      "name": "aggregation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K8"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O11",
+      "name": "join operation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K9",
+        "K19"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O12",
+      "name": "window operation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K10"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O13",
+      "name": "pivot operation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K11",
+        "K20"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O14",
+      "name": "unpivot operation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K12",
+        "K21"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O15",
+      "name": "fill operation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K13"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O16",
+      "name": "verification",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K14"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O17",
+      "name": "manifest",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O18",
+      "name": "pipeline",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O19",
+      "name": "determinism contract",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O20",
+      "name": "error handling",
+      "status": "unknown",
+      "reasons": [
+        "not_run"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O21",
+      "name": "build configuration",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K17"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O22",
+      "name": "transformation operations",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    }
+  ],
+  "loss": {
+    "boundary": [
+      "O1",
+      "O2",
+      "O4",
+      "O6",
+      "O9",
+      "O17",
+      "O18",
+      "O19",
+      "O20",
+      "O22"
+    ],
+    "ic": [],
+    "executor": [
+      "O10",
+      "O11",
+      "O12",
+      "O13",
+      "O14",
+      "O15",
+      "O16",
+      "O21"
+    ]
+  },
+  "management_calls": 4,
+  "wall": {
+    "round_ms": 1029348,
+    "stages": [
+      {
+        "stage": "attribution",
+        "ms": 22299,
+        "spans": 1,
+        "first_start_ms": 0,
+        "last_end_ms": 22299
+      },
+      {
+        "stage": "checks",
+        "ms": 149904,
+        "spans": 2,
+        "first_start_ms": 22300,
+        "last_end_ms": 172204
+      },
+      {
+        "stage": "coding",
+        "ms": 186648,
+        "spans": 1,
+        "first_start_ms": 172431,
+        "last_end_ms": 359079
+      },
+      {
+        "stage": "build",
+        "ms": 4744,
+        "spans": 2,
+        "first_start_ms": 359079,
+        "last_end_ms": 669557
+      },
+      {
+        "stage": "trial",
+        "ms": 2563,
+        "spans": 2,
+        "first_start_ms": 362771,
+        "last_end_ms": 670640
+      },
+      {
+        "stage": "guard rerun",
+        "ms": 10566,
+        "spans": 5,
+        "first_start_ms": 364505,
+        "last_end_ms": 676555
+      },
+      {
+        "stage": "review",
+        "ms": 527864,
+        "spans": 2,
+        "first_start_ms": 369714,
+        "last_end_ms": 969271
+      },
+      {
+        "stage": "formalize",
+        "ms": 78177,
+        "spans": 2,
+        "first_start_ms": 605097,
+        "last_end_ms": 1002953
+      },
+      {
+        "stage": "premise checks",
+        "ms": 980,
+        "spans": 2,
+        "first_start_ms": 649616,
+        "last_end_ms": 1002964
+      },
+      {
+        "stage": "repair",
+        "ms": 17877,
+        "spans": 1,
+        "first_start_ms": 650610,
+        "last_end_ms": 668487
+      }
+    ]
+  },
+  "acceptance": {
+    "by_kind": {
+      "A": 2,
+      "B": 18,
+      "C": 0
+    },
+    "open": {
+      "program_wrong": [],
+      "uncovered": [],
+      "reference_pending": [
+        "K13"
+      ],
+      "ambiguous": [],
+      "uncheckable": [],
+      "expired": [],
+      "confirmed": []
+    }
+  },
+  "ledger": {
+    "open": {
+      "program_wrong": [],
+      "uncovered": [],
+      "reference_pending": [
+        "K13"
+      ]
+    },
+    "confirmed": [],
+    "report_only": [
+      {
+        "id": "V1.1.1",
+        "how": "blocked",
+        "detail": "no_input: The review names the K8 case but does not provide the complete input.csv or recipe.json contents."
+      },
+      {
+        "id": "V1.1.2",
+        "how": "blocked",
+        "detail": "no_input: The review refers to the K9 join case without giving the command arguments or either complete CSV file."
+      },
+      {
+        "id": "V1.1.3",
+        "how": "blocked",
+        "detail": "no_input: The review refers to the K10 window case without giving the command arguments or complete input and recipe files."
+      },
+      {
+        "id": "V1.1.4",
+        "how": "blocked",
+        "detail": "no_input: The review refers to the K11 pivot case without giving the command arguments or complete input and recipe files."
+      },
+      {
+        "id": "V1.1.5",
+        "how": "blocked",
+        "detail": "no_input: The review refers to the K12 unpivot case without giving the command arguments or complete input and recipe files."
+      },
+      {
+        "id": "V1.1.6",
+        "how": "blocked",
+        "detail": "no_input: The review gives input.csv but does not give the complete recipe.json contents, so the call cannot be rebuilt exactly."
+      },
+      {
+        "id": "V1.1.7",
+        "how": "blocked",
+        "detail": "no_input: The review does not provide the complete K16 command, including its subcommand and arguments."
+      },
+      {
+        "id": "V1.1.9",
+        "how": "blocked",
+        "detail": "no_input: The review does not provide the complete ingest command, schema.json contents, or output path, so the call cannot be rebuilt exactly."
+      },
+      {
+        "id": "V1.1.10",
+        "how": "blocked",
+        "detail": "no_input: The review does not provide the complete pipeline config or the concrete failing step error, so the expected command and exact output cannot be rebuilt."
+      },
+      {
+        "id": "V1.2.1",
+        "how": "blocked",
+        "detail": "no_input: The command arguments are stated, but the complete contents of review-fixtures/data.csv and review-fixtures/schema.json are missing."
+      },
+      {
+        "id": "V1.2.2",
+        "how": "blocked",
+        "detail": "no_input: The review does not provide the complete command arguments or the contents of the input CSV and recipe files for the five commands."
+      },
+      {
+        "id": "V1.2.3",
+        "how": "blocked",
+        "detail": "no_input: The command omits the input and output arguments with ellipses, and the complete contents of the input CSV and recipe-fill-invalid.json are missing."
+      },
+      {
+        "id": "V1.2.4",
+        "how": "blocked",
+        "detail": "no_input: The schema argument and output argument are omitted with ellipses, and the complete schema file content is missing."
+      },
+      {
+        "id": "V1.2.5",
+        "how": "blocked",
+        "detail": "no_input: The command arguments are stated, but the complete contents of review-fixtures/empty.sha256 are missing."
+      },
+      {
+        "id": "V1.2.6",
+        "how": "blocked",
+        "detail": "no_input: The complete contents of review-fixtures/pipeline-bad.json are missing."
+      },
+      {
+        "id": "V1.2.7",
+        "how": "blocked",
+        "detail": "no_input: The complete contents of review-fixtures/data.csv and review-fixtures/missing-unique-schema.json are missing, so the schema reference cannot be rebuilt."
+      }
+    ],
+    "ended": [
+      {
+        "id": "V1.1.1",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.2",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.3",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.4",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.5",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.6",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.7",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.8",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V1.1.9",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.10",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.1",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.2",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.3",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.4",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.5",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.6",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V1.2.7",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "K5",
+        "how": "ruled_program_right",
+        "cycles": 0
+      }
+    ],
+    "sends": 1,
+    "held": []
+  },
+  "review": {
+    "first_delivery": {
+      "cycle": "C1.1",
+      "commit": "be30a8259dee6e793427fae6d35f93efbf716bd0"
+    },
+    "reviews": [
+      {
+        "n": 1,
+        "cycle": "C1.1",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 10,
+        "malformed": 0,
+        "blocked": 9,
+        "sent": 1,
+        "superseded": [],
+        "leads": 13
+      },
+      {
+        "n": 2,
+        "cycle": "C1.2",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 7,
+        "malformed": 0,
+        "blocked": 7,
+        "sent": 0,
+        "superseded": [],
+        "leads": 0
+      }
+    ],
+    "voided": 0,
+    "reviewer": {
+      "calls": 2,
+      "tokens": {
+        "input_tokens": 65667,
+        "cache_read_tokens": 1099264,
+        "cache_write_tokens": 0,
+        "output_tokens": 9750,
+        "reasoning_tokens": 6501
+      },
+      "stub_calls": 0
+    },
+    "formalizer": {
+      "calls": 4,
+      "tokens": {
+        "input_tokens": 52361,
+        "cache_read_tokens": 9984,
+        "cache_write_tokens": 0,
+        "output_tokens": 10161,
+        "reasoning_tokens": 3104
+      },
+      "stub_calls": 0
+    },
+    "models": {
+      "reviewer": [
+        "gpt-5.6-luna-fast"
+      ],
+      "formalizer": [
+        "gpt-5.6-luna-fast"
+      ]
+    },
+    "items": {
+      "reported": 17,
+      "sent": 1,
+      "malformed": 0
+    },
+    "premise_blocked": {
+      "no_input": 16
+    },
+    "guards": {
+      "at_start": 0,
+      "at_end": 9,
+      "born": [
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5",
+        "G6",
+        "G7",
+        "G8",
+        "G9"
+      ],
+      "flipped_changed_text": [],
+      "flipped_unchanged": [],
+      "retired": []
+    },
+    "reverted": 0,
+    "trial": {
+      "runs": 2,
+      "failures": 0
+    },
+    "leads": {
+      "library": 13,
+      "judgment": 0
+    },
+    "coverage": {
+      "units": 131,
+      "covered": 19,
+      "uncovered": [
+        "R1.S0.P1.s1",
+        "R1.S2.P6.s1",
+        "R1.S2.P6.s3",
+        "R1.S6.P2.s1",
+        "R1.S6.P2.s2",
+        "R1.S6.P2.s3",
+        "R1.S2.P2.s1",
+        "R1.S2.P2.s2",
+        "R1.S2.P3.s2",
+        "R1.S2.P3.s3",
+        "R1.S2.P3.s4",
+        "R1.S2.P4.s1",
+        "R1.S2.P4.s2",
+        "R1.S3.P1.s1",
+        "R1.S3.P2.s2",
+        "R1.S3.P2.s4",
+        "R1.S3.P2.s5",
+        "R1.S3.P3.s2",
+        "R1.S3.P3.s3",
+        "R1.S3.P4.s1",
+        "R1.S3.P4.s2",
+        "R1.S3.P4.s3",
+        "R1.S3.P5.s2",
+        "R1.S3.P5.s4",
+        "R1.S3.P5.s5",
+        "R1.S3.P5.s7",
+        "R1.S3.P5.s8",
+        "R1.S3.P5.s9",
+        "R1.S3.P5.s10",
+        "R1.S3.P5.s12",
+        "R1.S3.P8.s2",
+        "R1.S3.P9.s1",
+        "R1.S3.P9.s5",
+        "R1.S3.P9.s6",
+        "R1.S3.P9.s7",
+        "R1.S3.P9.s8",
+        "R1.S3.P9.s9",
+        "R1.S3.P9.s10",
+        "R1.S3.P10.s1",
+        "R1.S3.P10.s3",
+        "R1.S3.P11.s1",
+        "R1.S3.P11.s3",
+        "R1.S3.P11.s4",
+        "R1.S3.P11.s5",
+        "R1.S3.P11.s8",
+        "R1.S3.P12.s1",
+        "R1.S3.P12.s2",
+        "R1.S3.P12.s3",
+        "R1.S3.P12.s4",
+        "R1.S3.P12.s5",
+        "R1.S3.P12.s6",
+        "R1.S3.P12.s10",
+        "R1.S3.P13.s1",
+        "R1.S3.P13.s2",
+        "R1.S3.P13.s3",
+        "R1.S3.P13.s4",
+        "R1.S3.P14.s1",
+        "R1.S3.P14.s2",
+        "R1.S3.P14.s3",
+        "R1.S3.P14.s4",
+        "R1.S3.P14.s5",
+        "R1.S3.P14.s6",
+        "R1.S3.P14.s7",
+        "R1.S3.P14.s8",
+        "R1.S3.P14.s9",
+        "R1.S3.P16.s1",
+        "R1.S3.P16.s2",
+        "R1.S3.P17.s1",
+        "R1.S3.P18.s1",
+        "R1.S3.P18.s2",
+        "R1.S3.P18.s3",
+        "R1.S3.P18.s4",
+        "R1.S3.P19.s2",
+        "R1.S3.P19.s3",
+        "R1.S3.P19.s4",
+        "R1.S3.P19.s6",
+        "R1.S3.P19.s7",
+        "R1.S3.P19.s8",
+        "R1.S3.P20.s1",
+        "R1.S3.P20.s2",
+        "R1.S3.P20.s3",
+        "R1.S3.P20.s4",
+        "R1.S3.P20.s5",
+        "R1.S3.P21.s2",
+        "R1.S3.P21.s3",
+        "R1.S3.P21.s4",
+        "R1.S3.P21.s6",
+        "R1.S3.P22.s1",
+        "R1.S3.P22.s2",
+        "R1.S3.P22.s3",
+        "R1.S3.P22.s4",
+        "R1.S3.P23.s2",
+        "R1.S3.P23.s3",
+        "R1.S3.P23.s4",
+        "R1.S3.P23.s7",
+        "R1.S4.P1.s1",
+        "R1.S4.P2.s1",
+        "R1.S4.P2.s2",
+        "R1.S5.P1.s1",
+        "R1.S5.P2.s1",
+        "R1.S5.P2.s2",
+        "R1.S5.P2.s3",
+        "R1.S5.P2.s4",
+        "R1.S5.P2.s5",
+        "R1.S6.P1.s1",
+        "R1.S7.P1.s3",
+        "R1.S8.P1.s1",
+        "R1.S8.P1.s2",
+        "R1.S8.P1.s3",
+        "R1.S8.P1.s4",
+        "R1.S8.P1.s5",
+        "R1.S8.P2.s1"
+      ]
+    },
+    "cache": {
+      "reviewer": 0.944,
+      "formalizer": 0.16
+    }
+  },
+  "first_delivery_score": {
+    "passed": 107,
+    "total": 219
+  }
+}

@@ -1,0 +1,7 @@
+Run 5 (rep1e), prepared 2026-10-23 by the design session.
+Code: branch ccr-992739b3-u5bcay @ abb6f71 (fix block batches 1+2), worktree
+C:/Users/HUAWEI~1/AppData/Local/Temp/claude/D--huawei-intent-compiler/cd3435e0-a941-43f3-a613-ebbc62edcffa/scratchpad/bfix
+Config: copied from rep1d, only run id, ports (45989/45990) and cache keys changed; acceptance options at their new defaults
+(fallback items, premise_block [unit_not_in_force, not_reproduced, input_claim_false], void_without_runs false,
+checks_once, checks_in_background, expire_reproduced false).
+Purpose: smoke of the fix block on real R1. Bar: final > first delivery; sent items close to reported; no_input no longer the main block reason.

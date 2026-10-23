@@ -1,0 +1,20 @@
+Run 5 (rep1e), 2026-10-23 13:34-13:51, code ccr-992739b3-u5bcay @ abb6f71 (fix batches 1+2). Valid run; not void.
+
+Scores: first delivery C1.1 108/219, final C1.4 108/219 (identical per-case results). Wall 992 s.
+Interfaces: 3 reviews valid, 0 void, 0 malformed, 0 blocked; 20 reviewer items, all no_input -> all three repair
+messages were the reviewer's whole reply (fallback whole, as the control group sends it). 1 guard (G1 = K12).
+
+Why the score did not move (observed):
+1. The executor (5.6 low) answered each of the three repair messages by changing 2-3 lines and stating that derive /
+   aggregate / window / pivot "remain unresolved" / "require broader restructuring of the current compressed
+   implementation". The control group's executor at the same setting also wrote a ~30-line compressed main.go in R1
+   (rep1: 30 lines, repairs 15 and 6 lines) and rewrote it in R2 (+1755 lines), so the compressed first draft is the
+   model's behaviour at low, not the work order's.
+2. 16 of 22 library checks have every assertion 'unknown' with admission_reason "reference script did not print
+   JSON": the checks model wrote print({'exit': 0, ...}) (a Python literal) instead of JSON; three check-writing
+   attempts never fed this back (issue codes seen: uncovered, verbatim_mismatch, expect_invalid, script_missing,
+   computed_by_hand). In run 4 the same model happened to write JSON and 21/21 were admitted. Consequence here:
+   3 checks ran, 2 leads to the reviewer, 1 guard.
+3. 13 of 20 reviewer items were no_input because the reviewer referred to files it wrote itself (base.csv,
+   derive-recipe.json, review-*.json); those files' contents are in the reviewer sessions' apply_patch/write tool
+   calls, exported to evidence/review-session-*.json.

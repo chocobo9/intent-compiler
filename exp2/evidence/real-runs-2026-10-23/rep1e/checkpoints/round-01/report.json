@@ -1,0 +1,870 @@
+{
+  "round": 1,
+  "official_score": {
+    "passed": 108,
+    "total": 219
+  },
+  "status": "done",
+  "stages": {
+    "understand": {
+      "calls": 1,
+      "tokens": {
+        "input_tokens": 14199,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 1922,
+        "reasoning_tokens": 505
+      },
+      "stub_calls": 0
+    },
+    "acceptance": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 52543,
+        "cache_read_tokens": 14848,
+        "cache_write_tokens": 0,
+        "output_tokens": 20592,
+        "reasoning_tokens": 2713
+      },
+      "stub_calls": 0
+    },
+    "coding": {
+      "calls": 4,
+      "tokens": {
+        "input_tokens": 77753,
+        "cache_read_tokens": 1261440,
+        "cache_write_tokens": 0,
+        "output_tokens": 13963,
+        "reasoning_tokens": 1327
+      },
+      "stub_calls": 0
+    }
+  },
+  "interrupted": {
+    "attempts": 0,
+    "stages": {
+      "understand": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "acceptance": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "coding": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      }
+    }
+  },
+  "scope": [
+    "O1",
+    "O2",
+    "O3",
+    "O4",
+    "O5",
+    "O6",
+    "O7",
+    "O8",
+    "O9",
+    "O10",
+    "O11",
+    "O12",
+    "O13",
+    "O14",
+    "O15",
+    "O16"
+  ],
+  "zones": {
+    "task": 16,
+    "protect": 0,
+    "status": 0,
+    "source_blocks": 48,
+    "anchors": 0
+  },
+  "execution": {
+    "status": "done",
+    "cycles": 4,
+    "repairs": 3,
+    "kept": "C1.4",
+    "failing_at_end": 0,
+    "contests": 0,
+    "carried_objects": [],
+    "sessions": 1,
+    "broken_sessions": 0
+  },
+  "checks": {
+    "entered": 22,
+    "stale": 0,
+    "retired": 0,
+    "run": 3,
+    "passed": 1,
+    "failed": 2
+  },
+  "probes": null,
+  "objects": [
+    {
+      "object": "O1",
+      "name": "dpipe CLI",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O2",
+      "name": "ingest operation",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O3",
+      "name": "transform operation",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O4",
+      "name": "expression evaluator",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O5",
+      "name": "basic and aggregate transformations",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O6",
+      "name": "join transformation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K14"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O7",
+      "name": "window transformation",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O8",
+      "name": "pivot transformation",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O9",
+      "name": "unpivot transformation",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O10",
+      "name": "fill transformation",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O11",
+      "name": "verify operation",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O12",
+      "name": "manifest operation",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O13",
+      "name": "pipeline operation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K11"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O14",
+      "name": "determinism contract",
+      "status": "unknown",
+      "reasons": [
+        "derived_disagreement",
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O15",
+      "name": "error handling",
+      "status": "unknown",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O16",
+      "name": "build requirement",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    }
+  ],
+  "loss": {
+    "boundary": [
+      "O1",
+      "O2",
+      "O3",
+      "O4",
+      "O5",
+      "O7",
+      "O8",
+      "O9",
+      "O10",
+      "O11",
+      "O12",
+      "O14",
+      "O15",
+      "O16"
+    ],
+    "ic": [],
+    "executor": [
+      "O6",
+      "O13"
+    ]
+  },
+  "management_calls": 4,
+  "wall": {
+    "round_ms": 992302,
+    "stages": [
+      {
+        "stage": "attribution",
+        "ms": 23607,
+        "spans": 1,
+        "first_start_ms": 0,
+        "last_end_ms": 23607
+      },
+      {
+        "stage": "check writing",
+        "ms": 161747,
+        "spans": 1,
+        "first_start_ms": 23618,
+        "last_end_ms": 185365
+      },
+      {
+        "stage": "checks",
+        "ms": 15,
+        "spans": 1,
+        "first_start_ms": 23634,
+        "last_end_ms": 23649
+      },
+      {
+        "stage": "coding",
+        "ms": 136952,
+        "spans": 1,
+        "first_start_ms": 24008,
+        "last_end_ms": 160960
+      },
+      {
+        "stage": "build",
+        "ms": 18105,
+        "spans": 4,
+        "first_start_ms": 160960,
+        "last_end_ms": 985913
+      },
+      {
+        "stage": "trial",
+        "ms": 8800,
+        "spans": 4,
+        "first_start_ms": 171634,
+        "last_end_ms": 987909
+      },
+      {
+        "stage": "waiting for checks",
+        "ms": 10138,
+        "spans": 2,
+        "first_start_ms": 175231,
+        "last_end_ms": 990171
+      },
+      {
+        "stage": "guard rerun",
+        "ms": 5991,
+        "spans": 8,
+        "first_start_ms": 185369,
+        "last_end_ms": 989754
+      },
+      {
+        "stage": "review",
+        "ms": 582643,
+        "spans": 3,
+        "first_start_ms": 187263,
+        "last_end_ms": 942311
+      },
+      {
+        "stage": "formalize",
+        "ms": 57370,
+        "spans": 3,
+        "first_start_ms": 450948,
+        "last_end_ms": 963319
+      },
+      {
+        "stage": "premise checks",
+        "ms": 1,
+        "spans": 3,
+        "first_start_ms": 469059,
+        "last_end_ms": 963330
+      },
+      {
+        "stage": "repair",
+        "ms": 142435,
+        "spans": 3,
+        "first_start_ms": 469083,
+        "last_end_ms": 984777
+      }
+    ]
+  },
+  "acceptance": {
+    "by_kind": {
+      "A": 3,
+      "B": 0,
+      "C": 0
+    },
+    "open": {
+      "program_wrong": [],
+      "uncovered": [],
+      "reference_pending": [],
+      "ambiguous": [],
+      "uncheckable": [],
+      "expired": [],
+      "confirmed": []
+    }
+  },
+  "ledger": {
+    "open": {
+      "program_wrong": [],
+      "uncovered": [],
+      "reference_pending": []
+    },
+    "confirmed": [],
+    "report_only": [
+      {
+        "id": "V1.1.0",
+        "how": "unverified",
+        "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+      },
+      {
+        "id": "V1.2.0",
+        "how": "unverified",
+        "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+      },
+      {
+        "id": "V1.3.0",
+        "how": "unverified",
+        "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+      }
+    ],
+    "ended": [
+      {
+        "id": "V1.1.0",
+        "how": "unverified",
+        "cycles": 1
+      },
+      {
+        "id": "V1.2.0",
+        "how": "unverified",
+        "cycles": 1
+      },
+      {
+        "id": "V1.3.0",
+        "how": "unverified",
+        "cycles": 1
+      }
+    ],
+    "sends": 3,
+    "held": []
+  },
+  "review": {
+    "first_delivery": {
+      "cycle": "C1.1",
+      "commit": "bc871edbd7155c25666bab132db1bca84ab1c49d"
+    },
+    "reviews": [
+      {
+        "n": 1,
+        "cycle": "C1.1",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 6,
+        "malformed": 0,
+        "blocked": 0,
+        "sent": 1,
+        "superseded": [],
+        "leads": 2,
+        "program_runs": 16,
+        "fallback": 6,
+        "logged": 0,
+        "fallback_whole": true,
+        "fallback_reasons": {
+          "no_input": 6
+        }
+      },
+      {
+        "n": 2,
+        "cycle": "C1.2",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 7,
+        "malformed": 0,
+        "blocked": 0,
+        "sent": 1,
+        "superseded": [],
+        "leads": 0,
+        "program_runs": 12,
+        "fallback": 7,
+        "logged": 0,
+        "fallback_whole": true,
+        "fallback_reasons": {
+          "no_input": 7
+        }
+      },
+      {
+        "n": 3,
+        "cycle": "C1.3",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 7,
+        "malformed": 0,
+        "blocked": 0,
+        "sent": 1,
+        "superseded": [],
+        "leads": 0,
+        "program_runs": 17,
+        "fallback": 7,
+        "logged": 0,
+        "fallback_whole": true,
+        "fallback_reasons": {
+          "no_input": 7
+        }
+      }
+    ],
+    "voided": 0,
+    "reviewer": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 98278,
+        "cache_read_tokens": 1031168,
+        "cache_write_tokens": 0,
+        "output_tokens": 11905,
+        "reasoning_tokens": 8418
+      },
+      "stub_calls": 0
+    },
+    "formalizer": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 38387,
+        "cache_read_tokens": 5248,
+        "cache_write_tokens": 0,
+        "output_tokens": 4970,
+        "reasoning_tokens": 3523
+      },
+      "stub_calls": 0
+    },
+    "models": {
+      "reviewer": [
+        "gpt-5.6-luna-fast"
+      ],
+      "formalizer": [
+        "gpt-5.6-luna-fast"
+      ]
+    },
+    "items": {
+      "reported": 20,
+      "sent": 3,
+      "malformed": 0
+    },
+    "premise_blocked": {},
+    "premise_logged": {},
+    "fallback": {
+      "reviews": 3,
+      "whole": 3,
+      "items": 20,
+      "reasons": {
+        "no_input": 20
+      }
+    },
+    "program_runs_zero": 0,
+    "guards": {
+      "at_start": 0,
+      "at_end": 1,
+      "born": [
+        "G1"
+      ],
+      "flipped_changed_text": [],
+      "flipped_unchanged": [],
+      "retired": []
+    },
+    "reverted": 0,
+    "trial": {
+      "runs": 4,
+      "failures": 0
+    },
+    "leads": {
+      "library": 2,
+      "judgment": 0
+    },
+    "coverage": {
+      "units": 131,
+      "covered": 1,
+      "uncovered": [
+        "R1.S0.P1.s1",
+        "R1.S2.P1.s1",
+        "R1.S2.P2.s1",
+        "R1.S2.P2.s2",
+        "R1.S2.P3.s2",
+        "R1.S2.P3.s3",
+        "R1.S2.P3.s4",
+        "R1.S2.P4.s1",
+        "R1.S2.P4.s2",
+        "R1.S2.P5.s1",
+        "R1.S2.P6.s1",
+        "R1.S2.P6.s3",
+        "R1.S6.P2.s1",
+        "R1.S6.P2.s2",
+        "R1.S6.P2.s3",
+        "R1.S3.P1.s1",
+        "R1.S3.P2.s2",
+        "R1.S3.P2.s4",
+        "R1.S3.P2.s5",
+        "R1.S3.P24.s1",
+        "R1.S3.P3.s2",
+        "R1.S3.P3.s3",
+        "R1.S3.P3.s4",
+        "R1.S3.P3.s5",
+        "R1.S3.P3.s6",
+        "R1.S3.P3.s7",
+        "R1.S3.P3.s8",
+        "R1.S3.P3.s9",
+        "R1.S3.P4.s1",
+        "R1.S3.P4.s2",
+        "R1.S3.P4.s3",
+        "R1.S3.P5.s2",
+        "R1.S3.P5.s3",
+        "R1.S3.P5.s4",
+        "R1.S3.P5.s5",
+        "R1.S3.P5.s6",
+        "R1.S3.P5.s7",
+        "R1.S3.P5.s8",
+        "R1.S3.P5.s9",
+        "R1.S3.P5.s10",
+        "R1.S3.P5.s11",
+        "R1.S3.P5.s12",
+        "R1.S3.P5.s13",
+        "R1.S3.P6.s1",
+        "R1.S3.P7.s1",
+        "R1.S3.P8.s1",
+        "R1.S3.P8.s2",
+        "R1.S3.P9.s1",
+        "R1.S3.P9.s2",
+        "R1.S3.P9.s3",
+        "R1.S3.P9.s4",
+        "R1.S3.P9.s5",
+        "R1.S3.P9.s6",
+        "R1.S3.P9.s7",
+        "R1.S3.P9.s8",
+        "R1.S3.P9.s9",
+        "R1.S3.P9.s10",
+        "R1.S3.P10.s1",
+        "R1.S3.P10.s3",
+        "R1.S3.P11.s1",
+        "R1.S3.P11.s3",
+        "R1.S3.P11.s4",
+        "R1.S3.P11.s5",
+        "R1.S3.P11.s8",
+        "R1.S3.P12.s1",
+        "R1.S3.P12.s2",
+        "R1.S3.P12.s3",
+        "R1.S3.P12.s4",
+        "R1.S3.P12.s5",
+        "R1.S3.P12.s6",
+        "R1.S3.P12.s10",
+        "R1.S3.P13.s1",
+        "R1.S3.P13.s2",
+        "R1.S3.P13.s3",
+        "R1.S3.P13.s4",
+        "R1.S3.P14.s1",
+        "R1.S3.P14.s2",
+        "R1.S3.P14.s3",
+        "R1.S3.P14.s4",
+        "R1.S3.P14.s5",
+        "R1.S3.P14.s6",
+        "R1.S3.P14.s7",
+        "R1.S3.P14.s8",
+        "R1.S3.P14.s9",
+        "R1.S3.P16.s1",
+        "R1.S3.P16.s2",
+        "R1.S3.P18.s1",
+        "R1.S3.P18.s2",
+        "R1.S3.P18.s3",
+        "R1.S3.P18.s4",
+        "R1.S3.P19.s2",
+        "R1.S3.P19.s3",
+        "R1.S3.P19.s4",
+        "R1.S3.P19.s6",
+        "R1.S3.P19.s7",
+        "R1.S3.P19.s8",
+        "R1.S3.P20.s1",
+        "R1.S3.P20.s2",
+        "R1.S3.P20.s3",
+        "R1.S3.P20.s4",
+        "R1.S3.P20.s5",
+        "R1.S3.P21.s2",
+        "R1.S3.P21.s3",
+        "R1.S3.P21.s4",
+        "R1.S3.P21.s6",
+        "R1.S3.P22.s1",
+        "R1.S3.P22.s2",
+        "R1.S3.P22.s3",
+        "R1.S3.P22.s4",
+        "R1.S3.P23.s2",
+        "R1.S3.P23.s3",
+        "R1.S3.P23.s4",
+        "R1.S3.P23.s7",
+        "R1.S4.P1.s1",
+        "R1.S4.P2.s1",
+        "R1.S4.P2.s2",
+        "R1.S5.P1.s1",
+        "R1.S5.P2.s1",
+        "R1.S5.P2.s2",
+        "R1.S5.P2.s3",
+        "R1.S5.P2.s4",
+        "R1.S5.P2.s5",
+        "R1.S6.P1.s1",
+        "R1.S7.P1.s3",
+        "R1.S8.P1.s1",
+        "R1.S8.P1.s2",
+        "R1.S8.P1.s3",
+        "R1.S8.P1.s4",
+        "R1.S8.P1.s5",
+        "R1.S8.P2.s1"
+      ]
+    },
+    "cache": {
+      "reviewer": 0.913,
+      "formalizer": 0.12
+    }
+  },
+  "measures": {
+    "round": 1,
+    "wall_ms": 992302,
+    "stages_ms": {
+      "attribution": 23607,
+      "check writing": 161747,
+      "checks": 15,
+      "coding": 136952,
+      "build": 18105,
+      "trial": 8800,
+      "waiting for checks": 10138,
+      "guard rerun": 5991,
+      "review": 582643,
+      "formalize": 57370,
+      "premise checks": 1,
+      "repair": 142435
+    },
+    "first_delivery": {
+      "cycle": "C1.1",
+      "commit": "bc871edbd7155c25666bab132db1bca84ab1c49d"
+    },
+    "guards": {
+      "at_start": 0,
+      "at_end": 1,
+      "born": 1
+    },
+    "regressions": {
+      "changed_text": 0,
+      "unchanged": 0
+    },
+    "reverted": 0,
+    "premise": {
+      "blocked": {},
+      "logged": {}
+    },
+    "fallback": {
+      "reviews": 3,
+      "whole": 3,
+      "items": 20,
+      "reasons": {
+        "no_input": 20
+      }
+    },
+    "reviews": 3,
+    "program_runs_zero": 0,
+    "tokens": {
+      "executor": {
+        "calls": 4,
+        "uncached_input": 77753,
+        "cache_read": 1261440,
+        "output": 13963,
+        "cache_write": 0
+      },
+      "attribution": {
+        "calls": 1,
+        "uncached_input": 14199,
+        "cache_read": 0,
+        "output": 1922,
+        "cache_write": 0
+      },
+      "checks": {
+        "calls": 3,
+        "uncached_input": 52543,
+        "cache_read": 14848,
+        "output": 20592,
+        "cache_write": 0
+      },
+      "reviewer": {
+        "calls": 3,
+        "uncached_input": 98278,
+        "cache_read": 1031168,
+        "output": 11905,
+        "cache_write": 0
+      },
+      "formalizer": {
+        "calls": 3,
+        "uncached_input": 38387,
+        "cache_read": 5248,
+        "output": 4970,
+        "cache_write": 0
+      },
+      "probes": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      },
+      "judge": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      },
+      "interrupted_management": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      }
+    },
+    "non_executor_cost": 347922
+  },
+  "first_delivery_score": {
+    "passed": 108,
+    "total": 219
+  }
+}

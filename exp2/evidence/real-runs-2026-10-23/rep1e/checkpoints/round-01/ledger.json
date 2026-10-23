@@ -1,0 +1,181 @@
+[
+ {
+  "id": "V1.1.0",
+  "source": "review",
+  "unit": "R1.S3.P2.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s5",
+   "R1.S3.P9",
+   "R1.S3.P13",
+   "R1.S3.P14",
+   "R1.S3.P18",
+   "R1.S3.P19",
+   "R1.S2.P6.s2.c3",
+   "R1.S8.P1.s5.c1",
+   "R1.S8.P1.s5.c2"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed the reported issues that were safely addressable:\n\n- Added expression evaluation support internally.\n- Added eager validation for invalid regex patterns.\n- Preserved buildability with `go build -o dpipe ./...`.\n\nThe existing transform implementation remains limited for `derive`, `aggregate`, `",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "6 item(s)"
+   }
+  ]
+ },
+ {
+  "id": "V1.2.0",
+  "source": "review",
+  "unit": "R1.S2.P6.s2",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2",
+   "R1.S3.P2.s5",
+   "R1.S3.P3",
+   "R1.S3.P5",
+   "R1.S3.P2.s2",
+   "R1.S3.P9",
+   "R1.S3.P10",
+   "R1.S3.P11",
+   "R1.S3.P13",
+   "R1.S3.P14",
+   "R1.S3.P15",
+   "R1.S3.P16",
+   "R1.S3.P18",
+   "R1.S3.P19",
+   "R1.S4.P2.s2.c1",
+   "R1.S4.P2.s2.c2",
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported verification issues:\n\n- Verify missing files now use `ERROR: file not found: <path>`.\n- Verify mismatches no longer emit the unintended extra `mismatch` stderr line.\n- Added numeric-aware key comparison support.\n- Confirmed the project still builds with `go build -o dpipe ./...`.",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "7 item(s)"
+   }
+  ]
+ },
+ {
+  "id": "V1.3.0",
+  "source": "review",
+  "unit": "R1.S2.P6.s2.c4",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2.c4",
+   "R1.S2.P4.s1",
+   "R1.S3.P2.s5",
+   "R1.S3.P9.s5",
+   "R1.S3.P13.s1",
+   "R1.S3.P18.s1",
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s3.c1"
+  ],
+  "reason": "unverified",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Implemented the missing `pipeline` command and verified the project still builds successfully with:\n\n```text\ngo build -o dpipe ./...\n```\n\nThe reported derive, aggregate, window, pivot, type-aware sorting, and validation-order issues remain unresolved in the current implementation.",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "unverified",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "unverified",
+   "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+  },
+  "disposition": "fallback",
+  "logged": [
+   {
+    "premise": "no_input",
+    "detail": "7 item(s)"
+   }
+  ]
+ }
+]

@@ -1,0 +1,735 @@
+[
+ {
+  "id": "V1.1.1",
+  "source": "review",
+  "unit": "R1.S3.P9.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s5",
+   "R1.S3.P9.s6",
+   "R1.S3.P9.s7",
+   "R1.S3.P9.s8",
+   "R1.S3.P9.s9",
+   "R1.S3.P9.s10",
+   "R1.S3.P10.s1",
+   "R1.S3.P10.s2",
+   "R1.S3.P10.s3",
+   "R1.S3.P11.s1",
+   "R1.S3.P11.s4",
+   "R1.S3.P11.s5",
+   "R1.S3.P11.s6",
+   "R1.S3.P11.s7",
+   "R1.S3.P11.s8"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review names the K8 case but does not provide the complete input.csv or recipe.json contents."
+  }
+ },
+ {
+  "id": "V1.1.2",
+  "source": "review",
+  "unit": "R1.S3.P12.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s1",
+   "R1.S3.P12.s4",
+   "R1.S3.P12.s5",
+   "R1.S3.P12.s6",
+   "R1.S3.P12.s7",
+   "R1.S3.P12.s8",
+   "R1.S3.P12.s9",
+   "R1.S3.P12.s10"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review refers to the K9 join case without giving the command arguments or either complete CSV file."
+  }
+ },
+ {
+  "id": "V1.1.3",
+  "source": "review",
+  "unit": "R1.S3.P13.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s1",
+   "R1.S3.P13.s2",
+   "R1.S3.P13.s3",
+   "R1.S3.P13.s4",
+   "R1.S3.P14.s1",
+   "R1.S3.P14.s2",
+   "R1.S3.P14.s3",
+   "R1.S3.P14.s4",
+   "R1.S3.P14.s5",
+   "R1.S3.P14.s6",
+   "R1.S3.P14.s7",
+   "R1.S3.P14.s8",
+   "R1.S3.P14.s9"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review refers to the K10 window case without giving the command arguments or complete input and recipe files."
+  }
+ },
+ {
+  "id": "V1.1.4",
+  "source": "review",
+  "unit": "R1.S3.P18.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s1",
+   "R1.S3.P18.s2",
+   "R1.S3.P18.s3",
+   "R1.S3.P18.s4",
+   "R1.S3.P19.s1",
+   "R1.S3.P19.s2",
+   "R1.S3.P19.s3",
+   "R1.S3.P19.s4",
+   "R1.S3.P19.s5",
+   "R1.S3.P19.s6",
+   "R1.S3.P19.s7",
+   "R1.S3.P19.s8"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review refers to the K11 pivot case without giving the command arguments or complete input and recipe files."
+  }
+ },
+ {
+  "id": "V1.1.5",
+  "source": "review",
+  "unit": "R1.S3.P20.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P20.s1",
+   "R1.S3.P20.s2",
+   "R1.S3.P20.s3",
+   "R1.S3.P20.s4",
+   "R1.S3.P20.s5",
+   "R1.S3.P21.s1",
+   "R1.S3.P21.s2",
+   "R1.S3.P21.s3",
+   "R1.S3.P21.s4",
+   "R1.S3.P21.s5",
+   "R1.S3.P21.s6"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review refers to the K12 unpivot case without giving the command arguments or complete input and recipe files."
+  }
+ },
+ {
+  "id": "V1.1.6",
+  "source": "review",
+  "unit": "R1.S3.P22.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P22.s1",
+   "R1.S3.P23.s1",
+   "R1.S3.P23.s2",
+   "R1.S3.P23.s5",
+   "R1.S3.P23.s6"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review gives input.csv but does not give the complete recipe.json contents, so the call cannot be rebuilt exactly."
+  }
+ },
+ {
+  "id": "V1.1.7",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review does not provide the complete K16 command, including its subcommand and arguments."
+  }
+ },
+ {
+  "id": "V1.1.8",
+  "source": "review",
+  "unit": "R1.S3.P3.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P3.s1",
+   "R1.S3.P3.s4",
+   "R1.S3.P3.s5",
+   "R1.S3.P3.s6",
+   "R1.S3.P3.s7",
+   "R1.S3.P3.s8",
+   "R1.S3.P3.s9",
+   "R1.S3.P5.s1",
+   "R1.S3.P5.s3",
+   "R1.S3.P5.s6",
+   "R1.S3.P5.s11",
+   "R1.S3.P5.s13",
+   "R1.S3.P6.s1",
+   "R1.S3.P7.s1",
+   "R1.S3.P8.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Updated the derive expression evaluator to support:\n\n- Comparisons: `==`, `!=`, `>`, `>=`, `<`, `<=`\n- Logical operators: `&&`, `||`\n- Parentheses and unary negation\n- Functions including `sqrt`, `round`, `if`, `coalesce`, `clamp`, and others\n- Required `NaN` comparison behavior\n\n`go build -o dpipe ",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "f878c1f0e27b05008c2c3ce9fb8dfe95cf4e608d1b3b00906cf143c3e93de2b9",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.2"
+  }
+ },
+ {
+  "id": "V1.1.9",
+  "source": "review",
+  "unit": "R1.S2.P6.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2.c1",
+   "R1.S2.P6.s2.c2",
+   "R1.S2.P6.s2.c3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review does not provide the complete ingest command, schema.json contents, or output path, so the call cannot be rebuilt exactly."
+  }
+ },
+ {
+  "id": "V1.1.10",
+  "source": "review",
+  "unit": "R1.S6.P2.s2",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2",
+   "R1.S6.P2.s2.c3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review does not provide the complete pipeline config or the concrete failing step error, so the expected command and exact output cannot be rebuilt."
+  }
+ },
+ {
+  "id": "V1.2.1",
+  "source": "review",
+  "unit": "R1.S2.P6.s2.c3",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2.c3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The command arguments are stated, but the complete contents of review-fixtures/data.csv and review-fixtures/schema.json are missing."
+  }
+ },
+ {
+  "id": "V1.2.2",
+  "source": "review",
+  "unit": "R1.S3.P9.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s5",
+   "R1.S3.P12.s1",
+   "R1.S3.P13.s1",
+   "R1.S3.P18.s1",
+   "R1.S3.P20.s1"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The review does not provide the complete command arguments or the contents of the input CSV and recipe files for the five commands."
+  }
+ },
+ {
+  "id": "V1.2.3",
+  "source": "review",
+  "unit": "R1.S3.P22.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P22.s3.c1",
+   "R1.S3.P22.s3.c2",
+   "R1.S3.P22.s3.c3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The command omits the input and output arguments with ellipses, and the complete contents of the input CSV and recipe-fill-invalid.json are missing."
+  }
+ },
+ {
+  "id": "V1.2.4",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The schema argument and output argument are omitted with ellipses, and the complete schema file content is missing."
+  }
+ },
+ {
+  "id": "V1.2.5",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The command arguments are stated, but the complete contents of review-fixtures/empty.sha256 are missing."
+  }
+ },
+ {
+  "id": "V1.2.6",
+  "source": "review",
+  "unit": "R1.S6.P2.s2.c3",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2.c3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The complete contents of review-fixtures/pipeline-bad.json are missing."
+  }
+ },
+ {
+  "id": "V1.2.7",
+  "source": "review",
+  "unit": "R1.S2.P3.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S2.P3.s2.c1",
+   "R1.S2.P3.s2.c2",
+   "R1.S2.P3.s2.c3"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "no_input: The complete contents of review-fixtures/data.csv and review-fixtures/missing-unique-schema.json are missing, so the schema reference cannot be rebuilt."
+  }
+ },
+ {
+  "id": "K5",
+  "source": "check",
+  "unit": "R1.S3.P9.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s1"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "ruled_program_right",
+   "detail": "ruled wrong (reference): The requirements specify Go's math/rand initialized with seed 7, generating one float per row in input order and retaining values below 0.5. For this input, that deterministic procedure yields rows 2 and 3, not the check's expected rows 1 and 2. [R1.S3.P9#ade451fd]"
+  }
+ },
+ {
+  "id": "K13",
+  "source": "check",
+  "unit": "R1.S3.P22",
+  "case": null,
+  "units": [
+   "R1.S3.P22",
+   "R1.S3.P23"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ }
+]
