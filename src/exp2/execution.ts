@@ -291,8 +291,8 @@ export interface AcceptRoundRecord {
   program_runs_zero?: number
   /** Reviews whose entries did not each end once (batch C, effect 4); absent when all did. */
   conservation_errors?: string[]
-  /** flipped_disputed: flips whose run was disputed, given to the reviewer as leads, not regressions (§12j.7 item 11). */
-  guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; flipped_disputed?: string[]; retired: { id: string; reason: string }[] }
+  /** flips: each flip, how it was classified and by which records (§6b: revision, object, edge; none), with where its expected values come from. */
+  guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; flips?: { id: string; cycle: string; how: "changed_text" | "regression"; sources: string[]; expected: string[] }[]; retired: { id: string; reason: string }[] }
   reverted: number
   trial: { runs: number; failures: number }
   /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind. */

@@ -118,6 +118,8 @@ export function renderGuardItem(g: GuardRecord, check: CheckRecord, run: CheckRu
   ].join("\n")
 }
 
+/** Where a check's expected values come from (verbatim / derived / computed), recorded with each flip (§6b). */
+const expectedKinds = (k: CheckRecord) => [...new Set(k.assertions.map(a => a.source.kind))].sort()
 const placeName = (t: CheckRecord["assertions"][number]["target"]) => [t.kind, t.path, t.line !== null ? `line ${t.line}` : null, t.pointer, t.column].filter(x => x !== null && x !== undefined && x !== "").join(" ")
 
 /** The list the executor gets: numbered, each item the reviewer's words (or a guard's evidence). */
@@ -277,13 +279,14 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       born.push(g)
       evs.push({ guard: g.id, round, cycle: id, status: "passing", program: current.program.id })
     }
-    // 2. Flips are classified first (§12j.7 item 11): this round's text changed behind the guard, the reviewer's question;
-    // a disputed run (the check's reading or reference against the program), a lead; only the rest are regressions.
+    // 2. Flips are classified first (§12j.7 item 11, §6b): this round's text changed behind the guard by the attribution's
+    // records, the reviewer's question; otherwise a regression, whatever the kind of its expected values.
     const flips = flipped.map(gid => {
       const g = guards.find(x => x.id === gid)!, run = guardRuns.find(x => x.guard === gid)!.run
-      const behind = changedTextBehind(registry, g, library, round, g.check)
-      return { g, run, behind, how: behind.length ? "changed_text" as const : run.failure?.class === "disputed" ? "disputed" as const : "regression" as const }
+      const behind = changedTextBehind(registry, g, round)
+      return { g, run, behind, how: behind.length ? "changed_text" as const : "regression" as const }
     })
+    for (const f of flips) accept.guards.flips = [...(accept.guards.flips ?? []), { id: f.g.id, cycle: id, how: f.how, sources: [...new Set(f.behind.map(b => b.source))], expected: expectedKinds(guardCheck(f.g, library)) }]
     const breaking = flips.filter(f => f.how === "regression").map(f => f.g.id)
     // A repair that made a passing guard fail on unchanged text is reverted. The code change goes, the findings stay
     // (§12j.7 item 2): what the repair was sent for is sent again once, with word of the revert.
@@ -314,16 +317,14 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         if (r.outcome !== "fail") continue
         if (flipped.includes(g.id)) {
           const f = flips.find(x => x.g.id === g.id)!
-          evs.push({ guard: g.id, round, cycle: id, status: "failing", program: current.program.id, ...(f.behind.length ? { changed_text: f.behind } : {}), ...(f.how === "disputed" ? { disputed: `${r.run.failure!.reason}: ${r.run.failure!.detail}` } : {}) })
+          evs.push({ guard: g.id, round, cycle: id, status: "failing", program: current.program.id, ...(f.behind.length ? { changed_text: f.behind.map(b => b.text), behind_sources: [...new Set(f.behind.map(b => b.source))] } : {}) })
           if (f.how === "changed_text") { accept.guards.flipped_changed_text.push(g.id); asked.delete(g.id) }
-          else if (f.how === "disputed") accept.guards.flipped_disputed = [...(accept.guards.flipped_disputed ?? []), g.id]
           else { accept.guards.flipped_unchanged.push(g.id); regressions.push({ g, run: r.run }) }
           continue
         }
-        // Failing already: awaiting the reviewer's word when this round's text stands behind it or the run was disputed,
-        // a regression otherwise.
+        // Failing already: awaiting the reviewer's word when this round's text stands behind it, a regression otherwise.
         const last = [...events].reverse().find(e => e.guard === g.id && e.status === "failing")
-        if (last?.changed_text?.length || last?.disputed) continue
+        if (last?.changed_text?.length) continue
         regressions.push({ g, run: r.run })
       }
       await note(born, evs)
@@ -370,17 +371,6 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         if (leadsGiven.get(r.check) === d) continue
         leadsGiven.set(r.check, d)
         leads.push({ id: r.check, text: renderEvidence([r], [r.check], library, registry, new Set()) })
-        accept.leads.library++
-      }
-      // Guards whose flip was disputed: what they show goes to the reviewer as a lead, never as a regression (§12j.7 item 11).
-      if (!cycle.reverted) for (const r of guardRuns.filter(x => x.outcome === "fail")) {
-        const g = guards.find(x => x.id === r.guard)!
-        const last = [...events].reverse().find(e => e.guard === g.id)
-        if (last?.status !== "failing" || !last.disputed) continue
-        const d = runDigest(r.run)
-        if (leadsGiven.get(g.id) === d) continue
-        leadsGiven.set(g.id, d)
-        leads.push({ id: g.id, text: renderGuardItem(g, guardCheck(g, library), r.run, registry) })
         accept.leads.library++
       }
       for (const l of deps.leads ? await deps.leads(program, id) : []) {

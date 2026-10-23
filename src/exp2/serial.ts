@@ -331,8 +331,7 @@ export class Serial {
     if (baseline.kind !== "null") {
       const openGuards = new Set(ledger.filter(e => e.state === "open" && e.source === "guard").map(e => e.id))
       // A guard whose flip is still the reviewer's question (this round's text changed behind it, no answer yet) is not carried as a regression.
-      // A disputed flip is a lead for the reviewer, never a regression (§12j.7 item 11): not carried either.
-      const asked = (id: string) => { const last = [...atStart.guard_events].reverse().find(e => e.guard === id); return last?.status === "failing" && ((last.changed_text?.length ?? 0) > 0 || !!last.disputed) }
+      const asked = (id: string) => { const last = [...atStart.guard_events].reverse().find(e => e.guard === id); return last?.status === "failing" && (last.changed_text?.length ?? 0) > 0 }
       const gs = liveGuards(atStart.guards, atStart.guard_events).filter(g => openGuards.has(g.id) && !asked(g.id))
       const runs = await this.timed("carry-over", () => runGuards(gs, atStart.checks, baseline, this.c.runner, round, registryStart, facts, limits.checkTimeoutMs))
       gs.forEach((g, i) => { if (runs[i].outcome === "fail") carried.push({ id: g.id, text: renderGuardItem(g, guardCheck(g, atStart.checks), runs[i].run, registryStart, true), check: guardCheck(g, atStart.checks), digest: runDigest(runs[i].run) }) })

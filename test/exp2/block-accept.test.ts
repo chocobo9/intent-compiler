@@ -13,7 +13,7 @@ import { checkPremises, claimProblems, itemCheckRecord, parseCsvGo, parsedFacts,
 import { git, head, initRepo } from "../../src/exp2/git.js"
 import { changedTextBehind, guardCoverage, type GuardEvent, type GuardRecord } from "../../src/exp2/guards.js"
 import { ledgerOf } from "../../src/exp2/ledger.js"
-import { renderReport } from "../../src/exp2/report.js"
+import { renderFlips, renderReport } from "../../src/exp2/report.js"
 import { invokesProgram, isNoIssues, programRunsIn, REPAIR_INTRO, REVIEW_INTRO, REVIEW_REPLY, reviewBaseText, reviewRanProgram, supersededIn } from "../../src/exp2/review.js"
 import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
 import { Serial } from "../../src/exp2/serial.js"
@@ -26,6 +26,7 @@ import { stubProbeWriter } from "./probe-stubs.js"
 import { FILTER_INPUT, FILTER_ITEM_TEXT, filterItem, scriptedReviewer, SORT_INPUT, stubFormalizer, workingReviewer } from "./review-stubs.js"
 import { serialExecutor } from "./serial-executor.js"
 import { StubExecutor, write } from "./stub-executor.js"
+import type { AttributionTransport } from "../../src/exp2/attribution.js"
 import { stubTransport } from "./stubs.js"
 
 /**
@@ -49,7 +50,7 @@ const resolved = (id: string, t: CheckRecord["assertions"][number]["target"], ex
 /** A library check for the sort (its values worked out already, as an admitted check holds them). */
 const sortCheck = (id: string, object: string): CheckRecord => ({
   id, round: 1, key: "sort-asc", object, blocks: [SORT_UNIT], uses: [], direction: "holds", input: SORT_INPUT,
-  // Stated values: a failure is the program's (a derived one would be disputed, §12j.7 item 11).
+  // Stated values: a failure is the program's.
   assertions: [resolved("l2", target("file_line", { path: "out.csv", line: 2 }), "3,3", "verbatim", SORT_UNIT), resolved("l5", target("file_line", { path: "out.csv", line: 5 }), "2,20", "verbatim", SORT_UNIT), resolved("exit", target("exit_code"), 0, "verbatim", SORT_UNIT)],
   unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
 })
@@ -260,10 +261,10 @@ describe("exp2 acceptance block §6: a guard that flips is a question for the re
     const reg = store.registry()
     const k = sidecarCheck("K7", reg.coverOf(SIDECAR_UNIT)!.owner)
     const guard: GuardRecord = { id: "G1", round: 1, source: "library", check: "K7", units: [SIDECAR_UNIT], object: k.object, born: { cycle: "C1.1", program: "p" } }
-    const behind = changedTextBehind(reg, guard, [k], 5, "K7")
-    assert.ok(behind.some(b => /R1\.S3\.P24\.s1: R1\.S3\.P24\.s1\.c3 withdrawn by R5\.S1\.P2\.s4/u.test(b)), JSON.stringify(behind))
-    assert.ok(behind.some(b => /owns a unit the guard rests on and changed this round/u.test(b)))
-    assert.deepEqual(changedTextBehind(reg, guard, [k], 4, "K7"), [], "nothing changed behind it in round 4")
+    const behind = changedTextBehind(reg, guard, 5)
+    assert.ok(behind.some(b => b.source === "revision" && /R1\.S3\.P24\.s1: R1\.S3\.P24\.s1\.c3 withdrawn by R5\.S1\.P2\.s4/u.test(b.text)), JSON.stringify(behind))
+    assert.ok(behind.some(b => b.source === "object" && /owns a unit the guard rests on and changed this round/u.test(b.text)))
+    assert.deepEqual(changedTextBehind(reg, guard, 4), [], "nothing changed behind it in round 4")
     const reviewer = scriptedReviewer([{ text: "SUPERSEDED G1: round 5 removed the .sha256 sidecar files of transform and ingest." }])
     const events: GuardEvent[] = []
     const { record } = await round(dir, store, 5, [wd => write(wd, files({ sidecar: false }))], {
@@ -289,7 +290,7 @@ describe("exp2 acceptance block §6: a guard that flips is a question for the re
     const reg = store.registry()
     const k = sortCheck("K1", reg.coverOf(SORT_UNIT)!.owner)
     const guard: GuardRecord = { id: "G1", round: 1, source: "library", check: "K1", units: [SORT_UNIT], object: k.object, born: { cycle: "C1.1", program: "p" } }
-    assert.deepEqual(changedTextBehind(reg, guard, [k], 2, "K1"), [])
+    assert.deepEqual(changedTextBehind(reg, guard, 2), [])
     const reviewer = scriptedReviewer([{ text: "NO ISSUES" }])
     const { record, executor } = await round(dir, store, 2, [wd => write(wd, files({ sortText: true })), wd => write(wd, files())], {
       library: [k], guards: [guard], guardEvents: [{ guard: "G1", round: 1, cycle: "C1.1", status: "passing" }], reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }),
@@ -374,7 +375,7 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       assert.match(text, /^# Round \d+ report\n\nOfficial score: [^\n]*\n\n§12i measures: wall \d+ s; guards \d+→\d+;[^\n]*\n\nInterface counts:\n\n/u)
       assert.match(text, /- Reviewer items: reported \d+, entered a repair list \d+ \(verified \d+, logged \d+, fallback \d+\), blocked \d+; every entry ended once: yes; no_input \d+; reviews \d+ \(void sessions \d+\)/u)
       assert.match(text, /- Check writing: admitted \d+\/\d+, unknown never told the model 0; dropped after the repairs \d+ .*; runs refused as an unknown subcommand \d+; units no check rests on \d+ \(reported only\)\./u)
-      assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*, disputed \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
+      assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
       assert.match(text, /- Requirements given: work order source zone delta, \d+ characters/u)
       assert.match(text, /- Revisions recorded: \d+ paragraphs of this round's text read like a revision/u)
       assert.ok(!/Probes|Ledger:|Guard coverage|Zones:/u.test(text), "nothing else is rendered")
@@ -412,4 +413,55 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
     assert.ok(wrong.library.passing.length + wrong.library.failing.length > 0, "the library ran on the product")
     assert.equal(renderReviewList([{ id: "a", text: "x" }, { id: "b", text: "y\n" }]), "1. x\n\n2. y")
   })
+})
+
+describe("batch 1b (§6b): a flip's text changed when the attribution's records say so; a relation edge counts, the guard's input does not", () => {
+  // The K8 shape: a guard on the sort whose text is related (an edge recorded in R1) to the sidecar clause R5 withdraws.
+  // The sort's own text and object are untouched in R5; only the edge connects the guard to the withdrawal.
+  const dir = mkdtempSync(join(tmpdir(), "exp2-acc-edge-"))
+  const withEdge = new Exp2Store(join(dir, "edge"), "acce"), without = new Exp2Store(join(dir, "plain"), "accp")
+  const edged = (): AttributionTransport => {
+    const inner = stubTransport()
+    return async request => {
+      const reply = await inner(request)
+      if (request.round !== 1 || request.previous_draft.assignments.length) return reply
+      const patch = JSON.parse(reply.text) as { edges_add: unknown[] }
+      patch.edges_add.push({ from: SORT_UNIT, to: SIDECAR_UNIT, kind: "refers_to" })
+      return { ...reply, text: JSON.stringify(patch) }
+    }
+  }
+  before(async () => {
+    for (const r of [1, 2, 3, 4, 5]) await withEdge.ingestRound(r, roundText(r), edged())
+    for (const r of [1, 2, 3, 4, 5]) await without.ingestRound(r, roundText(r), stubTransport())
+  })
+  const sortGuard = (reg: ReturnType<Exp2Store["registry"]>) => {
+    const k = sortCheck("K1", reg.coverOf(SORT_UNIT)!.owner)
+    return { k, guard: { id: "G1", round: 1, source: "library", check: "K1", units: [SORT_UNIT], object: k.object, born: { cycle: "C1.1", program: "p" } } as GuardRecord }
+  }
+
+  it("the records: with the edge, R5's withdrawal of the sidecar stands behind the sort guard (source edge); without it, nothing does", () => {
+    const reg = withEdge.registry(), { guard } = sortGuard(reg)
+    assert.ok(!reg.roundScope(5).some(c => c.object === guard.object), "R5 does not change the sort")
+    const behind = changedTextBehind(reg, guard, 5)
+    assert.ok(behind.length && behind.every(b => b.source === "edge"), JSON.stringify(behind))
+    assert.match(behind.map(b => b.text).join("\n"),/^R1\.S3\.P9\.s2 refers_to R1\.S3\.P24\.s1 \(round 1\); R1\.S3\.P24\.s1\.c3 withdrawn by R5\.S1\.P2\.s4/u)
+    assert.deepEqual(changedTextBehind(without.registry(), sortGuard(without.registry()).guard, 5), [])
+  })
+
+  for (const [name, store, how] of [["with the edge", () => withEdge, "changed_text"], ["without the edge", () => without, "regression"]] as const) {
+    it(`R5, the sort breaks, ${name}: ${how === "changed_text" ? "a question for the reviewer, nothing sent" : "a regression, sent to the executor"}; the report names the source`, async () => {
+      const s = store(), { k, guard } = sortGuard(s.registry())
+      // Asked, the reviewer says the sort guard is superseded (the stand-in answers so whenever it is asked).
+      const reviewer = scriptedReviewer([{ text: "SUPERSEDED G1: round 5 changed what the sort guard rests on." }])
+      const { record } = await round(dir, s, 5, [wd => write(wd, files({ sortText: true, sidecar: false })), wd => write(wd, files({ sidecar: false }))], {
+        library: [k], guards: [guard], guardEvents: [{ guard: "G1", round: 1, cycle: "C1.1", status: "passing" }], reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }),
+      })
+      assert.equal(/G1: command \["transform"/u.test(reviewer.requests[0].request), how === "changed_text", "the reviewer is asked about G1 only when a record stands behind it")
+      const flips = record.accept!.guards.flips!
+      assert.deepEqual(flips.map(f => [f.id, f.how, f.sources]), [["G1", how, how === "changed_text" ? ["edge"] : []]])
+      const sent = record.cycles[0].items!.filter(i => i.id === "G1" && i.action === "send")
+      assert.equal(sent.length, how === "changed_text" ? 0 : 1)
+      assert.match(renderFlips(flips), how === "changed_text" ? /edge 1, none 0; G1 C5\.1 changed text \(edge; expected verbatim\)/u : /edge 0, none 1; G1 C5\.1 regression \(none; expected verbatim\)/u)
+    })
+  }
 })

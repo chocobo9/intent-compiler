@@ -110,7 +110,7 @@ export interface RoundMeasures {
   first_delivery: { cycle: string; commit: string } | null
   guards: { at_start: number; at_end: number; born: number }
   /** Guards that passed and fail now (§12i "退化次数"), on changed text and on unchanged text. */
-  regressions: { changed_text: number; unchanged: number; disputed?: number }
+  regressions: { changed_text: number; unchanged: number }
   reverted: number
   premise: { blocked: Record<string, number>; logged: Record<string, number> }
   fallback: { reviews: number; whole: number; items: number; reasons: Record<string, number> }
@@ -303,7 +303,7 @@ export function roundMeasures(r: RoundReport): RoundMeasures | null {
     round: r.round, wall_ms: r.wall?.round_ms ?? 0, stages_ms: Object.fromEntries((r.wall?.stages ?? []).map(x => [x.stage, x.ms])),
     first_delivery: v.first_delivery,
     guards: { at_start: v.guards.at_start, at_end: v.guards.at_end, born: v.guards.born.length },
-    regressions: { changed_text: v.guards.flipped_changed_text.length, unchanged: v.guards.flipped_unchanged.length, disputed: v.guards.flipped_disputed?.length ?? 0 },
+    regressions: { changed_text: v.guards.flipped_changed_text.length, unchanged: v.guards.flipped_unchanged.length },
     reverted: v.reverted, premise: { blocked: v.premise_blocked, logged: v.premise_logged }, fallback: v.fallback, reviews: v.reviews.length, program_runs_zero: v.program_runs_zero,
     checks: { entered: r.checks.entered, admitted: r.checks.admitted ?? 0, unknown_not_fed_back: r.checks.unknown_not_fed_back ?? 0, dropped: Object.values(r.checks.dropped ?? {}).reduce((a, b) => a + b, 0), refused_calls: r.checks.refused_calls ?? 0 },
     items: { reported: v.items.reported, entered: v.items.sent, verified: v.items.verified, logged: v.items.logged, fallback: v.items.fallback, blocked: v.items.blocked, no_input: (v.premise_blocked.no_input ?? 0) + (v.fallback.reasons.no_input ?? 0), conservation_errors: v.conservation_errors.length },
@@ -355,6 +355,15 @@ function renderMeasures(m: RoundMeasures): string {
 }
 
 /**
+ * The report's line on guard flips (§6b): each flip, how it was classified and by which records (a flip several records
+ * name counts under each), and where its expected values come from.
+ */
+export function renderFlips(flips: NonNullable<AcceptRoundRecord["guards"]["flips"]>): string {
+  const n = (k: string) => flips.filter(f => k === "none" ? !f.sources.length : f.sources.includes(k)).length
+  return `- Flip classification (source: revision record / object change / relation edge / none): revision ${n("revision")}, object ${n("object")}, edge ${n("edge")}, none ${n("none")}; ${flips.map(f => `${f.id} ${f.cycle} ${f.how === "changed_text" ? "changed text" : "regression"} (${f.sources.length ? f.sources.join(", ") : "none"}; expected ${f.expected.join("/") || "none"})`).join(", ")}.`
+}
+
+/**
  * The round report as text (§12j.4): the line §12i registered in advance, and the interface counts. Everything else
  * (stages, zones, objects, ledger, wall times by stage, …) is in report.json.
  */
@@ -376,7 +385,8 @@ export function renderReport(r: RoundReport): string {
       ...(v.conservation_errors.length ? [`- Conservation broken: ${v.conservation_errors.join("; ")}.`] : []),
     ] : []),
     `- Check writing: admitted ${r.checks.admitted ?? r.checks.entered}/${r.checks.entered}, unknown never told the model ${r.checks.unknown_not_fed_back ?? 0}; dropped after the repairs ${sum(r.checks.dropped)} (${by(r.checks.dropped ?? {})}); runs refused as an unknown subcommand ${r.checks.refused_calls ?? 0}; units no check rests on ${r.checks.uncovered ?? 0} (reported only).`,
-    ...(v ? [`- Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}; flips on changed text ${v.guards.flipped_changed_text.length}${ids(v.guards.flipped_changed_text)}, on unchanged text ${v.guards.flipped_unchanged.length}${ids(v.guards.flipped_unchanged)}, disputed ${v.guards.flipped_disputed?.length ?? 0}${ids(v.guards.flipped_disputed ?? [])}; retired as superseded ${v.guards.retired.length}${ids(v.guards.retired.map(x => x.id))}; repairs reverted ${v.reverted}.`] : []),
+    ...(v ? [`- Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}; flips on changed text ${v.guards.flipped_changed_text.length}${ids(v.guards.flipped_changed_text)}, on unchanged text ${v.guards.flipped_unchanged.length}${ids(v.guards.flipped_unchanged)}; retired as superseded ${v.guards.retired.length}${ids(v.guards.retired.map(x => x.id))}; repairs reverted ${v.reverted}.`] : []),
+    ...(v?.guards.flips?.length ? [renderFlips(v.guards.flips)] : []),
     ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters in ${r.zones.source_blocks} blocks (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all})${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions` : ""}.`] : []),
     ...(r.revisions ? [`- Revisions recorded: ${r.revisions.cue_paragraphs} paragraphs of this round's text read like a revision, ${r.revisions.recorded} of them are recorded as revising earlier text; ${r.revisions.modifications} modifications this round${r.revisions.unrecorded.length ? `; cue paragraphs with none: ${r.revisions.unrecorded.slice(0, 20).join(", ")}${r.revisions.unrecorded.length > 20 ? ` and ${r.revisions.unrecorded.length - 20} more` : ""}` : ""}.`] : []),
     "",

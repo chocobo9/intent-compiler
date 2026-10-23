@@ -32,7 +32,7 @@ export interface GuardRecord {
 
 /**
  * A change of a guard's standing, appended only when it changes: born passing; a flip to failing (with whether the
- * text it rests on, or an object its input invokes, changed this round); back to passing; retired (the reviewer
+ * text it rests on changed this round, by the attribution's records); back to passing; retired (the reviewer
  * said the behaviour was superseded by this round's text).
  */
 export interface GuardEvent {
@@ -43,8 +43,8 @@ export interface GuardEvent {
   program?: string
   /** failing: the round's text changes behind the flip, when there are any (§12i item 6); none: a regression. */
   changed_text?: string[]
-  /** failing: the run was disputed (the check's own reading or reference against the program's), not a regression (§12j.7 item 11). */
-  disputed?: string
+  /** failing: which records said so (§6b): revision, object, edge; empty: none, a regression. */
+  behind_sources?: BehindSource[]
   reason?: string
 }
 
@@ -92,43 +92,45 @@ export async function runGuards(guards: readonly GuardRecord[], library: readonl
 
 const within = (registry: Registry, inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
 
-/** The guard's input as words: arguments, file paths and contents, split on anything that is not a name character. */
-function inputWords(input: CheckInput | undefined): Set<string> {
-  if (!input) return new Set()
-  const text = [...input.args, ...input.files.flatMap(f => [f.path, f.content])].join("\n")
-  return new Set(text.toLowerCase().split(/[^a-z0-9_-]+/u).filter(Boolean))
-}
+/** Which authority says this round's text changed behind a guard (DESIGN §6b): the revision record, the change record of the object a unit belongs to, a relation edge. */
+export type BehindSource = "revision" | "object" | "edge"
+export interface Behind { source: BehindSource; text: string }
 
 /**
- * What of this round's text changes stands behind a guard (DESIGN §12i item 6), decided by code from the registry
- * and the guard's own input, never inferred from references: a modification this round that overlaps a unit it
- * rests on; an object changed this round that owns one of its units; an object changed this round whose name the
- * guard's input invokes (a command, a step type, a field). Empty: the text behind the guard did not change, and a
- * flip is a regression.
+ * What of this round's text changes stands behind a guard (DESIGN §12i item 6, §6b), read only from the attribution's
+ * records: a modification this round that overlaps a unit it rests on, or a unit out of force since this round (the
+ * revision record); an object changed this round that owns one of its units (the object's change record); a relation
+ * edge between the guard's units or objects and text this round revised or withdrew (the edges). Nothing is inferred
+ * from the guard's input. Empty: the text behind the guard did not change, and a flip is a regression.
  */
-export function changedTextBehind(registry: Registry, guard: Pick<GuardRecord, "units" | "input"> & { round?: number }, library: readonly CheckRecord[], round: number, check?: string): string[] {
+export function changedTextBehind(registry: Registry, guard: Pick<GuardRecord, "units"> & { round?: number }, round: number): Behind[] {
   // A guard born this round rests on this round's text: nothing changed behind it (with classification before the
   // revert, §12j.7 item 11, every flip of a round-1 guard would otherwise read as a change of text).
   if (guard.round !== undefined && guard.round >= round) return []
-  const out = new Set<string>()
-  const input = guard.input ?? (check ? library.find(c => c.id === check)?.input : undefined)
-  for (const m of replacedBasis(registry, guard.units, round - 1, round)) out.add(`${m.unit}: ${m.parts.join(", ")} ${m.kind === "partial" ? "partly revised" : m.kind === "withdraw" ? "withdrawn" : "replaced"} by ${m.by.join(", ")}`)
-  const scope = registry.roundScope(round)
-  const owners = new Set(guard.units.map(u => registry.coverOf(u)?.owner).filter((o): o is string => !!o && o !== "none"))
-  const words = inputWords(input)
-  for (const c of scope) {
-    const o = registry.objects.get(c.object)
-    if (!o) continue
-    const name = o.name.toLowerCase()
-    if (owners.has(c.object)) out.add(`${c.object} (${o.name}) owns a unit the guard rests on and changed this round (${c.id})`)
-    else if (words.has(name)) out.add(`${c.object} (${o.name}) is invoked by the guard's input and changed this round (${c.id})`)
-  }
+  const out = new Map<string, Behind>()
+  const add = (source: BehindSource, text: string) => { if (!out.has(text)) out.set(text, { source, text }) }
+  for (const m of replacedBasis(registry, guard.units, round - 1, round)) add("revision", `${m.unit}: ${m.parts.join(", ")} ${m.kind === "partial" ? "partly revised" : m.kind === "withdraw" ? "withdrawn" : "replaced"} by ${m.by.join(", ")}`)
   // The units themselves may be out of force by now (wholly replaced or withdrawn): that too is a change behind it.
   for (const u of guard.units) {
     const own = registry.ownership(u)
-    if (own && !LIVE_STATES.has(own.state) && own.modifications.some(m => m.round === round)) out.add(`${u} is ${own.state} since this round`)
+    if (own && !LIVE_STATES.has(own.state) && own.modifications.some(m => m.round === round)) add("revision", `${u} is ${own.state} since this round`)
   }
-  return [...out]
+  const owners = new Set(guard.units.map(u => registry.coverOf(u)?.owner).filter((o): o is string => !!o && o !== "none"))
+  for (const c of registry.roundScope(round)) {
+    const o = registry.objects.get(c.object)
+    if (o && owners.has(c.object)) add("object", `${c.object} (${o.name}) owns a unit the guard rests on and changed this round (${c.id})`)
+  }
+  // Edges: one end on the guard (a block overlapping one of its units, or the object owning one), the other end text
+  // this round revised or withdrew.
+  const onGuard = (end: string) => /^O\d+$/u.test(end) ? owners.has(end) : guard.units.some(u => within(registry, u, end) || within(registry, end, u))
+  for (const e of registry.references.filter(x => x.round <= round)) {
+    for (const [mine, other] of [[e.from, e.to], [e.to, e.from]] as const) {
+      if (!onGuard(mine) || onGuard(other)) continue
+      const blocks = /^O\d+$/u.test(other) ? registry.referredText({ ...e, to: other }) : [other]
+      for (const m of replacedBasis(registry, blocks, round - 1, round)) add("edge", `${e.from} ${e.kind} ${e.to} (round ${e.round}); ${m.parts.join(", ")} ${m.kind === "partial" ? "partly revised" : m.kind === "withdraw" ? "withdrawn" : "replaced"} by ${m.by.join(", ")}`)
+    }
+  }
+  return [...out.values()]
 }
 
 /** The text the round's changes put in place of a guard's units, quoted for the reviewer (§12i item 6). */

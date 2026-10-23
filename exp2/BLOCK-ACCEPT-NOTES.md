@@ -855,3 +855,58 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 
    §6b 的权威表定了：句子有没有被取代，只读归属的修订记录。这两条属于"读的一方补判断"。G77 只靠修订记录就能分对。
 2. **原文未改、只有派生值不符的翻转记为 disputed**：不送修，也不回退，只作线索交给审查员。§6b 守卫规则 1 写的是：句子没改、守卫翻了，就是退化，必须修回；派生值守卫的退役同样只走修订记录。按规则 1，ic15 R3 的 G84、G92 应当送修，在修补周期里翻转时应当回退。
+
+## 22.11 小批 1b：翻转分类只读权威，派生值翻转按退化（DESIGN §6b，用户 2026-10-24 定）
+
+**做法**
+- **`changedTextBehind`（guards.ts）只读归属的三种记录**，每条结果带来源：
+  - `revision`：本轮的修订记录与守卫依据的单位重叠，或者单位本轮起不再有效；
+  - `object`：守卫单位所在的对象本轮有改动记录；
+  - `edge`：一条关系边，一端在守卫上（与其单位重叠的块，或拥有其单位的对象），另一端是本轮被修订或撤回的原文。
+
+  签名改为 `(registry, guard, round)`，不再需要检查库和守卫输入。
+- **删除"对象名出现在输入里"这条推断**：`inputWords` 及其分支一起删掉。恢复方式：`git show 9abc73c:src/exp2/guards.ts`。
+- **翻转分类（accept.ts）只剩两类**：有记录支持的，记为原文改过（`changed_text`），交审查员；没有记录支持的，一律算退化（规则 1），不看期望值是派生的、原文写明的还是算出来的。删掉的部分：
+  - `how: "disputed"` 分支；
+  - `flipped_disputed` 字段；
+  - `GuardEvent.disputed`；
+  - 审查请求里"翻转被 disputed 的守卫作为线索"那一段；
+  - 已失败守卫"等审查员"判断里的 disputed 条件；
+  - serial 带入时的 disputed 豁免；
+  - `measures.regressions.disputed`；
+  - 报告 Guards 行的 "disputed n"。
+
+  恢复方式同上，取 9abc73c 的 accept.ts、serial.ts、report.ts、execution.ts。
+- **每次翻转都记一条 `accept.guards.flips[]`**：`{ id, cycle, how, sources, expected }`。`sources` 为空即"无"；`expected` 是守卫断言的期望值来源（verbatim / derived / computed），照常记录。守卫事件另加 `behind_sources`。
+- **报告新增一行**（`renderFlips`）：`Flip classification (source: revision record / object change / relation edge / none)`，先按来源计数（一次翻转被几种记录同时支持时，各计一次），再逐条列出：编号、周期、分类、来源、期望值来源。
+- **未改**：
+  - 回退分支照旧不往 `flipped_unchanged` 里记（原有行为）。被回退的翻转在 `flips[]` 和 `cycle.reverted.guards` 里能看到。
+  - 有记录支持的翻转，审查员没答 SUPERSEDED 时仍送修（§12j.2）。
+
+**依据**：DESIGN §6b（30724cd）的权威表第 1、2 行和守卫规则 1–3；22.10 列出的两处出入；ic15 R3 的 G84、G92（原运行判为原文未改的退化，批 1 改成了 disputed）。
+
+**验收**（本机，Windows，Go 在 PATH 上）
+- **G77 真实重放**（`g77-replay.test.ts`，5/5，连跑两次都通过）：
+  - G77 在 C3.2 翻转，分类为 changed_text，来源是 `revision` 和 `object`（R2.S11.P5.s1、P6.s4 被 R3.S3.P1–P3 部分修订；O51 本轮有改动）；
+  - reverted 0，保留 C3.4，与 22.9 的结果相同。
+- **G84、G92**（同一次重放）：
+  - `changedTextBehind` 对二者都返回空；
+  - 在首次交付 C3.1 翻转，分类为 regression，来源为无，期望值来源分别是 computed、computed/verbatim；
+  - 进入 C3.1 的修补单（`not_landed`，send），第一条修补消息里有二者。
+- **K8 形状**（`block-accept.test.ts` 的 "batch 1b" 组，替身归属 R1–R5，真实原文）：
+  - 守卫在 sort（R1.S3.P9.s2）上，R5 没有改 sort 的文字和对象；
+  - 一份归属在 R1 记了一条边 `R1.S3.P9.s2 refers_to R1.S3.P24.s1`，R5 撤回了 sidecar 子句 `R1.S3.P24.s1.c3`；
+  - **有边**：来源 `edge`；R5 sort 改坏后翻转，分类为 changed_text，审查请求里有 G1 的问题，SUPERSEDED 后不送修。报告行为 `edge 1, none 0; G1 C5.1 changed text (edge; expected verbatim)`；
+  - **无边**：`changedTextBehind` 为空；分类为 regression，当周期送修，审查请求里不问 G1。报告行为 `edge 0, none 1; G1 C5.1 regression (none; expected verbatim)`。
+- **派生值守卫**（`batch-1.test.ts` 的 "batch 1b (§6b rule 1)"）：
+  - R3 修补把 sort 改坏，原文未改；
+  - 翻转分类为 regression，来源为无，期望值来源 derived/verbatim；
+  - 回退 1 次（`reverted.guards = [G1]`），原修补针对的条目带说明重送，第三个程序修好，保留 C3.3。不再作为线索交审查员。
+- **block-accept §6**：两项（R5 撤回 sidecar 交审查员、R2 sort 退化直接送修）断言改成读来源，结果不变。
+- 另：9abc73c 把 BLOCK-ACCEPT-NOTES.md、serial.test.ts、g77-replay.test.ts 误存成了 CRLF（编辑脚本在 Windows 上的换行转换），整文件都成了 diff。本批改回 LF，内容不变。
+- **全量 `npm test`**（本机）：958 项，943 通过，1 跳过，12 失败，2 取消。
+  - 9 项是 22.9 列过的环境失败。
+  - 1 项原有：repair-batch。
+  - 另 2 项（block11 §5、block9 "a hung or broken session"）的报错都是 `the host blocked … spawn UNKNOWN`。
+  - block-accept 的 serial R1–R3（连带 2 项取消）在全量里 "stopped"，单独连跑两次都通过（2/2），同属主机拦截。
+  - serial 中断续跑那项本次通过。

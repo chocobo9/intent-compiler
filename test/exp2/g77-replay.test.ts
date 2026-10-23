@@ -22,7 +22,8 @@ import { StubExecutor, write } from "./stub-executor.js"
  * R3. G77 was born in R2 from a reviewer item (normalize zscore by the population stddev); R3's text revises it to the
  * sample stddev (attribution: R3.S3 partial over R2.S11.P5, P6). On fe6562d the three repairs of R3 flipped G77 and
  * each was reverted. Here the same registry, guards, checks, real reviewer and formalizer replies and the four real
- * programs (C3.1 work, C3.2–C3.4 repairs) go through the current acceptance.
+ * programs (C3.1 work, C3.2–C3.4 repairs) go through the current acceptance. G84 and G92 (hash values, R3 left their
+ * text as it was) flip at the first delivery: by §6b rule 1 regressions, sent for repair.
  */
 
 const FIX = resolve(process.cwd(), "exp2/evidence/replay-2026-10-23/g77-ic15-r3")
@@ -55,9 +56,13 @@ describe("G77 replayed (ic15 R3, real state and programs): the flip is classifie
   })
 
   it("R3's text stands behind G77: the attribution's revision of R2.S11.P5, P6 and the change of its object", () => {
-    const behind = changedTextBehind(registry, g77, fx.checks, 3, g77.check)
-    assert.ok(behind.some(b => /^R2\.S11\.P5\.s1: .* partly revised by R3\.S3/u.test(b)), behind.join("\n"))
-    assert.ok(behind.some(b => b.startsWith(`${g77.object} `)), behind.join("\n"))
+    const behind = changedTextBehind(registry, g77, 3)
+    assert.ok(behind.some(b => b.source === "revision" && /^R2\.S11\.P5\.s1: .* partly revised by R3\.S3/u.test(b.text)), JSON.stringify(behind))
+    assert.ok(behind.some(b => b.source === "object" && b.text.startsWith(`${g77.object} `)), JSON.stringify(behind))
+  })
+
+  it("batch 1b (§6b): G84 and G92 rest on text R3 left as it was: no record stands behind them", () => {
+    for (const id of ["G84", "G92"]) assert.deepEqual(changedTextBehind(registry, fx.guards.find(g => g.id === id)!, 3), [], id)
   })
 
   it("on each of the three real repair programs G77 fails; the work program passes it", async () => {
@@ -95,11 +100,18 @@ describe("G77 replayed (ic15 R3, real state and programs): the flip is classifie
     }, { ...DEFAULT_LIMITS, repairCycles: 3 })
     const a = record.accept!
     const g77Flip = events.find(e => e.guard === "G77" && e.status === "failing")
-    console.log(JSON.stringify({ cycles: record.cycles.map(c => ({ id: c.id, message: c.message, reverted: c.reverted ?? null, flipped: c.guards?.flipped })), reverted: a.reverted, flipped_changed_text: a.guards.flipped_changed_text, flipped_unchanged: a.guards.flipped_unchanged, flipped_disputed: a.guards.flipped_disputed ?? [], retired: a.guards.retired, kept: record.kept, g77: g77Flip ?? null }, null, 1))
+    console.log(JSON.stringify({ cycles: record.cycles.map(c => ({ id: c.id, message: c.message, reverted: c.reverted ?? null, flipped: c.guards?.flipped })), reverted: a.reverted, flipped_changed_text: a.guards.flipped_changed_text, flipped_unchanged: a.guards.flipped_unchanged, flips: a.guards.flips, retired: a.guards.retired, kept: record.kept, g77: g77Flip ?? null }, null, 1))
     assert.equal(a.reverted, 0, "no repair is reverted")
     assert.ok(record.cycles.every(c => !c.reverted))
     assert.ok(a.guards.flipped_changed_text.includes("G77"), JSON.stringify(a.guards))
     assert.ok(!a.guards.flipped_unchanged.includes("G77"))
+    assert.deepEqual(a.guards.flips!.find(f => f.id === "G77")!.sources, ["revision", "object"])
+    // §6b rule 1: G84 and G92 flip at the first delivery on unchanged text: regressions, in the repair list at once.
+    assert.deepEqual(a.guards.flipped_unchanged, ["G84", "G92"])
+    assert.deepEqual(a.guards.flips!.filter(f => f.how === "regression").map(f => [f.id, f.cycle, f.sources]), [["G84", "C3.1", []], ["G92", "C3.1", []]])
+    const c31 = record.cycles.find(c => c.id === "C3.1")!
+    assert.deepEqual(c31.items!.filter(i => i.id === "G84" || i.id === "G92").map(i => [i.id, i.verdict, i.action]), [["G84", "not_landed", "send"], ["G92", "not_landed", "send"]])
+    assert.match(executor.log.messages[1].text, /\(G84\)[^]*\(G92\)|\(G92\)[^]*\(G84\)/u)
     assert.ok(g77Flip?.changed_text?.length, JSON.stringify(g77Flip))
     assert.ok(!executor.log.messages.some(m => /reverted by the controller/u.test(m.text)))
     assert.ok(requests.slice(1).some(r => /G77: command \["transform"/u.test(r)), "the reviewer is asked about G77")

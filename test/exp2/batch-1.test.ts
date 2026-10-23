@@ -143,17 +143,24 @@ describe("batch 1, item 11: a flip is classified before any revert; only a regre
     assert.ok(!ledger.some(e => e.end?.how === "discarded"))
   })
 
-  it("a flip whose run is disputed (only a derived value differs, its object unchanged this round): not reverted, not sent; a lead for the reviewer", async () => {
+  it("batch 1b (§6b rule 1): a guard whose value is worked out (derived) flips on unchanged text: a regression; the repair is reverted; the flip's sources are none", async () => {
     const sort = recorded.registry().coverOf(SORT_UNIT)!.owner
     assert.ok(!recorded.registry().roundScope(3).some(c => c.object === sort), "R3 does not touch the sort")
     // The sort guard with its value worked out (derived), as the formalizer writes most values.
     const g = { ...sortGuard(sort), assertions: sortGuard(sort).assertions!.map(x => x.id === "l2" ? { ...x, source: { kind: "derived" as const, block: null } } : x) }
-    const reviewer = workingReviewer(join(dir, "rb-disputed"))
-    const { record, executor } = await round3(dir, recorded, [wd => write(wd, program({ stddev: "sample", filterWrong: true })), wd => write(wd, program({ stddev: "sample", sortText: true }))], { guards: [g], reviewer })
+    const reviewer = workingReviewer(join(dir, "rb-derived"))
+    const { record, executor } = await round3(dir, recorded, [
+      wd => write(wd, program({ stddev: "sample", filterWrong: true })),
+      wd => write(wd, program({ stddev: "sample", sortText: true })),
+      wd => write(wd, program({ stddev: "sample" })),
+    ], { guards: [g], reviewer })
     const a = record.accept!
-    assert.deepEqual([a.reverted, a.guards.flipped_unchanged, a.guards.flipped_disputed], [0, [], ["G1"]])
-    assert.ok(!executor.log.messages.slice(1).some(m => /\(G1\)/u.test(m.text)), "not sent to the executor as a regression")
-    assert.ok(reviewer.requests.slice(1).some(r => /# Leads to verify[^]*- G1: /u.test(r.request)), "a lead for the next review")
+    assert.equal(a.reverted, 1)
+    assert.deepEqual(record.cycles.find(c => c.reverted)!.reverted!.guards, ["G1"])
+    assert.deepEqual(a.guards.flips!.map(f => [f.id, f.cycle, f.how, f.sources, f.expected]), [["G1", "C3.2", "regression", [], ["derived", "verbatim"]]])
+    assert.equal(record.kept, "C3.3", "the third program fixes the filter and keeps the sort")
+    assert.match(executor.log.messages[2].text, /reverted by the controller: it made G1 fail/u)
+    assert.ok(!reviewer.requests.some(r => /# Leads to verify[^]*- G1: /u.test(r.request)), "no lead: it is the executor's")
   })
 })
 
