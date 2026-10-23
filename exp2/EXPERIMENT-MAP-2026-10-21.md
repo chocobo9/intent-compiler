@@ -54,7 +54,7 @@
 
 
 **对照组新模型组合（2026-10-22/23）**：执行方 5.6 low（L）或 5.6 medium（M），审查员 5.6 medium，其余同 rep2b。
-- rep1 官方 R15：L 950/960（99.0%），M 960/960（100%）；rep2 进行中；
+- 官方 R15：L rep1 950、rep2 951（99.0%、99.1%）；M rep1 960、rep2 953（100%、99.3%）；
 - 运行目录：`exp2-review15-luna56-{low,medium}-revmed-rep{1,2}-dpipe-20261022`；
 - 3 个审查员并行的试跑：`*-revmed-par3-rep1-*`，各只跑完 R1，已停止；
 - 详细数据见 OBSERVATIONS §17。
