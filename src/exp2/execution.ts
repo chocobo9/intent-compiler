@@ -249,6 +249,9 @@ export interface ReviewItemRecord {
    */
   disposition?: "sent" | "logged" | "fallback" | "blocked"
   logged?: { premise: string; detail: string }[]
+  /** Where code took the input from when the formalizer gave none (batch C, effect 3), and files earlier commands produced. */
+  input_from?: string
+  produced?: { path: string; by: string[]; made: boolean }[]
   /** The check the code built (sent items), for later runs. */
   check?: { input: import("./runner.js").CheckInput; assertions: import("./checks.js").Assertion[]; reference_script: import("./checks.js").CheckDraft["reference_script"]; object: string | null }
   /** The guard it became once the executor fixed it. */
@@ -262,7 +265,14 @@ export interface ReviewItemRecord {
  * fix block A2); fallback: items sent in the reviewer's words because code could not verify them, and whether the whole
  * reply went (A1); logged: items sent although a premise outside the blocking tier failed (A3).
  */
-export interface ReviewSummary { n: number; cycle: string; attempts: number; valid: boolean; no_issues: boolean; reported: number; malformed: number; blocked: number; sent: number; superseded: string[]; leads: number; program_runs?: number; fallback?: number; fallback_whole?: boolean; fallback_reasons?: Record<string, number>; logged?: number }
+export interface ReviewSummary {
+  n: number; cycle: string; attempts: number; valid: boolean; no_issues: boolean; reported: number; malformed: number; blocked: number; sent: number; superseded: string[]; leads: number
+  program_runs?: number; fallback?: number; fallback_whole?: boolean; fallback_reasons?: Record<string, number>; logged?: number
+  /** Batch C, effect 4: entries that went out (sent verified, logged, fallback), and the check that every entry ended once. */
+  entered?: number
+  formalizer_duplicates?: number
+  conservation?: { reported: number; sent: number; logged: number; fallback: number; blocked: number; ok: boolean }
+}
 
 export interface AcceptRoundRecord {
   reviews: ReviewSummary[]
@@ -276,6 +286,8 @@ export interface AcceptRoundRecord {
   fallback?: { reviews: number; whole: number; items: number; reasons: Record<string, number> }
   /** Valid reviews in whose session no run of the program was seen (fix block A2). */
   program_runs_zero?: number
+  /** Reviews whose entries did not each end once (batch C, effect 4); absent when all did. */
+  conservation_errors?: string[]
   guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; retired: { id: string; reason: string }[] }
   reverted: number
   trial: { runs: number; failures: number }

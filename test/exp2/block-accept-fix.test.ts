@@ -182,15 +182,14 @@ describe("fix block A1: what code cannot verify for its own reasons goes out in 
     assert.equal(formalize.calls.n, 1, "no problem left in the first reply: no second formalizer call")
     assert.equal(executor.log.messages[1].text, `${REPAIR_INTRO}\n\n${REP1B.response_text.trim()}`)
     const r1 = record.accept!.reviews[0]
-    assert.deepEqual([r1.reported, r1.sent, r1.blocked, r1.fallback, r1.fallback_whole, r1.fallback_reasons], [8, 1, 0, 8, true, { no_input: 8 }])
+    assert.deepEqual([r1.reported, r1.sent, r1.blocked, r1.fallback, r1.fallback_whole, r1.fallback_reasons], [8, 8, 0, 8, true, { no_input: 8 }])
     assert.deepEqual(record.accept!.fallback, { reviews: 1, whole: 1, items: 8, reasons: { no_input: 8 } })
     assert.deepEqual(record.accept!.premise_blocked, {})
     const recs = record.review_items!.filter(x => x.review === "R1.1")
     assert.deepEqual(recs.filter(x => x.item > 0).map(x => [x.disposition, x.logged?.at(-1)?.premise]), Array(8).fill(["fallback", "no_input"]))
-    // The ledger lists the reply as sent and unverified: no check can tell whether it was fixed.
+    // The ledger lists each item as sent and unverified (batch C, effect 4): no check can tell whether it was fixed.
     const ledger = ledgerOf({ ...store.inspect(), executions: [record] }, store.registry())
-    const e = ledger.find(x => x.id === "V1.1.0")!
-    assert.deepEqual([e.source, e.reason, e.sent, e.end?.how, e.disposition], ["review", "unverified", ["C1.1"], "unverified", "fallback"])
+    assert.deepEqual(ledger.filter(x => x.source === "review").map(e => [e.id, e.reason, e.sent, e.end?.how, e.disposition]), Array.from({ length: 8 }, (_, k) => [`V1.1.${k + 1}`, "unverified", ["C1.1"], "unverified", "fallback"]))
   })
 
   it("a reply the formalizer answered with the real malformed reply (the ids before canonicalUnit) still goes out", async () => {
@@ -250,7 +249,7 @@ describe("fix block A2: a review whose session shows no run of the program is va
     assert.ok(record.accept!.program_runs_zero! >= 2)
     assert.equal(executor.log.messages[1].text, `${REPAIR_INTRO}\n\n${replyAsList(REP1C[0].response_text)}`)
     assert.equal(executor.log.messages[2].text, `${REPAIR_INTRO}\n\n${replyAsList(REP1C[1].response_text)}`)
-    assert.ok(record.accept!.reviews.slice(0, 2).every(r => r.valid && r.program_runs === 0 && r.sent === 1 && r.fallback_whole))
+    assert.ok(record.accept!.reviews.slice(0, 2).every(r => r.valid && r.program_runs === 0 && r.sent === r.reported && r.fallback_whole))
   })
 
   it("the real tool parts of rep1c give the runs; voiding is still there behind acceptance.void_without_runs", async () => {

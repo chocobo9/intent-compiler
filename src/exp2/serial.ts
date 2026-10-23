@@ -295,7 +295,7 @@ export class Serial {
     const review = this.mode() === "review", a = this.c.acceptance ?? {}
     let checkWriting: Promise<CheckRoundRecord> | null = null
     if (store.ablation.checks !== false) {
-      const deps = { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs, staleByReference: byRef, ...(review && a.checksOnce !== false ? { unitsOnce: true } : {}) }
+      const deps = { sandbox: this.c.sandbox, runner: this.c.runner, baseline, maxRepairs: limits.checkRepairs, timeoutMs: limits.checkTimeoutMs, staleByReference: byRef, ...(review && a.checksOnce !== false ? { unitsOnce: true } : {}), ...(review ? { binary: this.c.binary ?? null, admitInLoop: true } : {}) }
       if (review && a.checksInBackground !== false) {
         // Fix block B3: the checks are written beside the coding; the work order has the library as the round starts.
         await store.beginRoundChecks(round, deps)
@@ -559,7 +559,7 @@ export class Serial {
         attempts: interrupted.length, understand: interrupted.flatMap(x => x.calls), acceptance: interrupted.flatMap(x => [...x.check_calls, ...(x.probe_calls ?? []), ...(x.judge_calls ?? []), ...(x.review_calls ?? []), ...(x.formalize_calls ?? [])]),
         coding: interrupted.reduce((t: StageCost, x) => { const c = codingCost(x.execution, this.c.executorIsStub); return { calls: t.calls + c.calls, tokens: sumUsage(t.tokens, c.tokens), stub_calls: t.stub_calls + c.stub_calls } }, codingCost(null, false)),
       },
-      checks: { entered: state.checks.filter(k => k.round === round).length, stale: events.filter(e => e.status === "stale").length, retired: events.filter(e => e.status === "retired").length, run: verdict.runs.length, passed: verdict.runs.filter(r => r.outcome === "pass").length, failed: verdict.runs.filter(r => r.outcome === "fail").length },
+      checks: { entered: state.checks.filter(k => k.round === round).length, stale: events.filter(e => e.status === "stale").length, retired: events.filter(e => e.status === "retired").length, run: verdict.runs.length, passed: verdict.runs.filter(r => r.outcome === "pass").length, failed: verdict.runs.filter(r => r.outcome === "fail").length, ...checkWritingCounts(state, round, execution) },
       review: { accept: execution.accept!, first_delivery: execution.first_delivery ?? null, review_calls: state.review_calls.filter(c => c.round === round), formalize_calls: state.formalize_calls.filter(c => c.round === round), coverage: cov },
     })
     await store.recordRound(execution, report)
@@ -731,3 +731,17 @@ function sumUsage(a: StageCost["tokens"], b: StageCost["tokens"]): StageCost["to
 }
 
 export type { ModelReply }
+
+/** What became of the round's check writing (batch C, effects 1–2), from the state and the round's runs. */
+export function checkWritingCounts(state: Pick<Exp2State, "checks" | "check_rounds">, round: number, execution: ExecutionRecord): Pick<RoundReport["checks"], "admitted" | "unknown" | "unknown_not_fed_back" | "dropped" | "normalized" | "refused_calls"> {
+  const mine = state.checks.filter(k => k.round === round)
+  const tally = (list: string[]) => list.reduce((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {} as Record<string, number>)
+  const record = state.check_rounds.find(r => r.round === round && r.status === "accepted")
+  return {
+    admitted: mine.filter(k => k.admission === "admitted").length, unknown: mine.filter(k => k.admission === "unknown").length,
+    unknown_not_fed_back: mine.filter(k => k.unknown.length && !k.fed_back).length,
+    dropped: tally((record?.dropped ?? []).flatMap(d => [...new Set(d.issues.map(i => i.code))])),
+    normalized: tally(mine.flatMap(k => (k.normalized ?? []).map(n => n.startsWith("args") ? "leading program name" : n.includes("expect_json") ? "unquoted expected string" : n.includes("Python dict") ? "Python dict output" : n.includes("several lines") ? "JSON on several lines" : n.includes("backslash") ? "doubled escapes" : "other"))),
+    refused_calls: execution.cycles.reduce((n, c) => n + c.runs.filter(r => r.failure === "not_landed/refused_call").length, 0),
+  }
+}

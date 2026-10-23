@@ -136,6 +136,10 @@ export interface CheckRecord {
   computed_inputs?: string[]
   /** admitted: in the library. unknown: no assertion survived, recorded with the reason only. */
   admission: "admitted" | "unknown"
+  /** Shape read the one way it could mean (batch C, effect 1): what code changed in the draft or how it read the script's output. */
+  normalized?: string[]
+  /** Whether the reasons in `unknown` were sent back to the writing model in a repair request (batch C, effect 1). */
+  fed_back?: boolean
   admission_reason: string | null
   strength: Strength | null
   /** Status at entry; later changes are events (retire now; stale is reserved for propagation). */
@@ -320,6 +324,7 @@ export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
   | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth" | "unavailable" | "unit_unchanged"
+  | "reference_output" | "reference_value_missing" | "methods_disagree" | "computed_missing"
 
 /** `blocks`: for code, the units an `uncovered` issue names. */
 export interface CheckIssue { code: CheckIssueCode; check?: string; message: string; blocks?: string[] }
@@ -676,6 +681,46 @@ export interface MethodBOutcome {
   input: CheckInput | null
   computed_inputs: string[]
   input_failure?: string
+  /** How the script's output was read when it was not one JSON object (batch C, effect 1). */
+  normalized?: string[]
+  /** What the script printed, for the message back to the model when it could not be read. */
+  stdout_head?: string
+}
+
+const unescapeBackslashes = (t: string) => t.replace(/\\([ntr\\"'])/gu, (_, c: string) => c === "n" ? "\n" : c === "t" ? "\t" : c === "r" ? "\r" : c)
+
+/** Python's own reading of a printed literal: the whole text, else one dict a line, merged; prints JSON or exits 2. */
+const PY_LITERAL = [
+  "import ast, json",
+  "text = open('__stdout__.txt', encoding='utf-8').read()",
+  "try:",
+  "    v = ast.literal_eval(text.strip())",
+  "    parts = [v]",
+  "except Exception:",
+  "    parts = [ast.literal_eval(l.strip()) for l in text.splitlines() if l.strip()]",
+  "out = {}",
+  "for v in parts:",
+  "    if not isinstance(v, dict): raise SystemExit(2)",
+  "    out.update(v)",
+  "print(json.dumps(out))",
+].join("\n")
+
+/**
+ * The script's output as one object of values, read the one way each form can mean (batch C, effect 1): one JSON
+ * object; JSON objects a line, merged; for Python, a printed dict literal (`print({...})`, read by Python's own
+ * `ast.literal_eval`, a line at a time when there are several). Anything else is not read.
+ */
+async function readValues(language: "python" | "node", stdout: string, sandbox: ScriptSandbox, timeoutMs: number): Promise<{ values: Record<string, unknown> | null; how?: string }> {
+  const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
+  try { const v = JSON.parse(stdout); return isObject(v) ? { values: v } : { values: null } } catch { /* other forms below */ }
+  const lines = stdout.split(/\r?\n/u).map(l => l.trim()).filter(Boolean)
+  if (lines.length > 1) {
+    try { const parts = lines.map(l => JSON.parse(l) as unknown); if (parts.every(isObject)) return { values: Object.assign({}, ...parts), how: "JSON objects on several lines, merged" } } catch { /* not JSON lines */ }
+  }
+  if (language !== "python" || !stdout.trim()) return { values: null }
+  const r = await sandbox.run("python", PY_LITERAL, [{ path: "__stdout__.txt", content: stdout }], timeoutMs)
+  if (r.exit_code !== 0 || r.timed_out) return { values: null }
+  try { const v = JSON.parse(r.stdout); return isObject(v) ? { values: v, how: "a printed Python dict literal, read with ast.literal_eval" } : { values: null } } catch { return { values: null } }
 }
 
 /**
@@ -686,17 +731,17 @@ export async function methodB(draft: CheckDraft, sandbox: ScriptSandbox, timeout
   const assertions: Assertion[] = [], unknown: CheckRecord["unknown"] = []
   const derived = draft.assertions.filter(a => a.source.kind !== "verbatim")
   const placeholders = placeholdersOf(draft.input)
-  let values: Record<string, unknown> | null = null, failure = ""
+  let values: Record<string, unknown> | null = null, failure = "", stdout_head: string | undefined
+  const normalized: string[] = []
   if ((derived.length || placeholders.length) && draft.reference_script) {
     const r = await sandbox.run(draft.reference_script.language, draft.reference_script.code, draft.input.files, timeoutMs)
     if (r.timed_out) failure = `reference script timed out after ${timeoutMs} ms`
     else if (r.exit_code !== 0) failure = `reference script exited ${r.exit_code}: ${r.stderr.trim().slice(0, 300)}`
     else {
-      try {
-        const parsed = JSON.parse(r.stdout)
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) values = parsed as Record<string, unknown>
-        else failure = "reference script did not print a JSON object"
-      } catch { failure = "reference script did not print JSON" }
+      const read = await readValues(draft.reference_script.language, r.stdout, sandbox, timeoutMs)
+      values = read.values
+      if (read.how) normalized.push(`reference script output: ${read.how}`)
+      if (!values) { failure = "reference script did not print JSON"; stdout_head = r.stdout.slice(0, 300) }
     }
   }
   let input: CheckInput | null = draft.input, input_failure: string | undefined
@@ -715,9 +760,42 @@ export async function methodB(draft: CheckDraft, sandbox: ScriptSandbox, timeout
     const b = values[a.id]
     if (a.source.kind === "computed") { assertions.push({ ...rest, expect: b, method_b: b }); continue }
     if (sameValue(expect, b, a.tolerance ?? DEFAULT_TOLERANCE)) assertions.push({ ...rest, expect, method_b: b })
+    // A string the script wrote with its escapes doubled (`'a\\nb'` in its source) means the text with those escapes undone.
+    else if (typeof b === "string" && typeof expect === "string" && /\\[ntr\\"']/u.test(b) && unescapeBackslashes(b) === expect) { assertions.push({ ...rest, expect, method_b: expect }); normalized.push(`assertion ${a.id}: the reference value read with its doubled backslash escapes undone`) }
     else unknown.push({ assertion: a, reason: `methods disagree: A ${expect_json}, B ${JSON.stringify(b)}`, method_b: b })
   }
-  return { assertions, unknown, input, computed_inputs: placeholders, ...(input_failure ? { input_failure } : {}) }
+  return { assertions, unknown, input, computed_inputs: placeholders, ...(input_failure ? { input_failure } : {}), ...(normalized.length ? { normalized } : {}), ...(stdout_head !== undefined ? { stdout_head } : {}) }
+}
+
+/**
+ * A draft check's shape read the one way it can mean (batch C, effect 1): an expected value that is not JSON is the
+ * string as written; arguments that start with the program's own name (the requirements give it) start after it.
+ * Returns what was changed, for the record.
+ */
+export function normalizeDraft(k: CheckDraft, binary: string | null): string[] {
+  const notes: string[] = []
+  for (const a of k.assertions) {
+    if (typeof a.expect_json !== "string") continue
+    try { JSON.parse(a.expect_json) } catch { a.expect_json = JSON.stringify(a.expect_json); notes.push(`assertion ${a.id}: expect_json read as the string written`) }
+  }
+  const first = k.input?.args?.[0]
+  if (binary && typeof first === "string" && first.replace(/^\.?[\\/]/u, "").replace(/\.exe$/iu, "") === binary && k.input.args.length > 1) { k.input.args = k.input.args.slice(1); notes.push(`args: the leading program name ${JSON.stringify(first)} dropped (args come after the program name)`) }
+  return notes
+}
+
+/** Admission as problems the model can act on (batch C, effect 1): every assertion methodB could not resolve, and why. */
+export function admissionIssues(k: CheckDraft, b: MethodBOutcome): CheckIssue[] {
+  const w = `check ${k.key}`
+  const out: CheckIssue[] = []
+  if (!b.input && b.input_failure) out.push({ code: "computed_missing", check: k.key, message: `${w}: ${b.input_failure}; the reference script must print a value for every {{computed:NAME}} placeholder` })
+  const byReason = new Map<string, string[]>()
+  for (const u of b.unknown) if (b.input) byReason.set(u.reason, [...(byReason.get(u.reason) ?? []), u.assertion.id])
+  for (const [reason, ids] of byReason) {
+    const code: CheckIssueCode = reason.startsWith("methods disagree") ? "methods_disagree" : reason.startsWith("reference script gave no value") ? "reference_value_missing" : "reference_output"
+    const printed = code === "reference_output" && b.stdout_head !== undefined ? `; it printed ${JSON.stringify(b.stdout_head)}` : ""
+    out.push({ code, check: k.key, message: `${w} assertion${ids.length > 1 ? "s" : ""} ${ids.join(", ")}: ${reason}${printed}; the reference script must print one JSON object mapping each derived or computed assertion's id to its value` })
+  }
+  return out
 }
 
 // ---------------------------------------------------------------- loop
@@ -751,15 +829,32 @@ export interface DeriveOutcome {
   /** Checks that still had problems when the repairs ran out: dropped one by one, with their issues (BLOCK9 §2.1). */
   dropped?: { key: string; issues: CheckIssue[] }[]
   coverage?: Coverage
+  /** Per check key: what code read the one way it could mean (batch C, effect 1). */
+  normalized?: Record<string, string[]>
+  /** Check keys whose admission problems went back to the model in a repair request (batch C, effect 1). */
+  fed_back?: string[]
 }
 
-export async function deriveChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], transport: ChecksTransport, options: { maxRepairs: number; callId: (n: number) => string; unitsOnce?: boolean }): Promise<DeriveOutcome> {
+/** The admission problems of a check (batch C, effect 1): the issues for the model and how its output was read. */
+export type AdmitCheck = (k: CheckDraft) => Promise<{ issues: CheckIssue[]; notes: string[] }>
+
+const ADMISSION_CODES: ReadonlySet<CheckIssueCode> = new Set(["reference_output", "reference_value_missing", "methods_disagree", "computed_missing"])
+
+export async function deriveChecks(registry: Registry, round: number, library: readonly CheckRecord[], events: readonly CheckEvent[], transport: ChecksTransport, options: { maxRepairs: number; callId: (n: number) => string; unitsOnce?: boolean; binary?: string | null; admit?: AdmitCheck }): Promise<DeriveOutcome> {
   const calls: CheckCallRecord[] = []
   const facts = codeFacts(registry, round)
   let draft = EMPTY_CHECKS
   let issues: CheckIssue[] = []
   let parsedOnce = false, transportFailures = 0
+  const normalized: Record<string, string[]> = {}
+  const fedBack = new Set<string>()
+  // Admission is the same for the same check: run once per distinct draft.
+  const admitted = new Map<string, Awaited<ReturnType<AdmitCheck>>>()
+  const admit = async (k: CheckDraft) => { const key = JSON.stringify(k); if (!admitted.has(key)) admitted.set(key, await options.admit!(k)); return admitted.get(key)! }
+  const finish = (o: DeriveOutcome): DeriveOutcome => ({ ...o, normalized, fed_back: [...fedBack] })
   for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
+    // The problems this request carries are the ones the model hears about.
+    for (const i of issues) if (i.check && ADMISSION_CODES.has(i.code)) fedBack.add(i.check)
     const request = buildCheckRequest(registry, round, library, events, draft, issues)
     const text = requestJson(request)
     const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "checks" as const, kind: attempt === 1 ? "attribute" as const : "repair" as const, attempt, request, request_chars: text.length, request_sha256: createHash("sha256").update(text).digest("hex") }
@@ -783,22 +878,32 @@ export async function deriveChecks(registry: Registry, round: number, library: r
     const shape = checksShapeProblems(parsed)
     if (shape.length) { issues = shape.map(message => ({ code: "shape" as const, message })); record.issues = issues; continue }
     draft = applyChecksPatch(draft, parsed as ChecksPatch)
+    for (const k of draft.checks) { const notes = normalizeDraft(k, options.binary ?? null); if (notes.length) normalized[k.key] = [...new Set([...(normalized[k.key] ?? []), ...notes])] }
     issues = [...checkChecks(registry, round, draft, library, events, facts, { unitsOnce: options.unitsOnce }), ...coverageIssues(registry, coverage(registry, round, draft, library, events), draft, library, events)]
+    // Admission inside the loop (batch C, effect 1): what the reference script gives, for checks with no other problem.
+    if (options.admit) for (const k of draft.checks.filter(c => !issues.some(i => i.check === c.key))) {
+      const a = await admit(k)
+      if (a.notes.length) normalized[k.key] = [...new Set([...(normalized[k.key] ?? []), ...a.notes])]
+      issues.push(...a.issues)
+    }
     record.issues = issues
     parsedOnce = true
-    if (!issues.length) return { status: "accepted", draft, calls, issues, dropped: [], coverage: coverage(registry, round, draft, library, events) }
+    if (!issues.length) return finish({ status: "accepted", draft, calls, issues, dropped: [], coverage: coverage(registry, round, draft, library, events) })
   }
-  if (!parsedOnce) return { status: "failed", calls, issues }
-  // The repairs ran out: each check with a problem left is dropped on its own; the rest enter (BLOCK9 §2.1).
-  const bad = new Set(issues.map(i => i.check).filter((k): k is string => !!k))
+  if (!parsedOnce) return finish({ status: "failed", calls, issues })
+  // The repairs ran out: each check with a problem left is dropped on its own; the rest enter (BLOCK9 §2.1). A check
+  // whose only problems are admission problems the model was told about enters with what resolved (batch C, effect 1);
+  // one whose admission problem appeared only in the last answer was never told, and is dropped.
+  const kept = new Set(draft.checks.map(k => k.key).filter(key => { const own = issues.filter(i => i.check === key); return own.length > 0 && own.every(i => ADMISSION_CODES.has(i.code)) && fedBack.has(key) }))
+  const bad = new Set(issues.map(i => i.check).filter((k): k is string => !!k && !kept.has(k)))
   const retired = new Set(events.filter(e => e.status === "retired").map(e => e.check))
-  const kept: ChecksDraft = {
+  const keptDraft: ChecksDraft = {
     checks: draft.checks.filter(k => !bad.has(k.key)),
     retire: draft.retire.filter(r => library.some(c => c.id === r.check && c.admission === "admitted") && !retired.has(r.check)),
     uncheckable: (draft.uncheckable ?? []).filter(u => registry.block(parseRef(u.block).id)),
   }
   const dropped = [...bad].map(key => ({ key, issues: issues.filter(i => i.check === key) }))
-  return { status: "accepted", draft: kept, calls, issues, dropped, coverage: coverage(registry, round, kept, library, events) }
+  return finish({ status: "accepted", draft: keptDraft, calls, issues, dropped, coverage: coverage(registry, round, keptDraft, library, events) })
 }
 
 function zero(): TokenUsage { return { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 } }

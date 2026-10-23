@@ -6,6 +6,7 @@ import { SessionBroken } from "./execution.js"
 import type { OpenCodeCodingClient } from "./opencode-executor.js"
 import { sessionTokens } from "./opencode-executor.js"
 import { asProviderError, classifyProviderError, withRateLimitRetry, type RateLimitPolicy } from "./provider-errors.js"
+import { sessionMaterials, type ReviewMaterials } from "./materials.js"
 
 /**
  * The reviewer (DESIGN §12i item 1): a session with tools, in a copy of the program, that builds it, runs it on
@@ -129,6 +130,8 @@ export interface ReviewOutcome {
   session: string
   /** The reviewer's own runs of the program under review, as the session's tool calls show them. */
   runs: ProgramRun[]
+  /** The files the reviewer wrote and the commands it ran, from the same tool calls (batch C, effect 3). */
+  materials?: Pick<ReviewMaterials, "files" | "commands" | "unreadable">
 }
 
 export interface Reviewer {
@@ -230,14 +233,14 @@ export class OpenCodeReviewer implements Reviewer {
       }, this.o.rateLimit)
     } catch (e) { throw broken("session.prompt", e) }
     const text = (Array.isArray(r.parts) ? r.parts : []).filter((p: any) => p?.type === "text").map((p: any) => String(p.text)).join("\n")
-    let usage: TokenUsage | null = null, runs: ProgramRun[] = []
+    let usage: TokenUsage | null = null, runs: ProgramRun[] = [], materials: ReviewOutcome["materials"]
     try {
-      if (client.session.messages) { const messages = await client.session.messages({ path: { id }, query: { directory: dir } }); usage = sessionTokens(messages); runs = programRunsIn(messages, this.o.binary) }
+      if (client.session.messages) { const messages = await client.session.messages({ path: { id }, query: { directory: dir } }); usage = sessionTokens(messages); runs = programRunsIn(messages, this.o.binary); materials = sessionMaterials(messages, dir) }
     } catch { usage = null }
     try { await client.session.abort?.({ path: { id }, query: { directory: dir } }) } catch { /* a finished session may refuse; nothing depends on it */ }
     const t = (r.info?.tokens ?? {}) as Record<string, any>
     const n = (x: unknown) => typeof x === "number" && Number.isFinite(x) ? x : 0
-    return { text, usage: usage ?? { input_tokens: n(t.input), output_tokens: n(t.output), reasoning_tokens: n(t.reasoning), cache_read_tokens: n(t.cache?.read), cache_write_tokens: n(t.cache?.write) }, model: typeof r.info?.modelID === "string" ? r.info.modelID : undefined, session: id, runs }
+    return { text, usage: usage ?? { input_tokens: n(t.input), output_tokens: n(t.output), reasoning_tokens: n(t.reasoning), cache_read_tokens: n(t.cache?.read), cache_write_tokens: n(t.cache?.write) }, model: typeof r.info?.modelID === "string" ? r.info.modelID : undefined, session: id, runs, ...(materials ? { materials } : {}) }
   }
 }
 

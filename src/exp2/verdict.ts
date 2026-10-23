@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto"
+import { statSync } from "node:fs"
+import { join } from "node:path"
 import { activeChecks, DEFAULT_TOLERANCE, sameValue, type Assertion, type CheckEvent, type CheckRecord, type CodeFacts, type Strength, type Target } from "./checks.js"
 import type { Registry } from "./registry.js"
 import type { CheckRunner, ProgramRef, RunOutput } from "./runner.js"
@@ -18,6 +20,8 @@ export type FailureClass = "not_landed" | "unknown" | "disputed"
 export type FailureReason =
   | "value_mismatch" | "missing_name" | "still_present" | "crash" | "refused" | "timeout" | "reading"
   | "position" | "input_incomplete" | "contested" | "reference"
+  /** The program answered the call as it answers an unknown command: what the check tests never ran (batch C, effect 2). */
+  | "refused_call"
   /** Kept for runs recorded before block 9. */
   | "rejected" | "other_error_rule"
 
@@ -219,8 +223,44 @@ export function classify(check: CheckRecord, results: AssertionResult[], out: Ru
   return { class: "not_landed", reason: "value_mismatch", detail: failed.map(r => `${r.id}: got ${JSON.stringify(r.actual)}`).join("; "), roles }
 }
 
+/** A subcommand no program has: how a program answers it is how it refuses a call (batch C, effect 2). */
+export const UNKNOWN_COMMAND = "__ic_unknown_command__"
+const REFUSALS = new Map<string, RunOutput | null>()
+/** A program by what runs: its command and mount, and the binary's modification time (a label is reused across builds). */
+const programKey = (p: ProgramRef) => {
+  const bin = p.mount ? join(p.mount.host, p.command[0]?.split("/").pop() ?? "") : p.command[0] ?? ""
+  let mtime = 0
+  try { mtime = statSync(bin).mtimeMs } catch { /* not a file here (a stand-in, or a path inside a container) */ }
+  return JSON.stringify([p.id, p.command, p.mount ?? null, mtime])
+}
+
+/**
+ * How the program answers a call it refuses: one run with an unknown subcommand, once per program. Null when it does
+ * not refuse that way (it exits 0, or the run timed out): then no call is taken for a refused one.
+ */
+async function refusalOf(program: ProgramRef, runner: CheckRunner, timeoutMs: number, given?: RunOutput): Promise<RunOutput | null> {
+  const key = programKey(program)
+  if (!REFUSALS.has(key)) {
+    const out = given ?? await runner.run(program, { args: [UNKNOWN_COMMAND], files: [] }, timeoutMs)
+    REFUSALS.set(key, out.timed_out || out.exit_code === 0 || out.exit_code === null ? null : out)
+  }
+  return REFUSALS.get(key)!
+}
+
+/**
+ * Whether a run is the program refusing the call (batch C, effect 2): the same exit code and the same output as the
+ * unknown-subcommand run, once the check's first argument and the unknown subcommand are both put out of the way.
+ */
+export function refusedCall(check: Pick<CheckRecord, "input">, out: RunOutput, refusal: RunOutput | null): boolean {
+  const first = check.input.args[0]
+  if (!refusal || !first || out.timed_out) return false
+  const mask = (t: string, word: string) => t.split(word).join("\u0000")
+  return out.exit_code === refusal.exit_code && mask(out.stdout, first) === mask(refusal.stdout, UNKNOWN_COMMAND) && mask(out.stderr, first) === mask(refusal.stderr, UNKNOWN_COMMAND)
+}
+
 export async function runCheck(check: CheckRecord, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, timeoutMs: number, upheld: ReadonlySet<DisputeKind> = new Set()): Promise<CheckRun> {
-  return checkRun(check, await runner.run(program, check.input, timeoutMs), program, runner, round, registry, facts, upheld)
+  const out = await runner.run(program, check.input, timeoutMs)
+  return checkRun(check, out, program, runner, round, registry, facts, upheld, refusedCall(check, out, await refusalOf(program, runner, timeoutMs)))
 }
 
 /**
@@ -228,9 +268,14 @@ export async function runCheck(check: CheckRecord, program: ProgramRef, runner: 
  * check), each then compared and classified by code as one alone would be.
  */
 export async function runChecks(checks: readonly CheckRecord[], program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, timeoutMs: number, upheld: (check: string) => ReadonlySet<DisputeKind> = () => new Set(), seen?: (check: string, out: RunOutput) => void): Promise<CheckRun[]> {
-  const outs = runner.runBatch ? await runner.runBatch(program, checks.map(c => c.input), timeoutMs) : await Promise.all(checks.map(c => runner.run(program, c.input, timeoutMs)))
+  // The unknown-subcommand run goes in the same batch the first time a program is seen (batch C, effect 2).
+  const probe = !REFUSALS.has(programKey(program)) && checks.length > 0
+  const inputs = [...(probe ? [{ args: [UNKNOWN_COMMAND], files: [] }] : []), ...checks.map(c => c.input)]
+  const all = runner.runBatch ? await runner.runBatch(program, inputs, timeoutMs) : await Promise.all(inputs.map(x => runner.run(program, x, timeoutMs)))
+  const refusal = await refusalOf(program, runner, timeoutMs, probe ? all[0] : undefined)
+  const outs = probe ? all.slice(1) : all
   checks.forEach((c, i) => seen?.(c.id, outs[i]))
-  return checks.map((c, i) => checkRun(c, outs[i], program, runner, round, registry, facts, upheld(c.id)))
+  return checks.map((c, i) => checkRun(c, outs[i], program, runner, round, registry, facts, upheld(c.id), refusedCall(c, outs[i], refusal)))
 }
 
 /** What a check's run showed, as a digest: an unchanged digest after a repair is no progress (DESIGN §12h E3). */
@@ -238,10 +283,13 @@ export function runDigest(run: Pick<CheckRun, "outcome" | "assertions" | "exit_c
   return createHash("sha256").update(JSON.stringify([run.outcome, run.exit_code, run.assertions.map(a => [a.id, a.ok, a.actual]), run.failure ? `${run.failure.class}/${run.failure.reason}` : null])).digest("hex")
 }
 
-function checkRun(check: CheckRecord, out: RunOutput, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, upheld: ReadonlySet<DisputeKind>): CheckRun {
+function checkRun(check: CheckRecord, out: RunOutput, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, upheld: ReadonlySet<DisputeKind>, refused = false): CheckRun {
   const assertions = compare(check.assertions, out)
   const satisfied = assertions.every(a => a.ok)
   const pass = check.direction === "holds" ? satisfied : !satisfied
+  // A call the program refused never ran what the check tests: it cannot pass, so it never becomes a guard (batch C,
+  // effect 2). A refused call that fails anyway keeps the cause the classification gives (a missing command names it).
+  if (refused && pass) return { check: check.id, round, program: program.id, outcome: "fail", assertions, exit_code: out.exit_code, stderr_head: out.stderr.slice(0, 300), stdout_head: out.stdout.slice(0, 600), failure: { class: "not_landed", reason: "refused_call", detail: `the program answered ${JSON.stringify(check.input.args[0])} as it answers an unknown subcommand`, roles: ["business"] } }
   return {
     check: check.id, round, program: program.id, outcome: pass ? "pass" : "fail", assertions, exit_code: out.exit_code, stderr_head: out.stderr.slice(0, 300),
     ...(pass ? {} : { stdout_head: out.stdout.slice(0, 600) }),

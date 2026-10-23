@@ -19,6 +19,7 @@ import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } f
 import { Exp2Store } from "./store.js"
 import { buildWorkOrder } from "./workorder.js"
 import { copyProgram, discardCopy, isNoIssues, reviewEntries, reviewRanProgram, reviewRequest, type Reviewer, type ReviewFocus } from "./review.js"
+import { NO_MATERIALS, sessionInput, type ReviewMaterials } from "./materials.js"
 import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalItem, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
 import { renderEvidence, type ReviewItemRecord } from "./execution.js"
 import { coverage, EMPTY_CHECKS } from "./checks.js"
@@ -389,7 +390,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
       if (a.status !== "accepted") throw new Error(`attribution of round ${r} did not pass (${a.status})`)
     }
     if (d.store.ablation.checks !== false && !d.store.inspect().check_rounds.some(x => x.round === r && x.status === "accepted")) {
-      const c = await d.store.deriveRoundChecks(r, d.checks, { sandbox: d.sandbox, runner: d.runner, baseline: nullProgram, maxRepairs: d.checkRepairs ?? 2, timeoutMs: d.timeoutMs, staleByReference: false })
+      const c = await d.store.deriveRoundChecks(r, d.checks, { sandbox: d.sandbox, runner: d.runner, baseline: nullProgram, maxRepairs: d.checkRepairs ?? 2, timeoutMs: d.timeoutMs, staleByReference: false, binary: d.binary, admitInLoop: true })
       if (c.status === "interrupted") throw new RoleUnavailable("check derivation", c.issues?.[0]?.message ?? "interrupted")
     }
   }
@@ -411,7 +412,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
     const sources = s.sources.filter(x => x.round <= p.round).map(x => ({ round: x.round, text: x.text }))
     const result: ReviewedProduct = { product: p, built: true, reviews: [], voided: 0, items: [], malformed: [], library: { failing: failing.map(r => r.check), passing: verdict.runs.filter(r => r.outcome === "pass").map(r => r.check) }, usage: { reviewer: zeroUsage(), formalizer: zeroUsage() }, calls: { reviews: 0, formalize: 0 } }
     for (let n = 1; n <= (d.reviews ?? 1); n++) {
-      let text: string | null = null, attempts = 0, usage = zeroUsage(), model: string | undefined, runs = 0
+      let text: string | null = null, attempts = 0, usage = zeroUsage(), model: string | undefined, runs = 0, session: ReviewMaterials = NO_MATERIALS
       for (; attempts < 2 && text === null; ) {
         attempts++
         const dir = copyProduct(p.path, join(d.root, "review-copies", `${p.name}-${n}-${attempts}`))
@@ -421,6 +422,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
         usage = addUsage(usage, o.usage)
         model = o.model
         runs = o.runs.length
+        session = { ...NO_MATERIALS, ...(o.materials ?? {}) }
         // Whether the program ran is a soft signal (fix block A2) unless configured to void.
         if (reviewRanProgram(o.runs) || !d.voidWithoutRuns) text = o.text
         else result.voided++
@@ -428,7 +430,9 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
       result.usage.reviewer = addUsage(result.usage.reviewer, usage)
       result.reviews.push({ n, attempts, valid: text !== null, no_issues: text !== null && isNoIssues(text), text: text ?? "", usage, ...(model ? { model } : {}), program_runs: runs })
       if (text === null || isNoIssues(text)) continue
-      const f = await formalizeReview(registry, p.round, text, d.binary, d.formalize, { reviewId: `${p.name}.${n}`, callId: k => `F${n}.${k}` })
+      // What IC holds of this review (batch C, effect 3): the library leads it gave and the reviewer's session.
+      const materials: ReviewMaterials = { ...session, leads: failing.flatMap(r => { const k = s.checks.find(c => c.id === r.check); return k ? [{ id: k.id, check: k }] : [] }) }
+      const f = await formalizeReview(registry, p.round, text, d.binary, d.formalize, { reviewId: `${p.name}.${n}`, callId: k => `F${n}.${k}`, materials })
       await store.recordFormalizeCalls(f.calls as FormalizeCallRecord[])
       result.calls.formalize += f.calls.length
       for (const c of f.calls) result.usage.formalizer = addUsage(result.usage.formalizer, c.usage)
@@ -443,7 +447,12 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
         const bad = new Map<number, string[]>()
         for (const m of f.malformed) if (m.item !== null) bad.set(m.item, [...(bad.get(m.item) ?? []), m.message])
         for (const [k, msgs] of bad) { handled.add(k); ownItem(k, entries[k - 1] ?? f.texts.find(x => x.item === k)?.text ?? "", "malformed", msgs.join("; ")) }
-        for (const it of f.items) { handled.add(it.item); await classify(it, n) }
+        for (const it of f.items) {
+          if (handled.has(it.item)) continue
+          handled.add(it.item)
+          if (it.input && it.produced?.length) for (const pr of it.produced) { const out = await d.runner.run(b.program!, sessionInput(pr.by, materials), d.timeoutMs); if (out.files[pr.path] !== undefined) it.input.files.push({ path: pr.path, content: out.files[pr.path] }) }
+          await classify(it, n)
+        }
         entries.forEach((t, k) => { if (!handled.has(k + 1)) ownItem(k + 1, t, "not_formalized", "the formalizer wrote no item for this entry of the review") })
       }
       // Code's own failures under the fallback (the serial's rule): sent in the reviewer's words, or blocked.
@@ -457,7 +466,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
     }
     async function classify(it: FormalItem, n: number) {
       const id = `V${p.round}.${n}.${it.item}`
-      const rec: ReviewItemRecord & { review_n: number; strict: Premise | null } = { id, round: p.round, review: `${p.name}.${n}`, review_n: n, item: it.item, text: it.text, units: it.units, premise: null, strict: null }
+      const rec: ReviewItemRecord & { review_n: number; strict: Premise | null } = { id, round: p.round, review: `${p.name}.${n}`, review_n: n, item: it.item, text: it.text, units: it.units, premise: null, strict: null, ...(it.input_from ? { input_from: it.input_from } : {}) }
       const a = await assessPremises(registry, p.round, it, d.sandbox, d.timeoutMs)
       const failures = [...a.failures]
       if (a.check) {
@@ -465,7 +474,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
         if (!rep.reproduced) failures.push({ premise: "not_reproduced", detail: `the check passes on the program (exit ${rep.run.exit_code})` })
         else rec.check = a.check
       }
-      const order: Premise[] = ["unit_not_in_force", "no_input", "input_claim_false", "value_not_computed", "value_not_stated", "reference_failed", "not_reproduced"]
+      const order: Premise[] = ["unit_not_in_force", "no_input", "no_assertion", "input_claim_false", "value_not_computed", "value_not_stated", "reference_failed", "not_reproduced"]
       rec.strict = order.find(x => failures.some(y => y.premise === x)) ?? null
       const stop = failures.find(x => block.has(x.premise))
       const logged = failures.filter(x => !block.has(x.premise))

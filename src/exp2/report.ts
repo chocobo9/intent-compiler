@@ -29,7 +29,13 @@ export interface RoundReport {
   scope: string[]
   zones: { task: number; protect: number; status: number; source_blocks: number; anchors: number }
   execution: { status: ExecutionRecord["status"]; cycles: number; repairs: number; kept: string | null; failing_at_end: number; contests: number; carried_objects: string[]; sessions: number; broken_sessions: number }
-  checks: { entered: number; stale: number; retired: number; run: number; passed: number; failed: number }
+  checks: {
+    entered: number; stale: number; retired: number; run: number; passed: number; failed: number
+    /** Batch C, effect 1: admitted of those entered, entered unknown (their reasons went back to the model), dropped after the repairs by issue code, shapes code read the one way they could mean. */
+    admitted?: number; unknown?: number; unknown_not_fed_back?: number; dropped?: Record<string, number>; normalized?: Record<string, number>
+    /** Batch C, effect 2: runs the program refused as it refuses an unknown subcommand, kept from passing. */
+    refused_calls?: number
+  }
   /**
    * Probes and judge (BLOCK10), null when off. share: their tokens over the round's coding tokens, all tokens
    * (input, cache, output) and without cache reads. Models as the calls report them.
@@ -101,6 +107,9 @@ export interface RoundMeasures {
   fallback: { reviews: number; whole: number; items: number; reasons: Record<string, number> }
   reviews: number
   program_runs_zero: number
+  /** Batch C: the round's check writing (admitted of entered, unknown never told) and the reviewer's entries (reported, entered, conservation errors). */
+  checks?: { entered: number; admitted: number; unknown_not_fed_back: number; dropped: number; refused_calls: number }
+  items?: { reported: number; entered: number; verified: number; logged: number; fallback: number; blocked: number; no_input: number; conservation_errors: number }
   tokens: Record<"executor" | "attribution" | "checks" | "reviewer" | "formalizer" | "probes" | "judge" | "interrupted_management", RoleTokens>
   non_executor_cost: number
 }
@@ -113,7 +122,9 @@ export interface ReviewReport {
   formalizer: StageCost
   models: { reviewer: string[]; formalizer: string[] }
   /** Reviewer's items over the round, and how many entered a repair list. */
-  items: { reported: number; sent: number; malformed: number }
+  items: { reported: number; sent: number; malformed: number; verified: number; logged: number; fallback: number; blocked: number }
+  /** Batch C, effect 4: reviews whose entries did not each end once. */
+  conservation_errors: string[]
   premise_blocked: Record<string, number>
   /** Fix block A1–A3: items sent although a premise outside the blocking tier failed; the fallback; reviews with no run seen. */
   premise_logged: Record<string, number>
@@ -307,6 +318,8 @@ export function roundMeasures(r: RoundReport): RoundMeasures | null {
     guards: { at_start: v.guards.at_start, at_end: v.guards.at_end, born: v.guards.born.length },
     regressions: { changed_text: v.guards.flipped_changed_text.length, unchanged: v.guards.flipped_unchanged.length },
     reverted: v.reverted, premise: { blocked: v.premise_blocked, logged: v.premise_logged }, fallback: v.fallback, reviews: v.reviews.length, program_runs_zero: v.program_runs_zero,
+    checks: { entered: r.checks.entered, admitted: r.checks.admitted ?? 0, unknown_not_fed_back: r.checks.unknown_not_fed_back ?? 0, dropped: Object.values(r.checks.dropped ?? {}).reduce((a, b) => a + b, 0), refused_calls: r.checks.refused_calls ?? 0 },
+    items: { reported: v.items.reported, entered: v.items.sent, verified: v.items.verified, logged: v.items.logged, fallback: v.items.fallback, blocked: v.items.blocked, no_input: (v.premise_blocked.no_input ?? 0) + (v.fallback.reasons.no_input ?? 0), conservation_errors: v.conservation_errors.length },
     tokens, non_executor_cost: Math.round(Object.entries(tokens).filter(([k]) => k !== "executor").reduce((n, [, t]) => n + costOf(t), 0)),
   }
 }
@@ -317,7 +330,11 @@ function reviewReport(r: NonNullable<ReportInput["review"]>): ReviewReport {
   return {
     first_delivery: r.first_delivery, reviews: a.reviews, voided: a.voided, reviewer, formalizer,
     models: { reviewer: [...new Set(r.review_calls.flatMap(c => c.model ? [c.model] : []))], formalizer: [...new Set(r.formalize_calls.flatMap(c => c.model ? [c.model] : []))] },
-    items: { reported: a.reviews.reduce((n, x) => n + x.reported, 0), sent: a.reviews.reduce((n, x) => n + x.sent, 0), malformed: a.reviews.reduce((n, x) => n + x.malformed, 0) },
+    items: {
+      reported: a.reviews.reduce((n, x) => n + x.reported, 0), sent: a.reviews.reduce((n, x) => n + x.sent, 0), malformed: a.reviews.reduce((n, x) => n + x.malformed, 0),
+      verified: a.reviews.reduce((n, x) => n + (x.conservation?.sent ?? 0), 0), logged: a.reviews.reduce((n, x) => n + (x.conservation?.logged ?? 0), 0), fallback: a.reviews.reduce((n, x) => n + (x.conservation?.fallback ?? 0), 0), blocked: a.reviews.reduce((n, x) => n + x.blocked, 0),
+    },
+    conservation_errors: a.conservation_errors ?? [],
     premise_blocked: a.premise_blocked, premise_logged: a.premise_logged ?? {}, fallback: a.fallback ?? { reviews: 0, whole: 0, items: 0, reasons: {} }, program_runs_zero: a.program_runs_zero ?? 0, guards: a.guards, reverted: a.reverted, trial: a.trial, leads: a.leads, coverage: r.coverage,
     cache: { reviewer: cacheShare(reviewer.tokens), formalizer: cacheShare(formalizer.tokens) },
   }
@@ -335,7 +352,8 @@ function renderReview(v: ReviewReport, firstScore: null | { passed: number; tota
   const by = (m: Record<string, number>) => Object.entries(m).filter(([, n]) => n).map(([k, n]) => `${k} ${n}`).join(", ") || "none"
   return [
     `Review acceptance: first delivery ${v.first_delivery ? `${v.first_delivery.cycle} ${v.first_delivery.commit.slice(0, 8)}` : "none"}${firstScore ? ` (official ${firstScore.passed}/${firstScore.total})` : ""}; trial runs ${v.trial.runs} (${v.trial.failures} failed); reviews ${v.reviews.length} (void sessions ${v.voided}): ${v.reviews.map(x => `#${x.n} on ${x.cycle}${x.valid ? "" : " void"}${x.no_issues ? " NO ISSUES" : ""}: reported ${x.reported}, blocked ${x.blocked}, malformed ${x.malformed}, sent ${x.sent}${x.fallback ? ` (fallback ${x.fallback}${x.fallback_whole ? ", the whole reply" : ""}: ${by(x.fallback_reasons ?? {})})` : ""}${x.logged ? `, logged ${x.logged}` : ""}${x.superseded.length ? `, superseded ${x.superseded.join(" ")}` : ""}, leads given ${x.leads}${x.program_runs !== undefined ? `, program runs seen ${x.program_runs}` : ""}`).join("; ") || "none"}.`,
-    `Reviewer items: reported ${v.items.reported}, entered a repair list ${v.items.sent}; premise checks blocked ${Object.values(v.premise_blocked).reduce((a, b) => a + b, 0)} (${by(v.premise_blocked)}), logged and sent ${Object.values(v.premise_logged).reduce((a, b) => a + b, 0)} (${by(v.premise_logged)}); fallback in ${v.fallback.reviews} review(s), ${v.fallback.items} item(s), whole reply ${v.fallback.whole} (${by(v.fallback.reasons)}); reviews with no program run seen ${v.program_runs_zero}.`,
+    ...(v.conservation_errors.length ? [`Conservation broken: ${v.conservation_errors.join("; ")}.`] : []),
+    `Reviewer items: reported ${v.items.reported}, entered a repair list ${v.items.sent} (verified ${v.items.verified}, logged ${v.items.logged}, fallback ${v.items.fallback}), blocked ${v.items.blocked}; every entry ended once: ${v.conservation_errors.length ? "no" : "yes"}; premise checks blocked ${Object.values(v.premise_blocked).reduce((a, b) => a + b, 0)} (${by(v.premise_blocked)}), logged and sent ${Object.values(v.premise_logged).reduce((a, b) => a + b, 0)} (${by(v.premise_logged)}); fallback in ${v.fallback.reviews} review(s), ${v.fallback.items} item(s), whole reply ${v.fallback.whole} (${by(v.fallback.reasons)}); reviews with no program run seen ${v.program_runs_zero}.`,
     `Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}${v.guards.born.length ? ` (${v.guards.born.join(", ")})` : ""}; flips on changed text ${v.guards.flipped_changed_text.length}${v.guards.flipped_changed_text.length ? ` (${v.guards.flipped_changed_text.join(", ")})` : ""}, on unchanged text ${v.guards.flipped_unchanged.length}${v.guards.flipped_unchanged.length ? ` (${v.guards.flipped_unchanged.join(", ")})` : ""}; retired as superseded ${v.guards.retired.length}${v.guards.retired.length ? ` (${v.guards.retired.map(x => x.id).join(", ")})` : ""}; repairs reverted ${v.reverted}.`,
     `Guard coverage: ${v.coverage ? `${v.coverage.covered}/${v.coverage.units} live units; uncovered ${v.coverage.uncovered.length}${v.coverage.uncovered.length ? ` (${v.coverage.uncovered.slice(0, 25).join(", ")}${v.coverage.uncovered.length > 25 ? ` and ${v.coverage.uncovered.length - 25} more; the full list is in report.json` : ""})` : ""}` : "n/a"}. Leads to the reviewer: library ${v.leads.library}, judgment ${v.leads.judgment}.`,
     `Reviewer (${v.models.reviewer.join(", ") || "?"}): ${v.reviewer.calls} sessions, ${tok(v.reviewer.tokens)}, cache share ${v.cache.reviewer ?? "n/a"}. Formalizer (${v.models.formalizer.join(", ") || "?"}): ${v.formalizer.calls} calls, ${tok(v.formalizer.tokens)}, cache share ${v.cache.formalizer ?? "n/a"}.`,
@@ -383,6 +401,7 @@ export function renderReport(r: RoundReport): string {
     ...(r.measures ? [renderMeasures(r.measures)] : []),
     ...(r.ledger ? [`Ledger: open program wrong ${r.ledger.open.program_wrong.length} (confirmed by a ruling ${r.ledger.confirmed?.length ?? 0}), uncovered ${r.ledger.open.uncovered.length}, reference pending ${r.ledger.open.reference_pending.length}; listed only ${r.ledger.report_only.length}${r.ledger.report_only.length ? ` (${tallyBy(r.ledger.report_only.map(x => x.how))})` : ""}; ended this round ${r.ledger.ended.length}${r.ledger.ended.length ? ` (${tallyBy(r.ledger.ended.map(x => x.how))})` : ""}; sent ${r.ledger.sends} times; held ${r.ledger.held.length}.`] : []),
     `Checks: ${r.checks.entered} entered, ${r.checks.stale} stale, ${r.checks.retired} retired; ${r.checks.run} run, ${r.checks.passed} passed, ${r.checks.failed} failed.`,
+    ...(r.checks.admitted !== undefined ? [`Check writing: admitted ${r.checks.admitted}/${r.checks.entered}, unknown ${r.checks.unknown ?? 0} (never told the model ${r.checks.unknown_not_fed_back ?? 0}); dropped after the repairs ${Object.values(r.checks.dropped ?? {}).reduce((a, b) => a + b, 0)} (${Object.entries(r.checks.dropped ?? {}).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}); read the one way they could mean: ${Object.entries(r.checks.normalized ?? {}).map(([k, n]) => `${k} ${n}`).join(", ") || "none"}; runs refused as an unknown subcommand ${r.checks.refused_calls ?? 0}.`] : []),
     `Objects: ${count("landed")} landed, ${count("not_landed")} not landed, ${count("unknown")} unknown.`,
     "",
     "| Object | Status | Basis |",

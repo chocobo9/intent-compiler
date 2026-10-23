@@ -4,7 +4,7 @@ import { attributeRound, RoleUnavailable, type AttributionTransport, type Issue,
 import { writing } from "./platform.js"
 import { materialize, type Registry, type RoundAcceptance, type Signal } from "./registry.js"
 import { contentHash } from "./source.js"
-import { activeChecks, basisOf, codeFacts, deriveChecks, libraryCovers, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport, type Coverage } from "./checks.js"
+import { activeChecks, admissionIssues, basisOf, codeFacts, deriveChecks, type AdmitCheck, libraryCovers, methodB, replacedBasis, staleChecks, type CheckCallRecord, type CheckEvent, type CheckIssue, type CheckRecord, type ChecksTransport, type Coverage } from "./checks.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import type { ExecutionRecord } from "./execution.js"
 import type { RoundReport } from "./report.js"
@@ -115,6 +115,10 @@ export interface DeriveDeps {
   staleByReference?: boolean
   /** Checks only for text this round added or revised, and for stale checks (fix block B2). */
   unitsOnce?: boolean
+  /** The program's name as the requirements give it: arguments that start with it are read as starting after it (batch C, effect 1). */
+  binary?: string | null
+  /** Admission inside the writing loop, its problems sent back to the model (batch C, effect 1; on under mode review). */
+  admitInLoop?: boolean
 }
 
 export interface IngestOptions { maxRepairs?: number }
@@ -203,8 +207,10 @@ export class Exp2Store {
   async writeRoundChecks(round: number, transport: ChecksTransport, deps: DeriveDeps): Promise<CheckRoundRecord> {
     const s0 = this.inspect()
     const registry = this.registry(s0)
-    const outcome = await deriveChecks(registry, round, s0.checks, s0.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `~M${n}`, unitsOnce: deps.unitsOnce })
     const timeout = deps.timeoutMs ?? 10_000
+    // Admission runs inside the writing loop, so what the reference script gives goes back to the model (batch C, effect 1).
+    const admit: AdmitCheck = async k => { const b = await methodB(k, deps.sandbox, timeout); return { issues: admissionIssues(k, b), notes: b.normalized ?? [] } }
+    const outcome = await deriveChecks(registry, round, s0.checks, s0.check_events, transport, { maxRepairs: deps.maxRepairs ?? 2, callId: n => `~M${n}`, unitsOnce: deps.unitsOnce, binary: deps.binary ?? null, ...(deps.admitInLoop ? { admit } : {}) })
     const facts = codeFacts(registry, round)
     const drafted: Omit<CheckRecord, "id" | "calls">[] = []
     if (outcome.status === "accepted") for (const draft of outcome.draft!.checks) {
@@ -214,6 +220,8 @@ export class Exp2Store {
         input: b.input ?? draft.input, assertions: b.assertions, unknown: b.unknown, reference_script: draft.reference_script,
         ...(b.computed_inputs.length ? { computed_inputs: b.computed_inputs } : {}),
         admission: b.assertions.length ? "admitted" : "unknown", admission_reason: b.assertions.length ? null : b.unknown.map(u => `${u.assertion.id}: ${u.reason}`).join("; "),
+        ...(outcome.normalized?.[draft.key]?.length ? { normalized: outcome.normalized[draft.key] } : {}),
+        ...(b.unknown.length ? { fed_back: (outcome.fed_back ?? []).includes(draft.key) } : {}),
         strength: null, status: "active",
       }
       if (record.admission === "admitted") record.strength = strength({ ...record, id: "~", calls: [] }, await runCheck({ ...record, id: "~", calls: [] }, deps.baseline, deps.runner, round, registry, facts, timeout), deps.baseline)

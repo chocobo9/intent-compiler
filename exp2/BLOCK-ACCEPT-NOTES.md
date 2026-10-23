@@ -178,7 +178,7 @@
 
 （修正块起按本节；旧版的四步并入下面。）
 
-1. **构建与离线测试**：拉取本分支到新工作树，`npm ci && npm test`。预期 927 项、920 通过、6 跳过、1 失败（原有的 `repair-batch`）。
+1. **构建与离线测试**：拉取本分支到新工作树，`npm ci && npm test`。预期 946 项、939 通过、6 跳过、1 失败（原有的 `repair-batch`）。
 2. **配置**：照 `exp2/local-config.example.json`。`coding.variant` 按比较口径设 low；`roles.review`、`roles.formalize` 为 gpt-5.6-luna-fast medium。`acceptance` 里修正块的项，默认即修正块的行为，不写也一样：
    - `premise_block: ["unit_not_in_force", "not_reproduced", "input_claim_false"]`（A3）
    - `fallback: "items"`（A1；`off` 是 29158c1 的行为，`review` 是 A1 字面）
@@ -186,10 +186,14 @@
    - `expire_reproduced: false`（B1）
    - `checks_once: true`、`checks_in_background: true`（B2、B3）
    `scoring.command` 配上就会对每轮最终提交和首次交付各计一次分（`scores.jsonl`）。镜像要有 `go`、`timeout`、支持 `%N` 的 `date`；试跑在容器里把源码复制到 `/app` 再构建，不需要可写挂载。
-3. **真实 R1**：`intent-exp2-serial --config <配置> --to 1`，然后 `intent-exp2-measures --checkpoints <checkpoints_dir>`。看：
-   - `measures.md`：R1 的 official 与 first delivery 两列（达标：前者高于后者）、blocked / logged / fallback、no run seen、各角色 token、阶段墙钟（`check writing` 应与 `coding` 重叠，`waiting for checks` 应接近 0）。
-   - `checkpoints/round-01/report.md` 的 `Review acceptance` 行：每次审查 `reported / blocked / sent (fallback …)`，以及 `program runs seen`。
-   出问题时对照：`exp2-state.json` 的 `review_calls`（`program_runs`、`valid`）、`formalize_calls`（`problems`）、`executions[].review_items`（`disposition`、`logged`、`premise`）。
+3. **真实 R1 冒烟**（批次 C 起看接口计数，不看分数）：`intent-exp2-serial --config <配置> --to 1`，然后 `intent-exp2-measures --checkpoints <checkpoints_dir>`。
+   - **`measures.md` 的检查列** "checks admitted/entered (unknown never told)"：准入应接近入库数；括号里的"从未告知模型"应为 0。
+   - **同一张表的条目列** "items reported / entered (verified, logged, fallback) / blocked; no_input; conservation"：reported = entered + blocked；conservation 为 ok；no_input 只应在三处材料都找不到时出现。
+   - **`report.md` 的 "Check writing" 一行**：修补后丢弃的条数按原因列出，各种读法（Python 字典输出、带程序名的参数、未加引号的字符串、重写的转义）的次数，以及被判为拒绝调用的运行数。
+   - **`report.md` 的 "Reviewer items" 一行**：结尾应是 "every entry ended once: yes"；不成立时上面会多一行 "Conservation broken: …"，写明缺哪个位置。
+   - **逐条查 no_input**：`exp2-state.json` 的 `executions[].review_items[]` 里，`input_from` 是代码取输入的来源（`lead K8`，或"the command the item quotes, with the files of the reviewer's session"）；`produced` 是由前一条命令重跑得到的文件；仍是 no_input 的，看 `detail`（formalizer 侧）或 `logged[].detail`，里面写了查过的线索、会话文件数和命令数。
+   - **其他字段**：`checks[].normalized` 是代码对检查的读法，`checks[].fed_back` 记录 unknown 的原因是否告知过模型；`check_rounds[].dropped` 是修补后丢弃的检查和原因。
+   - **对照材料**：本次的审查会话可以从 OpenCode 导出，与 `exp2/evidence/replay-2026-10-23/sessions/` 对照：`materials.files` 应能覆盖审查员写过的全部文件。
 4. **冻结产物的离线回放（A3 验收）**：
    ```
    intent-exp2-replay --config <配置> --products <list.tsv> --out <目录-k> --mode review --defects <缺陷表>
@@ -448,3 +452,118 @@ replay 工具（`intent-exp2-replay --mode review`）复用到 A3 的离线回�
 ### 18.3 顺序
 
 效果 1 → 2 → 3 → 4，最后做真实回复重放和故障注入的测试。每项 `npm test` 通过后推送；NOTES 第 19 节逐项写做法、依据的运行和验收结果。
+
+## 19. 批次 C 第二阶段：做法、依据、验收
+
+测试全部在 `test/exp2/batch-c.test.ts`。测试材料是 `exp2/evidence/replay-2026-10-23/`：从 2250130 的 real-runs 抽出的五次运行的真实回复（抽取内容见该目录的 README），加上 rep1e 三份审查会话的原样导出。除被测程序（这里构建的 Go 替身）和 rep1c 缺的 formalizer 回复之外，所有模型输出都是真实回复的重放。
+
+### 效果 1：检查的输出或参数形状认不出就退回，不静默作废
+
+**做法**
+- **准入移进写检查的循环**（`deriveChecks` 的 `admit`，review 模式下打开）。每次回复之后，没有其他问题的检查当场跑一遍 `methodB`；断言解析不出来的原因作为问题写进下一次请求：
+  - 问题码有四个：`reference_output`、`reference_value_missing`、`methods_disagree`、`computed_missing`；
+  - 消息里带上脚本实际打印的内容。
+- **能唯一读出的形状，代码直接读**，记进 `CheckRecord.normalized`：
+  - 脚本输出是 Python 字面量：同一个沙箱里用 `ast.literal_eval` 读，多行时每行一个字典再合并；多行 JSON 对象同样合并；
+  - 脚本里字符串的转义写重了（源码里是 `\\n`），而去掉一层转义后正好等于 A 值；
+  - `expect_json` 没加引号：按字符串读；
+  - 参数以程序名开头：去掉。程序名取自原文，函数是 `normalizeDraft`；formalizer 的参数同样处理。
+- **修补用完之后**，按问题有没有退回过分两种处理：
+  - 只剩准入问题、并且这些问题退回过的检查，带着已解析的断言入库，记 `fed_back: true`；
+  - 准入问题只在最后一次回答里出现过、从未退回过的检查，整条丢弃，在 `check_rounds[].dropped` 里按原因计数。
+  这样状态里不会有"unknown 且无反馈"的检查。
+- **报告**新增 "Check writing" 一行：准入数/入库数、未告知的 unknown 数、修补后丢弃数（按问题码）、各种读法的次数、被判为拒绝调用的运行数。
+
+**依据**：诊断第 3 题。rep1e 有 19/22 不准入，原因是 21 个脚本都用 `print({...})` 输出；21/22 的参数带程序名；7 条草稿被丢弃。三次调用都没被告知这些。
+
+**验收（真实回复重放：真实归属回复 + 写检查的三次真实回复）**
+
+| 运行 | 原运行准入 | 重放：入库 / 准入 / unknown（是否告知过） / 修补后丢弃（原因） |
+|---|---|---|
+| rep1e | 3/22 | 23 / 22 / 1（告知过） / 6（`reference_value_missing` 3、`verbatim_mismatch` 2、`computed_by_hand` 1） |
+| rep1d | 21/21 | 21 / 21 / 0 / 2（`verbatim_mismatch` 1、`reference_value_missing` 1） |
+
+- 两次准入都 ≥ 20；两次的状态里都没有"unknown 且未告知"的检查。rep1e 入库 23 条，比原来多 1：原来 5 条因为 `expect_json` 不是 JSON 被丢，现在按字符串读后入库了其中 3 条（另外 2 条因其他问题仍被丢）。
+- rep1e 原先以 `dpipe` 开头的 21 条检查，重放后按键对应的检查都从子命令开始（`ingest`、`transform`、`verify`、`manifest`、`pipeline`）。
+- 第一次回答里的准入问题，出现在了第二次请求的 issues 里，消息写明了脚本打印的内容。
+- 把脚本都改成打印 `'not a value'` 再重放：第二次请求收到 `reference_output`，并附上 `it printed "not a value\n"`；状态里每条 unknown 的检查都是 `fed_back: true`。
+
+**边界**：重放时模型不会根据退回改写回答，所以"退回之后修好"这一步只在真实运行里发生。表里的数字是代码自己能读出的部分。
+
+### 效果 2：被程序当作未知命令拒绝的调用，不能判通过，也不能成为守卫
+
+**做法**（`verdict.ts`）
+- 每个程序（按命令、挂载和二进制修改时间区分）记一份拒绝指纹：用子命令 `__ic_unknown_command__` 运行一次。第一次见到这个程序时，这次运行和同批检查一起跑。
+- 一条检查的运行，把自己的第一个参数换成占位符之后，如果退出码、stdout、stderr 与指纹完全相同，又本来会判通过，就改判失败，原因 `refused_call`。原本就失败的运行保留原来的归类（`missing_name` 更具体）。
+- 指纹退出码为 0 时不启用。
+- 库检查、守卫、条目检查、复现、强度都经过 `runChecks`/`runCheck`，规则相同。
+
+**依据**：诊断第 1 题 D。rep1e 的 K12 参数是 `dpipe transform …`，程序以 "ERROR: unknown command" 退出 1，正好满足"期望 exit 1"，于是成了守卫 G1。
+
+**验收**
+- rep1e 的 K12 原样在 Go 替身上运行：判为 `fail / refused_call`；去掉程序名后，它进入 transform，不再判为拒绝。
+- 用 rep1e 原来准入的三条（K11、K12、K14）当库跑一轮：没有守卫产生（原运行有 G1），K12 每个周期都是 `not_landed/refused_call`。
+- 重放后，原先带程序名的 21 条检查执行的是各自的子命令。其中 transform 和 verify 的检查（Go 替身只实现了这两个）在替身上运行，没有一条判为拒绝。
+
+**边界**
+- rep1e 的程序不在材料里，验收用的是替身程序。
+- 程序对"缺参数"和"未知命令"给出完全相同的输出时，测缺参数的检查也会判为拒绝；报告里有计数（"runs refused as an unknown subcommand"）。
+- rep1e 有一条检查的参数是 `go build …`（K1 cli_build），这是写检查的错误。它在任何程序上都判为拒绝，所以不会成为守卫。
+
+### 效果 3：输入在 IC 手里，条目就要落成检查
+
+**做法**（`materials.ts`；`formalize.ts` 的 `completeInput`；`accept.ts`）
+- **审查结束时**，`OpenCodeReviewer` 从会话消息读出 `materials`：
+  - 审查员写过的文件：`apply_patch` 的 Add/Update（按顺序套用 V4A 补丁），以及 `write`、`edit`。删除不理会。
+  - 运行过的命令和输出。
+  两种导出形状（`state.input`、part 上的 `input`）都能读。
+- **给 formalizer 的请求**新增 `materials`：这次给的线索（库检查的完整输入）、文件、命令。schema 里 `files[].content` 可以为 null，用 `from` 指明来源（"session" 或线索编号），由代码填入。
+- **formalizer 仍写不出输入时，代码确定性地补**：
+  1. 条目文字点到的线索编号：线索的库检查就是条目的检查（已准入，期望值已解析）。
+  2. 否则取条目里反引号中、调用了程序的那条命令：去掉 `&`、`go run .`、程序路径之后就是 args，文件取会话里同名的文件，并递归带上这些文件内容里点到的其他会话文件。
+     - 审查员自己那次运行在会话里时：它当时没写过的文件，要么由更早的、以另一种角色（参数前的选项不同）提到它的命令产生（在当前程序上重跑那条命令取文件，`produced`），要么当时也不存在。
+     - 命令不在会话里时：它点到的每个文件都必须找到，否则不补。
+  3. 三处都没有：`no_input`，`detail` 写明查过哪些线索、多少会话文件和命令、缺哪个文件。
+- **只补到输入、formalizer 一条断言也没写**：判 `no_assertion`，按审查员原话退化送出（属于代码自己的原因）。
+
+**依据**：诊断第 2 题。rep1d 有 6 条用线索编号代替输入；rep1e 20/20 的输入都在会话的 `apply_patch` 里，verify 的两条还要用前一条命令的输出。
+
+**验收**
+- **第 4 次（rep1d）重放**：真实 formalizer 回复 + 原运行给的 13 条线索。引用线索编号的 6 条（第 1–5 条、第 7 条，对应 K8–K12、K16）都从线索取得检查，0 条 `no_input`。放进一轮里跑：这 6 条在程序上复现，作为已核验条目送修。其余条目仍是 `no_input`，原因都写成"leads given: K5, K8…; session files: 0"：rep1d 的审查会话没有导出，重放里没有审查员自己的文件。
+- **第 5 次（rep1e）重放**：三份真实审查 + 三份会话导出 + 真实 formalizer 回复。`no_input` 从 20 降到 0。
+  - 19 条由"条目引用的命令 + 会话文件"重建。
+  - V1.2.6（verify）用的 `review-out.csv`，由会话里更早的 `ingest` 命令在当前程序上重跑产生。
+  - V1.3.7（pipeline）formalizer 没写断言，按原话退化（`no_assertion`）。
+- **会话末删除文件**：rep1e 第 1 次审查删掉了 base.csv 等 24 个文件，`materials` 里这些文件都还在。
+
+**边界**
+- 写文件和运行命令的先后顺序没有逐条对齐：一个在命令之后才写的文件也会被带上。
+- 真实回复里的 formalizer 还没见过 `materials`，所以这次的重建都是代码完成的。新的请求会让 formalizer 自己引用材料。
+
+### 效果 4：发现守恒，整段按条目数计
+
+**做法**（`accept.ts`）
+- 审查回复的每个列表项都有一条 `ReviewItemRecord`，结局恰好是送修、记日志送出、退化送出、挡下之一。formalizer 对同一位置写了两条时，只保留第一条，计入 `formalizer_duplicates`。
+- 整段退化时每一项各记一条、各送一次（台账逐项列出），消息仍是审查员整段原话；原来的 `V<r>.<n>.0` 不再产生。
+- 每次审查由代码核对：每个位置恰好一条记录、都有结局、项数等于四类之和。summary 里有 `entered` 和 `conservation`，不成立时 `conservation_errors` 写出缺哪个位置、哪个位置记了两次、哪条没有结局，报告里单独一行 "Conservation broken"。
+- 报告的 "Reviewer items" 一行改为 "reported N, entered a repair list M (verified, logged, fallback), blocked K; every entry ended once: yes/no"。`measures.jsonl` 和 `measures.md` 也有这些数。
+
+**依据**：诊断第 1 题 J（整段送出只算 1 条）。
+
+**验收**
+- **rep1e 重放**：reported 20、entered 20，报告逐字为 "Reviewer items: reported 20, entered a repair list 20 (verified …, logged …, fallback …), blocked 0; every entry ended once: yes"；台账 20 条。
+- **rep1b**（真实回复 + 两份真实 formalizer 回复，8 条都没有输入）：8 条都进了修补，台账 8 条（V1.1.1–V1.1.8，unverified），修补消息仍是 `REPAIR_INTRO` 加审查员整段原话。
+- **故障注入**：rep1b、rep1c ×2、rep1d ×2、rep1e ×3，共 8 份真实回复（rep1 在第一次审查前中止，没有回复）。每份都分别注入五种故障，全部守恒，且 reported 等于审查回复的列表项数：
+  - 编号带 hash（`R1.S3.P12#deadbeef:s10`）；
+  - 命令改成 PowerShell 下的 `& .\dpipe-review.exe`；
+  - 只叙述：去掉反引号命令，formalizer 的输入全置 null；
+  - 参考脚本改成打印 Python 字面量；
+  - formalizer 的参数前加程序名。
+
+### 不改的部分
+
+审查请求和修补消息的原文、执行方的消息、前提档位都没有动。执行方拒做的问题不在本批。
+
+### 离线验证
+
+`npm test`：946 项，939 通过，6 项跳过，失败 1 项仍是原有的 `repair-batch`。新增 19 项，都在 `batch-c.test.ts`。改了 3 处旧测试，都是计数口径随效果 4 改变：整段退化的 sent 从 1 变为条目数；台账从 `V1.1.0` 变为逐项；报告的 "Reviewer items" 一行。没有运行真实模型。

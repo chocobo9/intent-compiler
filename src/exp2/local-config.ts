@@ -146,7 +146,7 @@ export function localConfigProblems(c: LocalConfig): string[] {
   if (c.rate_limit && (!Array.isArray(c.rate_limit.delays_ms) || !c.rate_limit.delays_ms.every(d => Number.isFinite(d) && d >= 0))) p.push("rate_limit.delays_ms must be an array of non-negative numbers")
   if (c.scoring && (!Array.isArray(c.scoring.command) || !c.scoring.command.length)) p.push("scoring.command must be a non-empty array")
   if (c.acceptance?.mode !== undefined && c.acceptance.mode !== "review" && c.acceptance.mode !== "probes") p.push("acceptance.mode must be review or probes")
-  const premises = ["unit_not_in_force", "input_claim_false", "value_not_stated", "value_not_computed", "reference_failed", "no_input", "not_reproduced", "malformed", "not_formalized", "formalize_failed"]
+  const premises = ["unit_not_in_force", "input_claim_false", "value_not_stated", "value_not_computed", "reference_failed", "no_input", "no_assertion", "not_reproduced", "malformed", "not_formalized", "formalize_failed"]
   if (c.acceptance?.premise_block !== undefined && (!Array.isArray(c.acceptance.premise_block) || c.acceptance.premise_block.some(x => !premises.includes(x)))) p.push(`acceptance.premise_block must list premises among ${premises.join(", ")}`)
   if (c.acceptance?.fallback !== undefined && !["items", "review", "off"].includes(c.acceptance.fallback)) p.push("acceptance.fallback must be items, review or off")
   if (c.acceptance?.mode !== "probes" && c.roles === null) p.push("acceptance mode review needs the roles (the reviewer and the formalizer); set acceptance.mode to probes with roles null")

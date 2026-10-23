@@ -6,6 +6,7 @@ import { renderEvidence, SessionBroken, Sends, type AcceptRoundRecord, type Buil
 import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
 import { commitStep, head, resetTo } from "./git.js"
 import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, type GuardEvent, type GuardRecord } from "./guards.js"
+import { sessionInput, type ReviewMaterials } from "./materials.js"
 import type { Registry } from "./registry.js"
 import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
@@ -172,6 +173,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   accept.program_runs_zero = 0
   // Items sent with no check behind them (fallback, or logged without a check): their text, in the reviewer's words.
   const freeText = new Map<string, { text: string; whole: boolean }>()
+  // Reviews whose whole reply went out as the control group sends it: the items it covers (batch C, effect 4).
+  const wholeReplies: { review: string; ids: Set<string>; text: string }[] = []
   let survivors: { id: string; text: string }[] = []
   const sendFree = (rec: ReviewItemRecord, text: string, why: string, whole = false) => {
     rec.disposition ??= "logged"
@@ -402,7 +405,12 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
           // blocking tier are logged, the item sent (A3).
           const reply = r.out.text
           const entries = reviewEntries(reply)
-          const f = await timed("formalize", () => formalizeReview(registry, round, reply, deps.binary, deps.formalize, { reviewId: `R${round}.${n2}`, callId: k => `F${round}.${n2}.${k}` }))
+          // What IC holds of this review (batch C, effect 3): the library leads it gave, and the reviewer's session.
+          const materials: ReviewMaterials = {
+            leads: leads.flatMap(l => { const k = library.find(c => c.id === l.id); return k ? [{ id: k.id, check: k }] : [] }),
+            files: r.out.materials?.files ?? [], commands: r.out.materials?.commands ?? [], ...(r.out.materials?.unreadable ? { unreadable: r.out.materials.unreadable } : {}),
+          }
+          const f = await timed("formalize", () => formalizeReview(registry, round, reply, deps.binary, deps.formalize, { reviewId: `R${round}.${n2}`, callId: k => `F${round}.${n2}.${k}`, materials }))
           await deps.record.formalize(f.calls)
           if (f.unavailable && fallbackMode === "off") throw new RoleUnavailable("formalize", f.unavailable, f.calls)
           const own: { n: number; text: string; units: string[]; failure: { premise: Premise; detail: string }; rec?: ReviewItemRecord }[] = []
@@ -430,10 +438,21 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
             summary.malformed = bad.size + (answerless && !f.items.length && !bad.size ? entries.length : 0)
           }
           await timed("premise checks", async () => {
+            const seen = new Set<number>()
             for (const it of f.items) {
+              // One record a position: an item the formalizer numbered twice keeps its first writing.
+              if (seen.has(it.item)) { summary.formalizer_duplicates = (summary.formalizer_duplicates ?? 0) + 1; continue }
+              seen.add(it.item)
               let vid = `V${round}.${n2}.${it.item}`
-              const rec: ReviewItemRecord = { id: vid, round, review: `R${round}.${n2}`, item: it.item, text: it.text, units: it.units, premise: null }
+              const rec: ReviewItemRecord = { id: vid, round, review: `R${round}.${n2}`, item: it.item, text: it.text, units: it.units, premise: null, ...(it.input_from ? { input_from: it.input_from } : {}) }
               record.review_items!.push(rec)
+              // A file an earlier command of the session wrote: that command run again on this program (batch C, effect 3).
+              if (it.input && it.produced?.length) for (const pr of it.produced) {
+                const out = await deps.runner.run(program, sessionInput(pr.by, materials), timeout)
+                const made = out.files[pr.path]
+                if (made !== undefined) it.input.files.push({ path: pr.path, content: made })
+                rec.produced = [...(rec.produced ?? []), { path: pr.path, by: pr.by, made: made !== undefined }]
+              }
               const a = await assessPremises(registry, round, it, deps.sandbox, timeout)
               const logged = a.failures.filter(x => !block.has(x.premise) && !OWN_FAILURES.has(x.premise))
               const ownFailure = a.failures.find(x => !block.has(x.premise) && OWN_FAILURES.has(x.premise))
@@ -495,11 +514,11 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
                 rec.disposition = "fallback"
                 rec.logged = [...(rec.logged ?? []), o.failure]
               }
-              if (whole) {
-                const rec: ReviewItemRecord = { id: `V${round}.${n2}.0`, round, review: `R${round}.${n2}`, item: 0, text: replyAsList(reply), units: [...new Set(own.flatMap(o => o.units))], premise: null, disposition: "fallback", logged: Object.entries(reasons).map(([premise, k]) => ({ premise, detail: `${k} item(s)` })) }
-                record.review_items!.push(rec)
-                sendFree(rec, rec.text, `fallback, the whole reply: ${Object.entries(reasons).map(([k, v]) => `${k} ${v}`).join(", ")}`, true)
-              } else for (const o of own) sendFree(record.review_items!.find(x => x.id === (o.rec?.id ?? `V${round}.${n2}.${o.n}`))!, o.text, `fallback: ${o.failure.premise}: ${o.failure.detail}`)
+              // Each item is sent and listed on its own (batch C, effect 4); when the whole reply went, the message is
+              // the reply as the reviewer wrote it, as the control group sends it.
+              const group = whole ? { review: `R${round}.${n2}`, ids: new Set(own.map(o => o.rec?.id ?? `V${round}.${n2}.${o.n}`)), text: replyAsList(reply) } : null
+              if (group) wholeReplies.push(group)
+              for (const o of own) sendFree(record.review_items!.find(x => x.id === (o.rec?.id ?? `V${round}.${n2}.${o.n}`))!, o.text, whole ? `fallback (the whole reply went): ${o.failure.premise}: ${o.failure.detail}` : `fallback: ${o.failure.premise}: ${o.failure.detail}`)
               summary.fallback = own.length
               summary.fallback_whole = whole
               summary.fallback_reasons = reasons
@@ -509,11 +528,24 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
               for (const [k, v] of Object.entries(reasons)) accept.fallback!.reasons[k] = (accept.fallback!.reasons[k] ?? 0) + v
             }
           }
-          summary.blocked = record.review_items!.filter(x => x.review === `R${round}.${n2}` && x.disposition === "blocked").length
-          summary.logged = record.review_items!.filter(x => x.review === `R${round}.${n2}` && x.disposition === "logged").length
+          // Conservation (batch C, effect 4): every entry of the reviewer's list ends in exactly one way.
+          // The list's entries are the reviewer's; positions past them are items the formalizer split off, counted too.
+          const mine = record.review_items!.filter(x => x.review === `R${round}.${n2}` && x.item > 0)
+          const by = (d: string) => mine.filter(x => x.disposition === d).length
+          const count = new Map<number, number>()
+          for (const x of mine) count.set(x.item, (count.get(x.item) ?? 0) + 1)
+          const missing = Array.from({ length: entries.length }, (_, k) => k + 1).filter(k => !count.has(k))
+          const twice = [...count].filter(([, c]) => c > 1).map(([k]) => k)
+          const open = mine.filter(x => !x.disposition).map(x => x.item)
+          summary.reported = count.size + missing.length
+          summary.blocked = by("blocked")
+          summary.logged = by("logged")
+          summary.entered = by("sent") + by("logged") + by("fallback")
+          summary.conservation = { reported: summary.reported, sent: by("sent"), logged: by("logged"), fallback: by("fallback"), blocked: by("blocked"), ok: !missing.length && !twice.length && !open.length && summary.reported === summary.entered + summary.blocked }
+          if (!summary.conservation.ok) accept.conservation_errors = [...(accept.conservation_errors ?? []), `R${round}.${n2}: entries ${summary.reported}; sent ${by("sent")}, logged ${by("logged")}, fallback ${by("fallback")}, blocked ${by("blocked")}; no record for ${missing.join(", ") || "none"}; recorded twice ${twice.join(", ") || "none"}; no disposition ${open.join(", ") || "none"}`]
         }
       }
-      summary.sent = survivors.length
+      summary.sent = summary.entered ?? survivors.length
       lastReviewFound = survivors.length > 0
       accept.reviews.push(summary)
       const { cycle: _c, ...ofCycle } = summary
@@ -534,7 +566,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     repairs++
     sentInRepair = toSend.map(t => t.id)
     // The whole reply alone goes as the control group sends it: the reviewer's list as written.
-    const list = toSend.length === 1 && freeText.get(toSend[0].id)?.whole ? toSend[0].text : renderReviewList(toSend)
+    const whole = wholeReplies.find(w => toSend.length > 0 && toSend.length === w.ids.size && toSend.every(t => w.ids.has(t.id)))
+    const list = whole ? whole.text : renderReviewList(toSend)
     evidence = list
     message = repairFromReview(list, voidedNote ? [voidedNote] : [])
     voidedNote = ""

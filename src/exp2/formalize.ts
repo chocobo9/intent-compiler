@@ -6,6 +6,7 @@ import { methodB, replacedBasis, statedIn, targetProblems, type Assertion, type 
 import { LIVE_STATES, type Registry } from "./registry.js"
 import { safePath, type CheckInput, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import { annotate } from "./source.js"
+import { inputFromMaterials, NO_MATERIALS, type ReviewMaterials } from "./materials.js"
 import { runCheck, type CheckRun } from "./verdict.js"
 
 /**
@@ -29,6 +30,11 @@ export interface FormalItem {
   claims: InputClaim[]
   assertions: AssertionDraft[]
   reference_script: CheckDraft["reference_script"]
+  /** A lead the item names (batch C, effect 3): its library check is the item's check. */
+  from_lead?: CheckRecord
+  /** Where the input came from when the formalizer gave none (batch C, effect 3), and files an earlier command produces. */
+  input_from?: string
+  produced?: { path: string; by: string[] }[]
 }
 
 /** records: data records after the header; empty_cells: empty fields among them; columns: the header. */
@@ -42,6 +48,8 @@ export interface FormalizeRequest {
   /** The reviewer's reply, verbatim. */
   review: string
   program: string
+  /** What IC holds of the review (batch C, effect 3): the leads it gave, the files the reviewer wrote, the commands it ran. */
+  materials?: { leads: { id: string; args: string[]; files: { path: string; content: string }[] }[]; files: { path: string; content: string }[]; commands: { command: string; output: string }[] }
   previous_answer?: FormalizeAnswer
   problems?: string[]
 }
@@ -101,7 +109,7 @@ export const FORMALIZE_SCHEMA = {
           input: {
             type: ["object", "null"], additionalProperties: false, required: ["args", "files"],
             description: "the call the review made: arguments after the program name, and every input file with its full content; null when the review does not give them completely",
-            properties: { args: { type: "array", items: { type: "string" } }, files: { type: "array", items: { type: "object", additionalProperties: false, required: ["path", "content"], properties: { path: { type: "string" }, content: { type: "string" } } } } },
+            properties: { args: { type: "array", items: { type: "string" } }, files: { type: "array", items: { type: "object", additionalProperties: false, required: ["path", "content", "from"], properties: { path: { type: "string" }, content: { type: ["string", "null"], description: "the file's full content; null when `from` names where code takes it" }, from: { type: ["string", "null"], description: "\"session\" for a file of `materials.files` (the reviewer wrote it), a lead id (K12) for that lead's file; null when content is given" } } } } },
           },
           why_no_input: { type: ["string", "null"], description: "when input is null: what the review leaves out" },
           claims: {
@@ -153,7 +161,7 @@ export const FORMALIZE_SYSTEM_PROMPT = [
   "You turn a review of a command-line program into checks that code can run. `review` is the reviewer's reply: a list of deviations from the requirements, each with the requirement it breaks, the command and input the reviewer used, and what the program did. `sources` holds the requirements, annotated with block ids; newer text overrides older text. `program` is the program's name.",
   "For each deviation in the list, in order, write one item:",
   `- units: the ids of the units of \`sources\` the deviation breaks (the finest units that state the rule: a sentence, a list item, a clause); ${UNIT_SYNTAX}.`,
-  "- input: the call the reviewer made, rebuilt exactly: the arguments after the program name, and every input file with its complete content. When the review does not give enough to rebuild the call (a file's content is missing or abbreviated, the arguments are not stated), set input to null and say in why_no_input what is missing. Do not invent content.",
+  "- input: the call the reviewer made, rebuilt exactly: the arguments after the program name, and every input file with its complete content. `materials`, when given, holds what the reviewer had and did: `leads` (checks it was asked to verify, with their arguments and files), `files` (the files it wrote in its session) and `commands` (what it ran, with the output). Take the call from there when the review names it: a file of `materials.files` is given with content null and from \"session\", a lead's file with from set to the lead id. Only when neither the review nor the materials give the call, set input to null and say in why_no_input what is missing. Do not invent content.",
   "- claims: for every input file ending in .csv or .json, what the item relies on the file holding, as the standard parser sees it: whether it parses (CSV as RFC 4180 the way Go's encoding/csv reads it: a blank line is skipped, every record has the header's field count; JSON as JSON.parse), the number of data records after the header, the number of empty fields among them, the header's columns. Count them yourself from the content you wrote; code checks these against the parser.",
   "- assertions: what a program that follows the requirement produces for this call, one fact each (an exit code, a line, a cell, a JSON field), stated so that they fail on the reviewed program and would pass once it is fixed. Every expected value has a source: verbatim when the requirement states the value (block is the id of the unit that states it; code checks that the value occurs there); derived when you worked it out from the input (then reference_script must print it too, under the assertion's id); computed for a digest or hash (expect_json \"null\"; reference_script alone gives it). A number that the text does not state is never verbatim: work it out in reference_script.",
   "- reference_script: needed when any assertion is derived or computed. It runs in a directory holding only the input files and prints one JSON object mapping each such assertion's id to its value. It must not run the program.",
@@ -162,9 +170,14 @@ export const FORMALIZE_SYSTEM_PROMPT = [
 
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
 
-export function buildFormalizeRequest(registry: Registry, round: number, review: string, program: string): FormalizeRequest {
+export function buildFormalizeRequest(registry: Registry, round: number, review: string, program: string, materials: ReviewMaterials = NO_MATERIALS): FormalizeRequest {
   const rounds = [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)
-  return { round, sources: rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n"), review, program }
+  const clip = (t: string, n: number) => t.length > n ? `${t.slice(0, n)}…` : t
+  const given = materials.leads.length || materials.files.length || materials.commands.length
+  return {
+    round, sources: rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n"), review, program,
+    ...(given ? { materials: { leads: materials.leads.map(l => ({ id: l.id, args: l.check.input.args, files: l.check.input.files })), files: materials.files.map(f => ({ path: f.path, content: clip(f.content, 4000) })), commands: materials.commands.slice(-80).map(c => ({ command: clip(c.command, 600), output: clip(c.output, 1200) })) } } : {}),
+  }
 }
 
 /**
@@ -178,7 +191,7 @@ export function canonicalUnit(u: string): string {
 }
 
 /** Definite errors of an answer, per item (an item with problems is asked again once, then dropped as malformed). */
-export function formalizeProblems(registry: Registry, round: number, answer: unknown): { problems: { item: number | null; message: string }[]; items: FormalItem[] } {
+export function formalizeProblems(registry: Registry, round: number, answer: unknown, materials: ReviewMaterials = NO_MATERIALS, binary: string | null = null): { problems: { item: number | null; message: string }[]; items: FormalItem[] } {
   const a = answer as Partial<FormalizeAnswer> | null
   if (!a || typeof a !== "object" || !Array.isArray(a.items)) return { problems: [{ item: null, message: "the answer must have an items list" }], items: [] }
   // Mechanical slips of the interface, read the one way they can mean (fix block A6): an id written as the annotation
@@ -193,6 +206,9 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
       if (x.source && x.source.kind === "verbatim" && (typeof x.source.block !== "string" || !registry.block(x.source.block))) x.source.block = null
       if (typeof x.expect_json === "string") { try { JSON.parse(x.expect_json) } catch { x.expect_json = JSON.stringify(x.expect_json) } }
     }
+    // Arguments that start with the program's own name start after it, as for library checks (batch C, effect 1).
+    const args = (raw.input as Partial<CheckInput> | null | undefined)?.args
+    if (binary && Array.isArray(args) && args.length > 1 && typeof args[0] === "string" && args[0].replace(/^\.?[\\/]/u, "").replace(/\.exe$/iu, "") === binary) args.shift()
   }
   const problems: { item: number | null; message: string }[] = []
   const items: FormalItem[] = []
@@ -207,14 +223,26 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
     if (!Array.isArray(it.units) || !it.units.length || !it.units.every(u => typeof u === "string")) add(`units must name at least one unit id; ${UNIT_SYNTAX}`)
     else if (!it.units.some(known)) for (const u of it.units) add(UNIT_ID.test(u) ? `unit ${u} does not exist in the requirements so far` : `unit ${u} is not in the unit id format; ${UNIT_SYNTAX}`)
     else it.units = it.units.filter(known)
-    // No input: nothing can be checked or run; the item stands on its text (its assertions are not looked at).
+    // No input: code may still rebuild it from the materials (batch C, effect 3), so the assertions that are well formed
+    // are kept; nothing about them is a problem the formalizer is asked again about.
     if (it.input === null || it.input === undefined) {
       if (problems.some(p => p.item === n)) continue
-      items.push({ item: n, text: it.text!, units: [...new Set(it.units!)], input: null, why_no_input: typeof it.why_no_input === "string" && it.why_no_input.trim() ? it.why_no_input : "the formalizer gave no input and no reason", claims: [], assertions: [], reference_script: null })
+      const good = (Array.isArray(it.assertions) ? it.assertions as Partial<AssertionDraft>[] : []).filter(x => x && typeof x.id === "string" && x.target && !targetProblems(x.target as Target) && typeof x.expect_json === "string" && x.source && ["verbatim", "derived", "computed"].includes(String(x.source.kind))) as AssertionDraft[]
+      const script = it.reference_script && typeof it.reference_script === "object" && (it.reference_script.language === "python" || it.reference_script.language === "node") && typeof it.reference_script.code === "string" ? it.reference_script : null
+      const usable = good.filter(x => x.source.kind === "verbatim" || script)
+      items.push({ item: n, text: it.text!, units: [...new Set(it.units!)], input: null, why_no_input: typeof it.why_no_input === "string" && it.why_no_input.trim() ? it.why_no_input : "the formalizer gave no input and no reason", claims: [], assertions: usable.map(x => ({ id: x.id, role: "business", target: { kind: x.target.kind, path: x.target.path ?? null, line: x.target.line ?? null, pointer: x.target.pointer ?? null, column: x.target.column ?? null }, expect_json: x.expect_json, tolerance: typeof x.tolerance === "number" ? x.tolerance : null, source: { kind: x.source.kind, block: x.source.block ?? null } })), reference_script: usable.some(x => x.source.kind !== "verbatim") ? script : null })
       continue
     }
     {
       const i = it.input as Partial<CheckInput>
+      // A file given by where it is (content null, batch C effect 3): code takes it from the session files or the lead.
+      if (Array.isArray(i.files)) for (const f of i.files as ({ path?: unknown; content?: unknown; from?: unknown })[]) {
+        if (!f || typeof f.path !== "string" || typeof f.content === "string") continue
+        const lead = typeof f.from === "string" ? materials.leads.find(l => l.id === f.from) : undefined
+        const found = lead ? lead.check.input.files.find(x => x.path === f.path) : materials.files.find(x => x.path.replace(/\\/gu, "/") === String(f.path).replace(/\\/gu, "/").replace(/^\.\//u, "")) ?? materials.files.find(x => x.path.split("/").pop() === String(f.path).split(/[\\/]/u).pop())
+        if (found) f.content = found.content
+        else add(`input file ${f.path}: content is null and ${lead ? `lead ${lead.id} has no such file` : `materials.files has no file ${f.path}`}`)
+      }
       if (!Array.isArray(i.args) || !i.args.every(x => typeof x === "string") || !Array.isArray(i.files) || !i.files.every(f => f && typeof f.path === "string" && typeof f.content === "string")) add("input must be {args: string[], files: {path, content}[]}")
       else {
         for (const f of i.files) if (!safePath(f.path)) add(`input path ${f.path} must be relative and inside the run directory`)
@@ -243,7 +271,7 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
     if (derived && !(it.reference_script && typeof it.reference_script === "object" && (it.reference_script.language === "python" || it.reference_script.language === "node") && typeof it.reference_script.code === "string")) add("derived and computed values need reference_script")
     if (problems.some(p => p.item === n)) continue
     items.push({
-      item: n, text: it.text!, units: [...new Set(it.units!)], input: it.input ? { args: [...it.input.args], files: it.input.files.map(f => ({ path: f.path, content: f.content })) } : null,
+      item: n, text: it.text!, units: [...new Set(it.units!)], input: it.input ? { args: [...it.input.args], files: it.input.files.map(f => ({ path: f.path, content: f.content as string })) } : null,
       why_no_input: it.input ? null : it.why_no_input!, claims: (Array.isArray(it.claims) ? it.claims : []).map(c => ({ path: c.path, parses: c.parses === true, records: Number.isInteger(c.records) ? c.records! : null, empty_cells: Number.isInteger(c.empty_cells) ? c.empty_cells! : null, columns: Array.isArray(c.columns) ? c.columns.map(String) : null })),
       assertions: (it.assertions as AssertionDraft[]).map(x => ({ id: x.id, role: "business", target: { kind: x.target.kind, path: x.target.path ?? null, line: x.target.line ?? null, pointer: x.target.pointer ?? null, column: x.target.column ?? null }, expect_json: x.expect_json, tolerance: typeof x.tolerance === "number" ? x.tolerance : null, source: { kind: x.source.kind, block: x.source.block ?? null } })),
       reference_script: derived ? it.reference_script! : null,
@@ -256,9 +284,10 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
  * Asks for the items of one review: the first answer and one repair with the problems code found. Items that still
  * have problems are reported as malformed (not sent, not counted as findings). Transport failures are retried.
  */
-export async function formalizeReview(registry: Registry, round: number, review: string, program: string, transport: FormalizeTransport, o: { reviewId: string; callId: (n: number) => string }): Promise<{ items: FormalItem[]; malformed: { item: number | null; message: string }[]; calls: FormalizeCallRecord[]; unavailable?: string; texts: { item: number; text: string }[] }> {
+export async function formalizeReview(registry: Registry, round: number, review: string, program: string, transport: FormalizeTransport, o: { reviewId: string; callId: (n: number) => string; materials?: ReviewMaterials }): Promise<{ items: FormalItem[]; malformed: { item: number | null; message: string }[]; calls: FormalizeCallRecord[]; unavailable?: string; texts: { item: number; text: string }[] }> {
   const calls: FormalizeCallRecord[] = []
-  let request = buildFormalizeRequest(registry, round, review, program)
+  const materials = o.materials ?? NO_MATERIALS
+  let request = buildFormalizeRequest(registry, round, review, program, materials)
   let items: FormalItem[] = [], malformed: { item: number | null; message: string }[] = [], failures = 0
   // The items' texts as the last parsed answer quotes them (a malformed item is still sent in the reviewer's words).
   let texts: { item: number; text: string }[] = []
@@ -275,7 +304,7 @@ export async function formalizeReview(registry: Registry, round: number, review:
     }
     let parsed: unknown = null
     try { parsed = JSON.parse(reply.text) } catch { parsed = null }
-    const checked = parsed === null ? { problems: [{ item: null, message: "the reply is not JSON" }], items: [] as FormalItem[] } : formalizeProblems(registry, round, parsed)
+    const checked = parsed === null ? { problems: [{ item: null, message: "the reply is not JSON" }], items: [] as FormalItem[] } : formalizeProblems(registry, round, parsed, materials, program)
     calls.push({ ...base, response_text: reply.text, problems: checked.problems.map(p => p.message), usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) })
     items = checked.items
     malformed = checked.problems
@@ -285,7 +314,20 @@ export async function formalizeReview(registry: Registry, round: number, review:
     if (parsed !== null && typeof parsed === "object") request = { ...request, previous_answer: parsed as FormalizeAnswer, problems: malformed.map(p => p.message) }
     else request = { ...request, problems: malformed.map(p => p.message) }
   }
-  return { items, malformed, calls, texts }
+  return { items: items.map(it => completeInput(it, materials, program)), malformed, calls, texts }
+}
+
+/**
+ * An item without an input, its input rebuilt from the materials by code (batch C, effect 3): a lead it names (its
+ * check is the item's check), or the command it quotes with the session's files; no_input stays only when neither
+ * is there, and then says what was searched.
+ */
+export function completeInput(it: FormalItem, materials: ReviewMaterials, binary: string): FormalItem {
+  if (it.input) return it
+  const found = inputFromMaterials(it.text, materials, binary)
+  if (found.kind === "lead") return { ...it, input: found.check.input, why_no_input: null, from_lead: found.check, input_from: `lead ${found.lead}` }
+  if (found.kind === "session") return { ...it, input: found.input, why_no_input: null, input_from: "the command the item quotes, with the files of the reviewer's session", ...(found.produced.length ? { produced: found.produced } : {}) }
+  return { ...it, why_no_input: `${found.why}; the formalizer: ${it.why_no_input ?? "no reason given"}` }
 }
 
 // ---------------------------------------------------------------- standard parsers
@@ -376,14 +418,14 @@ export function claimProblems(input: CheckInput, claims: readonly InputClaim[]):
  * not_formalized (the formalizer left a listed deviation out) and formalize_failed (the call failed) are code's own
  * failures to verify, not findings about the item (fix block A1).
  */
-export type Premise = "unit_not_in_force" | "input_claim_false" | "value_not_stated" | "value_not_computed" | "reference_failed" | "no_input" | "not_reproduced" | "malformed" | "not_formalized" | "formalize_failed"
+export type Premise = "unit_not_in_force" | "input_claim_false" | "value_not_stated" | "value_not_computed" | "reference_failed" | "no_input" | "no_assertion" | "not_reproduced" | "malformed" | "not_formalized" | "formalize_failed"
 
 export interface PremiseFailure { premise: Premise; detail: string }
 
 /** The premises that stop an item by default (fix block A3): code's conclusions about the item itself. The rest are logged. */
 export const DEFAULT_PREMISE_BLOCK: readonly Premise[] = ["unit_not_in_force", "not_reproduced", "input_claim_false"]
 /** Failures that are code's own, not the item's: under the fallback the item goes out in the reviewer's words (A1). */
-export const OWN_FAILURES: ReadonlySet<Premise> = new Set(["no_input", "malformed", "not_formalized", "formalize_failed"])
+export const OWN_FAILURES: ReadonlySet<Premise> = new Set(["no_input", "no_assertion", "malformed", "not_formalized", "formalize_failed"])
 
 /** A check built from an item whose premises held: the input filled and the expected values resolved. */
 export interface ItemCheck { input: CheckInput; assertions: Assertion[]; reference_script: CheckDraft["reference_script"]; object: string | null }
@@ -416,7 +458,10 @@ export async function assessPremises(registry: Registry, round: number, item: Fo
   const failures: PremiseFailure[] = []
   const fail = (premise: Premise, detail: string) => { if (!failures.some(f => f.premise === premise)) failures.push({ premise, detail }) }
   for (const u of item.units) { const why = notInForce(registry, round, u); if (why) fail("unit_not_in_force", why) }
+  // A lead the item names: the lead's check (admitted, its values resolved) is the item's check (batch C, effect 3).
+  if (item.from_lead) return { failures, check: { input: item.from_lead.input, assertions: item.from_lead.assertions, reference_script: item.from_lead.reference_script, object: item.from_lead.object } }
   if (!item.input) { fail("no_input", item.why_no_input ?? "the review does not give the input"); return { failures, check: null } }
+  if (!item.assertions.length) { fail("no_assertion", `the input is known (${item.input_from ?? "from the formalizer"}) but the formalizer wrote no assertion for the item`); return { failures, check: null } }
   const claims = claimProblems(item.input, item.claims)
   if (claims.length) fail("input_claim_false", claims.join("; "))
   const assertions: AssertionDraft[] = []
@@ -442,7 +487,7 @@ export async function assessPremises(registry: Registry, round: number, item: Fo
  */
 export async function checkPremises(registry: Registry, round: number, item: FormalItem, sandbox: ScriptSandbox, timeoutMs: number): Promise<{ ok: true; check: ItemCheck } | { ok: false; failure: PremiseFailure }> {
   const a = await assessPremises(registry, round, item, sandbox, timeoutMs)
-  const order: Premise[] = ["unit_not_in_force", "no_input", "input_claim_false", "value_not_computed", "value_not_stated", "reference_failed"]
+  const order: Premise[] = ["unit_not_in_force", "no_input", "no_assertion", "input_claim_false", "value_not_computed", "value_not_stated", "reference_failed"]
   const first = order.map(p => a.failures.find(f => f.premise === p)).find(f => !!f)
   if (first) return { ok: false, failure: first }
   if (!a.check) return { ok: false, failure: { premise: "reference_failed", detail: "no assertion could be resolved" } }

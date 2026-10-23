@@ -369,7 +369,7 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       for (const st of ["coding", "build", "trial", "guard rerun", "review"]) assert.ok(stages.includes(st), `R${r.round} wall time has ${st}: ${stages.join(", ")}`)
       const text = renderReport(r)
       assert.match(text, /Review acceptance: first delivery C\d+\.1 [0-9a-f]{8}; trial runs \d+ \(\d+ failed\); reviews \d+ \(void sessions \d+\): #1 on C\d+\.\d+/u)
-      assert.match(text, /Reviewer items: reported \d+, entered a repair list \d+; premise checks blocked \d+ \(/u)
+      assert.match(text, /Reviewer items: reported \d+, entered a repair list \d+ \(verified \d+, logged \d+, fallback \d+\), blocked \d+; every entry ended once: yes; premise checks blocked \d+ \(/u)
       assert.match(text, /Guards: \d+ at the start, \d+ at the end, new \d+.*; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
       assert.match(text, /Guard coverage: \d+\/\d+ live units; uncovered \d+/u)
       assert.match(text, /Reviewer \(stub:reviewer\): \d+ sessions, in \d+, cache read \d+, out \d+, cache share [\d.]+\. Formalizer \((stub:formalizer|\?)\): \d+ calls/u)
