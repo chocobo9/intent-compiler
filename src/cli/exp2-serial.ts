@@ -15,7 +15,7 @@ async function main(argv: string[]): Promise<number> {
   const problems = await preflight(config)
   if (problems.length) { process.stderr.write(`Preflight failed:\n- ${problems.join("\n- ")}\n`); return 2 }
   const { serial } = assembleSerial(config)
-  const outcome = await serial.run({ to, resumeWaitMs: config.resume?.wait_ms, maxResumes: config.resume?.max_resumes })
+  const outcome = await serial.run({ to, resumeWaitMs: config.resume?.wait_ms, maxResumes: config.resume?.max_resumes, environmentWaitMs: config.resume?.environment_wait_ms })
   process.stdout.write(JSON.stringify(outcome, null, 2) + "\n")
   return outcome.status === "done" ? 0 : outcome.status === "suspended" ? 3 : 1
 }

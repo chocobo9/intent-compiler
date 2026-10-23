@@ -567,3 +567,76 @@ replay 工具（`intent-exp2-replay --mode review`）复用到 A3 的离线回�
 ### 离线验证
 
 `npm test`：946 项，939 通过，6 项跳过，失败 1 项仍是原有的 `repair-batch`。新增 19 项，都在 `batch-c.test.ts`。改了 3 处旧测试，都是计数口径随效果 4 改变：整段退化的 sent 从 1 变为条目数；台账从 `V1.1.0` 变为逐项；报告的 "Reviewer items" 一行。没有运行真实模型。
+
+## 20. 接口计数基线（fe6562d）
+
+**做法**：`test/exp2/replay-baseline.test.ts` 用当前代码重放七次真实 R1，算出下面的接口计数，与 `exp2/evidence/replay-2026-10-23/baseline-fe6562d.json` 比较。
+- 重放用到的真实输出：真实归属回复、写检查的真实回复、审查与 formalizer 的真实回复，加上 rep1e 导出的会话。
+- 被测程序：一个对每次调用都报错的程序。
+- 基线文件是在 fe6562d 的 src 上写出的（d5c31ce 的 src 与 fe6562d 相同）。
+- 判定方向：准入、进入修补单、来自材料的输入，越多越好；从未告知的 unknown、no_input、blocked、守恒错误，越少越好。其余计数只报告，不判定。
+- rep1f、rep1g 的固定材料取自 be04db7，重放共用的辅助函数挪到了 `test/exp2/replay-fixtures.ts`。
+
+**基线**
+
+| 运行 | 写检查：入库 / 准入 / 未告知的 unknown / 丢弃 | 审查：报告 / 进入 / 核实 / fallback / 来自材料的输入 / no_input |
+|---|---|---|
+| rep1 | 30 / 28 / 0 / 4 | —（第一次审查即作废） |
+| rep1b | 20 / 20 / 0 / 1 | 8 / 8 / 0 / 8 / 0 / 8 |
+| rep1c | 21 / 21 / 0 / 8 | 32 / 32 / 0 / 32 / 0 / 32（没有 formalizer 回复，用的是"全部无输入"的替身） |
+| rep1d | 21 / 21 / 0 / 2 | 20 / 20 / 8 / 12 / 6 / 12（审查会话没有导出） |
+| rep1e | 23 / 22 / 0 / 6 | 20 / 20 / 15 / 1 / 20 / 0 |
+| rep1f | 14 / 14 / 0 / 2 | —（docker 停机，没有审查） |
+| rep1g | 13 / 13 / 0 / 1 | 25 / 25 / 22 / 2 / 1 / 2（审查会话没有导出） |
+
+rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1，比真实运行少 2，原因是那 2 条的输入在没有导出的会话文件里。
+
+## 21. 批 4：环境错误停轮等待
+
+**做法**
+- **新增 `EnvironmentUnavailable`**（`platform.ts`），是 `EnvironmentBlocked` 的子类。原先各模型调用对 `EnvironmentBlocked` 的放行（不算传输失败）对它照样生效。
+- **`serial.run` 先认它**，走 `QuotaExhausted` 那条路：
+  - 保存这次尝试的花费，原因写成 `environment unavailable: …`；
+  - 回到检查点，等待 `environmentWaitMs` 后重跑本轮。等待时间的配置项是 `resume.environment_wait_ms`，默认 5 分钟（配额等待是 30 分钟）；
+  - 续跑次数与配额续跑共用 `max_resumes`。
+  - 主机拦截程序启动（智能应用控制）仍按原样停轮，不等待：被拦截的是新构建的未签名程序，等待不会让它通过。
+- **识别规则**，都在 docker 客户端或解释器的输出上判断，不看程序的输出：
+  - **docker 不在**（`dockerDown`）：
+    - 客户端退出码不为 0，并且输出里有守护进程连不上的原话。rep1f 的原话 "failed to connect to the docker API" 逐字收录；另收 "Cannot connect to the Docker daemon"（Linux）、"error during connect"、"docker daemon is not running"（较旧的 Windows 客户端）；
+    - docker 客户端本身启动不了（spawn ENOENT）。
+    - 守护进程有回应的容器错误（"Error response from daemon: No such image"）不算 docker 不在。
+  - **生效位置**：`dockerGoBuilder`、`dockerGoBuilderAsync`（构建），`dockerTrial`（试跑），`runInContainer`（检查的批量与单次运行、参考脚本）。命中就抛出，不再返回 `{ ok: false, output }` 或运行结果。
+  - **解释器缺失**（`interpreterMissing`）：
+    - 本机 spawn ENOENT；
+    - Windows 应用商店占位程序的 "Python was not found; run without arguments to install from the Microsoft Store"；
+    - 镜像里没有解释器（退出 126/127，输出里有解释器路径和 "no such file or directory"）。
+    - 生效位置是 `LocalScriptSandbox` 与 `DockerScriptSandbox`。脚本自己的失败照旧退回写检查的模型。
+  - **审查副本**（`copyProgram`）：
+    - 旧目录删不掉（EPERM/EBUSY，例如续跑同一轮时还被锁着）：副本建在旁边的 `<dir>-2`…`<dir>-5`；
+    - 五个位置都删不掉，或者 clone/checkout 失败：抛出，消息带 git 的 stderr。
+    - 原来这里会抛出未处理的错误，进程退出。
+- **由此得到的效果**：
+  - 试跑里的 docker 错误不再作为试跑失败消息发给执行方；
+  - 写检查时参考脚本碰上 docker 错误，不再作为"reference script exited 1"退回模型（rep1f 的 13 条里，9 条的 unknown 原因是这句话，其中 7 条没有准入；第三次写检查的请求把它当作问题退回了模型）；
+  - 一轮中途 docker 断开，检查运行抛出，本轮回到检查点，守卫不判翻转，也不触发回退。
+
+**依据**
+- rep1f（2026-10-23 15:39，Docker Desktop 未启动）：
+  - 三个周期的构建和试跑输出都是上面那句原话，状态 `trial_spent`，执行方花掉两次试跑修复（VOID.txt：未缓存 29k）；
+  - 13 条检查中 9 条的 unknown 原因里有这句原话，第三次写检查的请求带着它。
+- CONSOLIDATION-MAP §5：各种环境错误现在各走到哪里。
+
+**验收**（`test/exp2/batch-4.test.ts`，离线）
+- 用一个假 docker 客户端，原样输出 rep1f 的那句话、退出 1：构建（同步和异步）、试跑、批量检查、单次检查、参考脚本，都抛出 `EnvironmentUnavailable`，消息以 "the docker daemon cannot be reached: failed to connect to the docker API" 开头。
+- 其他客户端的两种说法、客户端不存在：都抛出。
+- 以下情况照旧按结果处理，不抛出：程序自身的编译错误（`syntax error`，返回 `ok: false`）、守护进程回应的 "No such image"、退出 0 的运行、程序报 "unknown command"。
+- 解释器缺失的三种形态都认出；脚本自己 `sys.exit('no such file or directory: data.csv')` 仍是退出 1 的结果。
+- 审查副本：clone 失败、目录删不掉，都抛出并写明原因。
+- review 模式的串行 R1–R2（替身执行方、替身审查方、本地 Go 试跑）：
+  - **R1 第一次试跑 docker 不在**：结果 `{ status: done, last_checkpoint: 2, resumes: 1 }`，等待一次，等待时长取配置值；中断记录只有 `round-01-1.json`，原因以 "environment unavailable: the docker daemon cannot be reached" 开头；执行方收到的消息里没有一条提到 docker；两轮报告的守卫、回退、条目、试跑计数与不中断的一次完全相同。
+  - **R1 第二个周期（C1.1 检查完之后的修补周期）跑检查时 docker 断开**：`resumes: 1`；中断记录里只有 C1.1；两轮报告的守卫（含两类翻转）、回退、条目与不中断的一次完全相同。
+- 七次重放的接口计数与基线相同（第 20 节）。
+
+**边界**
+- 没有用真 docker 停机实测，规则按 rep1f 的原话和公开的客户端措辞校准。
+- 一轮中途停下会丢掉这一轮执行方已经做的工作（回到检查点），和配额停轮一样。

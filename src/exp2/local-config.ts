@@ -65,7 +65,8 @@ export interface LocalConfig {
   /** `limits`: resource limits on the program under test (BLOCK10 §9.2; defaults DEFAULT_RESOURCE_LIMITS). */
   runner: { kind: "local"; limits?: Partial<ResourceLimits> } | ({ kind: "docker"; docker?: string[] } & Omit<DockerOptions, "docker">)
   tools?: { python?: string; go?: string }
-  resume?: { wait_ms?: number; max_resumes?: number }
+  /** wait_ms: after a spent quota (default 30 min); environment_wait_ms: after docker or a review copy was unavailable (default 5 min). */
+  resume?: { wait_ms?: number; max_resumes?: number; environment_wait_ms?: number }
   /** Waits before retrying a rate-limited call; when they run out the call counts as a spent quota. */
   rate_limit?: { delays_ms: number[] }
   /**

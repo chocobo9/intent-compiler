@@ -11,6 +11,43 @@
  */
 export class EnvironmentBlocked extends Error {}
 
+/**
+ * The environment is down for now (DESIGN §12j.5, batch 4): the docker daemon cannot be reached, a review copy cannot
+ * be made, a script interpreter is missing. No model and no program did anything wrong, so nothing is sent to anyone:
+ * the serial keeps what the attempt spent, goes back to the checkpoint, waits and runs the round again.
+ */
+export class EnvironmentUnavailable extends EnvironmentBlocked {}
+
+/**
+ * The docker client's own words when it cannot reach the daemon. The first is rep1f's, verbatim on Windows with Docker
+ * Desktop stopped ("failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine; check if the
+ * path is correct and if the daemon is running: open //./pipe/dockerDesktopLinuxEngine: The system cannot find the
+ * file specified."); the others are the same condition in older clients and on Linux.
+ */
+const DOCKER_DOWN = /failed to connect to the docker API|Cannot connect to the Docker daemon|error during connect|docker daemon is not running/iu
+
+/**
+ * Whether a docker client call failed because docker itself is not there: the daemon unreachable, or the client not
+ * installed (spawn ENOENT). Returns what to report, or null for any other outcome (the program's or the build's own).
+ */
+export function dockerDown(exitCode: number | null, output: string, error?: unknown): string | null {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code
+  if (code === "ENOENT" || /spawn \S*docker\S* ENOENT/iu.test(output)) return `the docker client cannot be started: ${String(error ?? output).trim().slice(0, 300)}`
+  if (exitCode !== 0 && DOCKER_DOWN.test(output)) return `the docker daemon cannot be reached: ${output.trim().slice(0, 300)}`
+  return null
+}
+
+/**
+ * Whether a script's interpreter is missing: not found on the host (spawn ENOENT, or the Windows Store placeholder that
+ * answers `python`), or not in the image (the container cannot exec it). Returns what to report, or null.
+ */
+export function interpreterMissing(interpreter: string, exitCode: number | null, output: string): string | null {
+  const missing = (exitCode === null && output.includes(`spawn ${interpreter} ENOENT`))
+    || /Python was not found; run without arguments to install from the Microsoft Store/iu.test(output)
+    || ((exitCode === 126 || exitCode === 127) && output.includes(interpreter) && /no such file or directory|executable file not found/iu.test(output))
+  return missing ? `the script interpreter ${interpreter} is missing: ${output.trim().slice(0, 300)}` : null
+}
+
 /** A local file or directory the run needs (state, recording, output) cannot be written: an environment error too. */
 export class LocalWriteFailed extends EnvironmentBlocked {}
 

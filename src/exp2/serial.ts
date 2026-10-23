@@ -8,7 +8,7 @@ import { executeRound, type BuildResult, type CycleRecord, type DetectScope, typ
 import { head, initRepo, resetTo } from "./git.js"
 import { acceptanceFromLedger, acceptanceSummary, buildReport, codingCost, renderReport, type RoundReport, type StageCost } from "./report.js"
 import { runDigest, type ObjectStatus } from "./verdict.js"
-import { EnvironmentBlocked } from "./platform.js"
+import { EnvironmentBlocked, EnvironmentUnavailable } from "./platform.js"
 import { freezePrediction } from "./prediction.js"
 import { nullBaseline, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import type { Exp2State, Exp2Store } from "./store.js"
@@ -239,7 +239,7 @@ export class Serial {
     return readdirSync(dir).filter(f => f.startsWith(`round-${pad(round)}-`)).sort().map(f => JSON.parse(readFileSync(join(dir, f), "utf8")) as InterruptedAttempt)
   }
 
-  async run(options: { to: number; wait?: (ms: number) => Promise<void>; resumeWaitMs?: number; maxResumes?: number }): Promise<SerialOutcome> {
+  async run(options: { to: number; wait?: (ms: number) => Promise<void>; resumeWaitMs?: number; maxResumes?: number; environmentWaitMs?: number }): Promise<SerialOutcome> {
     const wait = options.wait ?? (ms => new Promise(r => setTimeout(r, ms)))
     let resumes = 0
     this.ensureStart()
@@ -254,6 +254,15 @@ export class Serial {
       try {
         outcome = await this.runRound(round)
       } catch (e) {
+        if (e instanceof EnvironmentUnavailable) {
+          // Docker down, a review copy that cannot be made, a missing interpreter (batch 4): nobody is told to fix it.
+          // Like a spent quota: keep what the attempt spent, back to the checkpoint, wait, run the round again.
+          this.salvage(round, `environment unavailable: ${e.message}`)
+          await this.restore(last)
+          if (++resumes > (options.maxResumes ?? 48)) return { status: "suspended", last_checkpoint: last, resumes }
+          await wait(options.environmentWaitMs ?? 5 * 60_000)
+          continue
+        }
         if (e instanceof AuthInvalid || e instanceof EnvironmentBlocked || e instanceof RoleUnavailable) {
           // A dead login, or a host that will not start programs, is not waited out: keep what the attempt spent,
           // go back to the checkpoint, stop and report. Neither counts as a failed step.

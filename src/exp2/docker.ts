@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { BuildResult } from "./execution.js"
-import { guardedSync, isEnvironmentBlock, scriptCommand, scriptFile } from "./platform.js"
+import { dockerDown, EnvironmentUnavailable, guardedSync, interpreterMissing, isEnvironmentBlock, scriptCommand, scriptFile } from "./platform.js"
 import { ranOnly } from "./coverage.js"
 import { collect, DEFAULT_RESOURCE_LIMITS, execute, nullRun, sourceLiterals, writeInputs, type ResourceLimits, type CheckInput, type CheckRunner, type InputFile, type ProgramRef, type RunOutput, type ScriptResult, type ScriptSandbox } from "./runner.js"
 
@@ -85,7 +85,17 @@ async function runInContainer(o: DockerOptions, runDir: string, command: string[
   // The docker client keeps the host environment it needs; the container gets none of it. Output is capped here.
   const result = await execute([cmd, ...pre, ...args], runDir, timeoutMs + (o.graceMs ?? 0), process.env, undefined, { outputBytes: limits.outputBytes })
   if (result.timed_out || result.limit) removeContainer(o, name)
+  throwIfDockerDown(result.exit_code, `${result.stderr}${result.stdout}`)
   return withContainerLimit(result, limits.memoryMb)
+}
+
+/**
+ * Docker itself not there (batch 4) is no outcome of the build, the trial, the check or the script: it is raised, so the
+ * round stops and waits instead of a check failing, a guard flipping or the executor being asked to fix it.
+ */
+function throwIfDockerDown(exitCode: number | null, output: string, error?: unknown): void {
+  const down = dockerDown(exitCode, output, error)
+  if (down) throw new EnvironmentUnavailable(down)
 }
 
 /** A container killed by its memory limit exits 137 (SIGKILL) without having timed out: recorded as the memory limit. */
@@ -184,7 +194,10 @@ export class DockerScriptSandbox implements ScriptSandbox {
       writeFileSync(join(dir, script), code, "utf8")
       // Inside the container it is Linux, whatever the host: the image's interpreters, named directly.
       const command = scriptCommand(language, script, { platform: "linux", python: this.o.python ?? DOCKER_PYTHON, node: this.o.node ?? "node" })
-      return await runInContainer(this.o, dir, command, timeoutMs)
+      const r = await runInContainer(this.o, dir, command, timeoutMs)
+      const missing = interpreterMissing(command[0], r.exit_code, `${r.stderr}${r.stdout}`)
+      if (missing) throw new EnvironmentUnavailable(missing)
+      return r
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }
 }
@@ -204,6 +217,7 @@ export function dockerGoBuilder(outRoot: string, o: DockerOptions, timeoutMs = 1
     const r = guardedSync("docker", () => spawnSync(cmd, [...pre, ...args], { encoding: "utf8", timeout: timeoutMs }), r => isEnvironmentBlock(r.error) ? String(r.error) : null)
     if (r.error && (r.error as NodeJS.ErrnoException).code === "ETIMEDOUT") removeContainer(o, name)
     const output = `${r.stdout ?? ""}${r.stderr ?? ""}${r.error ? String(r.error) : ""}`
+    throwIfDockerDown(r.status, output, r.error)
     if (r.status !== 0) return { ok: false, output, program: null }
     return { ok: true, output, program: { id: label, label: `build of ${label} (docker)`, command: [`/prog/${binary}`], source_dir: workdir, mount: { host: out, container: "/prog" }, ...(o.cover ? { cover: true } : {}) } }
   }
@@ -220,6 +234,7 @@ export function dockerGoBuilderAsync(outRoot: string, o: DockerOptions, timeoutM
     const r = await execute([cmd, ...pre, ...args], out, timeoutMs, process.env)
     if (r.timed_out) removeContainer(o, name)
     const output = `${r.stdout}${r.stderr}`
+    throwIfDockerDown(r.exit_code, output)
     if (r.exit_code !== 0) return { ok: false, output, program: null }
     return { ok: true, output, program: { id: label, label: `build of ${label} (docker)`, command: [`/prog/${binary}`], source_dir: workdir, mount: { host: out, container: "/prog" } } }
   }
@@ -239,6 +254,7 @@ export function dockerTrial(o: DockerOptions, binary = "app", timeoutMs = 10 * 6
       const [cmd, ...pre] = docker(o)
       const r = await execute([cmd, ...pre, ...args], dir, timeoutMs, process.env)
       if (r.timed_out) removeContainer(o, name)
+      throwIfDockerDown(r.exit_code, `${r.stdout}${r.stderr}`)
       return { ok: r.exit_code === 0, output: `${r.stdout}${r.stderr}` }
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }

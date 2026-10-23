@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process"
 import { mkdirSync, rmSync } from "node:fs"
 import { dirname } from "node:path"
 import { QuotaExhausted, type TokenUsage } from "./attribution.js"
+import { EnvironmentUnavailable } from "./platform.js"
 import { SessionBroken } from "./execution.js"
 import type { OpenCodeCodingClient } from "./opencode-executor.js"
 import { sessionTokens } from "./opencode-executor.js"
@@ -249,11 +250,23 @@ export class OpenCodeReviewer implements Reviewer {
  * reviewer changes there is thrown away with it).
  */
 export function copyProgram(workdir: string, commit: string, dir: string): string {
-  rmSync(dir, { recursive: true, force: true })
-  mkdirSync(dirname(dir), { recursive: true })
-  execFileSync("git", ["clone", "-q", workdir, dir], { stdio: "ignore" })
-  execFileSync("git", ["-C", dir, "checkout", "-q", commit], { stdio: "ignore" })
-  return dir
+  // A directory left locked by an earlier attempt (Windows, EPERM/EBUSY) is left as it is: the copy goes beside it.
+  let at = dir
+  for (let n = 2; ; n++) {
+    try { rmSync(at, { recursive: true, force: true }); break } catch (e) {
+      if (n > 5) throw new EnvironmentUnavailable(`the review copy at ${dir} cannot be made: ${(e as Error).message}`)
+      at = `${dir}-${n}`
+    }
+  }
+  try {
+    mkdirSync(dirname(at), { recursive: true })
+    execFileSync("git", ["clone", "-q", workdir, at], { stdio: ["ignore", "ignore", "pipe"] })
+    execFileSync("git", ["-C", at, "checkout", "-q", commit], { stdio: ["ignore", "ignore", "pipe"] })
+  } catch (e) {
+    const stderr = String((e as { stderr?: unknown }).stderr ?? "").trim()
+    throw new EnvironmentUnavailable(`the review copy of ${commit.slice(0, 12)} cannot be cloned to ${at}: ${stderr || (e as Error).message}`.slice(0, 600))
+  }
+  return at
 }
 
 // Windows can keep a review copy locked (EPERM/EBUSY); like the control arm's script, leave it in place then.

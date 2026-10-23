@@ -4,7 +4,7 @@ import { dirname, extname, join, relative, resolve, sep } from "node:path"
 import { spawn as nodeSpawn } from "node:child_process"
 import { mapPool } from "./pool.js"
 import { readCoverage } from "./coverage.js"
-import { ENVIRONMENT_TRIES, EnvironmentBlocked, isEnvironmentBlock, minimalEnv, scriptCommand, scriptFile, type PlatformOptions } from "./platform.js"
+import { ENVIRONMENT_TRIES, EnvironmentBlocked, EnvironmentUnavailable, interpreterMissing, isEnvironmentBlock, minimalEnv, scriptCommand, scriptFile, type PlatformOptions } from "./platform.js"
 
 /**
  * Exp2 check runner (DESIGN §8): runs the program under test, or a reference script, in a fresh directory that
@@ -224,7 +224,12 @@ export class LocalScriptSandbox implements ScriptSandbox {
       const script = scriptFile(language)
       writeFileSync(join(dir, script), code, "utf8")
       // python -I: isolated mode, no user site or script-directory imports beyond the run directory itself.
-      return await execute(scriptCommand(language, script, this.platform), dir, timeoutMs, minimalEnv(tmpdir(), this.platform))
+      const command = scriptCommand(language, script, this.platform)
+      const r = await execute(command, dir, timeoutMs, minimalEnv(tmpdir(), this.platform))
+      // A missing interpreter is the host's, not the script's: raised, never told to the model as its script failing.
+      const missing = interpreterMissing(command[0], r.exit_code, `${r.stderr}${r.stdout}`)
+      if (missing) throw new EnvironmentUnavailable(missing)
+      return r
     } finally { rmSync(dir, { recursive: true, force: true }) }
   }
 }
