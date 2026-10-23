@@ -184,3 +184,64 @@
    每份产物看 `products/<name>/review.md`：审查员原话、逐条前提判定；`replay.md` 的表给出原始条目数、挡下数（按前提）、会送修的数，缺陷表对原话和对过了前提的条目分别命中。"对照组审查员原样"就是其中的原话一列，同一次运行给出两边，不需要另跑；要多次样本就多跑 `--out`。人工核实误报仍要像 VERIFY-2026-10-22 那样逐条做。
 3. §12i 的预先登记判定：`intent-exp2-serial --config <配置>`，15 轮 ×2，对照组 L 已有数据。每轮报告的 "Review acceptance"、"Guards"、"Reviewer … Formalizer" 几行给出 §12i 要求同时报告的量；成本按 `未缓存输入 + 0.1×缓存读 + 输出` 从各角色的 token 行算（口径待确认）。首次交付的诊断分由 `scores.jsonl` 里 `kind: "first_delivery"` 的行给出（配置 `scoring` 后自动计）。
 4. 真实运行先看：审查请求的大小（原文累积到 R15 约 30k token，与对照组相同）、作废率（`void sessions`，如果 OpenCode 的 tool parts 没有退出码，这个数应为 0，是检测失效的信号而不是审查质量）、formalizer 退回次数（`formalize_calls` 里 `problems` 非空的）、前提挡下的分布。
+
+---
+
+# 修正块：失败即开放，接口按真实回复校准（2026-10-23）
+
+依据：本块消息（效果 A1–A6、B1–B4）、`exp2/evidence/real-replies-2026-10-23/` 的真实回复、上文第 0–14 节。基础是 `exp2-block1` 29158c1（含三处本地机械修复）。下面先是开发前审查（单独推送），之后每批一节。
+
+## 15. 开发前审查
+
+### 15.1 先核对证据：真实回复里实际是什么
+
+对 fixture 直接跑了现有代码（29158c1 的 `programRunsIn`、`canonicalUnit`、`listEntries`），结果：
+
+| 事实 | 观察 | 对效果的影响 |
+|---|---|---|
+| rep1b 审查员报的条数 | 回复是 **8 条**（顶层列表项 8）；formalizer 也只写了 8 条。"14"是报告的计数错误：`summary.reported = f.items.length + f.malformed.length`，malformed 是**问题条数**（F2 有 14 个问题），不是条目数 | A1 的验收"14 条进入退化送修"按实际改为"8 条，即审查员的全部原话"；计数错误在第一批修 |
+| rep1b 8 条的 input | 8 条全部 `input: null`（why_no_input：recipe/csv 内容没给）。canonicalUnit 修好之后，这 8 条仍然全部过不了前提，原因是 `no_input` | 和第 4 次 R1 的 16/17 `no_input` 是同一个现象：对照组的审查请求只要"the command and input you used"，审查员写摘要，不贴完整文件。A1 必须覆盖 `no_input`，而且必须按**条目**退化（见 15.2 冲突 1） |
+| rep1b F1 的其他问题 | `expect_json` 写成未加引号的字符串（`ERROR: invalid recipe: …`）；verbatim 断言的 `source.block` 带 hash 或为 null；input 为 null 的条目仍被要求 derived 断言有脚本 | 都是机械问题：非 JSON 的 `expect_json` 按字符串读；verbatim 缺单位时在条目自己的单位里找；input 为 null 时不再核断言（反正建不成检查）。后一条还省掉一次退回调用 |
+| canonicalUnit | 28 个真实编号全部归一为合法形状（`R1.S3.P12.s10.c1` 等），是否命中注册表由 A4 的测试对 R1 原文核 | A6 仍要做：退回消息里"不存在"和"格式不对"要分开说 |
+| programRunsIn（三处修复后） | rep1b V1.1.1：30 次运行；rep1c V1.1.1：16 次（`& .\dpipe-review.exe`）；rep1c V1.1.2：19 次（`.\dpipe.exe`） | 三处修复已经让识别命中。A2 仍要做：识别规则下一次再漏，不能再整轮作废 |
+| exit code | PowerShell 下工具给的 `metadata.exit` 是**外壳**的退出码（命令末尾 `Write-Output "EXIT=$LASTEXITCODE"`，外壳总是 0），不是程序的 | 退出码在 Windows 上判定不了"程序是否真的跑起来"。A2 降为软信号是对的，`program_runs` 只当报告字段 |
+| rep1c 的审查回复 | 17 条、15 条，两次都被作废，formalizer 没被调用 | A2 的回放没有真实 formalizer 回复，用和真实回复同形状的替身（全部 `input: null`）回放 |
+
+### 15.2 会失效或互相冲突的效果
+
+1. **A1 的"0 条送修"条件覆盖不了第 4 次 R1。** 第 4 次是 1 条送修、16 条 `no_input`：按 A1 字面，有 1 条送修就不退化，16 条真发现照样被吞。按"失败即开放"的本意，改成**按条目退化**：凡是因 IC 自身原因（formalizer 写不成、`no_input`、formalizer 调用失败）没能核验的条目，各自用审查员原话送修；被真核验挡下的（`not_reproduced` 等拦截档）照样挡。全部条目都退化、0 条存活时，修补消息就是 `REPAIR_INTRO` 加审查员整段原话，和 A1 字面相同。配置 `acceptance.fallback: "items" | "review" | "off"`，默认 `items`；`review` 是 A1 字面（只在 0 条送修且挡下的全是 IC 自身原因时整段退化），`off` 是第 12 块以来的行为。
+2. **A1 与 A3 对 `input_claim_false` 的归类不同。** A1 把"`unit_not_in_force` 以外的前提失败"都算 IC 自身原因（会触发退化）；A3 把 `input_claim_false` 放在拦截档，称为"解析器结论"。我按 A3：是否退化看档位，拦截档里的原因（默认 `unit_not_in_force`、`not_reproduced`、`input_claim_false`）都不退化，其余都放行（值的前提记日志，formalizer 的问题走退化）。依据：`input_claim_false` 和 `not_reproduced` 一样是代码对条目前提的确定性结论；证据 A 里输入退化是误报的最大一类（11/22），按 A1 字面会把这一类原样转给执行方。要改只需改 `acceptance.premise_block`。
+3. **A3 的"只记日志档"和现有 `checkPremises` 的结构冲突。** 现在它返回第一个失败就停，后面的前提不再核，也不建检查。记日志档放行时，条目还要继续：能建成检查的照样建、照样复现（`not_reproduced` 仍拦）；`reference_failed` 建不成检查的，带原话送修、不进守卫。要改成"逐条核完，按档位汇总"。
+4. **A2 与 §12i 第 7 条直接冲突。** §12i 写"没有一次成功运行程序的，该次审查作废重做"。A2 是用户当前授权，按 A2 做，作废重做留作配置（`acceptance.void_without_runs`，默认关）。
+5. **A5 改变审查请求的原文拼接，会让既有测试和录音的请求前缀变化。** 审查员不进录音（第 11 节），formalizer 的请求不受影响（它用 annotate 的全文），只需改测试。
+6. **A5 的试跑消息写的是 `go build -o dpipe ./... && go test ./...` in /app。** 现在 docker 试跑在 `/src`（只读挂载）里 `go build -o /tmp/trial-bin`，输出前还 echo 了命令名。消息要逐字一致，试跑本身也改成在容器里把源码复制到 `/app`、跑同一条命令、输出原样，消息才不说假话。本机无 docker 的 `goTrial` 只用于测试，同样改成单条命令语义。
+7. **B1 与第 12 块的有效期规则冲突**（"两轮无进展到期"）。B1 只对"复现过"的条目（有检查且在程序上失败过的审查条目、守卫退化）取消到期；探针和库检查条目的到期规则不变（它们只在 probes 模式出现）。配置 `acceptance.expire_reproduced`，默认 false。"被原文取代"目前对审查条目没有触发：库检查有 stale 事件、守卫有 retired 事件，审查条目没有。要在轮初的带入处用前提 1（单位是否仍有效）判一次，取代的记 superseded。
+8. **B3 把库检查移出关键路径，会改变工单内容。** 工单的"未落地证据"来自本轮新检查在基线上的运行。移到后台后，工单只含开轮时已有检查的状态；新检查在第一次守卫重跑时加入（那时编码已完成）。R1 的基线是空程序，证据只是"没有实现"，影响为零；后续轮次少了新检查在旧程序上的失败证据。这和"模型写的期望不直接驱动修补"（§12i 第 3 条）方向一致，也和对照组（只给原文）一致。配置 `acceptance.checks_in_background`，默认开。
+9. **B2 与现有 coverage 规则的关系。** 现在的覆盖义务已经只针对本轮改动的单位；但模型可以给本轮改动对象的**未改动单位**再写检查（作用域按对象给）。B2 只需在代码里加一条确定的规则：一条检查依据的单位里至少有一个是本轮新增/修订的单位或过期检查的单位，否则退回（与 `object_not_in_scope` 同一层次）。真实运行里这类检查有多少，我手上没有状态文件，第二批的 NOTES 会写明这是未经真实数据核对的。
+
+### 15.3 可复用的现有部件
+
+| 效果 | 复用 | 新增（为什么现有的不够） |
+|---|---|---|
+| A1 | `renderReviewList`、`repairFromReview`、`Sends`（送一次、无进展停送）、`ItemSighting` 的 `action`、台账 `premise_failed` | 条目的"放行方式"（`fallback`/`logged`）和每次审查的退化原因分布：现有 sighting 只有 send/hold/blocked 三种结局，没有"未核验但送出" |
+| A2 | `programRunsIn`、`ReviewCallRecord.program_runs` | 只加报告汇总（`program_runs_zero`）和开关 |
+| A3 | `checkPremises` 的五个前提、`methodB`、`reproduces` | 档位配置；`checkPremises` 改为逐条核完 |
+| A4 | fixture 本身、`Exp2Store.ingestRound`（R1 原文切出的编号与真实运行相同：切分是确定性的，不依赖模型） | 测试文件，不加生产代码 |
+| A5 | `REVIEW_INTRO`/`REVIEW_REPLY`/`REPAIR_INTRO` 常量、`dockerTrial` | 试跑消息常量 |
+| A6 | `FORMALIZE_SCHEMA`、`canonicalUnit`、source.ts 的编号语法 | schema 的 pattern、提示里一句编号语法 |
+| B1 | 台账 `confirmed`（"确认过的条目不到期、每轮送一次"已有实现）、轮初带入（`carried`） | 把"复现过"当作确认的一种；审查条目的取代判定 |
+| B2 | `checkChecks` 的作用域规则 | 单位级的同一规则 |
+| B3 | `writeRoundProbes` 的"模型调用在锁外、一次提交"模式；`ready()` 的等待写法 | `deriveRoundChecks` 拆成同样的两段 |
+| B4 | `RoundReport.review`、`wall.stages`、`scores.jsonl` 的 `first_delivery` | 缺的字段：退化次数（按条/整段、原因）、`program_runs=0` 次数、前提按档位、守卫退化次数（通过→失败） |
+
+replay 工具（`intent-exp2-replay --mode review`）复用到 A3 的离线回放：它已经对冻结产物跑审查、formalizer、前提核验和缺陷表匹配，只需让输出按档位分列。
+
+### 15.4 会改变优先级的证据
+
+- **`no_input` 是现在最大的一类挡下原因**（rep1b 8/8，第 4 次 16/17）。A1 的按条目退化能保住分数，但 IC 的资产（审查条目修好后固化为守卫）在 `no_input` 下一条也攒不起来：没有输入就没有检查。这直接影响 §12i 判定里的成本比（守卫替代后续审查是省成本的来源）。可行的确定性做法：审查副本里审查员自己写的输入文件（rep1b 的 `apply_patch` 写了 left.csv、recipe-join.json 等）在 formalizer 调用之前还在磁盘上，代码可以把副本里未跟踪的小文本文件交给 formalizer。风险：审查员可能先后用同名文件做不同的调用，留在磁盘上的是最后的内容，重建出的检查可能不复现，被 `not_reproduced` 挡下（又一处失败即闭合）。本块不做，列为下一步的候选；要做需要先看一次真实会话里 `apply_patch`/`write` 工具的 input 形状（fixture 导出时把非 bash 工具的 input 去掉了），由本地补导出。
+- **B3 的 138 秒**是 R1 的库检查推导；R1 的编码是 1.5 分钟（对照组 L）。放到后台后关键路径上大概只剩等待两者中较长的一个。墙钟线性增长的其他来源（审查请求随原文增长）与对照组相同，不在本块范围。
+- 第 4 次 R1 的最终 142/219 说明流程跑通后分数受送修条数限制（1/17）；第一批完成后，预期送修数接近对照组（同一审查员的原话），R1 分数应回到对照组 L 的区间（64.4%/90.4%），这是本地第一项验证。
+
+### 15.5 开发顺序
+
+第一批：A5、A6、A4（先有真实回复的测试），再 A2、A3、A1（A1 依赖 A3 的档位）。第二批：B1、B4、B2、B3。每批 `npm test` 通过后推送。
