@@ -24,6 +24,13 @@
 //   was sent at (the sighting that sent it, or `carried_in` for the work message); else touched. No sighting on a
 //   cycle that built: unseen.
 // - A cycle whose program did not build ran no check: every send into it is build_failed under every rule.
+// - The code rule (for comparing items by form, 2026-10-25 follow-up): the stem mapping, applied to every item sent,
+//   with or without a check. The item's object: its check's, else the owner of the first of its units that has one.
+//   fixed only for an item with a check that passes; otherwise touched / untouched by the cycle's diff as under stem.
+// - Form: "check" when the item went with an executable check (its command, input and expected values), "words" when
+//   it went in the reviewer's words only (no check). Command age: "new" when the object's earliest text is of the
+//   round the item was sent in, else "earlier".
+// - Items are review items and guards sent back as regressions; a guard always has a check.
 // - An item sent without a check (verdict unverified, sent in the reviewer's words) has no check that could pass: it is
 //   counted apart as no_check.
 // - Stopped for no progress: a sighting in the round with action hold and a reason naming no progress.
@@ -67,8 +74,14 @@ for (const dir of runs) {
   const linked = (mapping, anchors, object, round) => mapping === "strict"
     ? nameLinks(reg, anchors, round).filter(l => l.object === object).map(l => l.anchor)
     : anchors.filter(a => a.kind === "dispatch" && reg.objects.get(object) && a.name.toLowerCase() === stem(reg.objects.get(object).name)).map(a => a.id)
+  const objectOf = it => it?.check?.object && it.check.object !== "none" ? it.check.object : (it?.units ?? []).map(u => reg.coverOf(u)?.owner).find(o => o && o !== "none" && reg.objects.has(o)) ?? null
   const execs = [...s.executions].sort((a, b) => a.round - b.round)
-  const items = new Map(execs.flatMap(e => e.review_items ?? []).map(i => [i.id, i]))
+  // Review items, and guards sent back as regressions (G ids): a guard's check is its library check, or the one it was
+  // born with from a review item.
+  const items = new Map([
+    ...s.guards.map(g => [g.id, { id: g.id, units: g.units, check: { object: g.object ?? s.checks.find(k => k.id === g.check)?.object ?? null } }]),
+    ...execs.flatMap(e => e.review_items ?? []).map(i => [i.id, i]),
+  ])
   for (const e of execs) {
     const next = execs.find(x => x.round === e.round + 1)
     const carriedOut = new Set((next?.carried_in ?? []).map(c => c.id))
@@ -90,6 +103,12 @@ for (const dir of runs) {
           ev[m] = broken ? "build_failed" : !it?.check ? "no_check" : seen?.verdict === "pass" ? "fixed" : absent ? "untouched" : !anchors.length ? "unmapped" : c.anchors.some(a => anchors.includes(a)) ? "touched" : "untouched"
           if (ev[m] === "untouched" && absent) ev[`${m}_absent`] = true
         }
+        {
+          const any = objectOf(it)
+          const anchors = any ? [...new Set([...linked("stem", before, any, e.round), ...linked("stem", after, any, e.round)])] : []
+          const absent = !anchors.length && NAMES_DISPATCH.test(reg.objects.get(any)?.name ?? "")
+          ev.code = broken ? "build_failed" : it?.check && seen?.verdict === "pass" ? "fixed" : absent ? "untouched" : !anchors.length ? "unmapped" : c.anchors.some(a => anchors.includes(a)) ? "touched" : "untouched"
+        }
         events.push(ev)
         sends.set(id, [...(sends.get(id) ?? []), ev])
       }
@@ -97,7 +116,9 @@ for (const dir of runs) {
     for (const [id, evs] of sends) {
       const it = items.get(id), object = it?.check?.object ?? null
       const held = cycles.flatMap(c => c.items ?? []).some(i => i.id === id && i.action === "hold" && /no progress/u.test(i.why ?? ""))
-      const row = { run, round: e.round, id, object, object_name: object ? reg.objects.get(object)?.name ?? null : null, first_sent_into: evs[0].cycle, stopped_no_progress: held, carried_next: carriedOut.has(id), carried_in: (e.carried_in ?? []).some(x => x.id === id) }
+      const any = objectOf(it), firstRound = any ? Math.min(...(reg.objects.get(any)?.blocks ?? []).map(b => Number(/^R(\d+)/u.exec(b.block)?.[1] ?? Infinity))) : null
+      const row = { run, round: e.round, id, object, object_name: object ? reg.objects.get(object)?.name ?? null : null, form: it?.check ? "check" : "words", command_object: any, command_name: any ? reg.objects.get(any)?.name ?? null : null, command_age: firstRound === null || !Number.isFinite(firstRound) ? null : firstRound === e.round ? "new" : "earlier", first_sent_into: evs[0].cycle, stopped_no_progress: held, carried_next: carriedOut.has(id), carried_in: (e.carried_in ?? []).some(x => x.id === id) }
+      row.code_end = evs.at(-1).code
       for (const m of RULES) { row[`${m}_sequence`] = evs.map(v => `${v.cycle}:${v[m]}${v[`${m}_absent`] ? "(absent)" : ""}${v.reverted ? "(reverted)" : ""}`); row[`${m}_end`] = evs.at(-1)[m]; row[`${m}_absent`] = !!evs.at(-1)[`${m}_absent`] }
       rows.push(row)
     }

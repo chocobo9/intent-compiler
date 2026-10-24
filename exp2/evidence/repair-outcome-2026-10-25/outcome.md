@@ -11,30 +11,30 @@ Rules in outcome.mjs's header. Items sent in a round (carried-in items count in 
 | rep1j | 3 | 11 | 5 (45%) | 0 (0%) | 0 (0%) | 1 | 5 | 0 | 0 |
 | rep1j | 4 | 7 | 2 (29%) | 0 (0%) | 0 (0%) | 1 | 4 | 0 | 0 |
 | rep1j | 5 | 10 | 0 (0%) | 0 (0%) | 0 (0%) | 0 | 6 | 4 | 0 |
-| rep1j | 6 | 14 | 8 (57%) | 0 (0%) | 0 (0%) | 1 | 5 | 0 | 0 |
+| rep1j | 6 | 14 | 8 (57%) | 0 (0%) | 0 (0%) | 0 | 6 | 0 | 0 |
 | rep1k | 1 | 26 | 19 (73%) | 0 (0%) | 0 (0%) | 1 | 6 | 0 | 0 |
 | rep1k | 2 | 25 | 16 (64%) | 0 (0%) | 0 (0%) | 0 | 9 | 0 | 0 |
 | rep1k | 3 | 16 | 5 (31%) | 0 (0%) | 0 (0%) | 0 | 11 | 0 | 0 |
 | rep1k | 4 | 20 | 7 (35%) | 0 (0%) | 0 (0%) | 0 | 13 | 0 | 0 |
-| rep1k | 5 | 14 | 1 (7%) | 0 (0%) | 0 (0%) | 1 | 1 | 11 | 0 |
-| rep1k | 6 | 20 | 1 (5%) | 0 (0%) | 0 (0%) | 6 | 13 | 0 | 0 |
+| rep1k | 5 | 14 | 1 (7%) | 0 (0%) | 0 (0%) | 0 | 2 | 11 | 0 |
+| rep1k | 6 | 20 | 2 (10%) | 0 (0%) | 0 (0%) | 3 | 15 | 0 | 0 |
 | rep1l | 1 | 17 | 6 (35%) | 0 (0%) | 0 (0%) | 2 | 9 | 0 | 0 |
 | rep1l | 2 | 33 | 12 (36%) | 0 (0%) | 0 (0%) | 2 | 19 | 0 | 0 |
 | rep1m | 1 | 17 | 8 (47%) | 0 (0%) | 0 (0%) | 3 | 6 | 0 | 0 |
 | rep1m | 2 | 32 | 13 (41%) | 0 (0%) | 0 (0%) | 2 | 17 | 0 | 0 |
-| all | — | 310 | 128 (41%) | 2 (1%) | 0 (0%) | 20 | 145 | 15 | 0 |
+| all | — | 310 | 129 (42%) | 2 (1%) | 0 (0%) | 15 | 149 | 15 | 0 |
 
-Of the 130 items judged (a check, a mapped command, a program that built): fixed 98%, touched 2%, untouched 0% .
+Of the 131 items judged (a check, a mapped command, a program that built): fixed 98%, touched 2%, untouched 0% .
 
 By the size of the message that sent the item (every send, outcome at the cycle it went into), mapping strict:
 
 | items in the message | sends | fixed | touched | untouched | untouched of judged | no check / unmapped |
 |---|---|---|---|---|---|---|
-| 1–5 | 68 | 24 | 0 | 0 | 0% | 5 / 35 |
-| 6–10 | 193 | 75 | 0 | 2 | 3% | 13 / 103 |
-| 11+ | 109 | 29 | 2 | 0 | 0% | 2 / 64 |
+| 1–5 | 68 | 24 | 0 | 0 | 0% | 3 / 37 |
+| 6–10 | 193 | 75 | 0 | 2 | 3% | 11 / 105 |
+| 11+ | 109 | 30 | 2 | 0 | 0% | 1 / 64 |
 
-Unmapped under strict: 145 (by object: Transformation 26, profile command 15, compare command 12, ingest command 10, pipeline command 10, bin operation 8, window operation 7, Ingestion 6, validate command 6, window transformation 6, expression evaluator 5, verify command 4, Lineage command 3, pivot operation 3, aggregate operation 3, Error handling 2, Profile command 2, Validate command 2, audit logging 2, pivot transformation 2, aggregate transformation 2, rollup transformation 2, drift command 1, normalize operation 1, encode operation 1, rollup operation 1, detect operation 1, hash operation 1, bin transformation 1)
+Unmapped under strict: 149 (by object: Transformation 27, profile command 15, compare command 12, ingest command 11, pipeline command 10, bin operation 8, window operation 7, Ingestion 6, validate command 6, window transformation 6, expression evaluator 5, verify command 4, Lineage command 3, pivot operation 3, aggregate operation 3, Error handling 2, Profile command 2, Validate command 2, audit logging 2, pivot transformation 2, aggregate transformation 2, rollup transformation 2, drift command 1, determinism contract 1, transform command 1, normalize operation 1, encode operation 1, rollup operation 1, detect operation 1, hash operation 1, bin transformation 1)
 
 ## Mapping: stem
 
@@ -45,30 +45,30 @@ Unmapped under strict: 145 (by object: Transformation 26, profile command 15, co
 | rep1j | 3 | 11 | 5 (45%) | 0 (0%) | 0 (0%) | 1 | 5 | 0 | 0 |
 | rep1j | 4 | 7 | 2 (29%) | 0 (0%) | 1 (14%) | 1 | 3 | 0 | 1 |
 | rep1j | 5 | 10 | 0 (0%) | 0 (0%) | 3 (30%) | 0 | 3 | 4 | 0 |
-| rep1j | 6 | 14 | 8 (57%) | 0 (0%) | 1 (7%) | 1 | 4 | 0 | 1 |
+| rep1j | 6 | 14 | 8 (57%) | 0 (0%) | 1 (7%) | 0 | 5 | 0 | 1 |
 | rep1k | 1 | 26 | 19 (73%) | 2 (8%) | 3 (12%) | 1 | 1 | 0 | 3 |
 | rep1k | 2 | 25 | 16 (64%) | 1 (4%) | 7 (28%) | 0 | 1 | 0 | 7 |
 | rep1k | 3 | 16 | 5 (31%) | 0 (0%) | 10 (63%) | 0 | 1 | 0 | 10 |
 | rep1k | 4 | 20 | 7 (35%) | 0 (0%) | 12 (60%) | 0 | 1 | 0 | 12 |
-| rep1k | 5 | 14 | 1 (7%) | 0 (0%) | 1 (7%) | 1 | 0 | 11 | 1 |
-| rep1k | 6 | 20 | 1 (5%) | 7 (35%) | 3 (15%) | 6 | 3 | 0 | 3 |
+| rep1k | 5 | 14 | 1 (7%) | 0 (0%) | 1 (7%) | 0 | 1 | 11 | 1 |
+| rep1k | 6 | 20 | 2 (10%) | 7 (35%) | 5 (25%) | 3 | 3 | 0 | 5 |
 | rep1l | 1 | 17 | 6 (35%) | 0 (0%) | 9 (53%) | 2 | 0 | 0 | 8 |
 | rep1l | 2 | 33 | 12 (36%) | 4 (12%) | 15 (45%) | 2 | 0 | 0 | 14 |
 | rep1m | 1 | 17 | 8 (47%) | 0 (0%) | 1 (6%) | 3 | 5 | 0 | 1 |
 | rep1m | 2 | 32 | 13 (41%) | 0 (0%) | 9 (28%) | 2 | 8 | 0 | 7 |
-| all | — | 310 | 128 (41%) | 16 (5%) | 77 (25%) | 20 | 54 | 15 | 70 |
+| all | — | 310 | 129 (42%) | 16 (5%) | 79 (25%) | 15 | 56 | 15 | 72 |
 
-Of the 221 items judged (a check, a mapped command, a program that built): fixed 58%, touched 7%, untouched 35%  (of which the command was not in the program at all: 4).
+Of the 224 items judged (a check, a mapped command, a program that built): fixed 58%, touched 7%, untouched 35%  (of which the command was not in the program at all: 4).
 
 By the size of the message that sent the item (every send, outcome at the cycle it went into), mapping stem:
 
 | items in the message | sends | fixed | touched | untouched | untouched of judged | no check / unmapped |
 |---|---|---|---|---|---|---|
-| 1–5 | 68 | 24 | 2 | 20 | 43% | 5 / 13 |
-| 6–10 | 193 | 75 | 13 | 54 | 38% | 13 / 38 |
-| 11+ | 109 | 29 | 20 | 23 | 32% | 2 / 23 |
+| 1–5 | 68 | 24 | 2 | 20 | 43% | 3 / 15 |
+| 6–10 | 193 | 75 | 13 | 56 | 39% | 11 / 38 |
+| 11+ | 109 | 30 | 20 | 23 | 32% | 1 / 23 |
 
-Unmapped under stem: 54 (by object: Transformation 26, Ingestion 6, window transformation 6, expression evaluator 5, Error handling 2, audit logging 2, pivot transformation 2, aggregate transformation 2, rollup transformation 2, bin transformation 1)
+Unmapped under stem: 56 (by object: Transformation 27, Ingestion 6, window transformation 6, expression evaluator 5, Error handling 2, audit logging 2, pivot transformation 2, aggregate transformation 2, rollup transformation 2, determinism contract 1, bin transformation 1)
 
 ## Rule: output (unseen in the unmapped column)
 
@@ -79,52 +79,52 @@ Unmapped under stem: 54 (by object: Transformation 26, Ingestion 6, window trans
 | rep1j | 3 | 11 | 5 (45%) | 0 (0%) | 5 (45%) | 1 | 0 | 0 | 5 |
 | rep1j | 4 | 7 | 2 (29%) | 0 (0%) | 4 (57%) | 1 | 0 | 0 | 4 |
 | rep1j | 5 | 10 | 0 (0%) | 0 (0%) | 6 (60%) | 0 | 0 | 4 | 0 |
-| rep1j | 6 | 14 | 8 (57%) | 0 (0%) | 5 (36%) | 1 | 0 | 0 | 5 |
+| rep1j | 6 | 14 | 8 (57%) | 0 (0%) | 6 (43%) | 0 | 0 | 0 | 6 |
 | rep1k | 1 | 26 | 19 (73%) | 0 (0%) | 6 (23%) | 1 | 0 | 0 | 6 |
 | rep1k | 2 | 25 | 16 (64%) | 0 (0%) | 9 (36%) | 0 | 0 | 0 | 9 |
 | rep1k | 3 | 16 | 5 (31%) | 0 (0%) | 11 (69%) | 0 | 0 | 0 | 11 |
 | rep1k | 4 | 20 | 7 (35%) | 0 (0%) | 13 (65%) | 0 | 0 | 0 | 13 |
-| rep1k | 5 | 14 | 1 (7%) | 0 (0%) | 1 (7%) | 1 | 0 | 11 | 1 |
-| rep1k | 6 | 20 | 1 (5%) | 1 (5%) | 12 (60%) | 6 | 0 | 0 | 12 |
+| rep1k | 5 | 14 | 1 (7%) | 0 (0%) | 2 (14%) | 0 | 0 | 11 | 2 |
+| rep1k | 6 | 20 | 2 (10%) | 1 (5%) | 14 (70%) | 3 | 0 | 0 | 14 |
 | rep1l | 1 | 17 | 6 (35%) | 1 (6%) | 8 (47%) | 2 | 0 | 0 | 8 |
 | rep1l | 2 | 33 | 12 (36%) | 2 (6%) | 17 (52%) | 2 | 0 | 0 | 17 |
 | rep1m | 1 | 17 | 8 (47%) | 0 (0%) | 6 (35%) | 3 | 0 | 0 | 6 |
 | rep1m | 2 | 32 | 13 (41%) | 2 (6%) | 15 (47%) | 2 | 0 | 0 | 15 |
-| all | — | 310 | 128 (41%) | 6 (2%) | 141 (45%) | 20 | 0 | 15 | 120 |
+| all | — | 310 | 129 (42%) | 6 (2%) | 145 (47%) | 15 | 0 | 15 | 124 |
 
-Of the 275 items judged (a check, a sighting, a program that built): fixed 47%, touched 2%, untouched 51% .
+Of the 280 items judged (a check, a sighting, a program that built): fixed 46%, touched 2%, untouched 52% .
 
 By the size of the message that sent the item (every send, outcome at the cycle it went into), mapping output:
 
 | items in the message | sends | fixed | touched | untouched | untouched of judged | no check / unmapped |
 |---|---|---|---|---|---|---|
-| 1–5 | 68 | 24 | 7 | 28 | 47% | 5 / 0 |
-| 6–10 | 193 | 75 | 27 | 78 | 43% | 13 / 0 |
-| 11+ | 109 | 29 | 16 | 50 | 53% | 2 / 0 |
+| 1–5 | 68 | 24 | 7 | 30 | 49% | 3 / 0 |
+| 6–10 | 193 | 75 | 27 | 80 | 44% | 11 / 0 |
+| 11+ | 109 | 30 | 16 | 50 | 52% | 1 / 0 |
 
 Unmapped under output: 0 (by object: )
 
 ## Output rule against stem
 
-No check (sent in the reviewer's words, no output to compare): 20 items; build failed at round end: 15; both apart.
+No check (sent in the reviewer's words, no output to compare): 15 items; build failed at round end: 15; both apart.
 
-At round end: 202 of 275 agree (73%); of the 221 that both rules judge (stem mapped, output sighted), 202 agree (91%).
+At round end: 205 of 280 agree (73%); of the 224 that both rules judge (stem mapped, output sighted), 205 agree (92%).
 
 | output (rows) / stem (columns) | fixed | touched | untouched | unmapped | build_failed |
 |---|---|---|---|---|---|
-| fixed | 128 | 0 | 0 | 0 | 0 |
+| fixed | 129 | 0 | 0 | 0 | 0 |
 | touched | 0 | 1 | 4 | 1 | 0 |
-| untouched | 0 | 15 | 73 | 53 | 0 |
+| untouched | 0 | 15 | 75 | 55 | 0 |
 | unseen | 0 | 0 | 0 | 0 | 0 |
 | build_failed | 0 | 0 | 0 | 0 | 0 |
 
-Send by send: 225 of 334 agree (67%).
+Send by send: 228 of 339 agree (67%).
 
 | output (rows) / stem (columns) | fixed | touched | untouched | unmapped | build_failed |
 |---|---|---|---|---|---|
-| fixed | 128 | 0 | 0 | 0 | 0 |
+| fixed | 129 | 0 | 0 | 0 | 0 |
 | touched | 0 | 19 | 19 | 12 | 0 |
-| untouched | 0 | 16 | 78 | 62 | 0 |
+| untouched | 0 | 16 | 80 | 64 | 0 |
 | unseen | 0 | 0 | 0 | 0 | 0 |
 | build_failed | 0 | 0 | 0 | 0 | 0 |
 
@@ -152,7 +152,7 @@ Disagreements at round end where both rules judge:
 | rep1m | 2 | V2.3.6 | profile command | touched | untouched | C2.4:untouched | C2.4:touched |
 | rep1m | 2 | V2.3.7 | profile command | touched | untouched | C2.4:untouched | C2.4:touched |
 
-Stem unmapped, by the output rule: fixed 0, touched 1, untouched 53, unseen 0
+Stem unmapped, by the output rule: fixed 0, touched 1, untouched 55, unseen 0
 
 ## Items
 
@@ -244,7 +244,7 @@ Stem unmapped, by the output rule: fixed 0, touched 1, untouched 53, unseen 0
 | rep1j | 6 | V5.2.2 (carried in) | Lineage command | C6.1 | C6.1:fixed | fixed | fixed | fixed |  |  |
 | rep1j | 6 | V5.3.1 (carried in) | Transformation | C6.1 | C6.1:fixed | fixed | fixed | fixed |  |  |
 | rep1j | 6 | V5.3.2 (carried in) | Lineage command | C6.1 | C6.1:fixed | fixed | fixed | fixed |  |  |
-| rep1j | 6 | G57 | — | C6.2 | C6.2:no_check | no_check | no_check | no_check | yes |  |
+| rep1j | 6 | G57 | Transformation | C6.2 | C6.2:unmapped | unmapped | unmapped | untouched | yes |  |
 | rep1j | 6 | V6.1.1 | Transformation | C6.2 | C6.2:unmapped C6.3:unmapped | unmapped | unmapped | untouched | yes |  |
 | rep1j | 6 | V6.1.2 | Transformation | C6.2 | C6.2:fixed | fixed | fixed | fixed |  |  |
 | rep1j | 6 | V6.1.3 | Audit logging | C6.2 | C6.2:fixed | fixed | fixed | fixed |  |  |
@@ -347,9 +347,9 @@ Stem unmapped, by the output rule: fixed 0, touched 1, untouched 53, unseen 0
 | rep1k | 5 | V4.2.1 (carried in) | validate command | C5.1 | C5.1:build_failed | build_failed | build_failed | build_failed | yes | yes |
 | rep1k | 5 | V4.2.2 (carried in) | validate command | C5.1 | C5.1:build_failed | build_failed | build_failed | build_failed | yes | yes |
 | rep1k | 5 | V4.2.3 (carried in) | validate command | C5.1 | C5.1:build_failed | build_failed | build_failed | build_failed | yes | yes |
-| rep1k | 5 | G5 | — | C5.3 | C5.3:no_check | no_check | no_check | no_check | yes | yes |
+| rep1k | 5 | G5 | determinism contract | C5.3 | C5.3:unmapped | unmapped | unmapped | untouched | yes | yes |
 | rep1k | 5 | V5.1.1 | lineage command | C5.3 | C5.3:fixed | fixed | fixed | fixed |  |  |
-| rep1k | 6 | G5 (carried in) | — | C6.1 | C6.1:no_check | no_check | no_check | no_check |  |  |
+| rep1k | 6 | G5 (carried in) | determinism contract | C6.1 | C6.1:fixed | fixed | fixed | fixed |  |  |
 | rep1k | 6 | V1.1.2 (carried in) | expression evaluator | C6.1 | C6.1:unmapped | unmapped | unmapped | untouched | yes |  |
 | rep1k | 6 | V1.1.9 (carried in) | ingest command | C6.1 | C6.1:touched | touched | unmapped | untouched | yes |  |
 | rep1k | 6 | V2.1.3 (carried in) | bin operation | C6.1 | C6.1:untouched | untouched | unmapped | untouched | yes |  |
@@ -360,8 +360,8 @@ Stem unmapped, by the output rule: fixed 0, touched 1, untouched 53, unseen 0
 | rep1k | 6 | V4.2.1 (carried in) | validate command | C6.1 | C6.1:touched | touched | unmapped | untouched | yes |  |
 | rep1k | 6 | V4.2.2 (carried in) | validate command | C6.1 | C6.1:touched | touched | unmapped | untouched | yes |  |
 | rep1k | 6 | V4.2.3 (carried in) | validate command | C6.1 | C6.1:touched | touched | unmapped | untouched | yes |  |
-| rep1k | 6 | G87 | — | C6.2 | C6.2:no_check | no_check | no_check | no_check | yes |  |
-| rep1k | 6 | G88 | — | C6.2 | C6.2:no_check | no_check | no_check | no_check | yes |  |
+| rep1k | 6 | G87 | ingest command | C6.2 | C6.2:untouched | untouched | unmapped | untouched | yes |  |
+| rep1k | 6 | G88 | transform command | C6.2 | C6.2:untouched | untouched | unmapped | untouched | yes |  |
 | rep1k | 6 | V6.1.1 | audit logging | C6.2 | C6.2:unmapped | unmapped | unmapped | untouched | yes |  |
 | rep1k | 6 | V6.1.2 | ingest command | C6.2 | C6.2:untouched | untouched | unmapped | untouched | yes |  |
 | rep1k | 6 | V6.1.3 | — | C6.2 | C6.2:no_check | no_check | no_check | no_check |  |  |
