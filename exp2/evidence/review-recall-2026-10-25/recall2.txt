@@ -1,0 +1,32 @@
+run    R     首次挂    涉及op     op被提到      行为被提到     发现数      轮末仍挂        仍挂且行为未提       仍挂且op未提
+rep1j  1      111        5          4           34       21          42                34                1
+rep1j  2       86        7          6           57       17           1                 1                1
+rep1j  3        1        1          0            0        4           1                 1                1
+rep1j  4        9        2          1            5        6           1                 1                1
+rep1j  5        7        3          0            0        9           7                 7                7
+rep1j  6       17        4          1            7        3           6                 6                6
+rep1k  1      119       11          9           50       26          23                16                1
+rep1k  2       71        6          5           64       19           7                 4                1
+rep1k  3       14        4          2           10        8           1                 1                1
+rep1k  4       16        2          1           15       10           9                 1                1
+rep1k  5       14        3          0            2        1          14                12               14
+rep1k  6       20        6          4            2        7          17                15                3
+rep1l  1       79        7          6           12       19          29                25                2
+rep1l  2      206       17         13          129       24         115                32                5
+rep1m  1       57        8          6           27       18          13                 9                3
+rep1m  2      169       14         10          122       34          30                13                3
+
+轮末仍挂且 op 未被任何发现提到（run, op: 用例数, 轮次）:
+  rep1j derive: 6  rounds [1, 2, 3, 4, 5, 6]
+  rep1j determinism: 1  rounds [5]
+  rep1j manifest: 10  rounds [5, 6]
+  rep1k derive: 6  rounds [1, 2, 3, 4, 5, 6]
+  rep1k determinism: 2  rounds [6]
+  rep1k manifest: 5  rounds [5]
+  rep1k validate: 8  rounds [5]
+  rep1l derive: 1  rounds [2]
+  rep1l error-handling: 1  rounds [2]
+  rep1l fill: 4  rounds [1, 2]
+  rep1l pipeline: 1  rounds [2]
+  rep1m derive: 2  rounds [1, 2]
+  rep1m fill: 4  rounds [1, 2]
