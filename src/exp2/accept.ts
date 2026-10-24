@@ -7,6 +7,7 @@ import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord
 import { commitStep, head, resetTo } from "./git.js"
 import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, type GuardEvent, type GuardRecord } from "./guards.js"
 import { sessionInput, type ReviewMaterials } from "./materials.js"
+import type { PackageBlock } from "./view.js"
 import type { Registry } from "./registry.js"
 import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
@@ -64,6 +65,8 @@ export interface AcceptDeps {
   binary: string
   /** The requirements of rounds 1..this, verbatim, for the reviewer. */
   sources: readonly { round: number; text: string }[]
+  /** The round's package those sources lay out (review scope delta): the formalizer reads it with block ids (batch 1c). */
+  package?: readonly PackageBlock[]
   /** A fresh directory for a copy of the program, by label. */
   copyDir: (label: string) => string
   /** Judgments on this program (probes and judge, when on): wrong verdicts as leads for the reviewer, never repairs. */
@@ -429,7 +432,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
             leads: leads.flatMap(l => { const k = library.find(c => c.id === l.id); return k ? [{ id: k.id, check: k }] : [] }),
             files: r.out.materials?.files ?? [], commands: r.out.materials?.commands ?? [], ...(r.out.materials?.unreadable ? { unreadable: r.out.materials.unreadable } : {}),
           }
-          const f = await timed("formalize", () => formalizeReview(registry, round, reply, deps.binary, deps.formalize, { reviewId: `R${round}.${n2}`, callId: k => `F${round}.${n2}.${k}`, materials }))
+          const f = await timed("formalize", () => formalizeReview(registry, round, reply, deps.binary, deps.formalize, { reviewId: `R${round}.${n2}`, callId: k => `F${round}.${n2}.${k}`, materials, ...(deps.package ? { pkg: deps.package } : {}) }))
           await deps.record.formalize(f.calls)
           if (f.unavailable && fallbackMode === "off") throw new RoleUnavailable("formalize", f.unavailable, f.calls)
           const own: { n: number; text: string; units: string[]; failure: { premise: Premise; detail: string }; rec?: ReviewItemRecord }[] = []

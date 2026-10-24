@@ -363,14 +363,16 @@ export class Serial {
       confirmed: carried.map(c => ({ id: c.id, object: c.check && c.check.object !== "none" ? c.check.object : null, units: c.check ? [...c.check.blocks] : [], args: c.check?.input.args ?? [], files: c.check?.input.files.map(f => f.path) ?? [] })),
     })
     // The reviewer reads the same package, laid out by round (§12j.7 item 6); full is the control group's text (ablation).
-    const sources = (a.reviewScope ?? "delta") === "full" ? state.sources.map(x => ({ round: x.round, text: x.text })) : packageSources(registry, round, roundPackage(registry, round, carried.flatMap(c => c.check ? [...c.check.blocks] : [])))
+    // The formalizer reads that package too, with block ids (batch 1c).
+    const reviewPackage = (a.reviewScope ?? "delta") === "full" ? undefined : roundPackage(registry, round, carried.flatMap(c => c.check ? [...c.check.blocks] : []))
+    const sources = reviewPackage ? packageSources(registry, round, reviewPackage) : state.sources.map(x => ({ round: x.round, text: x.text }))
     const carriedText = carried.length ? `\n${CARRIED_HEADER_REVIEW}\n\n${renderReviewList(carried)}\n` : ""
     const binary = this.c.binary ?? "app"
     // 4. Execution and acceptance.
     const execution = await acceptRound(workdir, workorder, renderWorkOrder(workorder) + carriedText, this.c.executor(round), {
       registry, library: state.checks, events: state.check_events, facts: codeFacts(registry, round), guards: state.guards, guardEvents: state.guard_events,
       runner: this.c.runner, sandbox: this.c.sandbox, anchors: this.c.anchors, build: this.c.build, ...(this.c.trial ? { trial: this.c.trial } : {}),
-      reviewer: this.c.reviewer, formalize: withWatchdog(this.c.formalize, limits.managementTimeoutMs), binary, sources,
+      reviewer: this.c.reviewer, formalize: withWatchdog(this.c.formalize, limits.managementTimeoutMs), binary, sources, ...(reviewPackage ? { package: reviewPackage } : {}),
       copyDir: label => join(this.c.copies ?? join(this.c.checkpoints, "review-copies"), label),
       ...(checkWriting ? { libraryNow: async () => { await checksReady(); const n = store.inspect(); return { library: n.checks, events: n.check_events } } } : {}),
       record: { review: r => store.recordReviewCall(r), formalize: c => store.recordFormalizeCalls(c), guards: (b, e) => store.recordGuards(b, e) },

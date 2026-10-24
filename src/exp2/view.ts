@@ -1,5 +1,5 @@
 import type { BlockState, Modification, Registry } from "./registry.js"
-import type { SourceBlock } from "./source.js"
+import { annotate, annotateRange, type SourceBlock } from "./source.js"
 
 /**
  * Object view: every source block an object holds, in round order. Text is always shown as a whole section or
@@ -127,6 +127,16 @@ export function renderObjectView(view: ObjectView): string {
  */
 export function effectiveText(registry: Registry, block: string, round: number): string | null {
   const b = registry.block(block)!
+  const cuts = inForceCuts(registry, block, round)
+  if (!cuts) return null
+  let text = b.text
+  for (const c of [...cuts].sort((x, y) => y.start - x.start)) text = `${text.slice(0, c.start - b.start)}${c.note}${text.slice(c.end - b.start)}`
+  return text
+}
+
+/** What `effectiveText` takes out of a block, as offsets in its round's text; null when the block is out of force. */
+function inForceCuts(registry: Registry, block: string, round: number): { start: number; end: number; note: string }[] | null {
+  const b = registry.block(block)!
   const own = registry.objects.get(registry.assigned.get(block) ?? "")?.blocks.find(x => x.block === block)
   const mods = own?.modifications.filter(m => m.round <= round) ?? []
   if (mods.some(m => m.parts.includes(block) && !(m.amended ?? []).includes(block))) return null
@@ -137,11 +147,32 @@ export function effectiveText(registry: Registry, block: string, round: number):
     const amended = (m.amended ?? []).includes(p)
     const note = amended ? `⟦${p} amended by ${m.by.join(", ")}; where they differ, ${m.by.join(", ")} wins⟧ ` : m.kind === "withdraw" ? `⟦${p} withdrawn⟧ ` : `⟦${p} replaced by ${m.by.join(", ")}⟧ `
     // The replaced text goes; it ends where its content ends, so the layout around it stays.
-    cuts.push(amended ? { start: part.start - b.start, end: part.start - b.start, note } : { start: part.start - b.start, end: part.start - b.start + part.text.trimEnd().length, note })
+    cuts.push(amended ? { start: part.start, end: part.start, note } : { start: part.start, end: part.start + part.text.trimEnd().length, note })
   }
-  let text = b.text
-  for (const c of cuts.sort((x, y) => y.start - x.start)) text = `${text.slice(0, c.start)}${c.note}${text.slice(c.end)}`
-  return text
+  return cuts
+}
+
+/**
+ * The round's package with block ids (§12j.7 item 6, batch 1c): the blocks the reviewer reads, annotated as
+ * `annotate` marks a round, for the formalizer. This round's text whole; earlier blocks in force, joined as in
+ * `packageSources`.
+ */
+export function annotatedPackage(registry: Registry, round: number, blocks: readonly PackageBlock[]): string {
+  const out: string[] = []
+  for (const r of [...new Set(blocks.map(b => b.round))].sort((a, b) => a - b)) {
+    const source = registry.sources.get(r)!
+    if (r === round) { out.push(`===== R${r} =====\n${annotate(source)}`); continue }
+    let text = "", end = -1
+    for (const pb of blocks.filter(x => x.round === r)) {
+      const at = registry.block(pb.id)!, cuts = inForceCuts(registry, pb.id, round)
+      if (!cuts) continue
+      const t = annotateRange(source, at.start, at.end, cuts)
+      text += end === at.start ? t : `${text ? "\n\n" : ""}${t.replace(/^\n+/u, "")}`
+      end = at.end
+    }
+    out.push(`===== R${r} =====\n${text.trimEnd()}\n`)
+  }
+  return out.join("\n")
 }
 
 export interface PackageBlock { id: string; round: number; object: string | null; text: string; why: "this round" | "object changed" | "related" | "open item" }

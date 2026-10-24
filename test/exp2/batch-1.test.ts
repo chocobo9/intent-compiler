@@ -16,7 +16,9 @@ import { renderReport, revisionRecall } from "../../src/exp2/report.js"
 import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
 import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store, refusedIn } from "../../src/exp2/store.js"
-import { effectiveText, packageSources, roundPackage } from "../../src/exp2/view.js"
+import { buildFormalizeRequest } from "../../src/exp2/formalize.js"
+import { annotate } from "../../src/exp2/source.js"
+import { annotatedPackage, effectiveText, packageSources, roundPackage } from "../../src/exp2/view.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { DROP, FILTER, GO_MOD, MAIN, NORMALIZE, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
@@ -198,6 +200,31 @@ describe("batch 1, items 6, 9 (§6a step 3): the round's package, not every roun
       assert.ok(delta.scope!.source_chars < delta.scope!.source_chars_all * 0.75, `R${r}: delta ${delta.scope!.source_chars} vs all ${delta.scope!.source_chars_all}`)
       assert.deepEqual(delta.status, [], "no status zone")
     }
+  })
+
+  it("batch 1c: the formalizer reads the reviewer's package with block ids: this round annotated whole, earlier blocks in force; no other text", () => {
+    const reg = store.registry()
+    const pkg = roundPackage(reg, 3, [FILTER_UNIT])
+    const text = annotatedPackage(reg, 3, pkg)
+    // R3 whole, as the old request gave it.
+    assert.ok(text.includes(`===== R3 =====\n${annotate(reg.sources.get(3)!)}`))
+    // An earlier block of the package: its markers, with the text in force (the population sentence replaced).
+    const p5 = reg.coverOf(ZSCORE_UNIT)!.block
+    assert.ok(pkg.some(b => b.id === p5), "the zscore paragraph is in R3's package")
+    assert.ok(text.includes(`⟦${p5}#${reg.block(p5)!.hash}⟧`))
+    assert.match(text, /⟦R2\.S11\.P5\.s3 replaced by R3\.S3\.P1, R3\.S3\.P2⟧/u)
+    assert.ok(!text.includes(reg.block(ZSCORE_UNIT)!.text.trim()), "the replaced sentence is not given")
+    // Markers off, the text is the reviewer's text.
+    const plain = packageSources(reg, 3, pkg).map(s => `===== R${s.round} =====\n${s.text}`).join("\n")
+    const unmark = (t: string) => t.replace(/⟦R\d+\.S\d+(?:\.P\d+)?#[0-9a-f]{8}⟧(?:\r?\n| )/gu, "").replace(/‹[^›]*›/gu, "")
+    assert.equal(unmark(text), plain)
+    // Blocks outside the package are not there.
+    for (const b of reg.sources.get(1)!.blocks.filter(b => b.level === "paragraph" && !pkg.some(x => x.id === b.id || reg.lineage(b.id).some(l => l.id === x.id)))) assert.ok(!text.includes(`⟦${b.id}#`), b.id)
+    // The request: the package; without it (review scope full) every round, as before.
+    const full = buildFormalizeRequest(reg, 3, "1. x", "dpipe"), delta = buildFormalizeRequest(reg, 3, "1. x", "dpipe", undefined, pkg)
+    assert.equal(delta.sources, text)
+    assert.ok(full.sources.startsWith(`===== R1 =====\n${annotate(reg.sources.get(1)!)}`))
+    assert.ok(delta.sources.length < full.sources.length)
   })
 
   it("the stand-in serial R1–R3 under delta and under all: the work orders' source zones and the review requests, by size", { timeout: 900_000 }, async () => {

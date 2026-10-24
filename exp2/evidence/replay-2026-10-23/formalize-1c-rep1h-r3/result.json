@@ -1,0 +1,148 @@
+{
+ "R3.1": {
+  "review_request": 35564,
+  "old": {
+   "calls": [
+    91171,
+    102171
+   ],
+   "items": 6,
+   "malformed": 0,
+   "no_input": 0,
+   "sent": 5,
+   "logged_sent": 0,
+   "fallback": 0,
+   "blocked": {
+    "unit_not_in_force": 1
+   },
+   "free": 0,
+   "entries": 6,
+   "not_formalized": 0
+  },
+  "new": {
+   "calls": [
+    48580
+   ],
+   "items": 7,
+   "malformed": 0,
+   "no_input": 0,
+   "sent": 7,
+   "logged_sent": 0,
+   "fallback": 0,
+   "blocked": {},
+   "free": 0,
+   "entries": 6,
+   "not_formalized": 0
+  },
+  "usage": [
+   {
+    "input_tokens": 23319,
+    "output_tokens": 3656,
+    "reasoning_tokens": 1351,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "cost": 0
+   }
+  ]
+ },
+ "R3.2": {
+  "review_request": 25564,
+  "old": {
+   "calls": [
+    80199,
+    91939
+   ],
+   "items": 6,
+   "malformed": 1,
+   "no_input": 0,
+   "sent": 5,
+   "logged_sent": 0,
+   "fallback": 1,
+   "blocked": {
+    "not_reproduced": 1
+   },
+   "free": 0,
+   "entries": 7,
+   "not_formalized": 0
+  },
+  "new": {
+   "calls": [
+    37608,
+    51542
+   ],
+   "items": 7,
+   "malformed": 0,
+   "no_input": 0,
+   "sent": 6,
+   "logged_sent": 0,
+   "fallback": 0,
+   "blocked": {
+    "not_reproduced": 1
+   },
+   "free": 0,
+   "entries": 7,
+   "not_formalized": 0
+  },
+  "usage": [
+   {
+    "input_tokens": 14316,
+    "output_tokens": 3908,
+    "reasoning_tokens": 2025,
+    "cache_read_tokens": 5504,
+    "cache_write_tokens": 0,
+    "cost": 0
+   },
+   {
+    "input_tokens": 18404,
+    "output_tokens": 3940,
+    "reasoning_tokens": 566,
+    "cache_read_tokens": 5504,
+    "cache_write_tokens": 0,
+    "cost": 0
+   }
+  ]
+ },
+ "R3.3": {
+  "review_request": 25564,
+  "old": {
+   "calls": [
+    75603
+   ],
+   "items": 3,
+   "malformed": 0,
+   "no_input": 0,
+   "sent": 3,
+   "logged_sent": 0,
+   "fallback": 0,
+   "blocked": {},
+   "free": 0,
+   "entries": 3,
+   "not_formalized": 0
+  },
+  "new": {
+   "calls": [
+    33012
+   ],
+   "items": 3,
+   "malformed": 0,
+   "no_input": 0,
+   "sent": 2,
+   "logged_sent": 0,
+   "fallback": 0,
+   "blocked": {},
+   "free": 1,
+   "entries": 3,
+   "not_formalized": 0
+  },
+  "usage": [
+   {
+    "input_tokens": 13061,
+    "output_tokens": 1411,
+    "reasoning_tokens": 1475,
+    "cache_read_tokens": 5504,
+    "cache_write_tokens": 0,
+    "cost": 0
+   }
+  ]
+ }
+}

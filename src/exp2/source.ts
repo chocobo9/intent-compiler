@@ -317,6 +317,28 @@ export function tilingProblems(source: RoundSource): string[] {
  * (‹s2›) and clauses (‹s2.c1›) get inline markers only where a paragraph or sentence has more than one.
  */
 export function annotate(source: RoundSource): string {
+  return annotateRange(source, 0, source.text.length)
+}
+
+/**
+ * The annotated text of `source.text[start, end)`, its markers as `annotate` puts them; `cuts` (offsets in the source)
+ * replace a span with a note, and the markers inside it go with it.
+ */
+export function annotateRange(source: RoundSource, start: number, end: number, cuts: readonly { start: number; end: number; note: string }[] = []): string {
+  const marks = annotationMarks(source)
+  const at = new Map(cuts.map(c => [c.start, c]))
+  let out = ""
+  for (let i = start; i <= end; i++) {
+    const c = at.get(i)
+    if (c && i < end) { out += c.note; if (c.end > c.start) { i = c.end - 1; continue } }
+    if (i === end && end !== source.text.length) break
+    for (const m of marks.get(i) ?? []) out += m
+    if (i < end) out += source.text[i]
+  }
+  return out
+}
+
+function annotationMarks(source: RoundSource): Map<number, string[]> {
   const byId = new Map(source.blocks.map(b => [b.id, b]))
   const marks = new Map<number, string[]>()
   // A paragraph marker takes its own line, ended the way the text ends its lines.
@@ -337,12 +359,7 @@ export function annotate(source: RoundSource): string {
       put(Math.max(at, parent.start), `‹${rel}›`)
     }
   }
-  let out = ""
-  for (let i = 0; i <= source.text.length; i++) {
-    for (const m of marks.get(i) ?? []) out += m
-    if (i < source.text.length) out += source.text[i]
-  }
-  return out
+  return marks
 }
 
 /** Block ids may be cited with a hash suffix (`R3.S2.P1#ab12cd34`); returns the bare id and the hash, if any. */
