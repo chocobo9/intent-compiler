@@ -1,0 +1,16 @@
+[round-2] The existing `fill` transform now supports an additional strategy: `"linear"`.
+[round-2] The `pipeline` command now supports the `"profile"` step type:
+[round-2] The `pipeline` command now additionally supports the `"compare"` step type:
+[round-3] The `fill` transform with `"strategy": "linear"` now handles boundary cells differently:
+[round-3] The `normalize` transform with `"method": "zscore"` now uses **sample standard deviation** (Bessel's correction) instead of population standard deviation:
+[round-3] Numeric column profiles (`int` and `float`) now include two additional percentile fields:
+[round-3] The `pipeline` command now supports the `"drift"` step type:
+[round-5] - The `verify` command still reads the checksum file passed with `--checksum` and compares it against the digest of the file passed with `--file`.
+[round-5] sha256` sidecar files produced during `ingest` and `transform` are **removed** — these commands no longer produce sidecar hash files.
+[round-5] `manifest` command: produces BLAKE2b-256 checksums instead of SHA256.
+[round-5] `ingest` command: no longer writes `.
+[round-5] `transform` command: no longer writes `.
+[round-5] The `pipeline` command now supports the `"lineage"` step type:
+[round-12] When the `method` field is omitted or empty, normalize should now behave exactly like `"minmax"` instead of producing empty values.
+[round-15] It should now report `row_hash` as the SHA-256 digest of the same sorted row-content string defined for `snapshot`.
+[round-15] The `row_hash` field in the JSON output is now a 64-character lowercase hexadecimal string instead of 32 characters.

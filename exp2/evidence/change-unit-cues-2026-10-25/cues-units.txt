@@ -1,0 +1,56 @@
+
+== theme_d5_w9_data_engineering_reproducibility_verification
+round     chars  chg_to  cross  prevnew  scope  authid cmd-in-rev  changes_to targets / cmds named in revisions
+round-1   18802       0      1        0      0       0          0  [] / []
+round-2   24600       0      0        0      0       0          3  [] / ['fill', 'pipeline']
+round-3    9436       0      0        2      0       0          4  [] / ['fill', 'int', 'normalize', 'pipeline']
+round-4    4770       0      0        0      0       0          0  [] / []
+round-5    4307       0      0        5      0       0          6  [] / ['ingest', 'manifest', 'pipeline', 'transform', 'verify']
+round-6    3322       0      0        0      0       0          1  [] / ['pipeline']
+round-7    2188       0      0        0      0       0          0  [] / []
+round-8    3292       0      0        0      0       0          0  [] / []
+round-9    2900       0      0        0      0       0          0  [] / []
+round-10   2280       0      0        0      0       0          1  [] / ['added']
+round-11   2127       0      0        0      0       0          0  [] / []
+round-12   1956       0      0        2      1       0          1  [] / ['method']
+round-13   3747       0      0        0      0       0          0  [] / []
+round-14   3721       0      0        0      0       0          0  [] / []
+round-15   1407       0      0        1      0       0          2  [] / ['row_hash']
+  total {'changes_to': 0, 'cross_list': 1, 'prev_new': 10, 'scope_unchanged': 1, 'author_id': 0, 'explicit_ref_to_cmd_in_revision': 18}
+
+== theme_d10_w4_ml_ai_mlops_migration_upgrade
+round     chars  chg_to  cross  prevnew  scope  authid cmd-in-rev  changes_to targets / cmds named in revisions
+round-1    5385       0      0        0      0       0          0  [] / []
+round-2   15293       0      0        2      4       9          1  [] / ['aggregate']
+round-3    6854       0      0        5      4       5          2  [] / ['weighted_mean']
+round-4    6520       0      0        0      2       9          1  [] / ['experiments']
+round-5   14884       0      0        0      3      18          2  [] / ['retries', 'retry']
+round-6    8336       0      0        1      3      31          3  [] / ['export', 'json', 'mean']
+round-7    6896       0      0        1      2       6          0  [] / []
+  total {'changes_to': 0, 'cross_list': 0, 'prev_new': 9, 'scope_unchanged': 18, 'author_id': 78, 'explicit_ref_to_cmd_in_revision': 9}
+
+== theme_d12_w1_automation_productivity_greenfield_implementation
+round     chars  chg_to  cross  prevnew  scope  authid cmd-in-rev  changes_to targets / cmds named in revisions
+round-1   20938       0      0        1      0       2          2  [] / ['inspect', 'sigkill']
+round-2   13200       0      0        1      1       2          3  [] / ['cache_key', 'cached']
+round-3   32159       0      0        1      1      22          4  [] / ['items', 'report.json', 'step_skipped', 'step_started']
+round-4   15333       0      0        0      1      16          3  [] / ['missing_artifact', 'missing_output', 'when']
+round-5   19021       0      0        1      1      25          2  [] / ['missing_output', 'timeout_ms']
+round-6   28195       0      0        2      1      30          3  [] / ['holders', 'mode', 'shared']
+round-7   42093       0      0        1      1      76          2  [] / ['inherited', 'tags_summary']
+  total {'changes_to': 0, 'cross_list': 0, 'prev_new': 7, 'scope_unchanged': 6, 'author_id': 173, 'explicit_ref_to_cmd_in_revision': 19}
+
+== theme_d8_w5_cloud_devops_integration_e2e_wiring
+round     chars  chg_to  cross  prevnew  scope  authid cmd-in-rev  changes_to targets / cmds named in revisions
+round-1    5445       0      0        1      0       0          0  [] / []
+round-2    3725       0      1        0      0       0          1  [] / ['deploy']
+round-3    3266       5      1        1      0       2          2  ['validate', 'build', 'diff', 'promote', 'history'] / ['diff', 'n.n.n']
+round-4    2074       0      0        1      0       0          0  [] / []
+round-5    2631       0      0        0      0       0          0  [] / []
+round-6    4554       0      0        0      0       0          0  [] / []
+round-7    5011       0      0        0      0       0          0  [] / []
+round-8    4652       0      0        1      0       0          1  [] / ['healthy']
+round-9    4637       0      0        0      0       0          0  [] / []
+round-10   3172       0      1        0      0       0          0  [] / []
+round-11   8282       0      0        1      0       0          0  [] / []
+  total {'changes_to': 5, 'cross_list': 3, 'prev_new': 5, 'scope_unchanged': 0, 'author_id': 2, 'explicit_ref_to_cmd_in_revision': 4}
