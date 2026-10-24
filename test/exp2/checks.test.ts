@@ -315,6 +315,27 @@ describe("exp2 check admission: definite errors only", () => {
   })
 })
 
+describe("exp2 check admission: a file's existence is stated by naming the file", () => {
+  it("file_exists true, cited to the unit that names <output>.sha256: admitted; cited to a unit that names no such file: sent back", async () => {
+    const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-exists-")), "t")
+    await store.ingestRound(1, roundText(1), stubTransport())
+    const registry = store.registry()
+    const unit = "R1.S3.P24.s1"
+    assert.match(registry.block(unit)!.text, /\.sha256/u)
+    const draft = (block: string): CheckDraft => ({
+      key: "k", object: registry.coverOf(unit)!.owner, blocks: [unit], uses: [], direction: "holds", note: null, reference_script: null,
+      input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [{ path: "data.csv", content: "id,value\n1,5\n" }, { path: "recipe.json", content: "[{\"op\": \"filter\", \"column\": \"value\", \"condition\": \"gt\", \"threshold\": 1}]" }] },
+      assertions: [
+        { id: "side", role: "business", target: { kind: "file_exists", path: "out.csv.sha256", line: null, pointer: null, column: null }, expect_json: "true", tolerance: null, source: { kind: "verbatim", block, quote: null } },
+        { id: "x", role: "business", target: { kind: "exit_code", path: null, line: null, pointer: null, column: null }, expect_json: "0", tolerance: null, source: { kind: "verbatim", block: "R1.S8.P1.s1", quote: null } },
+      ],
+    })
+    const mismatches = (block: string) => checkChecks(registry, 1, { checks: [draft(block)], retire: [] }, [], []).filter(i => i.code === "verbatim_mismatch" && /assertion side/u.test(i.message)).map(i => i.message)
+    assert.deepEqual(mismatches(unit), [])
+    assert.equal(mismatches("R1.S3.P2.s4").length, 1, "a unit that does not name the file does not state its existence")
+  })
+})
+
 describe("exp2 runner and sandbox", () => {
   it("a reference script runs in its own directory with only the input files, and is stopped at the time limit", async () => {
     const sandbox = new LocalScriptSandbox()

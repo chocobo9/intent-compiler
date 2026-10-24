@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
 import { AuthInvalid, QuotaExhausted, ReplayMiss, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
 import { EnvironmentBlocked } from "./platform.js"
-import { methodB, replacedBasis, statedIn, targetProblems, type Assertion, type AssertionDraft, type CheckDraft, type CheckRecord, type CodeFacts, type Target } from "./checks.js"
+import { methodB, replacedBasis, statesValue, targetProblems, type Assertion, type AssertionDraft, type CheckDraft, type CheckRecord, type CodeFacts, type Target } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import { safePath, type CheckInput, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import { annotate } from "./source.js"
@@ -365,7 +365,7 @@ export async function assessPremises(registry: Registry, round: number, item: Fo
     if (a.source.kind !== "verbatim") { assertions.push(a); continue }
     const expect = JSON.parse(a.expect_json) as unknown
     const cited = a.source.block ? registry.block(a.source.block) : null
-    const stater = cited && statedIn(cited.text, expect) ? cited : item.units.map(u => registry.block(u)).find(b => b && statedIn(b.text, expect)) ?? null
+    const stater = cited && statesValue(cited.text, a.target, expect) ? cited : item.units.map(u => registry.block(u)).find(b => b && statesValue(b.text, a.target, expect)) ?? null
     if (!stater) fail(typeof expect === "number" ? "value_not_computed" : "value_not_stated", `assertion ${a.id}: ${a.expect_json} is not stated in ${a.source.block ?? item.units.join(", ")}${cited ? `, which reads ${JSON.stringify(cited.text.trim().slice(0, 160))}` : ""}`)
     assertions.push(stater && stater.id !== a.source.block ? { ...a, source: { ...a.source, block: stater.id } } : a)
   }

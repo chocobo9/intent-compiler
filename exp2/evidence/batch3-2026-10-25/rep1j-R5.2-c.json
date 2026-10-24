@@ -1,0 +1,51 @@
+{
+ "run": "exp2-icacc-r6-luna56-low-rep1j-20261025",
+ "round": 5,
+ "review": 2,
+ "cycle": "C5.2",
+ "commit": "3ed809b1",
+ "entries": 3,
+ "items": [
+  {
+   "id": "V5.2.1",
+   "units": [
+    "R5.S1.P2.s4",
+    "R5.S1.P2.s5",
+    "R5.S1.P3.s5"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "logged",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V5.2.2",
+   "units": [
+    "R5.S4.P3.s1"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V5.2.3",
+   "units": [
+    "R4.S5.P1.s3"
+   ],
+   "premises": [],
+   "reproduced": false,
+   "recorded": "blocked",
+   "old": "blocked not_reproduced",
+   "new": "blocked not_reproduced"
+  }
+ ],
+ "malformed": 0,
+ "sent": {
+  "old": 2,
+  "new": 2
+ },
+ "repair_list_new": "1. **Transform writes `.sha256` sidecars.**\n   - Requirement: R5.S1.P2.s4/P3.s5 says `transform` must not write sidecar files and must remove existing ones.\n   - Command: `dpipe-test.exe transform --input review-input.csv --recipe review-recipe.json --output derived.csv --seed 1`\n   - Input: Recipe deriving `double = value * 2`.\n   - Behavior: Created `derived.csv.sha256` instead of removing/not producing it.\n\n2. **Lineage incorrectly includes ingest schema as an input dependency.**\n   - Requirement: R5.S4.P3 says ingest input is `file` only.\n   - Command: `dpipe-test.exe lineage --config review-pipeline.json --output lineage.json`\n   - Input: Pipeline ingest step with `file: review-input.csv`, `schema: review-schema.json`.\n   - Behavior: Lineage listed both `review-input.csv` and `review-schema.json` as ingest inputs and emitted edges from both."
+}

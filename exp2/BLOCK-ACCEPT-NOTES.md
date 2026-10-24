@@ -1776,3 +1776,18 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 2. stem 判 untouched、输出判 touched（4 条）：派发代码没变，但输出变了，靠的是共用函数的改动。分别是 rep1l R1 V1.3.3 pipeline、rep1l R2 V2.3.2 compare、rep1m R2 V2.3.6 和 V2.3.7 profile。
 
 **两种口径在说什么**：stem 看的是"执行方改没改这个命令的代码"，输出看的是"改动有没有让这条检查的输出变"。第 1 类是改了但没起作用，按输出口径算 untouched，停送规则也是这么停的。第 2 类是共用代码的改动带动了输出，锚点名映射看不到。输出口径不需要名字映射，unmapped 为 0。
+
+## 29. 批 3（c）（b）：文件存在性的"已陈述"、删掉检查的取反方向
+
+用户放行 (c) 和 (b)（2026-10-25，经设计会话）；(a) 停送规则暂不做，范围留在 DESIGN-DEEP §4.2。
+
+### 29.1（c）文件存在性的期望按"原文提到这个文件"算已陈述
+
+**做法**：`checks.ts` 新增 `statesValue(text, target, expect)`。target 是 file_exists、期望是布尔值时，如果原文（去掉 Markdown 后，不分大小写）里出现该文件的名字或扩展名（如 `.sha256`），就算已陈述；其他情况照旧用 `statedIn`。两个调用点共用这个函数：库检查的 verbatim 校验（`checkChecks`），和条目前提（`assessPremises`）。库检查重答提示里"'writes the file' 表示文件存在，改用 derived"那半句一并去掉，因为现在代码直接认。
+
+**依据**：rep1j R5 的 V5.1.1、V5.2.1、V5.3.1，三条都写成 file_exists=false、verbatim、引用 R5.S1.P3.s5（"no longer writes `.sha256` sidecar files"）。布尔值 false 永远不会逐字出现在原文里，所以三条都被记成 value_not_stated（§28 之后查明，它们并没有因此不送）。
+
+**验收**：
+- rep1j R5 三次审查用记录下来的回复重放（起运行自己的服务读会话，记录下来的程序在 docker 里跑；脚本沿用 `batch2-2026-10-25/replay-premises.mjs`，结果在 `exp2/evidence/batch3-2026-10-25/rep1j-R5.{1,2,3}-c.json`）：value_not_stated 3 → 0。三条仍然发出、仍然能复现；另外 6 条结果和运行记录相同（V5.x.2 发出，V5.x.3 不复现、挡下）。
+- 测试：库检查一条（引用提到 `.sha256` 的单元算已陈述，引用不提这个文件的单元要重答），条目前提一条（引用 R5.S1.P3.s5 不报，引用过滤单元报 value_not_stated）。
+- 全量测试：这次主机连续拦截新构建的程序（spawn UNKNOWN，每跑一次有二十多处，逐个文件重跑也拦），本地全量测试不能当闸门。逐个文件重跑后，凡是失败的都伴有 spawn UNKNOWN，或者属于已知的 10 条环境问题，没有一条是断言失败；recording.test 有一条没报 spawn 的失败，单独重跑通过。replay-baseline（七个 R1 重放）在本地构建 dpipe.exe，连跑三次都被拦，这次没跑成。

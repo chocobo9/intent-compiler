@@ -128,6 +128,14 @@ describe("exp2 acceptance block §2: the premises code checks before an item is 
     assert.deepEqual((await assessPremises(store.registry(), 4, it, sandbox, 10_000)).failures, [])
   })
 
+  it("a file that must not exist, cited to the unit that withdrew it (R5 names .sha256): stated; cited to a unit that names no such file: value_not_stated", async () => {
+    const absent = (block: string): FormalItem => ({ ...filterItem(1, "transform still writes the sidecar", "R5.S1.P3.s5"), assertions: [{ id: "side", role: "business", target: target("file_exists", { path: "out.csv.sha256" }), expect_json: "false", tolerance: null, source: { kind: "verbatim", block } }], reference_script: null })
+    assert.match(store.registry().block("R5.S1.P3.s5")!.text, /\.sha256/u)
+    assert.deepEqual((await assessPremises(store.registry(), 5, absent("R5.S1.P3.s5"), sandbox, 10_000)).failures, [])
+    const p = await assessPremises(store.registry(), 5, { ...absent(FILTER_UNIT), units: [FILTER_UNIT] }, sandbox, 10_000)
+    assert.deepEqual(p.failures.map(f => f.premise), ["value_not_stated"])
+  })
+
   it("a numeric expectation stated in words, not computed: fails its premise; stated by the text: passes", async () => {
     const base = filterItem(1, "the threshold must be 42", FILTER_UNIT)
     const spoken: FormalItem = { ...base, assertions: [{ id: "n", role: "business", target: target("csv_cell", { path: "out.csv", line: 1, column: "value" }), expect_json: "42", tolerance: null, source: { kind: "verbatim", block: FILTER_UNIT } }], reference_script: null }

@@ -496,7 +496,7 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
         const ref = parseRef(a.source.block ?? "")
         const block = registry.block(ref.id)
         if (!block || roundOf(ref.id) > round) add("verbatim_not_found", `${aw}: a stated value needs the id of the block, sentence or clause that states it; ${a.source.block ?? "(none)"} does not exist`, k.key)
-        else if (!statedIn(block.text, expect)) add("verbatim_mismatch", `${aw}: ${a.expect_json} does not occur in ${ref.id}, which reads ${JSON.stringify(excerpt(block.text, 160))}; cite the unit that states it, or, when the text states the value in words (say "an empty string" for "", "writes the file" for the file existing), make the source derived and have the reference script compute it`, k.key)
+        else if (!statesValue(block.text, a.target, expect)) add("verbatim_mismatch", `${aw}: ${a.expect_json} does not occur in ${ref.id}, which reads ${JSON.stringify(excerpt(block.text, 160))}; cite the unit that states it, or, when the text states the value in words (say "an empty string" for ""), make the source derived and have the reference script compute it`, k.key)
       }
       // A key form of a shared convention in the expectation needs that convention in uses.
       for (const text of strings(expect)) {
@@ -586,6 +586,17 @@ export function statedIn(text: string, expect: unknown): boolean {
     return e.length >= 3 ? t.includes(e) : new RegExp(`(^|[^\\w.])${escape(e)}($|[^\\w.])`, "u").test(t)
   }
   return quoteSays(plainText(text), expect)
+}
+
+/**
+ * Does the text state this expectation? A file's existence (true or false on file_exists) never occurs in the text as
+ * written: the text states it by naming the file, by its name or its extension (`.sha256`). Any other value: statedIn.
+ */
+export function statesValue(text: string, target: Pick<Target, "kind" | "path">, expect: unknown): boolean {
+  if (target.kind !== "file_exists" || typeof expect !== "boolean" || !target.path) return statedIn(text, expect)
+  const name = target.path.split(/[\\/]/u).pop()!.toLowerCase(), ext = /(\.[^.]+)$/u.exec(name)?.[1]
+  const t = plainText(text).toLowerCase()
+  return t.includes(name) || (!!ext && t.includes(ext))
 }
 
 /** Does the quoted text say this value: the same text, the text with its <placeholders> filled in, or the number in it. */

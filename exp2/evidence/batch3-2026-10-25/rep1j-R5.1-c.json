@@ -1,0 +1,51 @@
+{
+ "run": "exp2-icacc-r6-luna56-low-rep1j-20261025",
+ "round": 5,
+ "review": 1,
+ "cycle": "C5.2",
+ "commit": "3ed809b1",
+ "entries": 3,
+ "items": [
+  {
+   "id": "V5.1.1",
+   "units": [
+    "R5.S1.P2.s4",
+    "R5.S1.P3.s5"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "logged",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V5.1.2",
+   "units": [
+    "R5.S4.P3.s1.c1",
+    "R5.S5.P5.s4"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V5.1.3",
+   "units": [
+    "R4.S5.P1.s3"
+   ],
+   "premises": [],
+   "reproduced": false,
+   "recorded": "blocked",
+   "old": "blocked not_reproduced",
+   "new": "blocked not_reproduced"
+  }
+ ],
+ "malformed": 0,
+ "sent": {
+  "old": 2,
+  "new": 2
+ },
+ "repair_list_new": "1. **Transform writes forbidden sidecar**\n  - Requirement: `transform` must not produce `.sha256` files and must remove any existing sidecar.\n  - Command/input: `dpipe transform --input review-transform.csv --recipe review-detect.json --output review-detect-out.csv --seed 1`\n  - Result: Created `review-detect-out.csv.sha256`.\n\n2. **Lineage incorrectly includes ingest schema as an input**\n  - Requirement: For `ingest`, lineage inputs are only `file`; `schema` is not listed.\n  - Command/input: `dpipe lineage --config review-config.json --output review-lineage.json`, with ingest step `{file:\"data.csv\", schema:\"schema.json\", output:\"clean.csv\"}`.\n  - Result: Report included `schema.json` in the ingest step inputs, as a node, and as an edge to `clean.csv`."
+}
