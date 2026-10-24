@@ -1,0 +1,12 @@
+{"round":1,"commit":"ab81d2e63d2791bd3de883e06611aa9a15bf5315","passed":196,"total":219,"prediction_sha256":"becf9dcf7c3f9ca7f7e5691562b608a745f33ccd07ea751e2261e6e1385ba42f"}
+{"round":1,"commit":"8f72ed93801b2135ada8d63599dc073d39e65f9a","kind":"first_delivery","passed":100,"total":219}
+{"round":2,"commit":"917ec2a9d2d89ec8a538b2f73182315da48ba0fb","passed":474,"total":481,"prediction_sha256":"5c1508755327ac9c73e5dbc4cae171259ecbfaf4a61207a10bc00da1108a79cd"}
+{"round":2,"commit":"3754ee978c3115c103f64a2f7da5966faeed1f7b","kind":"first_delivery","passed":410,"total":481}
+{"round":3,"commit":"089c96fc0a66bc345001fd490f47eecefee16256","passed":534,"total":535,"prediction_sha256":"6d80220ad6704bbe886f435df9d4667bf11c4d4ffbbbc5cb35f0123d94e97ee9"}
+{"round":3,"commit":"d4cc7d6f44e3b66c7841ab031ca7765bb00de24a","kind":"first_delivery","passed":521,"total":535}
+{"round":4,"commit":"70b3fcf529a46030fba682284f4cdc9881bd032d","passed":630,"total":639,"prediction_sha256":"b1af9ca74be0059503d50cb5475f03d516f62ae083e455530398cec55540d9b0"}
+{"round":4,"commit":"1dd6d5eb9876c748806f8c44b6f53ab53f50c74b","kind":"first_delivery","passed":623,"total":639}
+{"round":5,"commit":"075efa23c22793519a0b257a168b1c62b9d57ea9","passed":666,"total":680,"prediction_sha256":"1964cfb26e1940758df0a66e7ab9b99865b73304fe704d2ae23cca382ec16f88"}
+{"round":5,"commit":"25e378daaf560f59766ac347f565494f09e18431","kind":"first_delivery","passed":666,"total":680}
+{"round":6,"commit":"1f7726af185fc359917182726321e5a1c02bb074","passed":698,"total":716,"prediction_sha256":"f7bfe6ef8bdbb6dd0974864d01102040575f20a619975a4bc563a85f6e6840a5"}
+{"round":6,"commit":"d8ef07c4ccffd55756514c88f0b09db065b653f0","kind":"first_delivery","passed":696,"total":716}

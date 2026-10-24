@@ -1,0 +1,6 @@
+Package batch real run R1-R6 (acceptance B of DESIGN 6c's package revision), local dev session, 2026-10-25.
+Code: branch ccr-992739b3-u5bcay @ b4f079d (P1 2774d55, P2 d0dbc20, P3 80cf781, applies_to rule b4f079d), worktree D:\huawei\intent_compiler\project-exp2-dev.
+Config: copied from rep1j; run id, ports (46011/46012), cache keys, label changed. 6 rounds, delta, executor low.
+Baseline = rep1j: official 177/480/534/638/673/710; unchanged-text flips 2 kinds 5 times; reviews 3,3,3,3,3,2;
+review requests R3-R6 147-172k chars; conservation, no_input 0.
+Started 2026-10-25 on b4f079d, --to 6.

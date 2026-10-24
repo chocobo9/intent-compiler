@@ -1,0 +1,113 @@
+{
+ "run_id": "exp2-icacc-r6-luna56-low-rep1k-20261025",
+ "inputs_dir": "D:/huawei/intent_compiler/project-exp2/exp2/inputs/dpipe",
+ "state_dir": "D:/huawei/EvoCodeBench/harbor_runs/exp2-icacc-r6-luna56-low-rep1k-20261025/state",
+ "checkpoints_dir": "D:/huawei/EvoCodeBench/harbor_runs/exp2-icacc-r6-luna56-low-rep1k-20261025/checkpoints",
+ "repo_dir": "D:/huawei/EvoCodeBench/harbor_runs/exp2-icacc-r6-luna56-low-rep1k-20261025/app",
+ "builds_dir": "D:/huawei/EvoCodeBench/harbor_runs/exp2-icacc-r6-luna56-low-rep1k-20261025/builds",
+ "rounds": 6,
+ "management": {
+  "server_url": "http://127.0.0.1:46011",
+  "directory": "D:/huawei/EvoCodeBench/harbor_runs/exp2-icacc-r6-luna56-low-rep1k-20261025/management",
+  "provider": "openai",
+  "model": "gpt-5.6-luna-fast",
+  "variant": "medium",
+  "request_timeout_ms": 1800000
+ },
+ "coding": {
+  "server_url": "http://127.0.0.1:46012",
+  "directory": "D:/huawei/EvoCodeBench/harbor_runs/exp2-icacc-r6-luna56-low-rep1k-20261025/app",
+  "provider": "openai",
+  "model": "gpt-5.6-luna-fast",
+  "variant": "low",
+  "agent": "build",
+  "request_timeout_ms": 3600000
+ },
+ "limits": {
+  "attribution_repairs": 2,
+  "check_repairs": 2,
+  "management_timeout_ms": 1800000,
+  "check_timeout_ms": 60000,
+  "execution": {
+   "repairCycles": 3,
+   "maxSessions": 3,
+   "callTimeoutMs": 2400000
+  },
+  "probe_repairs": 2
+ },
+ "runner": {
+  "kind": "docker",
+  "docker": [
+   "docker"
+  ],
+  "image": "sdd-unattended-preflight:latest",
+  "python": "/opt/sdd-python/bin/python3",
+  "buildCache": "exp2-gocache-icacc-r6k",
+  "graceMs": 10000
+ },
+ "tools": {
+  "python": "C:/Users/HuaWeiClient/AppData/Local/Programs/Python/Python312/python.exe",
+  "go": "D:/huawei/intent_compiler/project/.scratch/sdd-phase1/go/bin/go.exe"
+ },
+ "resume": {
+  "wait_ms": 1800000,
+  "max_resumes": 48
+ },
+ "rate_limit": {
+  "delays_ms": [
+   15000,
+   45000,
+   120000
+  ]
+ },
+ "scoring": {
+  "command": [
+   "C:/Program Files/nodejs/node.exe",
+   "D:/huawei/EvoCodeBench/harbor_runs/exp2-icacc-r6-luna56-low-rep1k-20261025/bin/score.mjs",
+   "{round}",
+   "{commit}",
+   "{repo}"
+  ]
+ },
+ "recording": {
+  "cassette": "D:/huawei/EvoCodeBench/harbor_runs/exp2-icacc-r6-luna56-low-rep1k-20261025/recording/cassette.json",
+  "label": "package batch real R1-R6 (delta scope, 5.6 low exec, 5.6 medium reviewer)"
+ },
+ "roles": {
+  "probes": {
+   "model": "gpt-5.6-luna-fast",
+   "variant": "medium"
+  },
+  "judge": {
+   "model": "gpt-5.6-luna-fast",
+   "variant": "medium"
+  },
+  "checks": {
+   "model": "gpt-5.6-luna-fast",
+   "variant": "medium"
+  },
+  "adjudicate": {
+   "model": "gpt-5.6-luna-fast",
+   "variant": "medium"
+  },
+  "review": {
+   "model": "gpt-5.6-luna-fast",
+   "variant": "medium"
+  },
+  "formalize": {
+   "model": "gpt-5.6-luna-fast",
+   "variant": "medium"
+  }
+ },
+ "acceptance": {
+  "mode": "review",
+  "probes": false,
+  "stale_by_reference": false,
+  "reviews": 3,
+  "trial_fixes": 2,
+  "review_agent": "build"
+ },
+ "measure": {
+  "gold_task": "deterministic-data-pipeline-go"
+ }
+}
