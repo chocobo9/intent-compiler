@@ -1,0 +1,17 @@
+rep1h (2026-10-24), code ccr-992739b3-u5bcay @ 00a0a7f (batch 1 + 1b), delta scope, executor low. R1 smoke by the local dev
+session, R2–R3 continued at the design session's request. Valid.
+
+Scores: R1 74 → 146/219; R2 207 → 428/481 (all-scope run: 346); R3 505 → 507/535 (all-scope: 389; control L: 529/514).
+Closure acceptance (DESIGN 12j / PROTOCOL):
+a. Round package: R2 source zone 43k vs all 46.5k (only 7% smaller: 20 objects, 9 of them R1 objects brought in by rule —
+   "open item" (18 items carried from R1), "object changed", "related"); R3 29.5k vs 64.9k (54% smaller, 5 objects). Holds by rule.
+b. Flips: G42, G51 (fill linear, R2) flipped at C3.1 → classified "changed text" (revision record + object change) → superseded,
+   no revert. Holds. (The zscore guard did not flip in this run.)
+c. Conservation yes in all rounds; no_input R2 6 (reviewer quoted commands it never ran, or no command and no lead) → fallback
+   by words; R3 0. Holds.
+   One revert in R3 C3.2: G72 (review-born, R2 profile statistics, derived expectations) flipped on unchanged text → regression →
+   revert, 6 findings resent, repaired in C3.3. Judged a true regression (expectations: skewness of 1..4 = 0, most_common = A).
+d. Cost: non-executor 0.487 / 0.658 / 0.862 M vs all-scope 0.49 / 0.60 / 0.69 M. FAILS. Cause: the formalizer still reads every
+   round's annotated text (R3: 5 calls, 75–102k chars each, 171k uncached); reviewer uncached 191k is mostly its own tool activity
+   (review requests shrank to 36k/26k/26k chars). Fix = formalizer scope → the round package text (batch 1c).
+e. Report has the flip-classification-source line; revision/relation recall lines pending block 13.

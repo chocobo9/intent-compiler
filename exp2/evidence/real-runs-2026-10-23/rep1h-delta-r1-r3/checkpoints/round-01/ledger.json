@@ -1,0 +1,1860 @@
+[
+ {
+  "id": "V1.1.1",
+  "source": "review",
+  "unit": "R1.S2.P6.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2.c1",
+   "R1.S2.P6.s2.c2",
+   "R1.S2.P6.s2.c3",
+   "R1.S2.P6.s2.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "7534fb776f00efaa7134df396d14d06d58bbe3f26430aa0e1d0f8164d73e7cd5",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.2",
+  "source": "review",
+  "unit": "R1.S3.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s2.c1",
+   "R1.S3.P2.s5",
+   "R1.S3.P3",
+   "R1.S3.P5",
+   "R1.S3.P6",
+   "R1.S3.P8"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "8a217c2a66ad9117edf0d131eafec647716477964e61c587f052e34f6d15c50a",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.3",
+  "source": "review",
+  "unit": "R1.S3.P9.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s5",
+   "R1.S3.P9.s6",
+   "R1.S3.P9.s7",
+   "R1.S3.P9.s8",
+   "R1.S3.P10.s1",
+   "R1.S3.P10.s2",
+   "R1.S3.P10.s3",
+   "R1.S3.P11.s1",
+   "R1.S3.P11.s4.c1",
+   "R1.S3.P11.s5",
+   "R1.S3.P11.s6",
+   "R1.S3.P11.s7",
+   "R1.S3.P11.s8.c1",
+   "R1.S3.P11.s8.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [
+   "C1.2"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "6d4f36e7353c47833dc0154fded0bfe051fde393c355e92dc6a551c6cc20ddca",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.4",
+  "source": "review",
+  "unit": "R1.S3.P12.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s4",
+   "R1.S3.P12.s5",
+   "R1.S3.P12.s6.c1",
+   "R1.S3.P12.s6.c2",
+   "R1.S3.P12.s6.c3",
+   "R1.S3.P12.s6.c4",
+   "R1.S3.P12.s7.c1",
+   "R1.S3.P12.s7.c2",
+   "R1.S3.P12.s8.c1",
+   "R1.S3.P12.s8.c2",
+   "R1.S3.P12.s8.c3",
+   "R1.S3.P12.s8.c4",
+   "R1.S3.P12.s9.c1",
+   "R1.S3.P12.s9.c2",
+   "R1.S3.P12.s9.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "79ae8fea53af24156fa50f48ab966525c5fbbc2d43b1ed684843e455a49eae5e",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.5",
+  "source": "review",
+  "unit": "R1.S3.P13.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s2.c1",
+   "R1.S3.P13.s2.c2",
+   "R1.S3.P13.s2.c3",
+   "R1.S3.P13.s3.c1",
+   "R1.S3.P13.s3.c6",
+   "R1.S3.P13.s3.c7",
+   "R1.S3.P13.s3.c8",
+   "R1.S3.P14.s1.c1",
+   "R1.S3.P14.s2",
+   "R1.S3.P15.s1.c1",
+   "R1.S3.P15.s2.c1",
+   "R1.S3.P15.s2.c2",
+   "R1.S3.P16.s1.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.3"
+  ],
+  "held": [
+   "C1.2"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "f10a359a5ee858a2c6144c9d7213634f5b18fb7b2f7e890a489b0eb7857b5287",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.6",
+  "source": "review",
+  "unit": "R1.S3.P18.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s2",
+   "R1.S3.P18.s3",
+   "R1.S3.P18.s4",
+   "R1.S3.P19.s2",
+   "R1.S3.P19.s3.c1",
+   "R1.S3.P19.s3.c2",
+   "R1.S3.P19.s4.c1",
+   "R1.S3.P19.s4.c2",
+   "R1.S3.P19.s4.c3",
+   "R1.S3.P19.s4.c4",
+   "R1.S3.P19.s4.c5",
+   "R1.S3.P19.s5.c1",
+   "R1.S3.P19.s5.c2",
+   "R1.S3.P19.s5.c3",
+   "R1.S3.P19.s6.c1",
+   "R1.S3.P19.s6.c2",
+   "R1.S3.P19.s6.c3",
+   "R1.S3.P19.s7.c1",
+   "R1.S3.P19.s7.c2",
+   "R1.S3.P19.s8.c1",
+   "R1.S3.P19.s8.c2",
+   "R1.S3.P19.s8.c3",
+   "R1.S3.P19.s8.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "9e41dcb27ae63ae87eefa30a19a7b10abff20962122995266ee5cf9105950d0a",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.7",
+  "source": "review",
+  "unit": "R1.S3.P20.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P20.s1.c1",
+   "R1.S3.P20.s2.c1",
+   "R1.S3.P20.s3",
+   "R1.S3.P21.s2.c1",
+   "R1.S3.P21.s2.c2",
+   "R1.S3.P21.s3.c1",
+   "R1.S3.P21.s3.c2",
+   "R1.S3.P21.s3.c3",
+   "R1.S3.P21.s3.c4",
+   "R1.S3.P21.s4.c1",
+   "R1.S3.P21.s4.c2",
+   "R1.S3.P21.s4.c3",
+   "R1.S3.P21.s4.c4",
+   "R1.S3.P21.s5.c1",
+   "R1.S3.P21.s5.c2",
+   "R1.S3.P21.s6.c1",
+   "R1.S3.P21.s6.c2",
+   "R1.S3.P21.s6.c3",
+   "R1.S3.P21.s6.c4"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "blocked",
+   "detail": "input_claim_false: unpivot.csv: claimed 1 empty cells, parsed 2"
+  },
+  "disposition": "blocked"
+ },
+ {
+  "id": "V1.1.8",
+  "source": "review",
+  "unit": "R1.S3.P24.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P24.s1.c1",
+   "R1.S3.P24.s1.c2",
+   "R1.S3.P24.s1.c3",
+   "R1.S7.P1.s1",
+   "R1.S7.P1.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2",
+   "C1.3"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "eb11f1ee456aa56fb9afd4eb1c9ea04d147f4469c8639d21aed282d1353ce4af",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a4: true is not stated in R1.S3.P24.s1.c3, which reads \"its SHA-256 to `<output>.sha256`.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.9",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "d402e2ab87ad499f0bc21094bb8d6ef05fd5bd8af78cbca6b7ac48403583f690",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.10",
+  "source": "review",
+  "unit": "R1.S8.P1.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s4.c1",
+   "R1.S8.P1.s4.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [
+   "C1.2"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "1887d992cd08859b3f49d1e3cbdff48780609dbeea8d2263ea1b39299582f3ab",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.11",
+  "source": "review",
+  "unit": "R1.S8.P1.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c2",
+   "R1.S8.P1.s3.c3",
+   "R1.S8.P1.s3.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "86e13e1a84947fdbb58cebf31155b7851841621958dcad4c72c5c8ea98ff3bb4",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.12",
+  "source": "review",
+  "unit": "R1.S6.P2.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s1.c1",
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3",
+   "R1.S6.P2.s2.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Fixed all reported issues:\n\n- Typed primary-key sorting\n- Full derive expression fields/evaluation\n- Aggregate and `having`\n- Correct first-match left join\n- Window ranking with partitions and ties\n- Array-based pivot\n- Transform checksum sidecars\n- Exact missing-file and malformed-JSON errors\n- Mis",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "d199fe3eee1b047a3b3d39fda2de236692ac211e4d11815a2143191a29ecf4c9",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a2: \"PIPELINE FAILED at step 1: ERROR: file not found: missing.txt\" is not stated in R1.S6.P2.s2.c3, which reads \"printing `PIPELINE FAILED at step N: <error>`\""
+   }
+  ]
+ },
+ {
+  "id": "V1.2.1",
+  "source": "review",
+  "unit": "R1.S3.P12.s6.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s6.c1",
+   "R1.S3.P12.s6.c4",
+   "R1.S3.P12.s6.c5",
+   "R1.S3.P12.s7.c1",
+   "R1.S3.P12.s9.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "e04aba48d75d1d882bdf676a9e88bcc2886a3d0a69dde71b7ea0a415e8e345b6",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.2",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "c40f8d6bd03fdff195a0c731251547962250ace40067b86f8d00a5408135c093",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.3",
+  "source": "review",
+  "unit": "R1.S8.P1.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c3",
+   "R1.S8.P1.s3.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "52e035bc439d535203ebc5760de0db6d1ba107def5871774e9366eafcdf580cd",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.4",
+  "source": "review",
+  "unit": "R1.S4.P2.s1.c2",
+  "case": null,
+  "units": [
+   "R1.S4.P2.s1.c2",
+   "R1.S4.P2.s2.c1",
+   "R1.S4.P2.s2.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "b3ef44b3bd10b081a934dd4a672661461be19fedd45636e3df65f734509895d2",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.5",
+  "source": "review",
+  "unit": "R1.S2.P6.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S2.P6.s2.c1",
+   "R1.S2.P6.s2.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [
+   "C1.3",
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "e6a27d444503317069d6748d640a13212f0b1b69001bfea18e2108433461b890",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.6",
+  "source": "review",
+  "unit": "R1.S3.P2.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s5",
+   "R1.S3.P4.s1",
+   "R1.S3.P8.s1.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.4"
+  ],
+  "held": [
+   "C1.3"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "7555e66f249c5abe228355c756c092c3854c71c6e6e389d9c33e9ea839d4f8ed",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.7",
+  "source": "review",
+  "unit": "R1.S3.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s2.c1",
+   "R1.S3.P9",
+   "R1.S3.P10.s1.c1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "2707e5231b193076fd5b5cf712c9aea09a4d057e79865a3774fa3199e23d84f7",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.8",
+  "source": "review",
+  "unit": "R1.S3.P13.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s2",
+   "R1.S3.P13.s3.c6",
+   "R1.S3.P14.s2",
+   "R1.S3.P15.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "6a8f5375068d70ee4dfaaa8b5b1d76ae949b156e2c0e934daf354994307f06b9",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.9",
+  "source": "review",
+  "unit": "R1.S3.P18.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P18.s2",
+   "R1.S3.P19.s6.c1",
+   "R1.S3.P19.s6.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "694a6a0e24dda7b320eab0d4a2408b68bb546e3ca11cf7aa8dd1c3a9293e69da",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.10",
+  "source": "review",
+  "unit": "R1.S3.P20.s2",
+  "case": null,
+  "units": [
+   "R1.S3.P20.s2",
+   "R1.S3.P20.s3",
+   "R1.S3.P20.s4",
+   "R1.S3.P21.s3",
+   "R1.S3.P21.s4",
+   "R1.S3.P21.s5"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "f6a010aa118bc700688a0cbe4feba9664b434e6786bf489084f4dfe75f5f0ebc",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.11",
+  "source": "review",
+  "unit": "R1.S8.P1.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s4.c1",
+   "R1.S8.P1.s4.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "8fa365c04ddd38404cd5b741cba1ecca0cd0e4b5eb4ce061b1c470c5d6c161fd",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.12",
+  "source": "review",
+  "unit": "R1.S8.P1.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c2",
+   "R1.S8.P1.s3.c3",
+   "R1.S8.P1.s3.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "634fefc469f893c4479f59655b19dd212b266ab2b60fb0325b278b47a44b418f",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.13",
+  "source": "review",
+  "unit": "R1.S3.P23.s7.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P23.s7.c1",
+   "R1.S3.P23.s7.c2",
+   "R1.S8.P1.s3.c1",
+   "R1.S8.P1.s3.c3",
+   "R1.S8.P1.s3.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Addressed the reported failures:\n\n- Correct left join behavior and first-match deduplication\n- Exact missing-file and invalid-recipe errors\n- Typed pipeline steps and failure reporting\n- Raw-byte checksum verification and mismatch output\n- Primary-key ingest sorting\n- Structured derive, aggregate, w",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "7f8e753eb596fde7e0233216a18e6c25e301635512224c85cf15c5cab2f0bb68",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.1",
+  "source": "review",
+  "unit": "R1.S3.P10.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P10.s1.c1",
+   "R1.S3.P10.s1.c2",
+   "R1.S3.P10.s1.c3",
+   "R1.S3.P10.s1.c4",
+   "R1.S3.P11.s1.c1",
+   "R1.S3.P11.s7"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "8e08b4b6cfc730066a7a04f3496691210e3897ba29aa9fde6718116c1cb452f7",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.2",
+  "source": "review",
+  "unit": "R1.S3.P13.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s3.c1",
+   "R1.S3.P13.s3.c2",
+   "R1.S3.P13.s3.c3",
+   "R1.S3.P13.s3.c4",
+   "R1.S3.P13.s3.c5",
+   "R1.S3.P13.s3.c6",
+   "R1.S3.P13.s3.c7",
+   "R1.S3.P13.s3.c8",
+   "R1.S3.P14.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "4f80bfb41617cecc2648a07b847f43aa356904c0f2dd1425be6b857836665d46",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.3",
+  "source": "review",
+  "unit": "R1.S3.P21.s3.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P21.s3.c1",
+   "R1.S3.P21.s3.c2",
+   "R1.S3.P21.s3.c3",
+   "R1.S3.P21.s3.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "c353521f955e949156f06486065c181f009ae4a84e3e1538f7c6ba336901c115",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.4",
+  "source": "review",
+  "unit": "R1.S3.P2.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s5",
+   "R1.S3.P3.s6",
+   "R1.S3.P8.s1",
+   "R1.S3.P8.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "f791d6cbba086c3f54a7c0da088b429d65cddba0b6418fb336f7ba371f4d53bd",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.5",
+  "source": "review",
+  "unit": "R1.S3.P12.s6.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s6.c1",
+   "R1.S3.P12.s6.c2",
+   "R1.S3.P12.s6.c3",
+   "R1.S3.P12.s6.c4",
+   "R1.S3.P12.s6.c5",
+   "R1.S3.P12.s7.c1",
+   "R1.S3.P12.s7.c2",
+   "R1.S3.P12.s9.c1",
+   "R1.S3.P12.s9.c2",
+   "R1.S3.P12.s9.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "5b21a520fb3b4fce3ce5cd90763086d54398e7bf39f9bb1f20b80000f3f30d32",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.6",
+  "source": "review",
+  "unit": "R1.S3.P19.s4.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P19.s4.c1",
+   "R1.S3.P19.s4.c2",
+   "R1.S3.P19.s4.c3",
+   "R1.S3.P19.s4.c4",
+   "R1.S3.P19.s4.c5"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "6fca76a7a75b4eede8afc5be9b90edea5971a997913534c26e77bcf5c92420f7",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.7",
+  "source": "review",
+  "unit": "R1.S4.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S4.P2.s2.c1",
+   "R1.S4.P2.s2.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the remaining reported issues:\n\n- Structured aggregate with array grouping, aggregations, and `having`\n- Correct window partitioning, ordering, and tied ranks\n- Structured unpivot with configured `value_to`\n- Structured derive expressions\n- Left join unmatched-row preservation\n- Pivot first-ma",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "65df1aba4986811c0bc42b176a4327a8090c9eaedb1135af8de65f71ba7709e9",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "K2",
+  "source": "check",
+  "unit": "R1.S2.P2",
+  "case": null,
+  "units": [
+   "R1.S2.P2",
+   "R1.S2.P3",
+   "R1.S2.P4",
+   "R1.S2.P5",
+   "R1.S8.P1"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K3",
+  "source": "check",
+  "unit": "R1.S2.P6",
+  "case": null,
+  "units": [
+   "R1.S2.P6"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K5",
+  "source": "check",
+  "unit": "R1.S3.P2",
+  "case": null,
+  "units": [
+   "R1.S3.P2",
+   "R1.S3.P9",
+   "R1.S3.P10",
+   "R1.S3.P11"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K6",
+  "source": "check",
+  "unit": "R1.S3.P9",
+  "case": null,
+  "units": [
+   "R1.S3.P9",
+   "R1.S3.P12"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K9",
+  "source": "check",
+  "unit": "R1.S3.P20",
+  "case": null,
+  "units": [
+   "R1.S3.P20",
+   "R1.S3.P21"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ }
+]
