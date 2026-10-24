@@ -1226,7 +1226,7 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
   - 关系：同轮一条边连接答案句段落与引文段落（或引文所属对象），不论方向、不论种类，算命中；答案句被归给引文所属对象（扩展记为归属），也算命中。两种分开计数，按答案的种类分列。
 - **`intent-exp2-attribute --config --inputs --to --out [--gold-task] [--gold-dir]`**：`attribute.ts` 加上 CLI。只跑归属，可以续跑；输出 attribute.json 和 attribute.md，每轮的修订、边、两个召回和精度，另有全部轮次的合计一行。
 
-**删除**（恢复方式：`git show c4b0f74:<路径>`）
+**删除**（恢复方式：`git show 621d48c:<路径>`）
 - view.ts：`effectiveText`、`inForceCuts`、`annotatedPackage`、`PackageBlock`、`packageSources`，以及按块的 `roundPackage`；
 - 工单 delta 档的旧 protect 规则（"已落地对象 + 共享锚点"）；delta 档原文区的按块渲染；
 - formalizer 的 `pkg` 参数（改成 `body`）。
