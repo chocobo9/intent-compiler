@@ -13,6 +13,7 @@ const D = pathToFileURL(join(process.cwd(), "dist/exp2/")).href
 const { Exp2Store } = await import(D + "store.js")
 const V = await import(D + "view.js")
 const { liveGuards } = await import(D + "guards.js")
+const { packageUse } = await import(D + "report.js")
 
 const s = JSON.parse(readFileSync(process.argv[2], "utf8"))
 const dir = mkdtempSync(join(tmpdir(), "pkg-replay-"))
@@ -21,7 +22,6 @@ writeFileSync(join(dir, "state", "exp2-state.json"), JSON.stringify(s))
 const reg = new Exp2Store(join(dir, "state"), s.run_id).registry()
 const items = s.executions.flatMap(x => x.review_items ?? [])
 const owner = u => { const o = reg.coverOf(u)?.owner; return o && o !== "none" ? o : null }
-const overlaps = (a, b) => reg.lineage(a).some(x => x.id === b) || reg.lineage(b).some(x => x.id === a)
 const pct = (a, b) => b ? `${Math.round(100 * a / b)}%` : "—"
 
 const rows = []
@@ -35,20 +35,21 @@ for (const e of s.executions.sort((a, b) => a.round - b.round)) {
   const { pkg, overflow } = V.fitPackage(built)
   const objects = new Set(pkg.segments.map(x => x.object))
   const listed = guards.filter(g => g.units.some(u => objects.has(owner(u) ?? ""))).length
-  const sent = items.filter(x => x.round === r && x.disposition === "sent")
-  const cited = new Set(sent.flatMap(x => x.units.map(owner)).filter(Boolean))
-  const citedParas = new Set(pkg.segments.filter(sg => sent.some(x => x.units.some(u => overlaps(u, sg.paragraph)))).map(sg => sg.paragraph))
+  // The report's own measure (report.ts packageUse), on the new package and on rep1j's (objects only).
+  const round = items.filter(x => x.round === r)
+  const use = packageUse(reg, pkg.segments, round)
   const before = s.reports.find(x => x.round === r)?.zones.package?.objects?.map(o => o.object) ?? []
+  const was = packageUse(reg, before.map(o => ({ object: o, paragraph: "" })), round)
   const sizes = V.packageSizes(pkg), text = reg.sources.get(r).text.length
   rows.push({
     round: r, text, bar: 2 * text + 10_000, chars: sizes.total, sizes, paragraphs: pkg.segments.length, objects: objects.size, heads: pkg.heads.length,
     edges: pkg.edges, guards_listed: listed, comparisons: pkg.comparisons.length, overflow,
-    cited_objects: [...cited], cited_in_package: [...cited].filter(o => objects.has(o)).length,
-    utilization_objects: pct([...cited].filter(o => objects.has(o)).length, objects.size), utilization_paragraphs: pct(citedParas.size, pkg.segments.length),
-    baseline: { chars: s.reports.find(x => x.round === r)?.zones.source_chars, objects: before.length, utilization_objects: pct([...cited].filter(o => before.includes(o)).length, before.length) },
+    cited_objects: use.objects.cited, cited_in_package: use.objects.in_package, missing: use.objects.missing,
+    utilization_objects: pct(use.objects.in_package, use.objects.total), utilization_paragraphs: pct(use.paragraphs.cited, use.paragraphs.total),
+    baseline: { chars: s.reports.find(x => x.round === r)?.zones.source_chars, objects: before.length, utilization_objects: pct(was.objects.in_package, was.objects.total) },
   })
 }
 console.log("| round | this round's text | bar (2× + 10k) | package chars (rep1j) | this round / revised / edge / open item / comparisons | paragraphs | objects (rep1j) | heads | edges to block / object | guards: listed on package objects / comparisons | utilization objects (rep1j, same rule) | utilization paragraphs | cited objects in package |")
 console.log("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 for (const x of rows) console.log(`| R${x.round} | ${x.text} | ${x.bar} | ${x.chars} (${x.baseline.chars}) | ${x.sizes["this round"]} / ${x.sizes.revised} / ${x.sizes.edge} / ${x.sizes["open item"]} / ${x.sizes.comparisons} | ${x.paragraphs} | ${x.objects} (${x.baseline.objects}) | ${x.heads} | ${x.edges.to_block} / ${x.edges.to_object} | ${x.guards_listed} / ${x.comparisons} | ${x.utilization_objects} (${x.baseline.utilization_objects}) | ${x.utilization_paragraphs} | ${x.cited_in_package}/${x.cited_objects.length} |`)
-console.log(JSON.stringify(rows.map(x => ({ round: x.round, cited: x.cited_objects, overflow: x.overflow }))))
+console.log(JSON.stringify(rows.map(x => ({ round: x.round, cited: x.cited_objects, missing: x.missing, overflow: x.overflow }))))

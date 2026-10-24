@@ -29,7 +29,7 @@ export interface RoundReport {
   interrupted: { attempts: number; stages: { understand: StageCost; acceptance: StageCost; coding: StageCost } }
   scope: string[]
   /** source_scope, source_chars, source_chars_all: the source zone's kind and size, and the size every round's text would have (§12j.7 item 9). */
-  zones: { task: number; protect: number; status: number; source_blocks: number; anchors: number; source_scope?: "delta" | "all"; source_chars?: number; source_chars_all?: number; source_blocks_all?: number; package?: { segments: { object: string; paragraph: string; why: string; via: string[] }[]; heads: string[]; edges: { to_block: number; to_object: number }; sizes: Record<string, number>; guards: number; overflow: PackageOverflow | null } }
+  zones: { task: number; protect: number; status: number; source_blocks: number; anchors: number; source_scope?: "delta" | "all"; source_chars?: number; source_chars_all?: number; source_blocks_all?: number; package?: { segments: { object: string; paragraph: string; why: string; via: string[] }[]; heads: string[]; edges: { to_block: number; to_object: number }; sizes: Record<string, number>; guards: number; overflow: PackageOverflow | null; utilization?: PackageUse } }
   /** Attribution against the gold sets (the chain block, effect 4), when the run names its task. */
   gold?: { task: string; revision: RecallLine; relation: RecallLine }
   /**
@@ -271,7 +271,7 @@ function reportOf(i: ReportInput): RoundReport {
     stages: { understand: stageCost(i.understand), acceptance: stageCost(i.acceptance), coding: codingCost(e, i.executorIsStub) },
     interrupted: { attempts: i.interrupted.attempts, stages: { understand: stageCost(i.interrupted.understand), acceptance: stageCost(i.interrupted.acceptance), coding: i.interrupted.coding } },
     scope: i.registry.roundScope(i.round).map(c => c.object),
-    zones: { task: i.workorder.task.length, protect: i.workorder.protect.length, status: i.workorder.status.length, source_blocks: i.workorder.package ? i.workorder.scope?.blocks ?? 0 : i.workorder.source.reduce((n, g) => n + g.blocks.length, 0), anchors: i.workorder.anchors.reduce((n, a) => n + a.anchors.length, 0), ...(i.workorder.scope ? { source_scope: i.workorder.scope.kind, source_chars: i.workorder.scope.source_chars, source_chars_all: i.workorder.scope.source_chars_all, source_blocks_all: i.workorder.scope.blocks_all, ...(i.workorder.scope.segments ? { package: { segments: i.workorder.scope.segments, heads: i.workorder.scope.heads ?? [], edges: i.workorder.scope.edges ?? { to_block: 0, to_object: 0 }, sizes: i.workorder.scope.sizes ?? {}, guards: i.workorder.scope.guards ?? 0, overflow: i.workorder.scope.overflow ?? null } } : {}) } : {}) },
+    zones: { task: i.workorder.task.length, protect: i.workorder.protect.length, status: i.workorder.status.length, source_blocks: i.workorder.package ? i.workorder.scope?.blocks ?? 0 : i.workorder.source.reduce((n, g) => n + g.blocks.length, 0), anchors: i.workorder.anchors.reduce((n, a) => n + a.anchors.length, 0), ...(i.workorder.scope ? { source_scope: i.workorder.scope.kind, source_chars: i.workorder.scope.source_chars, source_chars_all: i.workorder.scope.source_chars_all, source_blocks_all: i.workorder.scope.blocks_all, ...(i.workorder.scope.segments ? { package: { segments: i.workorder.scope.segments, heads: i.workorder.scope.heads ?? [], edges: i.workorder.scope.edges ?? { to_block: 0, to_object: 0 }, sizes: i.workorder.scope.sizes ?? {}, guards: i.workorder.scope.guards ?? 0, overflow: i.workorder.scope.overflow ?? null, utilization: packageUse(i.registry, i.workorder.scope.segments, (e.review_items ?? []).filter(x => x.round === i.round)) } } : {}) } : {}) },
     revisions: revisionRecall(i.registry, i.round),
     ...(i.gold ? { gold: { task: i.gold.task, revision: goldRevisionRecall(i.registry, i.round, i.gold), relation: relationRecall(i.registry, i.round, i.gold) } } : {}),
     execution: {
@@ -394,6 +394,7 @@ export function renderReport(r: RoundReport): string {
     ...(v ? [`- Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}; flips on changed text ${v.guards.flipped_changed_text.length}${ids(v.guards.flipped_changed_text)}, on unchanged text ${v.guards.flipped_unchanged.length}${ids(v.guards.flipped_unchanged)}; retired as superseded ${v.guards.retired.length}${ids(v.guards.retired.map(x => x.id))}; repairs reverted ${v.reverted}.`] : []),
     ...(v?.guards.flips?.length ? [renderFlips(v.guards.flips)] : []),
     ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters${r.zones.package ? ` in ${r.zones.package.segments.length} paragraphs of ${new Set(r.zones.package.segments.map(x => x.object)).size} objects (${segmentCounts(r.zones.package)}), ${r.zones.package.heads.length} object heads; this round's edges to a block ${r.zones.package.edges.to_block}, to an object ${r.zones.package.edges.to_object}; ${r.zones.package.guards} comparisons (guards on revised units)${r.zones.package.overflow ? `; over the budget of ${r.zones.package.overflow.limit} (${r.zones.package.overflow.chars}): dropped ${r.zones.package.overflow.dropped.length} paragraphs${r.zones.package.overflow.still_over ? ", still over" : ""}` : ""}` : ` in ${r.zones.source_blocks} blocks`} (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all} blocks)${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions${v.leads.dropped ? `, ${v.leads.dropped} leads past the cap of 20` : ""}` : ""}.`] : []),
+    ...(r.zones.package?.utilization ? [renderUse(r.zones.package.utilization)] : []),
     r.gold ? renderRecall(`Revision recall (gold set ${r.gold.task})`, r.gold.revision) : "- Revision recall: no gold set for this task.",
     r.gold ? renderRecall(`Relation recall (gold set ${r.gold.task})`, r.gold.relation) : "- Relation recall: no gold set for this task.",
     "",
@@ -403,4 +404,26 @@ export function renderReport(r: RoundReport): string {
   return lines.join("\n")
 }
 
+/** How much of the package the round's findings used (§6c revision item 6). */
+export interface PackageUse { objects: { cited: string[]; in_package: number; total: number; missing: string[] }; paragraphs: { cited: number; total: number } }
+
+/**
+ * The package's utilization (§6c revision item 6; the design session's Q3): the review items of the round, all its
+ * reviews, that went to a repair list (disposition "sent"); the objects their units belong to, and the package's
+ * paragraphs a unit is in or holds; over the package's objects and paragraphs. The executor's changes are not counted.
+ */
+export function packageUse(registry: Registry, segments: readonly { object: string; paragraph: string }[], items: readonly { disposition?: string; units: readonly string[] }[]): PackageUse {
+  const sent = items.filter(x => x.disposition === "sent")
+  const owner = (u: string) => { const o = registry.coverOf(u)?.owner; return o && o !== "none" ? o : null }
+  const overlaps = (a: string, b: string) => registry.lineage(a).some(x => x.id === b) || registry.lineage(b).some(x => x.id === a)
+  const cited = [...new Set(sent.flatMap(x => x.units.map(owner)).filter((o): o is string => !!o))]
+  const objects = new Set(segments.map(x => x.object))
+  return { objects: { cited, in_package: cited.filter(o => objects.has(o)).length, total: objects.size, missing: cited.filter(o => !objects.has(o)) }, paragraphs: { cited: segments.filter(sg => sent.some(x => x.units.some(u => registry.block(u) && overlaps(u, sg.paragraph)))).length, total: segments.length } }
+}
+
 const segmentCounts = (p: { segments: readonly { why: string }[]; sizes: Record<string, number> }) => ["this round", "revised", "edge", "open item"].map(w => `${w} ${p.segments.filter(x => x.why === w).length} (${p.sizes[w] ?? 0} characters)`).join(", ")
+
+const pct = (a: number, b: number) => b ? `${Math.round(100 * a / b)}%` : "—"
+function renderUse(u: PackageUse): string {
+  return `- Package use (review items sent to a repair list): objects ${u.objects.in_package}/${u.objects.total} (${pct(u.objects.in_package, u.objects.total)}), paragraphs ${u.paragraphs.cited}/${u.paragraphs.total} (${pct(u.paragraphs.cited, u.paragraphs.total)}); cited objects in the package ${u.objects.in_package}/${u.objects.cited.length}${u.objects.missing.length ? ` (not in it: ${u.objects.missing.join(", ")})` : ""}.`
+}

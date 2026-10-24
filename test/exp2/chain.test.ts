@@ -9,7 +9,7 @@ import type { CheckRecord } from "../../src/exp2/checks.js"
 import { GOLD_DIR, loadGold, locate, relationRecall, revisionRecall } from "../../src/exp2/gold.js"
 import type { GuardRecord } from "../../src/exp2/guards.js"
 import type { Registry } from "../../src/exp2/registry.js"
-import { renderReport, type RoundReport } from "../../src/exp2/report.js"
+import { packageUse, renderReport, type RoundReport } from "../../src/exp2/report.js"
 import { reviewRequestOn } from "../../src/exp2/review.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import type { CheckRun } from "../../src/exp2/verdict.js"
@@ -126,6 +126,19 @@ describe("the chain block, the round's package and its limit (§6c, round packag
     assert.deepEqual(g.pkg.segments.map(s => s.paragraph), ["P1", "P2", "P7"], "edges, then open items")
     assert.equal(g.overflow!.still_over, true, "this round's paragraphs are never cut")
     assert.equal(fitPackage(pkg([seg("P1", "this round", 10)])).overflow, null)
+  })
+
+  it("the package's use (§6c revision item 6): the items sent to a repair list, by the objects and the package's paragraphs their units are in", () => {
+    const reg = store.registry()
+    const pkg = roundPackage(reg, 3)
+    const p = pkg.segments[0], other = pkg.segments.find(x => x.object !== p.object)!
+    const unit = reg.block(p.paragraph)!.children[0] ?? p.paragraph
+    const use = packageUse(reg, pkg.segments, [{ disposition: "sent", units: [unit] }, { disposition: "blocked", units: [other.paragraph] }, { disposition: "sent", units: ["R1.S3.P9.s2"] }])
+    const sortOwner = reg.coverOf("R1.S3.P9.s2")!.owner
+    assert.deepEqual(use.objects.cited.sort(), [p.object, sortOwner].sort())
+    assert.equal(use.paragraphs.cited, 1, "only the sent item in a package paragraph counts")
+    assert.equal(use.objects.total, new Set(pkg.segments.map(x => x.object)).size)
+    assert.deepEqual(use.objects.missing, pkg.segments.some(x => x.object === sortOwner) ? [] : [sortOwner])
   })
 
   it("the review request (§6c, review request): the package's views as the requirements, this round's unit ids, no quoted old text, no guard list", () => {
