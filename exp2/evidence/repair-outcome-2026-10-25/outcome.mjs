@@ -18,6 +18,12 @@
 //   stem, an object whose name ends in "operation" or "command" names its dispatch even when the program has none:
 //   no anchor of that name before or after the cycle means the command was not written, and the item is untouched
 //   (counted as absent within untouched). Any other name without a linked anchor stays unmapped.
+// - The output rule (DESIGN-DEEP §4, revised in f82c288), beside the anchor mappings: fixed when the cycle sights the
+//   item as pass; else untouched when the check's output digest on the cycle (`items[].digest`: outcome, exit code,
+//   each assertion's actual value, the failure class and reason; the digest the stop rule compares) equals the digest it
+//   was sent at (the sighting that sent it, or `carried_in` for the work message); else touched. No sighting on a
+//   cycle that built: unseen.
+// - A cycle whose program did not build ran no check: every send into it is build_failed under every rule.
 // - An item sent without a check (verdict unverified, sent in the reviewer's words) has no check that could pass: it is
 //   counted apart as no_check.
 // - Stopped for no progress: a sighting in the round with action hold and a reason naming no progress.
@@ -37,7 +43,7 @@ const extractor = new GoAnchorExtractor()
 
 const [OUT, ...runs] = process.argv.slice(2)
 mkdirSync(OUT, { recursive: true })
-const MAPPINGS = ["strict", "stem"]
+const MAPPINGS = ["strict", "stem"], RULES = [...MAPPINGS, "output"]
 const NAMES_DISPATCH = /\s+(operation|command)$/iu
 const stem = n => n.toLowerCase().replace(NAMES_DISPATCH, "")
 const rows = [], events = []
@@ -74,11 +80,14 @@ for (const dir of runs) {
       for (const id of into) {
         const it = items.get(id), seen = (c.items ?? []).find(i => i.id === id)
         const object = it?.check?.object ?? null
+        const sentAt = k === 0 ? (e.carried_in ?? []).find(x => x.id === id)?.digest : (cycles[k - 1].items ?? []).find(i => i.id === id)?.digest
         const ev = { run, round: e.round, id, cycle: c.id, size: into.length, reverted: !!c.reverted, verdict: seen?.verdict ?? null }
+        const broken = c.build?.ok === false
+        ev.output = broken ? "build_failed" : !it?.check ? "no_check" : seen?.verdict === "pass" ? "fixed" : !seen ? "unseen" : seen.digest === sentAt ? "untouched" : "touched"
         for (const m of MAPPINGS) {
           const anchors = object ? [...new Set([...linked(m, before, object, e.round), ...linked(m, after, object, e.round)])] : []
           const absent = !anchors.length && m === "stem" && NAMES_DISPATCH.test(reg.objects.get(object)?.name ?? "")
-          ev[m] = !it?.check ? "no_check" : seen?.verdict === "pass" ? "fixed" : absent ? "untouched" : !anchors.length ? "unmapped" : c.anchors.some(a => anchors.includes(a)) ? "touched" : "untouched"
+          ev[m] = broken ? "build_failed" : !it?.check ? "no_check" : seen?.verdict === "pass" ? "fixed" : absent ? "untouched" : !anchors.length ? "unmapped" : c.anchors.some(a => anchors.includes(a)) ? "touched" : "untouched"
           if (ev[m] === "untouched" && absent) ev[`${m}_absent`] = true
         }
         events.push(ev)
@@ -89,7 +98,7 @@ for (const dir of runs) {
       const it = items.get(id), object = it?.check?.object ?? null
       const held = cycles.flatMap(c => c.items ?? []).some(i => i.id === id && i.action === "hold" && /no progress/u.test(i.why ?? ""))
       const row = { run, round: e.round, id, object, object_name: object ? reg.objects.get(object)?.name ?? null : null, first_sent_into: evs[0].cycle, stopped_no_progress: held, carried_next: carriedOut.has(id), carried_in: (e.carried_in ?? []).some(x => x.id === id) }
-      for (const m of MAPPINGS) { row[`${m}_sequence`] = evs.map(v => `${v.cycle}:${v[m]}${v[`${m}_absent`] ? "(absent)" : ""}${v.reverted ? "(reverted)" : ""}`); row[`${m}_end`] = evs.at(-1)[m]; row[`${m}_absent`] = !!evs.at(-1)[`${m}_absent`] }
+      for (const m of RULES) { row[`${m}_sequence`] = evs.map(v => `${v.cycle}:${v[m]}${v[`${m}_absent`] ? "(absent)" : ""}${v.reverted ? "(reverted)" : ""}`); row[`${m}_end`] = evs.at(-1)[m]; row[`${m}_absent`] = !!evs.at(-1)[`${m}_absent`] }
       rows.push(row)
     }
   }
@@ -98,15 +107,15 @@ for (const dir of runs) {
 
 const pct = (a, b) => b ? `${Math.round(100 * a / b)}%` : "—"
 const lines = ["# Repair outcomes (DESIGN-DEEP §4.1)", "", "Rules in outcome.mjs's header. Items sent in a round (carried-in items count in the round they were carried into); outcome at the last cycle of the round the item went into. Percentages of all items sent."]
-for (const m of MAPPINGS) {
+for (const m of RULES) {
   const end = r => r[`${m}_end`]
-  lines.push("", `## Mapping: ${m}`, "", "| run | round | sent | fixed | touched | untouched | no check | unmapped | untouched stopped for no progress |", "|---|---|---|---|---|---|---|---|---|")
+  lines.push("", `## ${m === "output" ? "Rule: output (unseen in the unmapped column)" : `Mapping: ${m}`}`, "", "| run | round | sent | fixed | touched | untouched | no check | unmapped | build failed | untouched stopped for no progress |", "|---|---|---|---|---|---|---|---|---|---|")
   const key = r => `${r.run} R${r.round}`
-  const line = (label, round, g) => { const n = g.length, c = o => g.filter(r => end(r) === o).length; return `| ${label} | ${round} | ${n} | ${c("fixed")} (${pct(c("fixed"), n)}) | ${c("touched")} (${pct(c("touched"), n)}) | ${c("untouched")} (${pct(c("untouched"), n)}) | ${c("no_check")} | ${c("unmapped")} | ${g.filter(r => end(r) === "untouched" && r.stopped_no_progress).length} |` }
+  const line = (label, round, g) => { const n = g.length, c = o => g.filter(r => end(r) === o || (o === "unmapped" && end(r) === "unseen")).length; return `| ${label} | ${round} | ${n} | ${c("fixed")} (${pct(c("fixed"), n)}) | ${c("touched")} (${pct(c("touched"), n)}) | ${c("untouched")} (${pct(c("untouched"), n)}) | ${c("no_check")} | ${c("unmapped")} | ${c("build_failed")} | ${g.filter(r => end(r) === "untouched" && r.stopped_no_progress).length} |` }
   for (const k of [...new Set(rows.map(key))]) { const g = rows.filter(r => key(r) === k); lines.push(line(g[0].run, g[0].round, g)) }
   lines.push(line("all", "—", rows))
   const c = o => rows.filter(r => end(r) === o).length, judged = c("fixed") + c("touched") + c("untouched")
-  lines.push("", `Of the ${judged} items with a check and a mapped command: fixed ${pct(c("fixed"), judged)}, touched ${pct(c("touched"), judged)}, untouched ${pct(c("untouched"), judged)} (of which the command was not in the program at all: ${rows.filter(r => end(r) === "untouched" && r[`${m}_absent`]).length}).`)
+  lines.push("", `Of the ${judged} items judged (a check, ${m === "output" ? "a sighting" : "a mapped command"}, a program that built): fixed ${pct(c("fixed"), judged)}, touched ${pct(c("touched"), judged)}, untouched ${pct(c("untouched"), judged)} ${m === "stem" ? ` (of which the command was not in the program at all: ${rows.filter(r => end(r) === "untouched" && r[`${m}_absent`]).length})` : ""}.`)
   lines.push("", `By the size of the message that sent the item (every send, outcome at the cycle it went into), mapping ${m}:`, "", "| items in the message | sends | fixed | touched | untouched | untouched of judged | no check / unmapped |", "|---|---|---|---|---|---|---|")
   for (const [name, lo, hi] of [["1–5", 1, 5], ["6–10", 6, 10], ["11+", 11, Infinity]]) {
     const g = events.filter(v => v.size >= lo && v.size <= hi), k = o => g.filter(v => v[m] === o).length, j = k("fixed") + k("touched") + k("untouched")
@@ -116,8 +125,26 @@ for (const m of MAPPINGS) {
   for (const r of un) byObj[r.object_name ?? r.object ?? "none"] = (byObj[r.object_name ?? r.object ?? "none"] ?? 0) + 1
   lines.push("", `Unmapped under ${m}: ${un.length} (by object: ${Object.entries(byObj).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(", ")})`)
 }
-lines.push("", "## Items", "", "| run | round | item | object | first sent into | outcomes by cycle (stem) | end (stem) | end (strict) | stopped (no progress) | carried into next round |", "|---|---|---|---|---|---|---|---|---|---|",
-  ...rows.map(r => `| ${r.run} | ${r.round} | ${r.id}${r.carried_in ? " (carried in)" : ""} | ${r.object_name ?? "—"} | ${r.first_sent_into} | ${r.stem_sequence.join(" ")} | ${r.stem_end} | ${r.strict_end} | ${r.stopped_no_progress ? "yes" : ""} | ${r.carried_next ? "yes" : ""} |`))
+// Output rule against stem, item by item (round end) and send by send; no_check apart (no output to compare).
+{
+  const OUT_KINDS = ["fixed", "touched", "untouched", "unseen", "build_failed"], STEM_KINDS = ["fixed", "touched", "untouched", "unmapped", "build_failed"]
+  const cmp = (list, a, b) => {
+    const g = list.filter(x => x[a] !== "no_check" && x[a] !== "build_failed"), same = g.filter(x => x[a] === x[b]).length
+    const t = ["| output (rows) / stem (columns) | " + STEM_KINDS.join(" | ") + " |", "|---|" + STEM_KINDS.map(() => "---").join("|") + "|"]
+    for (const o of OUT_KINDS) t.push(`| ${o} | ${STEM_KINDS.map(k => g.filter(x => x[a] === o && x[b] === k).length).join(" | ")} |`)
+    return { g, same, t }
+  }
+  const ends = cmp(rows, "output_end", "stem_end"), sends = cmp(events, "output", "stem")
+  const mappedEnds = ends.g.filter(r => r.stem_end !== "unmapped" && r.output_end !== "unseen"), mappedSame = mappedEnds.filter(r => r.output_end === r.stem_end).length
+  lines.push("", "## Output rule against stem", "", `No check (sent in the reviewer's words, no output to compare): ${rows.filter(r => r.output_end === "no_check").length} items; build failed at round end: ${rows.filter(r => r.output_end === "build_failed").length}; both apart.`, "",
+    `At round end: ${ends.same} of ${ends.g.length} agree (${pct(ends.same, ends.g.length)}); of the ${mappedEnds.length} that both rules judge (stem mapped, output sighted), ${mappedSame} agree (${pct(mappedSame, mappedEnds.length)}).`, "", ...ends.t, "",
+    `Send by send: ${sends.same} of ${sends.g.length} agree (${pct(sends.same, sends.g.length)}).`, "", ...sends.t, "",
+    "Disagreements at round end where both rules judge:", "", "| run | round | item | object | output | stem | stem by cycle | output by cycle |", "|---|---|---|---|---|---|---|---|",
+    ...mappedEnds.filter(r => r.output_end !== r.stem_end).map(r => `| ${r.run} | ${r.round} | ${r.id} | ${r.object_name ?? "—"} | ${r.output_end} | ${r.stem_end}${r.stem_absent ? " (absent)" : ""} | ${r.stem_sequence.join(" ")} | ${r.output_sequence.join(" ")} |`),
+    "", "Stem unmapped, by the output rule: " + ["fixed", "touched", "untouched", "unseen"].map(o => `${o} ${ends.g.filter(r => r.stem_end === "unmapped" && r.output_end === o).length}`).join(", "))
+}
+lines.push("", "## Items", "", "| run | round | item | object | first sent into | outcomes by cycle (stem) | end (stem) | end (strict) | end (output) | stopped (no progress) | carried into next round |", "|---|---|---|---|---|---|---|---|---|---|---|",
+  ...rows.map(r => `| ${r.run} | ${r.round} | ${r.id}${r.carried_in ? " (carried in)" : ""} | ${r.object_name ?? "—"} | ${r.first_sent_into} | ${r.stem_sequence.join(" ")} | ${r.stem_end} | ${r.strict_end} | ${r.output_end} | ${r.stopped_no_progress ? "yes" : ""} | ${r.carried_next ? "yes" : ""} |`))
 writeFileSync(join(OUT, "outcome.md"), lines.join("\n") + "\n", "utf8")
 writeFileSync(join(OUT, "outcome.json"), JSON.stringify({ items: rows, sends: events }, null, 1) + "\n", "utf8")
 console.log(lines.slice(0, lines.indexOf("## Items")).join("\n"))

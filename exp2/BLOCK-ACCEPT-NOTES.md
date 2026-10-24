@@ -1745,18 +1745,34 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - strict：按 nameLinks 原样；
 - stem：把对象名末尾的 "operation" / "command" 去掉再比。对这类名字的对象，前后两个提交里都没有同名派发，说明命令根本没写，算 untouched，并单独计数（absent）；其他名字（"Transformation""Ingestion""window transformation"……）映射不到的仍算 unmapped。
 
-**结果（stem 映射；strict 的表在 outcome.md）**：
+**结果（stem 映射；strict 的表在 outcome.md）**。§28 起，程序没构建成功的周期单列 build_failed（rep1j C5.1、rep1k C5.1：没有程序，检查没跑，锚点口径在这里判的 touched/untouched 没有意义），下表已按此改过：
 
-| 运行 | 送出条目（轮次合计）| fixed | touched | untouched | no check | unmapped | untouched 中被停送 |
-|---|---|---|---|---|---|---|---|
-| rep1j R1–R6 | 90 | 40 | 3 | 7 | 3 | 37 | 4 |
-| rep1k R1–R6 | 121 | 49 | 16 | 40 | 8 | 8 | 40 |
-| rep1l R1–R2 | 50 | 18 | 4 | 24 | 4 | 0 | 22 |
-| rep1m R1–R2 | 49 | 21 | 0 | 10 | 5 | 13 | 8 |
-| 合计 | 310 | 128（41%）| 23（7%）| 81（26%）| 20 | 58 | 74 |
+| 运行 | 送出条目（轮次合计）| fixed | touched | untouched | no check | unmapped | build failed | untouched 中被停送 |
+|---|---|---|---|---|---|---|---|---|
+| rep1j R1–R6 | 90 | 40 | 2 | 7 | 3 | 34 | 4 | 4 |
+| rep1k R1–R6 | 121 | 49 | 10 | 36 | 8 | 7 | 11 | 36 |
+| rep1l R1–R2 | 50 | 18 | 4 | 24 | 4 | 0 | 0 | 22 |
+| rep1m R1–R2 | 49 | 21 | 0 | 10 | 5 | 13 | 0 | 8 |
+| 合计 | 310 | 128（41%）| 16（5%）| 77（25%）| 20 | 54 | 15 | 70 |
 
-- 去掉 no_check 和 unmapped 后有结局的 232 条：fixed 55%、touched 10%、untouched 35%。§4.3 定的线是 untouched ≤ 10%、fixed ≥ 70%，这就是基线。
-- untouched 的 81 条里 74 条被"无进展"停送，48 条带进了下一轮。命令根本没写（absent）的 4 条：rep1l R2 的 normalize、encode、rollup、detect。
-- 所有被停送的 141 条按轮末结局分：untouched 74、unmapped 41、touched 21、no_check 4、fixed 1。也就是说，停送规则停下的条目里，碰过的（touched）只占约六分之一。
-- 按送出它的那条消息有几条条目分组（每次送出各算一次）：1–5 条 68 次，untouched 占有结局的 43%；6–10 条 193 次，38%；11 条以上 109 次，33%。**在这四次运行里，消息越大，untouched 的比例并没有更高。** 大消息里 touched 多（27 次，对 1–5 条的 3 次）。这和设计稿"大消息里 untouched 多"的观察对不上，至少在这个口径下对不上。
-- 每轮的数字见 outcome.md。rep1k R3、R4 的 untouched 最多（10/16、12/20），而且全部被停送。
+- 有结局的 221 条（有检查、映射得到、程序构建成功）：fixed 58%、touched 7%、untouched 35%。§4.3 的线是 untouched ≤ 10%、fixed ≥ 70%。
+- untouched 77 条里 70 条被"无进展"停送。命令根本没写（absent）的 4 条：rep1l R2 的 normalize、encode、rollup、detect。
+- 按送出它的消息里有几条条目分组：1–5 条 68 次，untouched 占有结局的 43%；6–10 条 193 次，38%；11 条以上 109 次，32%。消息越大，untouched 的比例并没有更高（设计会话据此撤回了消息条目上限）。
+
+## 28. 输出口径与 stem 口径逐条对照（DESIGN-DEEP §4 改版 f82c288）
+
+**做法**：同一脚本（`outcome.mjs`）加了第三种判法 output：周期上该条目 verdict=pass → fixed；否则该周期检查输出的摘要等于送出时的摘要 → untouched；否则 touched。摘要用的是条目记录里的 `digest`，也就是停送规则比较的那个：结局、退出码、每条断言的实际值、失败类别和原因。没有检查的 20 条（按审查员原话发出）没有输出可比，单列；程序没构建成功的周期单列 build_failed（rep1j C5.1、rep1k C5.1，15 条）。对照表和不一致清单在 outcome.md 的"Output rule against stem"一节。
+
+**输出口径的结果**：310 条里 fixed 128、touched 6、untouched 141、no_check 20、build_failed 15。有结局的 275 条：fixed 47%、touched 2%、untouched 51%。untouched 中被停送 120 条。按消息大小：1–5 条 47%，6–10 条 43%，11 条以上 53%。
+
+**一致率**：
+- 轮末两种口径都能判的 221 条（stem 映射得到、输出有记录）：202 条一致（91%）。fixed 两边完全一样（128 条）。
+- 逐次送出比（334 次，不含 no_check、build_failed）：225 次一致（67%）。stem 判 unmapped 的也算进分母，所以比轮末低。
+- stem 映射不到的 54 条，输出口径判 untouched 53、touched 1。
+- 命令根本没写的 4 条（absent），输出口径也都是 untouched：输出每次都是同一个错误，和设计会话的预期一致。
+
+**轮末不一致的 19 条，分两类**：
+1. stem 判 touched、输出判 untouched（15 条）：命令的派发代码在 diff 里变了，但这条检查的输出逐字没变。其中 rep1k R6 的 7 条都在 C6.1（本轮第一次交付，一次改了很多派发）；rep1j R1 的 V1.1.9、V1.3.7 判在被回退的周期上；另外 6 条是 rep1k R1/R2 的 window、bin，rep1l R2 的 pivot、pipeline、compare。
+2. stem 判 untouched、输出判 touched（4 条）：派发代码没变，但输出变了，靠的是共用函数的改动。分别是 rep1l R1 V1.3.3 pipeline、rep1l R2 V2.3.2 compare、rep1m R2 V2.3.6 和 V2.3.7 profile。
+
+**两种口径在说什么**：stem 看的是"执行方改没改这个命令的代码"，输出看的是"改动有没有让这条检查的输出变"。第 1 类是改了但没起作用，按输出口径算 untouched，停送规则也是这么停的。第 2 类是共用代码的改动带动了输出，锚点名映射看不到。输出口径不需要名字映射，unmapped 为 0。

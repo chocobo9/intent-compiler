@@ -23,7 +23,14 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:untouched(reverted)",
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -48,7 +55,14 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:untouched(reverted)",
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -69,7 +83,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -90,7 +109,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -111,7 +135,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -132,7 +161,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -153,7 +187,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -174,7 +213,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -199,7 +243,14 @@
     "C1.4:touched(reverted)"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:untouched(reverted)",
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -222,7 +273,13 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched(reverted)",
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -245,7 +302,13 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched(reverted)",
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -268,7 +331,13 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched(reverted)",
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -291,7 +360,13 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched(reverted)",
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -312,7 +387,12 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -333,7 +413,12 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -354,7 +439,12 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -375,7 +465,12 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -396,7 +491,12 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -417,7 +517,12 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -438,7 +543,12 @@
     "C1.4:touched(reverted)"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -459,7 +569,12 @@
     "C1.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -482,7 +597,13 @@
     "C2.4:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched",
+    "C2.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -505,7 +626,13 @@
     "C2.2:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:touched",
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -526,7 +653,12 @@
     "C2.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -549,7 +681,13 @@
     "C2.2:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:touched",
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -570,7 +708,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -591,7 +734,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -612,7 +760,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -633,7 +786,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -654,7 +812,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -675,7 +838,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -696,7 +864,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -717,7 +890,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -738,7 +916,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -761,7 +944,13 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -782,7 +971,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -805,7 +999,13 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -826,7 +1026,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -847,7 +1052,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -868,7 +1078,12 @@
     "C2.3:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -889,7 +1104,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -910,7 +1130,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -933,7 +1158,13 @@
     "C2.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:touched",
+    "C2.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -954,7 +1185,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -977,7 +1213,13 @@
     "C2.4:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:touched",
+    "C2.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -998,7 +1240,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1019,7 +1266,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1040,7 +1292,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1061,7 +1318,12 @@
     "C3.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1082,7 +1344,12 @@
     "C3.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1103,7 +1370,12 @@
     "C3.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1124,7 +1396,12 @@
     "C3.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1145,7 +1422,12 @@
     "C3.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1166,7 +1448,12 @@
     "C3.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1187,7 +1474,12 @@
     "C3.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1208,7 +1500,12 @@
     "C3.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1229,7 +1526,12 @@
     "C3.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1250,7 +1552,12 @@
     "C3.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1271,7 +1578,12 @@
     "C3.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1292,7 +1604,12 @@
     "C4.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1313,7 +1630,12 @@
     "C4.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1334,7 +1656,12 @@
     "C4.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1357,7 +1684,13 @@
     "C4.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.2:touched",
+    "C4.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1378,7 +1711,12 @@
     "C4.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1399,7 +1737,12 @@
     "C4.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1420,7 +1763,12 @@
     "C4.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1433,15 +1781,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1454,15 +1807,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1475,15 +1833,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1496,15 +1859,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:touched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "touched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1527,7 +1895,13 @@
     "C5.4:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.3:untouched(reverted)",
+    "C5.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1550,7 +1924,13 @@
     "C5.4:untouched(reverted)"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.3:untouched(reverted)",
+    "C5.4:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1573,7 +1953,13 @@
     "C5.5:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.4:untouched(reverted)",
+    "C5.5:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1596,7 +1982,13 @@
     "C5.5:untouched(reverted)"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.4:untouched(reverted)",
+    "C5.5:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1617,7 +2009,12 @@
     "C5.5:unmapped(reverted)"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.5:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1638,7 +2035,12 @@
     "C5.5:untouched(reverted)"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.5:untouched(reverted)"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1659,7 +2061,12 @@
     "C6.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1680,7 +2087,12 @@
     "C6.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1701,7 +2113,12 @@
     "C6.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1722,7 +2139,12 @@
     "C6.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1743,7 +2165,12 @@
     "C6.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1764,7 +2191,12 @@
     "C6.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1785,7 +2217,12 @@
     "C6.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1806,7 +2243,12 @@
     "C6.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1827,7 +2269,12 @@
     "C6.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1848,7 +2295,12 @@
     "C6.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1869,7 +2321,12 @@
     "C6.2:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1892,7 +2349,13 @@
     "C6.3:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:touched",
+    "C6.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1913,7 +2376,12 @@
     "C6.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1j",
@@ -1934,7 +2402,12 @@
     "C6.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -1955,7 +2428,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -1978,7 +2456,13 @@
     "C1.3:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2001,7 +2485,13 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2024,7 +2514,13 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2047,7 +2543,13 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2070,7 +2572,13 @@
     "C1.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:untouched",
+    "C1.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2091,7 +2599,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2112,7 +2625,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2135,7 +2653,13 @@
     "C1.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2156,7 +2680,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2181,7 +2710,14 @@
     "C1.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:touched",
+    "C1.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2204,7 +2740,13 @@
     "C1.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2225,7 +2767,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2248,7 +2795,13 @@
     "C1.4:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:touched",
+    "C1.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2269,7 +2822,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2290,7 +2848,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2311,7 +2874,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2332,7 +2900,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2353,7 +2926,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2374,7 +2952,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2395,7 +2978,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2416,7 +3004,12 @@
     "C1.4:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2437,7 +3030,12 @@
     "C1.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2458,7 +3056,12 @@
     "C1.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2479,7 +3082,12 @@
     "C1.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2500,7 +3108,12 @@
     "C1.4:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2521,7 +3134,12 @@
     "C2.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2542,7 +3160,12 @@
     "C2.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2563,7 +3186,12 @@
     "C2.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2584,7 +3212,12 @@
     "C2.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2605,7 +3238,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2626,7 +3264,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2649,7 +3292,13 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2670,7 +3319,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2691,7 +3345,12 @@
     "C2.2:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2714,7 +3373,13 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2735,7 +3400,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2756,7 +3426,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2779,7 +3454,13 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2802,7 +3483,13 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2825,7 +3512,13 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2846,7 +3539,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2867,7 +3565,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2888,7 +3591,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2909,7 +3617,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2930,7 +3643,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2951,7 +3669,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2972,7 +3695,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -2993,7 +3721,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3014,7 +3747,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3035,7 +3773,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3056,7 +3799,12 @@
     "C3.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3077,7 +3825,12 @@
     "C3.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3098,7 +3851,12 @@
     "C3.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3119,7 +3877,12 @@
     "C3.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3142,7 +3905,13 @@
     "C3.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched",
+    "C3.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3163,7 +3932,12 @@
     "C3.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3184,7 +3958,12 @@
     "C3.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3205,7 +3984,12 @@
     "C3.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3228,7 +4012,13 @@
     "C3.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.2:touched",
+    "C3.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3249,7 +4039,12 @@
     "C3.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3270,7 +4065,12 @@
     "C3.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3291,7 +4091,12 @@
     "C3.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3314,7 +4119,13 @@
     "C3.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.2:touched",
+    "C3.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3335,7 +4146,12 @@
     "C3.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3356,7 +4172,12 @@
     "C3.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3377,7 +4198,12 @@
     "C3.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C3.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3398,7 +4224,12 @@
     "C4.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3419,7 +4250,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3440,7 +4276,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3461,7 +4302,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3482,7 +4328,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3503,7 +4354,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3524,7 +4380,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3545,7 +4406,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3566,7 +4432,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3587,7 +4458,12 @@
     "C4.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3610,7 +4486,13 @@
     "C4.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.2:touched",
+    "C4.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3631,7 +4513,12 @@
     "C4.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3652,7 +4539,12 @@
     "C4.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3673,7 +4565,12 @@
     "C4.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3694,7 +4591,12 @@
     "C4.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3717,7 +4619,13 @@
     "C4.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.2:touched",
+    "C4.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3738,7 +4646,12 @@
     "C4.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3759,7 +4672,12 @@
     "C4.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3780,7 +4698,12 @@
     "C4.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3801,7 +4724,12 @@
     "C4.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C4.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3814,15 +4742,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3835,19 +4768,26 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped",
+    "C5.1:build_failed",
     "C5.3:unmapped",
     "C5.4:unmapped"
    ],
    "strict_end": "unmapped",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:touched",
+    "C5.1:build_failed",
     "C5.3:touched",
     "C5.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed",
+    "C5.3:touched",
+    "C5.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3860,15 +4800,20 @@
    "carried_next": false,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:untouched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "untouched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3881,15 +4826,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:untouched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "untouched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3902,15 +4852,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:touched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "touched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3923,15 +4878,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:touched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "touched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3944,15 +4904,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:touched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "touched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3965,15 +4930,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:untouched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "untouched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -3986,15 +4956,20 @@
    "carried_next": false,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:untouched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "untouched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4007,15 +4982,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:touched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "touched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4028,15 +5008,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:touched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "touched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4049,15 +5034,20 @@
    "carried_next": true,
    "carried_in": true,
    "strict_sequence": [
-    "C5.1:unmapped"
+    "C5.1:build_failed"
    ],
-   "strict_end": "unmapped",
+   "strict_end": "build_failed",
    "strict_absent": false,
    "stem_sequence": [
-    "C5.1:touched"
+    "C5.1:build_failed"
    ],
-   "stem_end": "touched",
-   "stem_absent": false
+   "stem_end": "build_failed",
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.1:build_failed"
+   ],
+   "output_end": "build_failed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4078,7 +5068,12 @@
     "C5.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4099,7 +5094,12 @@
     "C5.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C5.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4120,7 +5120,12 @@
     "C6.1:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4141,7 +5146,12 @@
     "C6.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4162,7 +5172,12 @@
     "C6.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4183,7 +5198,12 @@
     "C6.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4204,7 +5224,12 @@
     "C6.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4225,7 +5250,12 @@
     "C6.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4246,7 +5276,12 @@
     "C6.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4267,7 +5302,12 @@
     "C6.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4288,7 +5328,12 @@
     "C6.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4309,7 +5354,12 @@
     "C6.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4330,7 +5380,12 @@
     "C6.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4351,7 +5406,12 @@
     "C6.2:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4372,7 +5432,12 @@
     "C6.2:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4393,7 +5458,12 @@
     "C6.2:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4414,7 +5484,12 @@
     "C6.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4435,7 +5510,12 @@
     "C6.2:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4456,7 +5536,12 @@
     "C6.2:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.2:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4477,7 +5562,12 @@
     "C6.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4498,7 +5588,12 @@
     "C6.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1k",
@@ -4519,7 +5614,12 @@
     "C6.4:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C6.4:touched"
+   ],
+   "output_end": "touched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4540,7 +5640,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4561,7 +5666,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4582,7 +5692,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4603,7 +5718,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4624,7 +5744,12 @@
     "C1.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4645,7 +5770,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4666,7 +5796,12 @@
     "C1.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4687,7 +5822,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4708,7 +5848,12 @@
     "C1.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4729,7 +5874,12 @@
     "C1.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4750,7 +5900,12 @@
     "C1.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4771,7 +5926,12 @@
     "C1.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4792,7 +5952,12 @@
     "C1.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4813,7 +5978,12 @@
     "C1.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4834,7 +6004,12 @@
     "C1.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4855,7 +6030,12 @@
     "C1.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4876,7 +6056,12 @@
     "C1.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:touched"
+   ],
+   "output_end": "touched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4897,7 +6082,12 @@
     "C2.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4918,7 +6108,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4941,7 +6136,13 @@
     "C2.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:touched",
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4964,7 +6165,13 @@
     "C2.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:touched",
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -4987,7 +6194,13 @@
     "C2.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:touched",
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5008,7 +6221,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5029,7 +6247,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5050,7 +6273,12 @@
     "C2.1:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5071,7 +6299,12 @@
     "C2.1:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5092,7 +6325,12 @@
     "C2.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5113,7 +6351,12 @@
     "C2.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5134,7 +6377,12 @@
     "C2.2:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5155,7 +6403,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5178,7 +6431,13 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5201,7 +6460,13 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5222,7 +6487,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5243,7 +6513,12 @@
     "C2.2:untouched(absent)"
    ],
    "stem_end": "untouched",
-   "stem_absent": true
+   "stem_absent": true,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5264,7 +6539,12 @@
     "C2.2:untouched(absent)"
    ],
    "stem_end": "untouched",
-   "stem_absent": true
+   "stem_absent": true,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5285,7 +6565,12 @@
     "C2.2:untouched(absent)"
    ],
    "stem_end": "untouched",
-   "stem_absent": true
+   "stem_absent": true,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5306,7 +6591,12 @@
     "C2.2:untouched(absent)"
    ],
    "stem_end": "untouched",
-   "stem_absent": true
+   "stem_absent": true,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5329,7 +6619,13 @@
     "C2.4:touched"
    ],
    "stem_end": "touched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:untouched",
+    "C2.4:touched"
+   ],
+   "output_end": "touched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5352,7 +6648,13 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5373,7 +6675,12 @@
     "C2.2:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5394,7 +6701,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5415,7 +6727,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5438,7 +6755,13 @@
     "C2.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:touched",
+    "C2.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5459,7 +6782,12 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5480,7 +6808,12 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5501,7 +6834,12 @@
     "C2.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5522,7 +6860,12 @@
     "C2.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5543,7 +6886,12 @@
     "C2.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:touched"
+   ],
+   "output_end": "touched",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5564,7 +6912,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1l",
@@ -5585,7 +6938,12 @@
     "C2.4:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5606,7 +6964,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5627,7 +6990,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5650,7 +7018,13 @@
     "C1.3:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5671,7 +7045,12 @@
     "C1.2:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5692,7 +7071,12 @@
     "C1.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5715,7 +7099,13 @@
     "C1.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.2:touched",
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5736,7 +7126,12 @@
     "C1.3:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5757,7 +7152,12 @@
     "C1.3:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5778,7 +7178,12 @@
     "C1.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5799,7 +7204,12 @@
     "C1.3:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5820,7 +7230,12 @@
     "C1.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5841,7 +7256,12 @@
     "C1.4:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5862,7 +7282,12 @@
     "C1.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5883,7 +7308,12 @@
     "C1.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5904,7 +7334,12 @@
     "C1.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5925,7 +7360,12 @@
     "C1.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5946,7 +7386,12 @@
     "C1.4:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C1.4:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5967,7 +7412,12 @@
     "C2.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -5988,7 +7438,12 @@
     "C2.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6009,7 +7464,12 @@
     "C2.1:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6030,7 +7490,12 @@
     "C2.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6051,7 +7516,12 @@
     "C2.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6072,7 +7542,12 @@
     "C2.1:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.1:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6095,7 +7570,13 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6118,7 +7599,13 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6141,7 +7628,13 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:touched",
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6162,7 +7655,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6183,7 +7681,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6204,7 +7707,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6225,7 +7733,12 @@
     "C2.2:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.2:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6246,7 +7759,12 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6267,7 +7785,12 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6288,7 +7811,12 @@
     "C2.3:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6309,7 +7837,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6330,7 +7863,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6353,7 +7891,13 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:touched",
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6374,7 +7918,12 @@
     "C2.3:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6395,7 +7944,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6416,7 +7970,12 @@
     "C2.3:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6437,7 +7996,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6460,7 +8024,13 @@
     "C2.4:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:touched",
+    "C2.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6481,7 +8051,12 @@
     "C2.3:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.3:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6502,7 +8077,12 @@
     "C2.4:no_check"
    ],
    "stem_end": "no_check",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:no_check"
+   ],
+   "output_end": "no_check",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6523,7 +8103,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6544,7 +8129,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6565,7 +8155,12 @@
     "C2.4:fixed"
    ],
    "stem_end": "fixed",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:fixed"
+   ],
+   "output_end": "fixed",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6586,7 +8181,12 @@
     "C2.4:unmapped"
    ],
    "stem_end": "unmapped",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:untouched"
+   ],
+   "output_end": "untouched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6607,7 +8207,12 @@
     "C2.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:touched"
+   ],
+   "output_end": "touched",
+   "output_absent": false
   },
   {
    "run": "rep1m",
@@ -6628,7 +8233,12 @@
     "C2.4:untouched"
    ],
    "stem_end": "untouched",
-   "stem_absent": false
+   "stem_absent": false,
+   "output_sequence": [
+    "C2.4:touched"
+   ],
+   "output_end": "touched",
+   "output_absent": false
   }
  ],
  "sends": [
@@ -6640,6 +8250,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6651,6 +8262,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6662,6 +8274,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -6673,6 +8286,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -6684,6 +8298,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -6695,6 +8310,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -6706,6 +8322,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -6717,6 +8334,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -6728,6 +8346,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "untouched",
    "stem": "untouched"
   },
@@ -6739,6 +8358,7 @@
    "size": 7,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6750,6 +8370,7 @@
    "size": 7,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6761,6 +8382,7 @@
    "size": 7,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "untouched",
    "stem": "untouched"
   },
@@ -6772,6 +8394,7 @@
    "size": 7,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6783,6 +8406,7 @@
    "size": 7,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6794,6 +8418,7 @@
    "size": 7,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6805,6 +8430,7 @@
    "size": 7,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6816,6 +8442,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6827,6 +8454,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6838,6 +8466,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "touched",
    "stem": "touched"
   },
@@ -6849,6 +8478,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6860,6 +8490,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6871,6 +8502,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6882,6 +8514,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6893,6 +8526,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6904,6 +8538,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6915,6 +8550,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6926,6 +8562,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6937,6 +8574,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6948,6 +8586,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6959,6 +8598,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "touched",
    "stem": "touched"
   },
@@ -6970,6 +8610,7 @@
    "size": 15,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6981,6 +8622,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -6992,6 +8634,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7003,6 +8646,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7014,6 +8658,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7025,6 +8670,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7036,6 +8682,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7047,6 +8694,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7058,6 +8706,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7069,6 +8718,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7080,6 +8730,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7091,6 +8742,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7102,6 +8754,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7113,6 +8766,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7124,6 +8778,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7135,6 +8790,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7146,6 +8802,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7157,6 +8814,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7168,6 +8826,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7179,6 +8838,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7190,6 +8850,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7201,6 +8862,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7212,6 +8874,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7223,6 +8886,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7234,6 +8898,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7245,6 +8910,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7256,6 +8922,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7267,6 +8934,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7278,6 +8946,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7289,6 +8958,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7300,6 +8970,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7311,6 +8982,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7322,6 +8994,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7333,6 +9006,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7344,6 +9018,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7355,6 +9030,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7366,6 +9042,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7377,6 +9054,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7388,6 +9066,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7399,6 +9078,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7410,6 +9090,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7421,6 +9102,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7432,6 +9114,7 @@
    "size": 1,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7443,6 +9126,7 @@
    "size": 1,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -7454,6 +9138,7 @@
    "size": 2,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7465,6 +9150,7 @@
    "size": 2,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7476,6 +9162,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7487,6 +9174,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7498,6 +9186,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7509,6 +9198,7 @@
    "size": 1,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7520,6 +9210,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7531,6 +9222,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7542,6 +9234,7 @@
    "size": 3,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -7553,6 +9246,7 @@
    "size": 1,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7564,8 +9258,9 @@
    "size": 4,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "unmapped"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1j",
@@ -7575,8 +9270,9 @@
    "size": 4,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "unmapped"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1j",
@@ -7586,8 +9282,9 @@
    "size": 4,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "unmapped"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1j",
@@ -7597,8 +9294,9 @@
    "size": 4,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "touched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1j",
@@ -7608,6 +9306,7 @@
    "size": 2,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7619,6 +9318,7 @@
    "size": 2,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7630,6 +9330,7 @@
    "size": 4,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7641,6 +9342,7 @@
    "size": 4,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7652,6 +9354,7 @@
    "size": 4,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7663,6 +9366,7 @@
    "size": 4,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7674,6 +9378,7 @@
    "size": 4,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7685,6 +9390,7 @@
    "size": 4,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7696,6 +9402,7 @@
    "size": 4,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7707,6 +9414,7 @@
    "size": 4,
    "reverted": true,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7718,6 +9426,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7729,6 +9438,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7740,6 +9450,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7751,6 +9462,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7762,6 +9474,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7773,6 +9486,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7784,6 +9498,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7795,6 +9510,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7806,6 +9522,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7817,6 +9534,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7828,6 +9546,7 @@
    "size": 4,
    "reverted": false,
    "verdict": "not_landed",
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -7839,6 +9558,7 @@
    "size": 4,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7850,6 +9570,7 @@
    "size": 4,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7861,6 +9582,7 @@
    "size": 4,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7872,6 +9594,7 @@
    "size": 1,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7883,6 +9606,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7894,6 +9618,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -7905,6 +9630,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -7916,6 +9642,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -7927,6 +9654,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -7938,6 +9666,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -7949,6 +9678,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7960,6 +9690,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7971,6 +9702,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -7982,6 +9714,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -7993,6 +9726,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8004,6 +9738,7 @@
    "size": 12,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8015,6 +9750,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -8026,6 +9762,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8037,6 +9774,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8048,6 +9786,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8059,6 +9798,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8070,6 +9810,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8081,6 +9822,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8092,6 +9834,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8103,6 +9846,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8114,6 +9858,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8125,6 +9870,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8136,6 +9882,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8147,6 +9894,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8158,6 +9906,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8169,6 +9918,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8180,6 +9930,7 @@
    "size": 16,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8191,6 +9942,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8202,6 +9954,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8213,6 +9966,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8224,6 +9978,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8235,6 +9990,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8246,6 +10002,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8257,6 +10014,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8268,6 +10026,7 @@
    "size": 8,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -8279,6 +10038,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -8290,6 +10050,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8301,6 +10062,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8312,6 +10074,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8323,6 +10086,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8334,6 +10098,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8345,6 +10110,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8356,6 +10122,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8367,6 +10134,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8378,6 +10146,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8389,6 +10158,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8400,6 +10170,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8411,6 +10182,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8422,6 +10194,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8433,6 +10206,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8444,6 +10218,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8455,6 +10230,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8466,6 +10242,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8477,6 +10254,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8488,6 +10266,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8499,6 +10278,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8510,6 +10290,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8521,6 +10302,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8532,6 +10314,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8543,6 +10326,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8554,6 +10338,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8565,6 +10350,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8576,6 +10362,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8587,6 +10374,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8598,6 +10386,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8609,6 +10398,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -8620,6 +10410,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8631,6 +10422,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8642,6 +10434,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8653,6 +10446,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8664,6 +10458,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8675,6 +10470,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8686,6 +10482,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8697,6 +10494,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -8708,6 +10506,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8719,6 +10518,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8730,6 +10530,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8741,6 +10542,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8752,6 +10554,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8763,6 +10566,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8774,6 +10578,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8785,6 +10590,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8796,6 +10602,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8807,6 +10614,7 @@
    "size": 1,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8818,6 +10626,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -8829,6 +10638,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8840,6 +10650,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8851,6 +10662,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8862,6 +10674,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8873,6 +10686,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8884,6 +10698,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8895,6 +10710,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8906,6 +10722,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8917,6 +10734,7 @@
    "size": 10,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8928,6 +10746,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8939,6 +10758,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8950,6 +10770,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8961,6 +10782,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8972,6 +10794,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -8983,6 +10806,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -8994,6 +10818,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9005,6 +10830,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9016,6 +10842,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9027,6 +10854,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9038,6 +10866,7 @@
    "size": 5,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9049,6 +10878,7 @@
    "size": 1,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9060,8 +10890,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "unmapped"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9071,8 +10902,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "touched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9082,8 +10914,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "untouched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9093,8 +10926,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "untouched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9104,8 +10938,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "touched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9115,8 +10950,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "touched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9126,8 +10962,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "touched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9137,8 +10974,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "untouched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9148,8 +10986,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "untouched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9159,8 +10998,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "touched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9170,8 +11010,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "touched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9181,8 +11022,9 @@
    "size": 12,
    "reverted": false,
    "verdict": null,
-   "strict": "unmapped",
-   "stem": "touched"
+   "output": "build_failed",
+   "strict": "build_failed",
+   "stem": "build_failed"
   },
   {
    "run": "rep1k",
@@ -9192,6 +11034,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "not_landed",
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9203,6 +11046,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9214,6 +11058,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9225,6 +11070,7 @@
    "size": 1,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9236,6 +11082,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "pass",
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9247,6 +11094,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -9258,6 +11106,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9269,6 +11118,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9280,6 +11130,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9291,6 +11142,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9302,6 +11154,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9313,6 +11166,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9324,6 +11178,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9335,6 +11190,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9346,6 +11202,7 @@
    "size": 11,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9357,6 +11214,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "not_landed",
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9368,6 +11226,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "not_landed",
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9379,6 +11238,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -9390,6 +11250,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9401,6 +11262,7 @@
    "size": 6,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9412,6 +11274,7 @@
    "size": 6,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9423,6 +11286,7 @@
    "size": 2,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9434,6 +11298,7 @@
    "size": 2,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9445,6 +11310,7 @@
    "size": 1,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -9456,6 +11322,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9467,6 +11334,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9478,6 +11346,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9489,6 +11358,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9500,6 +11370,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9511,6 +11382,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9522,6 +11394,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9533,6 +11406,7 @@
    "size": 8,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9544,6 +11418,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9555,6 +11430,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9566,6 +11442,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9577,6 +11454,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9588,6 +11466,7 @@
    "size": 6,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9599,6 +11478,7 @@
    "size": 6,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -9610,6 +11490,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9621,6 +11502,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9632,6 +11514,7 @@
    "size": 3,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9643,6 +11526,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9654,6 +11538,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9665,6 +11550,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9676,6 +11562,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9687,6 +11574,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9698,6 +11586,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9709,6 +11598,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9720,6 +11610,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9731,6 +11622,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9742,6 +11634,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9753,6 +11646,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9764,6 +11658,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9775,6 +11670,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9786,6 +11682,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9797,6 +11694,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9808,6 +11706,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9819,6 +11718,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9830,6 +11730,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9841,6 +11742,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9852,6 +11754,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched",
    "stem_absent": true
@@ -9864,6 +11767,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched",
    "stem_absent": true
@@ -9876,6 +11780,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched",
    "stem_absent": true
@@ -9888,6 +11793,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched",
    "stem_absent": true
@@ -9900,6 +11806,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched",
    "stem_absent": true
@@ -9912,6 +11819,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -9923,6 +11831,7 @@
    "size": 17,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -9934,6 +11843,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9945,6 +11855,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9956,6 +11867,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9967,6 +11879,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9978,6 +11891,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -9989,6 +11903,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -10000,6 +11915,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10011,6 +11927,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10022,6 +11939,7 @@
    "size": 9,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -10033,6 +11951,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -10044,6 +11963,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10055,6 +11975,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10066,6 +11987,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10077,6 +11999,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10088,6 +12011,7 @@
    "size": 6,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -10099,6 +12023,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10110,6 +12035,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10121,6 +12047,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10132,6 +12059,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10143,6 +12071,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10154,6 +12083,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10165,6 +12095,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10176,6 +12107,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10187,6 +12119,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10198,6 +12131,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10209,6 +12143,7 @@
    "size": 7,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -10220,6 +12155,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10231,6 +12167,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10242,6 +12179,7 @@
    "size": 6,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -10253,6 +12191,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10264,6 +12203,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10275,6 +12215,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10286,6 +12227,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10297,6 +12239,7 @@
    "size": 6,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -10308,6 +12251,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10319,6 +12263,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10330,6 +12275,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10341,6 +12287,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10352,6 +12299,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10363,6 +12311,7 @@
    "size": 6,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10374,6 +12323,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10385,6 +12335,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10396,6 +12347,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "touched"
   },
@@ -10407,6 +12359,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10418,6 +12371,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10429,6 +12383,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10440,6 +12395,7 @@
    "size": 7,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10451,6 +12407,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10462,6 +12419,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10473,6 +12431,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10484,6 +12443,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10495,6 +12455,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10506,6 +12467,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10517,6 +12479,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10528,6 +12491,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10539,6 +12503,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10550,6 +12515,7 @@
    "size": 15,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -10561,6 +12527,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10572,6 +12539,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10583,6 +12551,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10594,6 +12563,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10605,6 +12575,7 @@
    "size": 15,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10616,6 +12587,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10627,6 +12599,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10638,6 +12611,7 @@
    "size": 9,
    "reverted": false,
    "verdict": null,
+   "output": "no_check",
    "strict": "no_check",
    "stem": "no_check"
   },
@@ -10649,6 +12623,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10660,6 +12635,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10671,6 +12647,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "pass",
+   "output": "fixed",
    "strict": "fixed",
    "stem": "fixed"
   },
@@ -10682,6 +12659,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "untouched",
    "strict": "unmapped",
    "stem": "unmapped"
   },
@@ -10693,6 +12671,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   },
@@ -10704,6 +12683,7 @@
    "size": 9,
    "reverted": false,
    "verdict": "wrong",
+   "output": "touched",
    "strict": "unmapped",
    "stem": "untouched"
   }
