@@ -1,0 +1,2041 @@
+[
+ {
+  "task": "theme_d10_w10_ml_ai_mlops_forensics_analysis",
+  "rounds": 9,
+  "chars": 15772,
+  "heads": 0,
+  "heads_codeish": 0,
+  "heads_repeat": 0,
+  "levels": {},
+  "rev_cues": 13,
+  "xref_cues": 3,
+  "bullet_ratio": 0.47,
+  "avg_sentence_words": 12.7,
+  "per_round": [
+   [
+    "round-1",
+    2308,
+    0,
+    2,
+    1
+   ],
+   [
+    "round-2",
+    585,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-3",
+    705,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-4",
+    2770,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-5",
+    1571,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-6",
+    2127,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-7",
+    2246,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-8",
+    1872,
+    0,
+    3,
+    0
+   ],
+   [
+    "round-9",
+    1588,
+    0,
+    0,
+    2
+   ]
+  ]
+ },
+ {
+  "task": "theme_d10_w11_ml_ai_mlops_automation_scripting",
+  "rounds": 7,
+  "chars": 31935,
+  "heads": 0,
+  "heads_codeish": 0,
+  "heads_repeat": 0,
+  "levels": {},
+  "rev_cues": 5,
+  "xref_cues": 1,
+  "bullet_ratio": 0.28,
+  "avg_sentence_words": 13.7,
+  "per_round": [
+   [
+    "round-1",
+    4915,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-2",
+    4655,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-3",
+    3104,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-4",
+    4400,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-5",
+    3400,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-6",
+    6229,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    5232,
+    0,
+    0,
+    1
+   ]
+  ]
+ },
+ {
+  "task": "theme_d10_w12_ml_ai_mlops_explanation_reporting",
+  "rounds": 7,
+  "chars": 7366,
+  "heads": 0,
+  "heads_codeish": 0,
+  "heads_repeat": 0,
+  "levels": {},
+  "rev_cues": 16,
+  "xref_cues": 0,
+  "bullet_ratio": 0.44,
+  "avg_sentence_words": 11.6,
+  "per_round": [
+   [
+    "round-1",
+    560,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-2",
+    776,
+    0,
+    4,
+    0
+   ],
+   [
+    "round-3",
+    1430,
+    0,
+    3,
+    0
+   ],
+   [
+    "round-4",
+    776,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-5",
+    1196,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-6",
+    1230,
+    0,
+    4,
+    0
+   ],
+   [
+    "round-7",
+    1398,
+    0,
+    3,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d10_w2_ml_ai_mlops_brownfield_modification",
+  "rounds": 8,
+  "chars": 14266,
+  "heads": 0,
+  "heads_codeish": 0,
+  "heads_repeat": 0,
+  "levels": {},
+  "rev_cues": 6,
+  "xref_cues": 3,
+  "bullet_ratio": 0.53,
+  "avg_sentence_words": 19.6,
+  "per_round": [
+   [
+    "round-1",
+    4924,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-2",
+    3869,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-3",
+    1201,
+    0,
+    2,
+    1
+   ],
+   [
+    "round-4",
+    1023,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    1025,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-6",
+    733,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    942,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-8",
+    549,
+    0,
+    3,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d10_w4_ml_ai_mlops_migration_upgrade",
+  "rounds": 7,
+  "chars": 64168,
+  "heads": 73,
+  "heads_codeish": 2,
+  "heads_repeat": 11,
+  "levels": {
+   "2": 30,
+   "3": 43
+  },
+  "rev_cues": 37,
+  "xref_cues": 5,
+  "bullet_ratio": 0.46,
+  "avg_sentence_words": 16.6,
+  "per_round": [
+   [
+    "round-1",
+    5385,
+    4,
+    1,
+    0
+   ],
+   [
+    "round-2",
+    15293,
+    14,
+    9,
+    3
+   ],
+   [
+    "round-3",
+    6854,
+    12,
+    10,
+    1
+   ],
+   [
+    "round-4",
+    6520,
+    5,
+    2,
+    1
+   ],
+   [
+    "round-5",
+    14884,
+    14,
+    5,
+    0
+   ],
+   [
+    "round-6",
+    8336,
+    12,
+    5,
+    0
+   ],
+   [
+    "round-7",
+    6896,
+    12,
+    5,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d10_w4_ml_ai_mlops_migration_upgrade__not_1234",
+  "rounds": 13,
+  "chars": 26041,
+  "heads": 0,
+  "heads_codeish": 0,
+  "heads_repeat": 0,
+  "levels": {},
+  "rev_cues": 10,
+  "xref_cues": 7,
+  "bullet_ratio": 0.53,
+  "avg_sentence_words": 21.5,
+  "per_round": [
+   [
+    "round-1",
+    2599,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-2",
+    2374,
+    0,
+    0,
+    2
+   ],
+   [
+    "round-3",
+    2696,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    2289,
+    0,
+    3,
+    1
+   ],
+   [
+    "round-5",
+    2058,
+    0,
+    0,
+    2
+   ],
+   [
+    "round-6",
+    1716,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    2340,
+    0,
+    4,
+    1
+   ],
+   [
+    "round-8",
+    1571,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-9",
+    2191,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-10",
+    1667,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-11",
+    1594,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-12",
+    1357,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-13",
+    1589,
+    0,
+    0,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d10_w5_ml_ai_mlops_integration_e2e_wiring",
+  "rounds": 7,
+  "chars": 49722,
+  "heads": 67,
+  "heads_codeish": 16,
+  "heads_repeat": 4,
+  "levels": {
+   "2": 36,
+   "3": 31
+  },
+  "rev_cues": 9,
+  "xref_cues": 5,
+  "bullet_ratio": 0.24,
+  "avg_sentence_words": 14.5,
+  "per_round": [
+   [
+    "round-1",
+    13236,
+    18,
+    3,
+    0
+   ],
+   [
+    "round-2",
+    16250,
+    22,
+    3,
+    1
+   ],
+   [
+    "round-3",
+    3625,
+    7,
+    1,
+    0
+   ],
+   [
+    "round-4",
+    4961,
+    5,
+    0,
+    1
+   ],
+   [
+    "round-5",
+    3503,
+    5,
+    1,
+    2
+   ],
+   [
+    "round-6",
+    3803,
+    4,
+    1,
+    0
+   ],
+   [
+    "round-7",
+    4344,
+    6,
+    0,
+    1
+   ]
+  ]
+ },
+ {
+  "task": "theme_d10_w8_ml_ai_mlops_security_patch_hardening",
+  "rounds": 8,
+  "chars": 12769,
+  "heads": 20,
+  "heads_codeish": 1,
+  "heads_repeat": 6,
+  "levels": {
+   "2": 13,
+   "3": 7
+  },
+  "rev_cues": 2,
+  "xref_cues": 0,
+  "bullet_ratio": 0.2,
+  "avg_sentence_words": 12.7,
+  "per_round": [
+   [
+    "round-1",
+    5825,
+    6,
+    0,
+    0
+   ],
+   [
+    "round-2",
+    1321,
+    2,
+    0,
+    0
+   ],
+   [
+    "round-3",
+    648,
+    2,
+    1,
+    0
+   ],
+   [
+    "round-4",
+    715,
+    2,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    698,
+    2,
+    0,
+    0
+   ],
+   [
+    "round-6",
+    945,
+    2,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    1149,
+    2,
+    0,
+    0
+   ],
+   [
+    "round-8",
+    1468,
+    2,
+    1,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d10_w9_ml_ai_mlops_reproducibility_verification",
+  "rounds": 8,
+  "chars": 18191,
+  "heads": 9,
+  "heads_codeish": 7,
+  "heads_repeat": 0,
+  "levels": {
+   "2": 9
+  },
+  "rev_cues": 2,
+  "xref_cues": 1,
+  "bullet_ratio": 0.15,
+  "avg_sentence_words": 16.9,
+  "per_round": [
+   [
+    "round-1",
+    11110,
+    9,
+    0,
+    0
+   ],
+   [
+    "round-2",
+    897,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-3",
+    1355,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    1021,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    1455,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-6",
+    738,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    780,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-8",
+    835,
+    0,
+    1,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d11_w2_scientific_numerical_brownfield_modification",
+  "rounds": 7,
+  "chars": 27623,
+  "heads": 34,
+  "heads_codeish": 16,
+  "heads_repeat": 9,
+  "levels": {
+   "2": 21,
+   "3": 13
+  },
+  "rev_cues": 10,
+  "xref_cues": 10,
+  "bullet_ratio": 0.2,
+  "avg_sentence_words": 19.3,
+  "per_round": [
+   [
+    "round-1",
+    7007,
+    5,
+    1,
+    2
+   ],
+   [
+    "round-2",
+    5356,
+    2,
+    2,
+    4
+   ],
+   [
+    "round-3",
+    4109,
+    6,
+    0,
+    3
+   ],
+   [
+    "round-4",
+    4048,
+    7,
+    2,
+    1
+   ],
+   [
+    "round-5",
+    1926,
+    4,
+    0,
+    0
+   ],
+   [
+    "round-6",
+    2255,
+    5,
+    4,
+    0
+   ],
+   [
+    "round-7",
+    2922,
+    5,
+    1,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d11_w2_scientific_numerical_brownfield_modification__not_1234",
+  "rounds": 5,
+  "chars": 12715,
+  "heads": 11,
+  "heads_codeish": 4,
+  "heads_repeat": 0,
+  "levels": {
+   "2": 11
+  },
+  "rev_cues": 7,
+  "xref_cues": 0,
+  "bullet_ratio": 0.29,
+  "avg_sentence_words": 15.6,
+  "per_round": [
+   [
+    "round-1",
+    4792,
+    11,
+    1,
+    0
+   ],
+   [
+    "round-2",
+    1664,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-3",
+    2187,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-4",
+    2207,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    1865,
+    0,
+    5,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d11_w9_scientific_numerical_reproducibility_verification",
+  "rounds": 8,
+  "chars": 11343,
+  "heads": 0,
+  "heads_codeish": 0,
+  "heads_repeat": 0,
+  "levels": {},
+  "rev_cues": 3,
+  "xref_cues": 0,
+  "bullet_ratio": 0.58,
+  "avg_sentence_words": 19.0,
+  "per_round": [
+   [
+    "round-1",
+    1241,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-2",
+    1463,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-3",
+    1754,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    1535,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    1407,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-6",
+    1323,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    1568,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-8",
+    1052,
+    0,
+    0,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d12_w1_automation_productivity_greenfield_implementation",
+  "rounds": 7,
+  "chars": 170939,
+  "heads": 147,
+  "heads_codeish": 46,
+  "heads_repeat": 15,
+  "levels": {
+   "1": 12,
+   "2": 41,
+   "3": 94
+  },
+  "rev_cues": 33,
+  "xref_cues": 25,
+  "bullet_ratio": 0.44,
+  "avg_sentence_words": 16.5,
+  "per_round": [
+   [
+    "round-1",
+    20938,
+    17,
+    2,
+    2
+   ],
+   [
+    "round-2",
+    13200,
+    15,
+    4,
+    1
+   ],
+   [
+    "round-3",
+    32159,
+    28,
+    7,
+    4
+   ],
+   [
+    "round-4",
+    15333,
+    10,
+    4,
+    2
+   ],
+   [
+    "round-5",
+    19021,
+    17,
+    7,
+    3
+   ],
+   [
+    "round-6",
+    28195,
+    22,
+    5,
+    4
+   ],
+   [
+    "round-7",
+    42093,
+    38,
+    4,
+    9
+   ]
+  ]
+ },
+ {
+  "task": "theme_d1_w11_code_build_automation_scripting",
+  "rounds": 8,
+  "chars": 31111,
+  "heads": 52,
+  "heads_codeish": 5,
+  "heads_repeat": 4,
+  "levels": {
+   "1": 8,
+   "2": 33,
+   "3": 11
+  },
+  "rev_cues": 15,
+  "xref_cues": 2,
+  "bullet_ratio": 0.15,
+  "avg_sentence_words": 16.6,
+  "per_round": [
+   [
+    "round-1",
+    3444,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-2",
+    6132,
+    16,
+    3,
+    0
+   ],
+   [
+    "round-3",
+    3410,
+    6,
+    8,
+    0
+   ],
+   [
+    "round-4",
+    3350,
+    5,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    3736,
+    7,
+    3,
+    1
+   ],
+   [
+    "round-6",
+    3711,
+    6,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    3515,
+    5,
+    0,
+    1
+   ],
+   [
+    "round-8",
+    3813,
+    7,
+    0,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d1_w1_code_build_greenfield_implementation",
+  "rounds": 9,
+  "chars": 43938,
+  "heads": 75,
+  "heads_codeish": 34,
+  "heads_repeat": 24,
+  "levels": {
+   "1": 9,
+   "2": 23,
+   "3": 43
+  },
+  "rev_cues": 5,
+  "xref_cues": 4,
+  "bullet_ratio": 0.2,
+  "avg_sentence_words": 16.2,
+  "per_round": [
+   [
+    "round-1",
+    10518,
+    7,
+    1,
+    0
+   ],
+   [
+    "round-2",
+    6412,
+    8,
+    1,
+    2
+   ],
+   [
+    "round-3",
+    6949,
+    9,
+    1,
+    2
+   ],
+   [
+    "round-4",
+    3918,
+    8,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    3732,
+    9,
+    1,
+    0
+   ],
+   [
+    "round-6",
+    4133,
+    9,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    3027,
+    8,
+    0,
+    0
+   ],
+   [
+    "round-8",
+    2895,
+    9,
+    1,
+    0
+   ],
+   [
+    "round-9",
+    2354,
+    8,
+    0,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d1_w2_code_build_brownfield_modification",
+  "rounds": 8,
+  "chars": 20846,
+  "heads": 5,
+  "heads_codeish": 2,
+  "heads_repeat": 0,
+  "levels": {
+   "3": 5
+  },
+  "rev_cues": 10,
+  "xref_cues": 2,
+  "bullet_ratio": 0.04,
+  "avg_sentence_words": 16.7,
+  "per_round": [
+   [
+    "round-1",
+    2719,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-2",
+    3406,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-3",
+    1455,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    2246,
+    0,
+    1,
+    1
+   ],
+   [
+    "round-5",
+    2288,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-6",
+    3700,
+    5,
+    6,
+    0
+   ],
+   [
+    "round-7",
+    2049,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-8",
+    2983,
+    0,
+    0,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d1_w5_code_build_integration_e2e_wiring",
+  "rounds": 8,
+  "chars": 14463,
+  "heads": 10,
+  "heads_codeish": 4,
+  "heads_repeat": 0,
+  "levels": {
+   "2": 6,
+   "3": 4
+  },
+  "rev_cues": 3,
+  "xref_cues": 1,
+  "bullet_ratio": 0.2,
+  "avg_sentence_words": 15.9,
+  "per_round": [
+   [
+    "round-1",
+    6134,
+    10,
+    1,
+    0
+   ],
+   [
+    "round-2",
+    1791,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-3",
+    978,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    1928,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-5",
+    411,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-6",
+    521,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    1044,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-8",
+    1656,
+    0,
+    0,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d1_w9_code_build_reproducibility_verification",
+  "rounds": 7,
+  "chars": 43405,
+  "heads": 41,
+  "heads_codeish": 13,
+  "heads_repeat": 5,
+  "levels": {
+   "2": 29,
+   "3": 12
+  },
+  "rev_cues": 22,
+  "xref_cues": 17,
+  "bullet_ratio": 0.4,
+  "avg_sentence_words": 14.8,
+  "per_round": [
+   [
+    "round-1",
+    8874,
+    12,
+    3,
+    0
+   ],
+   [
+    "round-2",
+    7263,
+    5,
+    2,
+    3
+   ],
+   [
+    "round-3",
+    6210,
+    8,
+    6,
+    4
+   ],
+   [
+    "round-4",
+    6162,
+    5,
+    6,
+    6
+   ],
+   [
+    "round-5",
+    4563,
+    4,
+    0,
+    1
+   ],
+   [
+    "round-6",
+    5360,
+    3,
+    1,
+    2
+   ],
+   [
+    "round-7",
+    4973,
+    4,
+    4,
+    1
+   ]
+  ]
+ },
+ {
+  "task": "theme_d3_w9_testing_quality_reproducibility_verification",
+  "rounds": 7,
+  "chars": 9515,
+  "heads": 0,
+  "heads_codeish": 0,
+  "heads_repeat": 0,
+  "levels": {},
+  "rev_cues": 4,
+  "xref_cues": 1,
+  "bullet_ratio": 0.57,
+  "avg_sentence_words": 12.7,
+  "per_round": [
+   [
+    "round-1",
+    358,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-2",
+    1997,
+    0,
+    2,
+    1
+   ],
+   [
+    "round-3",
+    1886,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    1594,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    1866,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-6",
+    747,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    1067,
+    0,
+    1,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d5_w1_data_engineering_greenfield_implementation",
+  "rounds": 13,
+  "chars": 245149,
+  "heads": 228,
+  "heads_codeish": 109,
+  "heads_repeat": 21,
+  "levels": {
+   "1": 11,
+   "2": 114,
+   "3": 91,
+   "4": 10,
+   "5": 2
+  },
+  "rev_cues": 27,
+  "xref_cues": 61,
+  "bullet_ratio": 0.2,
+  "avg_sentence_words": 16.6,
+  "per_round": [
+   [
+    "round-1",
+    14332,
+    14,
+    1,
+    0
+   ],
+   [
+    "round-2",
+    23563,
+    15,
+    1,
+    6
+   ],
+   [
+    "round-3",
+    15149,
+    20,
+    0,
+    5
+   ],
+   [
+    "round-4",
+    15570,
+    17,
+    8,
+    0
+   ],
+   [
+    "round-5",
+    11887,
+    13,
+    0,
+    3
+   ],
+   [
+    "round-6",
+    17694,
+    19,
+    1,
+    3
+   ],
+   [
+    "round-7",
+    15191,
+    17,
+    8,
+    3
+   ],
+   [
+    "round-8",
+    24413,
+    28,
+    2,
+    3
+   ],
+   [
+    "round-9",
+    23859,
+    22,
+    1,
+    11
+   ],
+   [
+    "round-10",
+    14280,
+    13,
+    2,
+    6
+   ],
+   [
+    "round-11",
+    31646,
+    23,
+    1,
+    8
+   ],
+   [
+    "round-12",
+    20446,
+    16,
+    1,
+    5
+   ],
+   [
+    "round-13",
+    17119,
+    11,
+    1,
+    8
+   ]
+  ]
+ },
+ {
+  "task": "theme_d5_w5_data_engineering_integration_e2e_wiring",
+  "rounds": 9,
+  "chars": 138802,
+  "heads": 118,
+  "heads_codeish": 66,
+  "heads_repeat": 36,
+  "levels": {
+   "1": 9,
+   "2": 41,
+   "3": 64,
+   "4": 4
+  },
+  "rev_cues": 31,
+  "xref_cues": 24,
+  "bullet_ratio": 0.19,
+  "avg_sentence_words": 17.8,
+  "per_round": [
+   [
+    "round-1",
+    9252,
+    13,
+    3,
+    1
+   ],
+   [
+    "round-2",
+    7917,
+    7,
+    1,
+    1
+   ],
+   [
+    "round-3",
+    9711,
+    8,
+    0,
+    2
+   ],
+   [
+    "round-4",
+    16189,
+    18,
+    6,
+    2
+   ],
+   [
+    "round-5",
+    15652,
+    11,
+    3,
+    3
+   ],
+   [
+    "round-6",
+    14238,
+    13,
+    4,
+    1
+   ],
+   [
+    "round-7",
+    19887,
+    11,
+    3,
+    3
+   ],
+   [
+    "round-8",
+    16274,
+    15,
+    4,
+    4
+   ],
+   [
+    "round-9",
+    29682,
+    22,
+    7,
+    7
+   ]
+  ]
+ },
+ {
+  "task": "theme_d5_w9_data_engineering_reproducibility_verification",
+  "rounds": 15,
+  "chars": 88855,
+  "heads": 161,
+  "heads_codeish": 88,
+  "heads_repeat": 72,
+  "levels": {
+   "2": 46,
+   "3": 111,
+   "1": 4
+  },
+  "rev_cues": 47,
+  "xref_cues": 4,
+  "bullet_ratio": 0.41,
+  "avg_sentence_words": 12.7,
+  "per_round": [
+   [
+    "round-1",
+    18802,
+    8,
+    7,
+    1
+   ],
+   [
+    "round-2",
+    24600,
+    29,
+    9,
+    2
+   ],
+   [
+    "round-3",
+    9436,
+    16,
+    9,
+    0
+   ],
+   [
+    "round-4",
+    4770,
+    9,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    4307,
+    8,
+    8,
+    1
+   ],
+   [
+    "round-6",
+    3322,
+    9,
+    1,
+    0
+   ],
+   [
+    "round-7",
+    2188,
+    6,
+    1,
+    0
+   ],
+   [
+    "round-8",
+    3292,
+    9,
+    0,
+    0
+   ],
+   [
+    "round-9",
+    2900,
+    9,
+    3,
+    0
+   ],
+   [
+    "round-10",
+    2280,
+    8,
+    5,
+    0
+   ],
+   [
+    "round-11",
+    2127,
+    9,
+    0,
+    0
+   ],
+   [
+    "round-12",
+    1956,
+    7,
+    2,
+    0
+   ],
+   [
+    "round-13",
+    3747,
+    14,
+    0,
+    0
+   ],
+   [
+    "round-14",
+    3721,
+    13,
+    0,
+    0
+   ],
+   [
+    "round-15",
+    1407,
+    7,
+    2,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d6_w1_database_storage_greenfield_implementation",
+  "rounds": 8,
+  "chars": 20975,
+  "heads": 15,
+  "heads_codeish": 2,
+  "heads_repeat": 0,
+  "levels": {
+   "2": 3,
+   "3": 12
+  },
+  "rev_cues": 5,
+  "xref_cues": 3,
+  "bullet_ratio": 0.45,
+  "avg_sentence_words": 13.9,
+  "per_round": [
+   [
+    "round-1",
+    12395,
+    15,
+    0,
+    2
+   ],
+   [
+    "round-2",
+    1314,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-3",
+    1130,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    1345,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-5",
+    1293,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-6",
+    1278,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    946,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-8",
+    1274,
+    0,
+    0,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d7_w5_systems_networking_integration_e2e_wiring",
+  "rounds": 8,
+  "chars": 31088,
+  "heads": 22,
+  "heads_codeish": 4,
+  "heads_repeat": 0,
+  "levels": {
+   "1": 2,
+   "2": 15,
+   "3": 5
+  },
+  "rev_cues": 6,
+  "xref_cues": 7,
+  "bullet_ratio": 0.28,
+  "avg_sentence_words": 16.5,
+  "per_round": [
+   [
+    "round-1",
+    15190,
+    11,
+    3,
+    1
+   ],
+   [
+    "round-2",
+    3930,
+    7,
+    0,
+    0
+   ],
+   [
+    "round-3",
+    1473,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    2321,
+    4,
+    1,
+    0
+   ],
+   [
+    "round-5",
+    2805,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-6",
+    1217,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    1963,
+    0,
+    1,
+    0
+   ],
+   [
+    "round-8",
+    2189,
+    0,
+    1,
+    6
+   ]
+  ]
+ },
+ {
+  "task": "theme_d8_w5_cloud_devops_integration_e2e_wiring",
+  "rounds": 11,
+  "chars": 47449,
+  "heads": 0,
+  "heads_codeish": 0,
+  "heads_repeat": 0,
+  "levels": {},
+  "rev_cues": 18,
+  "xref_cues": 4,
+  "bullet_ratio": 0.24,
+  "avg_sentence_words": 14.1,
+  "per_round": [
+   [
+    "round-1",
+    5445,
+    0,
+    2,
+    0
+   ],
+   [
+    "round-2",
+    3725,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-3",
+    3266,
+    0,
+    3,
+    0
+   ],
+   [
+    "round-4",
+    2074,
+    0,
+    5,
+    1
+   ],
+   [
+    "round-5",
+    2631,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-6",
+    4554,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-7",
+    5011,
+    0,
+    0,
+    0
+   ],
+   [
+    "round-8",
+    4652,
+    0,
+    1,
+    1
+   ],
+   [
+    "round-9",
+    4637,
+    0,
+    6,
+    0
+   ],
+   [
+    "round-10",
+    3172,
+    0,
+    0,
+    1
+   ],
+   [
+    "round-11",
+    8282,
+    0,
+    1,
+    0
+   ]
+  ]
+ },
+ {
+  "task": "theme_d9_w11_security_automation_scripting",
+  "rounds": 15,
+  "chars": 73574,
+  "heads": 27,
+  "heads_codeish": 26,
+  "heads_repeat": 0,
+  "levels": {
+   "3": 27
+  },
+  "rev_cues": 7,
+  "xref_cues": 7,
+  "bullet_ratio": 0.4,
+  "avg_sentence_words": 18.2,
+  "per_round": [
+   [
+    "round-1",
+    10628,
+    7,
+    1,
+    0
+   ],
+   [
+    "round-2",
+    11339,
+    1,
+    1,
+    1
+   ],
+   [
+    "round-3",
+    7668,
+    2,
+    0,
+    0
+   ],
+   [
+    "round-4",
+    5088,
+    1,
+    0,
+    0
+   ],
+   [
+    "round-5",
+    4006,
+    2,
+    2,
+    1
+   ],
+   [
+    "round-6",
+    4008,
+    1,
+    0,
+    1
+   ],
+   [
+    "round-7",
+    3481,
+    2,
+    2,
+    0
+   ],
+   [
+    "round-8",
+    2617,
+    1,
+    0,
+    0
+   ],
+   [
+    "round-9",
+    2964,
+    1,
+    0,
+    0
+   ],
+   [
+    "round-10",
+    2368,
+    2,
+    1,
+    0
+   ],
+   [
+    "round-11",
+    4007,
+    1,
+    0,
+    0
+   ],
+   [
+    "round-12",
+    4411,
+    2,
+    0,
+    1
+   ],
+   [
+    "round-13",
+    3733,
+    1,
+    0,
+    1
+   ],
+   [
+    "round-14",
+    3649,
+    1,
+    0,
+    1
+   ],
+   [
+    "round-15",
+    3607,
+    2,
+    0,
+    1
+   ]
+  ]
+ }
+]
