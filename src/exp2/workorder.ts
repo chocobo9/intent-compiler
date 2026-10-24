@@ -2,7 +2,7 @@ import type { Anchor } from "./anchors.js"
 import { activeChecks, type CheckEvent, type CheckRecord } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import type { CheckRun, ObjectStatus } from "./verdict.js"
-import { contextOf, fitPackage, renderGuardList, renderPackage, roundPackage, type PackageGuard, type PackageObject, type PackageOverflow } from "./view.js"
+import { contextOf, fitPackage, packageSizes, renderGuardList, renderPackage, roundPackage, type PackageGuard, type PackageOverflow, type RoundPackage } from "./view.js"
 
 /**
  * The round's work order (DESIGN §6): five zones computed by code. Zones other than the source zone cite ids only;
@@ -47,9 +47,9 @@ export interface WorkOrder {
    * What of the requirements the source zone holds (§12j.7 item 9): delta, the round's package (§6a step 3), or all.
    * Characters of the source zone as rendered, and what it would be with every round's text (all), for the report.
    */
-  scope?: { kind: "delta" | "all"; source_chars: number; source_chars_all: number; blocks: number; blocks_all: number; objects?: { object: string; why: string; via: string[] }[]; guards?: number; overflow?: PackageOverflow | null }
-  /** Scope delta (§6c): the round's package as current views (the source zone) and its guards (the protection zone). */
-  package?: { objects: PackageObject[]; guards: PackageGuard[] }
+  scope?: { kind: "delta" | "all"; source_chars: number; source_chars_all: number; blocks: number; blocks_all: number; segments?: { object: string; paragraph: string; why: string; via: string[] }[]; heads?: string[]; edges?: { to_block: number; to_object: number }; sizes?: Record<string, number>; guards?: number; overflow?: PackageOverflow | null }
+  /** Scope delta (§6c): the round's package, by paragraph (the source zone), and the guards (the protection zone). */
+  package?: { pkg: RoundPackage; guards: PackageGuard[] }
 }
 
 /** A failure the round must fix: a confirmed item (the reviewer's, verified) or a guard failing; never a hypothesis. */
@@ -79,7 +79,7 @@ export interface WorkOrderInput {
   /** The source zone: the round's package (delta) or every round's text (all, the default here; ablation in the serial). */
   scope?: "delta" | "all"
   /** Scope delta: the package as the serial fitted it, with the guards on its objects; absent, computed here without guards. */
-  package?: { objects: PackageObject[]; guards: PackageGuard[]; overflow: PackageOverflow | null }
+  package?: { pkg: RoundPackage; guards: PackageGuard[]; overflow: PackageOverflow | null }
   /**
    * Under the review acceptance (§12j.7 items 4, 10): the failures that make an object a task are these (confirmed items
    * and guards), not the library's hypotheses, and there is no status zone. Absent: the library's statuses, as before.
@@ -209,10 +209,10 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   const order = (g: Map<string | null, unknown>) => [...g.keys()].sort((a, b) => a === null ? 1 : b === null ? -1 : Number(a.slice(1)) - Number(b.slice(1)))
   const all = order(groups).map(k => ({ object: k, name: k === null ? "(no requirement)" : name(k), blocks: groups.get(k)! }))
   let source = all
-  let pkg: { objects: PackageObject[]; guards: PackageGuard[]; overflow: PackageOverflow | null } | undefined
+  let pkg: { pkg: RoundPackage; guards: PackageGuard[]; overflow: PackageOverflow | null } | undefined
   if (input.scope === "delta") {
     // The round's package (DESIGN §6c): the objects' current views, the guards on them; the rest held by the guards.
-    pkg = input.package ?? (() => { const f = fitPackage(registry, round, roundPackage(registry, round, (input.confirmed ?? []).map(c => ({ id: c.id, units: c.units }))), []); return { objects: f.pkg, guards: f.guards, overflow: f.overflow } })()
+    pkg = input.package ?? (() => { const f = fitPackage(roundPackage(registry, round, (input.confirmed ?? []).map(c => ({ id: c.id, units: c.units })))); return { pkg: f.pkg, guards: [], overflow: f.overflow } })()
     source = []
   }
 
@@ -229,8 +229,8 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   const chars = (zone: WorkOrder["source"]) => renderSource(zone).length
   const blocksAll = all.reduce((n, g) => n + g.blocks.length, 0)
   if (pkg) return {
-    round, task, protect: [], status: statusZone, source, anchors: anchorZone.filter(a => inTask.has(a.object)), edges, package: { objects: pkg.objects, guards: pkg.guards },
-    scope: { kind: "delta", source_chars: renderPackage(pkg.objects).length, source_chars_all: chars(all), blocks: (renderPackage(pkg.objects).match(/⟦[^⟧]+⟧/gu) ?? []).length, blocks_all: blocksAll, objects: pkg.objects.map(o => ({ object: o.object, why: o.why, via: o.via })), guards: pkg.guards.length, overflow: pkg.overflow },
+    round, task, protect: [], status: statusZone, source, anchors: anchorZone.filter(a => inTask.has(a.object)), edges, package: { pkg: pkg.pkg, guards: pkg.guards },
+    scope: { kind: "delta", source_chars: renderPackage(pkg.pkg).length, source_chars_all: chars(all), blocks: pkg.pkg.segments.length, blocks_all: blocksAll, segments: pkg.pkg.segments.map(s => ({ object: s.object, paragraph: s.paragraph, why: s.why, via: s.via })), heads: pkg.pkg.heads.map(h => h.object), edges: pkg.pkg.edges, sizes: packageSizes(pkg.pkg), guards: pkg.guards.length, overflow: pkg.overflow },
   }
   return { round, task, protect, status: statusZone, source, anchors: anchorZone, edges, scope: { kind: input.scope ?? "all", source_chars: chars(source), source_chars_all: chars(all), blocks: source.reduce((n, g) => n + g.blocks.length, 0), blocks_all: blocksAll } }
 }
@@ -287,6 +287,6 @@ export function renderWorkOrder(w: WorkOrder): string {
   for (const a of w.anchors) out.push(`- ${a.object}: ${a.anchors.map(x => `${x.id} (${x.file}:${x.lines})`).join(", ") || "(no anchors yet)"}${a.last_steps.length ? `; last steps ${a.last_steps.map(s => `${s.step} ${s.status}`).join(", ")}` : ""}`)
   if (w.edges.length) out.push("", "Edges (reference only): " + w.edges.map(e => `${e.from} ${e.kind} ${e.to}`).join("; "))
   out.push("", w.scope?.kind === "delta" && w.round > 1 ? "## Source zone (the requirements this round concerns, earlier text as it stands now; the only authority)" : "## Source zone (the requirements; the only authority)", "")
-  out.push(w.package ? renderPackage(w.package.objects) : renderSource(w.source))
+  out.push(w.package ? renderPackage(w.package.pkg) : renderSource(w.source))
   return out.join("\n") + "\n"
 }

@@ -359,14 +359,14 @@ export class Serial {
     const previous = state.reports.find(r => r.round === round - 1)
     // The round's package (§6c): the objects' current views and the guards on them, with what each gets on the baseline now.
     const deltaWork = (a.workorderScope ?? "delta") === "delta", deltaReview = (a.reviewScope ?? "delta") === "delta"
-    let pkg: ReturnType<typeof fitPackage> | undefined
+    let pkg: (ReturnType<typeof fitPackage> & { guards: PackageGuard[] }) | undefined
     if (deltaWork || deltaReview) {
-      const objects = roundPackage(registry, round, carried.map(c => ({ id: c.id, units: c.check ? [...c.check.blocks] : [] })))
-      const inPkg = new Set(objects.map(o => o.object))
+      const built = roundPackage(registry, round, carried.map(c => ({ id: c.id, units: c.check ? [...c.check.blocks] : [] })))
+      const inPkg = new Set(built.segments.map(s => s.object))
       const gs = liveGuards(state.guards, state.guard_events).filter(g => g.units.some(u => inPkg.has(registry.coverOf(u)?.owner ?? "")))
       const runs = baseline.kind !== "null" && gs.length ? await this.timed("guard list", () => runGuards(gs, state.checks, baseline, this.c.runner, round, registry, codeFacts(registry, round), limits.checkTimeoutMs)) : []
       const guards: PackageGuard[] = gs.map((g, i) => { const k = guardCheck(g, state.checks); return { id: g.id, object: g.object, args: k.input.args, files: k.input.files.map(f => f.path), units: g.units, output: runs[i] ? guardOutput(k, runs[i].run) : null } })
-      pkg = fitPackage(registry, round, objects, guards)
+      pkg = { ...fitPackage(built), guards }
     }
     const workorder: WorkOrder = buildWorkOrder({
       registry, round, library: state.checks, events: state.check_events, statuses: start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
@@ -375,7 +375,7 @@ export class Serial {
       // The round's package (§6a step 3) by default; failures in the task zone are confirmed items and guards only.
       scope: a.workorderScope ?? "delta",
       confirmed: carried.map(c => ({ id: c.id, object: c.check && c.check.object !== "none" ? c.check.object : null, units: c.check ? [...c.check.blocks] : [], args: c.check?.input.args ?? [], files: c.check?.input.files.map(f => f.path) ?? [] })),
-      ...(deltaWork && pkg ? { package: { objects: pkg.pkg, guards: pkg.guards, overflow: pkg.overflow } } : {}),
+      ...(deltaWork && pkg ? { package: { pkg: pkg.pkg, guards: pkg.guards, overflow: pkg.overflow } } : {}),
     })
     // The reviewer reads the package's views, without the guards (§6c); the formalizer the same text. Full is the
     // control group's text (ablation).

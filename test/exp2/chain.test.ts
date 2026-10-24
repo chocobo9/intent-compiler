@@ -13,7 +13,7 @@ import { renderReport, type RoundReport } from "../../src/exp2/report.js"
 import { reviewRequestOn } from "../../src/exp2/review.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import type { CheckRun } from "../../src/exp2/verdict.js"
-import { currentView, fitPackage, renderGuardList, renderPackage, roundPackage, type PackageGuard, type PackageObject } from "../../src/exp2/view.js"
+import { currentView, fitPackage, PACKAGE_BUDGET, renderGuardList, renderPackage, roundPackage, type PackageSegment } from "../../src/exp2/view.js"
 import { roundText } from "./inputs.js"
 import { stubTransport } from "./stubs.js"
 
@@ -91,23 +91,19 @@ describe("the chain block, the round's package and its limit (§6c, round packag
   const dir = mkdtempSync(join(tmpdir(), "exp2-chain-pkg-"))
   const store = new Exp2Store(join(dir, "store"), "chp")
   before(async () => { for (const r of [1, 2, 3]) await store.ingestRound(r, roundText(r), stubTransport()) })
-  const obj = (object: string, why: PackageObject["why"], via: string[], size: number): PackageObject => ({ object, name: object, why, via, view: "x".repeat(size) })
+  const seg = (paragraph: string, why: PackageSegment["why"], size: number): PackageSegment => ({ object: "O1", name: "o", paragraph, round: 1, path: "R1", why, via: [], text: "x".repeat(size) })
 
-  it("over three times the round's text: the earlier objects brought by refers_to go first, the last first; then the guards' outputs; this round's and the open items' stay", () => {
-    const reg = store.registry()
-    const limit = 3 * reg.sources.get(3)!.text.length
-    const pkg = [obj("O1", "this round", [], limit * 0.4), obj("O2", "edge", ["a refers_to b"], limit * 0.25), obj("O3", "edge", ["c refers_to d"], limit * 0.25), obj("O4", "edge", ["e applies_to f"], limit * 0.1), obj("O5", "open item", ["V1.1.1"], limit * 0.1)]
-    const guards: PackageGuard[] = [{ id: "G1", object: "O1", args: ["transform"], files: ["d.csv"], units: ["R3.S3.P1"], output: "exit 0; " + "y".repeat(2000) }]
-    const f = fitPackage(reg, 3, pkg, guards)
-    assert.deepEqual(f.pkg.map(p => p.object), ["O1", "O2", "O4", "O5"])
-    assert.deepEqual(f.overflow!.dropped, ["O3"])
-    assert.equal(f.overflow!.limit, limit)
-    const g = fitPackage(reg, 3, [...pkg, obj("O6", "this round", [], limit * 0.4)], guards)
-    assert.deepEqual(g.pkg.map(p => p.object), ["O1", "O4", "O5", "O6"], "both refers_to objects go, applies_to stays")
-    assert.equal(g.overflow!.outputs_dropped, true)
-    assert.equal(g.guards[0].output, null)
-    assert.equal(g.overflow!.still_over, true, "this round's objects are never cut")
-    assert.equal(fitPackage(reg, 3, [obj("O1", "this round", [], 10)], guards).overflow, null)
+  it("over the budget (40k): the paragraphs edges brought go first, the last first; then those of open items; this round's and the revised ones stay", () => {
+    const pkg = (segments: PackageSegment[]) => ({ segments, heads: [], comparisons: [], edges: { to_block: 0, to_object: 0 } })
+    assert.equal(PACKAGE_BUDGET, 40_000)
+    const segs = [seg("P1", "this round", 12_000), seg("P2", "revised", 5_000), seg("P3", "edge", 8_000), seg("P4", "edge", 8_000), seg("P5", "open item", 6_000), seg("P6", "open item", 6_000)]
+    const f = fitPackage(pkg(segs))
+    assert.deepEqual(f.pkg.segments.map(s => s.paragraph), ["P1", "P2", "P3", "P5", "P6"])
+    assert.deepEqual(f.overflow!.dropped, ["P4"])
+    const g = fitPackage(pkg([...segs, seg("P7", "this round", 25_000)]))
+    assert.deepEqual(g.pkg.segments.map(s => s.paragraph), ["P1", "P2", "P7"], "edges, then open items")
+    assert.equal(g.overflow!.still_over, true, "this round's paragraphs are never cut")
+    assert.equal(fitPackage(pkg([seg("P1", "this round", 10)])).overflow, null)
   })
 
   it("the guard list gives the command, the input files, the output now and the units; never an expected value", () => {

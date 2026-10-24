@@ -18,7 +18,7 @@ import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store, refusedIn } from "../../src/exp2/store.js"
 import { buildFormalizeRequest } from "../../src/exp2/formalize.js"
 import { annotate } from "../../src/exp2/source.js"
-import { currentView, fitPackage, renderPackage, roundPackage } from "../../src/exp2/view.js"
+import { contextOf, currentView, fitPackage, renderPackage, roundPackage } from "../../src/exp2/view.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { DROP, FILTER, GO_MOD, MAIN, NORMALIZE, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
@@ -213,28 +213,30 @@ describe("batch 1, items 6, 9 (§6a step 3): the round's package, not every roun
     assert.ok(plain(then).includes(reg.block(ZSCORE_UNIT)!.text.trim()), "in round 2 it stood as written")
     assert.ok(now.indexOf("R3.S3.P1") < now.indexOf("## R3") || !now.includes("## R3"), "the revising text sits in place, not again at its own place")
     assert.equal(currentView(reg, normalize, 3), now, "a pure function")
-    // R1's package: every object R1 made, its view.
-    assert.deepEqual(roundPackage(reg, 1).map(p => p.why), roundPackage(reg, 1).map(() => "this round"))
+    // R1's package: R1's paragraphs, all of them this round's.
+    assert.ok(roundPackage(reg, 1).segments.every(s => s.why === "this round" && s.round === 1))
   })
 
-  it("R2 and R3 (§6c round package): this round's objects, earlier objects one edge away, the open items' objects; nothing else", () => {
+  it("R2 and R3 (§6c revision): this round's paragraphs, the earlier paragraphs this round revises, the paragraphs this round's edges point at, the open items' paragraphs; nothing else", () => {
     const reg = store.registry()
-    const num = (o: string) => Number(o.slice(1))
+    const para = (id: string) => contextOf(reg, id).id
     for (const r of [2, 3]) {
-      const changed = new Set(reg.roundScope(r).map(c => c.object))
+      const own = new Set(reg.roundScope(r).flatMap(c => c.entries.map(e => para(e.block))))
+      const revised = new Set([...reg.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === r).flatMap(m => m.parts.map(para)))))
       const pkg = roundPackage(reg, r, [{ id: "V1.1.1", units: [FILTER_UNIT] }])
-      for (const p of pkg) {
-        if (p.why === "this round") assert.ok(changed.has(p.object), p.object)
-        else if (p.why === "edge") assert.ok(p.via.every(v => reg.references.some(e => e.round <= r && `${e.from} ${e.kind} ${e.to}` === v)), `${p.object} ${p.via}`)
-        else assert.deepEqual([p.why, p.via], ["open item", ["V1.1.1"]])
+      for (const s of pkg.segments) {
+        if (s.why === "this round") assert.ok(own.has(s.paragraph), s.paragraph)
+        else if (s.why === "revised") assert.ok(revised.has(s.paragraph) && /earlier text of /u.test(s.text), s.paragraph)
+        else if (s.why === "edge") assert.ok(reg.references.some(e => e.round === r && !/^O\d+$/u.test(e.to) && para(e.to) === s.paragraph), s.paragraph)
+        else assert.deepEqual([s.paragraph, s.via], [para(FILTER_UNIT), ["V1.1.1"]])
       }
-      assert.deepEqual(pkg.filter(p => p.why === "this round").map(p => p.object), [...changed].filter(o => pkg.some(p => p.object === o)).sort((a, b) => num(a) - num(b)), "this round's first, in id order")
-      const filter = reg.coverOf(FILTER_UNIT)!.owner
-      assert.ok(pkg.some(p => p.object === filter), "the open item's object")
+      for (const p of own) assert.ok(pkg.segments.some(s => s.paragraph === p), `${p} of this round is there`)
+      assert.equal(new Set(pkg.segments.map(s => s.paragraph)).size, pkg.segments.length, "each paragraph once")
+      assert.equal(pkg.edges.to_block + pkg.edges.to_object, reg.references.filter(e => e.round === r).length)
       const delta = buildWorkOrder({ registry: reg, round: r, library: [], events: [], statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [], scope: "delta", confirmed: [{ id: "V1.1.1", object: null, units: [FILTER_UNIT], args: [], files: [] }] })
       assert.ok(delta.scope!.source_chars < delta.scope!.source_chars_all, `R${r}: delta ${delta.scope!.source_chars} vs all ${delta.scope!.source_chars_all}`)
       assert.deepEqual(delta.status, [], "no status zone")
-      assert.deepEqual(delta.scope!.objects!.map(o => o.object), fitPackage(reg, r, pkg, []).pkg.map(p => p.object), "the package within its limit")
+      assert.deepEqual(delta.scope!.segments!.map(s => s.paragraph), fitPackage(pkg).pkg.segments.map(s => s.paragraph), "the package within its budget")
       assert.doesNotMatch(renderWorkOrder(delta), /replaced by|amended by|newer text wins/u)
     }
   })
@@ -272,7 +274,7 @@ ${annotate(reg.sources.get(1)!)}`))
       assert.ok(d[k].review < a[k].review, `R${k + 1} review requests: delta ${d[k].review}, full ${a[k].review}`)
     }
     // The report says so, in its interface counts.
-    assert.match(renderReport(delta.reports[2]), /- Requirements given: work order source zone delta, \d+ characters in \d+ objects \(\d+ this round, \d+ by an edge, \d+ by open items\), \d+ guards listed.* \(every round's text: \d+ in \d+ blocks\); review requests \d+ characters/u)
+    assert.match(renderReport(delta.reports[2]), /- Requirements given: work order source zone delta, \d+ characters in \d+ paragraphs of \d+ objects \(this round \d+ \(\d+ characters\), revised \d+ \(\d+ characters\), edge \d+ \(\d+ characters\), open item \d+ \(\d+ characters\)\), \d+ object heads; this round's edges to a block \d+, to an object \d+; \d+ guards listed.* \(every round's text: \d+ in \d+ blocks\); review requests \d+ characters/u)
   })
 })
 

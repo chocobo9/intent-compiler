@@ -209,72 +209,151 @@ function inlineText(registry: Registry, units: readonly string[]): string {
   return texts.join(units.some(u => /^\s*(?:[-*+]|\d+[.)])\s/u.test(registry.block(u)!.text)) ? "\n" : " ")
 }
 
-export type PackageWhy = "this round" | "edge" | "open item"
-export interface PackageObject { object: string; name: string; why: PackageWhy; via: string[]; view: string }
+/**
+ * A paragraph (or section) as it stands after `round`: units later rounds revised replaced in place by the units
+ * revising them (each under its id), withdrawn units and revised code blocks or tables gone; hashes dropped.
+ */
+export function paragraphInForce(registry: Registry, paragraph: string, round: number): string {
+  const p = registry.block(paragraph)!
+  const cuts: Cut[] = []
+  for (const o of registry.objects.values()) for (const own of o.blocks) for (const m of own.modifications.filter(x => x.round <= round)) {
+    const amended = new Set(m.amended ?? [])
+    const parts = m.parts.map(x => registry.block(x)!).filter(x => x && x.start >= p.start && x.end <= p.end && x.id !== p.id).sort((a, b) => a.start - b.start)
+    const replaced = m.kind === "withdraw" ? [] : parts.filter(x => !amended.has(x.id))
+    for (const x of parts) cuts.push({ start: x.start, end: contentEnd(x), note: x === replaced[0] ? inlineText(registry, m.by) : "" })
+  }
+  return renderSpan(registry, p, cuts)
+}
+
+export type SegmentWhy = "this round" | "revised" | "edge" | "open item"
+/** A paragraph of the round's package (§6c, the package's revision): whose it is, why it is there, its text in force. */
+export interface PackageSegment { object: string; name: string; paragraph: string; round: number; path: string; why: SegmentWhy; via: string[]; text: string }
+/** An object an edge of this round points at as a whole: named, its text not brought (§6c revision, decision Q2). */
+export interface PackageHead { object: string; name: string; referred_by: string[] }
+/** Behaviour bound to earlier text this round revises (§6c revision item 4): a guard on a revised unit, what it gets now. */
+export interface PackageComparison { guard: string; args: string[]; files: string[]; output: string | null; units: { id: string; earlier: string; now: string[] }[] }
+export interface RoundPackage { segments: PackageSegment[]; heads: PackageHead[]; comparisons: PackageComparison[]; edges: { to_block: number; to_object: number } }
+
+const WHY_RANK: Record<SegmentWhy, number> = { "this round": 0, revised: 1, edge: 2, "open item": 3 }
+const paragraphOf = (registry: Registry, id: string) => contextOf(registry, id).id
 
 /**
- * The round's package (DESIGN §6c, round package; §6a step 3), by object: the objects this round adds or revises;
- * earlier objects one relation edge of the attribution away from them; the objects the open items' units belong to.
- * One hop only, nothing inferred. Each with its current view; this round's first, then the earlier ones, each in id
- * order.
+ * The round's package (DESIGN §6c and its revision of 2026-10-25), by paragraph:
+ * - this round: the paragraphs (or sections) holding the units this round attributed, under their object;
+ * - revised: the earlier paragraph holding each unit this round revised or withdrew, as it stands now, with the
+ *   earlier text of the unit on a line below;
+ * - edge: an edge recorded this round from this round's text to an earlier block brings that block's paragraph; one
+ *   to an object as a whole brings a head line only;
+ * - open item: the paragraph each open item's unit is in.
+ * Each paragraph once (the first reason in that order); nothing inferred.
  */
-export function roundPackage(registry: Registry, round: number, open: readonly { id: string; units: readonly string[] }[] = []): PackageObject[] {
-  const num = (id: string) => Number(id.slice(1))
-  const changed = new Set(registry.roundScope(round).map(c => c.object))
-  const ownerOf = (id: string) => { const o = /^O\d+$/u.test(id) ? id : registry.coverOf(id)?.owner; return o && o !== "none" && registry.objects.has(o) ? o : null }
-  const earlier = new Map<string, { why: PackageWhy; via: string[] }>()
-  const bring = (o: string | null, why: PackageWhy, via: string) => {
-    if (!o || changed.has(o)) return
-    const e = earlier.get(o) ?? { why, via: [] }
-    if (why === "edge") e.why = "edge"
-    if (!e.via.includes(via)) e.via.push(via)
-    earlier.set(o, e)
+export function roundPackage(registry: Registry, round: number, open: readonly { id: string; units: readonly string[] }[] = []): RoundPackage {
+  const owner = (id: string) => { const o = registry.coverOf(id)?.owner; return o && o !== "none" && registry.objects.has(o) ? o : null }
+  const segs = new Map<string, PackageSegment>()
+  const earlier = new Map<string, string[]>()
+  const add = (paragraph: string, object: string | null, why: SegmentWhy, via: string | null) => {
+    if (!object) return
+    const b = registry.block(paragraph)!
+    const at = segs.get(paragraph)
+    if (at && WHY_RANK[at.why] <= WHY_RANK[why]) { if (via && !at.via.includes(via)) at.via.push(via); return }
+    const text = b.round === round ? renderSpan(registry, b, []) : paragraphInForce(registry, paragraph, round)
+    const path = [`R${b.round}`, ...headingPath(registry, contextOf(registry, paragraph)).map(h => h.replace(/^#+\s*/u, ""))].join(" › ")
+    segs.set(paragraph, { object, name: registry.objects.get(object)!.name, paragraph, round: b.round, path, why, via: [...(at?.via ?? []), ...(via ? [via] : [])], text })
   }
-  for (const e of registry.references.filter(x => x.round <= round)) {
-    const from = ownerOf(e.from), to = ownerOf(e.to)
-    if (from && changed.has(from)) bring(to, "edge", `${e.from} ${e.kind} ${e.to}`)
-    if (to && changed.has(to)) bring(from, "edge", `${e.from} ${e.kind} ${e.to}`)
+  // This round's units, by the paragraph (or section) they are in.
+  for (const c of registry.roundScope(round)) for (const e of c.entries) add(paragraphOf(registry, e.block), c.object, "this round", null)
+  // Earlier units this round revised or withdrew.
+  for (const o of registry.objects.values()) for (const own of o.blocks) for (const m of own.modifications.filter(x => x.round === round)) for (const p of m.parts) {
+    const para = paragraphOf(registry, p)
+    add(para, o.id, "revised", `${p} ${m.kind === "withdraw" ? "withdrawn" : "revised"} by ${m.by.join(", ")}`)
+    earlier.set(para, [...new Set([...(earlier.get(para) ?? []), p])])
   }
-  for (const item of open) for (const u of item.units) bring(ownerOf(u), "open item", item.id)
-  const make = (object: string, why: PackageWhy, via: string[]): PackageObject => ({ object, name: registry.objects.get(object)!.name, why, via, view: currentView(registry, object, round) })
-  return [
-    ...[...changed].filter(o => registry.objects.has(o)).sort((a, b) => num(a) - num(b)).map(o => make(o, "this round", [])),
-    ...[...earlier.entries()].sort((a, b) => num(a[0]) - num(b[0])).map(([o, e]) => make(o, e.why, e.via)),
-  ].filter(p => p.view.trim() !== "")
+  // Edges this round records from its own text.
+  const heads = new Map<string, PackageHead>()
+  const edges = { to_block: 0, to_object: 0 }
+  for (const e of registry.references.filter(x => x.round === round)) {
+    if (/^O\d+$/u.test(e.to)) {
+      edges.to_object++
+      const o = registry.objects.get(e.to)
+      if (!o) continue
+      const h = heads.get(o.id) ?? { object: o.id, name: o.name, referred_by: [] }
+      if (!h.referred_by.includes(e.from)) h.referred_by.push(e.from)
+      heads.set(o.id, h)
+    } else {
+      edges.to_block++
+      const b = registry.block(e.to)
+      if (b && b.round < round) add(paragraphOf(registry, e.to), owner(e.to), "edge", `${e.from} ${e.kind} ${e.to}`)
+    }
+  }
+  for (const item of open) for (const u of item.units) if (registry.block(u)) add(paragraphOf(registry, u), owner(u), "open item", item.id)
+  const segments = [...segs.values()]
+  for (const s of segments) for (const p of earlier.get(s.paragraph) ?? []) s.text = `${s.text.trimEnd()}\nearlier text of ${p}: ${registry.block(p)!.text.trim()}`
+  // An object with text in the package needs no head line.
+  const withText = new Set(segments.map(s => s.object))
+  return { segments: orderSegments(registry, segments), heads: [...heads.values()].filter(h => !withText.has(h.object)), comparisons: [], edges }
 }
 
-/** A guard of the package (§6c, round package item 3): what it runs and what it gets now, never what it expects. */
+function orderSegments(registry: Registry, segments: PackageSegment[]): PackageSegment[] {
+  const num = (o: string) => Number(o.slice(1))
+  const rank = new Map<string, number>()
+  for (const s of segments) rank.set(s.object, Math.min(rank.get(s.object) ?? 9, WHY_RANK[s.why]))
+  return [...segments].sort((a, b) => (rank.get(a.object)! === 0 ? 0 : 1) - (rank.get(b.object)! === 0 ? 0 : 1) || num(a.object) - num(b.object) || a.round - b.round || registry.block(a.paragraph)!.start - registry.block(b.paragraph)!.start)
+}
+
+const segmentLabel = (s: PackageSegment) => s.why === "this round" ? "this round" : s.why === "revised" ? `earlier text this round revises (${s.via.join("; ")})` : s.why === "edge" ? `earlier, referred to by ${s.via.join("; ")}` : `earlier, open item ${s.via.join(", ")}`
+
+/** The package as the executor, the reviewer and the formalizer read it: by object, each paragraph under its heading path and reason. */
+export function renderPackage(pkg: RoundPackage): string {
+  const out: string[] = []
+  let object = "", header = ""
+  for (const s of pkg.segments) {
+    if (s.object !== object) { out.push(`### ${s.object} ${s.name}`); object = s.object; header = "" }
+    // The heading path and reason once for consecutive paragraphs that share them.
+    const h = `## ${s.path} — ${segmentLabel(s)}`
+    if (h !== header) { out.push(h); header = h }
+    out.push(s.text.trimEnd())
+  }
+  for (const h of pkg.heads) out.push(`### ${h.object} ${h.name} — referred to by ${h.referred_by.join(", ")}, text not brought`)
+  if (pkg.comparisons.length) out.push(renderComparisons(pkg.comparisons))
+  return out.length ? out.join("\n\n") + "\n" : ""
+}
+
+export function renderComparisons(cs: readonly PackageComparison[]): string {
+  const out = ["## Behaviour bound to earlier text this round revises (what the program does now; decide from the requirements as they stand)"]
+  for (const c of cs) {
+    out.push(`- ${c.guard}: command ${JSON.stringify(c.args)}; input files ${c.files.join(", ") || "none"}${c.output !== null ? `; now: ${c.output}` : ""}`)
+    for (const u of c.units) out.push(`  - earlier text of ${u.id}: ${u.earlier}${u.now.length ? `; now: ${u.now.join(" ")}` : "; withdrawn"}`)
+  }
+  return out.join("\n")
+}
+
+/** Characters of the package by zone (§6c revision item 5). */
+export function packageSizes(pkg: RoundPackage): Record<SegmentWhy | "heads" | "comparisons" | "total", number> {
+  const by = (w: SegmentWhy) => pkg.segments.filter(s => s.why === w).reduce((n, s) => n + s.text.length, 0)
+  return { "this round": by("this round"), revised: by("revised"), edge: by("edge"), "open item": by("open item"), heads: pkg.heads.length ? pkg.heads.map(h => h.object).join().length : 0, comparisons: pkg.comparisons.length ? renderComparisons(pkg.comparisons).length : 0, total: renderPackage(pkg).length }
+}
+
+export interface PackageOverflow { limit: number; chars: number; dropped: string[]; still_over: boolean }
+
+/**
+ * The package within its budget (§6c revision item 5): first the paragraphs edges brought go, the last first; then
+ * those of the open items. This round's paragraphs and the revised ones stay. Null overflow: it fitted.
+ */
+export function fitPackage(pkg: RoundPackage, limit = PACKAGE_BUDGET): { pkg: RoundPackage; overflow: PackageOverflow | null } {
+  const chars = renderPackage(pkg).length
+  if (chars <= limit) return { pkg, overflow: null }
+  const segments = [...pkg.segments], dropped: string[] = []
+  for (const why of ["edge", "open item"] as const) for (let i = segments.length - 1; i >= 0 && renderPackage({ ...pkg, segments }).length > limit; i--) if (segments[i].why === why) { dropped.push(segments[i].paragraph); segments.splice(i, 1) }
+  const fitted = { ...pkg, segments }
+  return { pkg: fitted, overflow: { limit, chars, dropped: dropped.reverse(), still_over: renderPackage(fitted).length > limit } }
+}
+
+/** A guard of the work order's protection zone (§6c, round package item 3): what it runs and gets now, never what it expects. */
 export interface PackageGuard { id: string; object: string | null; args: string[]; files: string[]; units: string[]; output: string | null }
-
-export const packageHeader = (p: PackageObject) => `### ${p.object} ${p.name} — ${p.why === "this round" ? "this round" : `earlier, brought in by ${p.why === "edge" ? "the edge" : "the open item"} ${p.via.join("; ")}`}`
-
-/** The package's requirements as the executor, the reviewer and the formalizer read them: each object's header and view. */
-export function renderPackage(pkg: readonly PackageObject[]): string {
-  return pkg.map(p => `${packageHeader(p)}\n\n${p.view.trimEnd()}\n`).join("\n")
-}
 
 export function renderGuardList(guards: readonly PackageGuard[]): string {
   return guards.map(g => `- ${g.id} (rests on ${g.units.join(", ")}): command ${JSON.stringify(g.args)}; input files ${g.files.join(", ") || "none"}${g.output !== null ? `; now: ${g.output}` : ""}`).join("\n")
 }
 
-export interface PackageOverflow { limit: number; chars: number; dropped: string[]; outputs_dropped: boolean; still_over: boolean }
-
-/**
- * The package within its limit (§6c, round package item 5: three times this round's text): first the earlier objects
- * brought in only by refers_to edges go, the last in order first; then the guards' outputs. This round's objects and
- * the open items' objects stay. Null overflow: it fitted.
- */
-export function fitPackage(registry: Registry, round: number, pkg: readonly PackageObject[], guards: readonly PackageGuard[]): { pkg: PackageObject[]; guards: PackageGuard[]; overflow: PackageOverflow | null } {
-  const limit = 3 * (registry.sources.get(round)?.text.length ?? 0)
-  const size = (p: readonly PackageObject[], g: readonly PackageGuard[]) => renderPackage(p).length + renderGuardList(g).length
-  const p = [...pkg]
-  let g = [...guards]
-  const chars = size(p, g)
-  if (chars <= limit) return { pkg: p, guards: g, overflow: null }
-  const dropped: string[] = []
-  const droppable = (x: PackageObject) => x.why === "edge" && x.via.every(v => / refers_to /u.test(v))
-  for (let i = p.length - 1; i >= 0 && size(p, g) > limit; i--) if (droppable(p[i])) { dropped.push(p[i].object); p.splice(i, 1) }
-  let outputs = false
-  if (size(p, g) > limit) { g = g.map(x => ({ ...x, output: null })); outputs = true }
-  return { pkg: p, guards: g, overflow: { limit, chars, dropped: dropped.reverse(), outputs_dropped: outputs, still_over: size(p, g) > limit } }
-}
+/** The package's budget in characters (§6c revision item 5). */
+export const PACKAGE_BUDGET = 40_000
