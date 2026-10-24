@@ -39,12 +39,12 @@ rep1m | 2 | 169 | 14 | 10 | 122 | 34 | 30 | 13 | 3
    - `fill` "Fill constant"：rep1l、rep1m 两轮各 2 个，未提到。
    - `manifest` "BLAKE2b manifest""Manifest row count and size"：rep1j R5–R6 共 10 个、rep1k R5 5 个。R5 原文把哈希从 SHA-256 改成 BLAKE2b，审查员在 transform/verify 上看到了（守卫 G1、G8 翻转），**manifest 上没看**。这是"一个概念改多个命令"的横切变更在审查侧漏掉的实例。
    - `validate` 7 个（rep1k R5）：R4 原文没写 row 起算，执行方取了文件行号，审查员也没报——原文没写的东西审查员也不会报，这与之前的归因一致。
-4. **看见了却没送出去（证据，一例）。** rep1j R5 三次审查都报了"transform 写了禁止的 .sha256 旁路文件"（V5.1.1、V5.2.1、V5.3.1），三条处置都是 logged，前提 value_not_stated ×3：formalizer 对"文件不应存在"写不出"期望值"，条目降为记录不送修。当轮 determinism 用例 "Transform SHA-256" 轮末仍挂。**这是验收侧自己的损失**，与 12j.3 的闸同类：一条只记录的前提把存在性检查当成没值。
+4. **看见了却没送出去——此条已被重放证伪（2026-10-25 晚，NOTES §28）：三条都送出并复现，未修好的原因是方向写反的守卫 G57 回退了三次正确修补。保留原文以存记录：** rep1j R5 三次审查都报了"transform 写了禁止的 .sha256 旁路文件"（V5.1.1、V5.2.1、V5.3.1），三条处置都是 logged，前提 value_not_stated ×3：formalizer 对"文件不应存在"写不出"期望值"，条目降为记录不送修。当轮 determinism 用例 "Transform SHA-256" 轮末仍挂。**这是验收侧自己的损失**，与 12j.3 的闸同类：一条只记录的前提把存在性检查当成没值。
 
 ## 对"验收做完了没有"的回答
 
 - 看见：大体做到，盲区具体可数：横切变更（哈希改法影响 manifest）、从不报的 derive 边界、fill constant。
-- 送出：有一个洞（value_not_stated 对存在性断言），已有一例造成丢分。
+- 送出：原以为的洞（value_not_stated）证伪；真实问题是守卫出生的取反方向（G57），归守卫层。
 - 修好：是主要丢分处，不属于验收模块。
 
 ## 局限
