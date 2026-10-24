@@ -1,5 +1,5 @@
 import type { BlockState, Modification, Registry } from "./registry.js"
-import { annotate, annotateRange, type SourceBlock } from "./source.js"
+import { annotateRange, type SourceBlock } from "./source.js"
 
 /**
  * Object view: every source block an object holds, in round order. Text is always shown as a whole section or
@@ -120,111 +120,161 @@ export function renderObjectView(view: ObjectView): string {
   return out.join("\n") + "\n"
 }
 
+// ------------------------------------------------------------------ the current view and the round's package (§6c)
+
+interface Cut { start: number; end: number; note: string }
+
+const within = (registry: Registry, inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
+const overlaps = (registry: Registry, a: string, b: string) => within(registry, a, b) || within(registry, b, a)
+/** A span's content, without the blank lines that follow it (the layout around a cut stays). */
+const contentEnd = (b: SourceBlock) => b.start + b.text.trimEnd().length
+const viewCache = new WeakMap<Registry, Map<string, string>>()
+
 /**
- * A block as it is in force after `round` (DESIGN §6a step 2): text later rounds replaced or withdrew inside it is left
- * out, with the id of what replaced it in its place; amended parts (code, tables) stay, with what amends them. Null when
- * the block as a whole is no longer in force.
+ * One object's requirements as they stand after `round` (DESIGN §6c, view; §6a step 2): a pure function of the
+ * registry, cached by object, round and the registry's change count.
+ * - Its blocks up to `round`, by round and document order; a block wholly replaced or withdrawn is not there.
+ * - A unit a later round revised (a sentence, a list item, a clause) is replaced in place by the units revising it,
+ *   each under its own id; those units are not given again where they stand.
+ * - A withdrawn unit goes; a code block or table revised goes whole. The text that withdrew or revised it is there,
+ *   in its own place (its round), whichever object owns it.
+ * - A heading path line where it changes; paragraph ids as `⟦R2.S13.P4⟧`, units as `‹s2›` (or their full id when
+ *   brought in place). No other marker.
  */
-export function effectiveText(registry: Registry, block: string, round: number): string | null {
-  const b = registry.block(block)!
-  const cuts = inForceCuts(registry, block, round)
-  if (!cuts) return null
-  let text = b.text
-  for (const c of [...cuts].sort((x, y) => y.start - x.start)) text = `${text.slice(0, c.start - b.start)}${c.note}${text.slice(c.end - b.start)}`
+export function currentView(registry: Registry, object: string, round: number): string {
+  const key = `${object}@${round}#${registry.changes.length}`
+  let cache = viewCache.get(registry)
+  if (!cache) viewCache.set(registry, cache = new Map())
+  const hit = cache.get(key)
+  if (hit !== undefined) return hit
+  const text = renderView(registry, object, round)
+  cache.set(key, text)
   return text
 }
 
-/** What `effectiveText` takes out of a block, as offsets in its round's text; null when the block is out of force. */
-function inForceCuts(registry: Registry, block: string, round: number): { start: number; end: number; note: string }[] | null {
-  const b = registry.block(block)!
-  const own = registry.objects.get(registry.assigned.get(block) ?? "")?.blocks.find(x => x.block === block)
-  const mods = own?.modifications.filter(m => m.round <= round) ?? []
-  if (mods.some(m => m.parts.includes(block) && !(m.amended ?? []).includes(block))) return null
-  const cuts: { start: number; end: number; note: string }[] = []
-  for (const m of mods) for (const p of m.parts) {
-    const part = registry.block(p)
-    if (!part || part.start < b.start || part.end > b.end) continue
-    const amended = (m.amended ?? []).includes(p)
-    const note = amended ? `⟦${p} amended by ${m.by.join(", ")}; where they differ, ${m.by.join(", ")} wins⟧ ` : m.kind === "withdraw" ? `⟦${p} withdrawn⟧ ` : `⟦${p} replaced by ${m.by.join(", ")}⟧ `
-    // The replaced text goes; it ends where its content ends, so the layout around it stays.
-    cuts.push(amended ? { start: part.start, end: part.start, note } : { start: part.start, end: part.start + part.text.trimEnd().length, note })
+function renderView(registry: Registry, object: string, round: number): string {
+  const o = registry.objects.get(object)
+  if (!o) return ""
+  const own = o.blocks.filter(b => b.round <= round)
+  const gone = new Set<string>(), inline = new Set<string>(), extra = new Set<string>()
+  const cuts = new Map<string, Cut[]>()
+  const cut = (block: string, c: Cut) => cuts.set(block, [...(cuts.get(block) ?? []), c])
+  for (const b of own) for (const m of b.modifications.filter(x => x.round <= round)) {
+    const whole = m.parts.includes(b.block)
+    if (whole) gone.add(b.block)
+    const amended = new Set(m.amended ?? [])
+    const parts = m.parts.filter(p => p !== b.block && within(registry, p, b.block)).map(p => registry.block(p)!).sort((x, y) => x.start - y.start)
+    // Revised units (not withdrawn, not a code block or table) take the revising text in place, at the first of them.
+    const replaced = m.kind === "withdraw" || whole ? [] : parts.filter(p => !amended.has(p.id))
+    for (const p of parts) cut(b.block, { start: p.start, end: contentEnd(p), note: p === replaced[0] ? inlineText(registry, m.by) : "" })
+    for (const u of m.by) (replaced.length ? inline : extra).add(u)
   }
-  return cuts
-}
-
-/**
- * The round's package with block ids (§12j.7 item 6, batch 1c): the blocks the reviewer reads, annotated as
- * `annotate` marks a round, for the formalizer. This round's text whole; earlier blocks in force, joined as in
- * `packageSources`.
- */
-export function annotatedPackage(registry: Registry, round: number, blocks: readonly PackageBlock[]): string {
+  // Units given in place are not given again where they stand: in this object's blocks they are cut.
+  for (const b of own) for (const u of inline) if (u !== b.block && within(registry, u, b.block)) { const x = registry.block(u)!; cut(b.block, { start: x.start, end: contentEnd(x), note: "" }) }
+  const blocks = own.filter(b => !gone.has(b.block) && !inline.has(b.block)).map(b => b.block)
+  for (const u of extra) if (!inline.has(u) && registry.block(u)!.round <= round && !blocks.some(b => overlaps(registry, u, b))) blocks.push(u)
+  const ordered = blocks.map(id => registry.block(id)!).sort((x, y) => x.round - y.round || x.start - y.start)
   const out: string[] = []
-  for (const r of [...new Set(blocks.map(b => b.round))].sort((a, b) => a - b)) {
-    const source = registry.sources.get(r)!
-    if (r === round) { out.push(`===== R${r} =====\n${annotate(source)}`); continue }
-    let text = "", end = -1
-    for (const pb of blocks.filter(x => x.round === r)) {
-      const at = registry.block(pb.id)!, cuts = inForceCuts(registry, pb.id, round)
-      if (!cuts) continue
-      const t = annotateRange(source, at.start, at.end, cuts)
-      text += end === at.start ? t : `${text ? "\n\n" : ""}${t.replace(/^\n+/u, "")}`
-      end = at.end
-    }
-    out.push(`===== R${r} =====\n${text.trimEnd()}\n`)
+  let path = ""
+  for (const b of ordered) {
+    const text = renderSpan(registry, b, cuts.get(b.id) ?? []).trimEnd()
+    // A block left with no text of its own (its units given in place elsewhere) is not there.
+    if (!text.replace(/⟦[^⟧]*⟧|‹[^›]*›/gu, "").split(/\r?\n/u).some(l => l.trim() && !/^#+\s/u.test(l.trim()))) continue
+    const p =[`R${b.round}`, ...headingPath(registry, contextOf(registry, b.id)).map(h => h.replace(/^#+\s*/u, ""))].join(" › ")
+    if (p !== path) { out.push(`## ${p}`); path = p }
+    out.push(text)
   }
-  return out.join("\n")
+  return out.length ? out.join("\n\n") + "\n" : ""
 }
 
-export interface PackageBlock { id: string; round: number; object: string | null; text: string; why: "this round" | "object changed" | "related" | "open item" }
+/** A block's annotated text with its cuts; hashes dropped; a unit below a paragraph led by its full id. */
+function renderSpan(registry: Registry, b: SourceBlock, cuts: readonly Cut[]): string {
+  const source = registry.sources.get(b.round)!
+  // Cuts of the same span (two revisions of one unit) give their notes together; a cut inside another goes.
+  const merged: Cut[] = []
+  for (const c of [...cuts].sort((x, y) => x.start - y.start || y.end - x.end)) {
+    const last = merged.at(-1)
+    if (last && c.start === last.start && c.end === last.end) { if (c.note && !last.note.includes(c.note)) last.note = [last.note, c.note].filter(Boolean).join(" ") }
+    else if (!last || c.start >= last.end) merged.push({ ...c })
+  }
+  const sorted = merged
+  const text = annotateRange(source, b.start, b.end, sorted).replace(/⟦([^#⟧]+)#[0-9a-f]{8}⟧/gu, "⟦$1⟧")
+  return b.level === "sentence" || b.level === "clause" ? `⟦${b.id}⟧ ${text.replace(/^‹[^›]*›/u, "")}` : text
+}
+
+/** The text of units brought in place of what they revise, each under its full id. */
+function inlineText(registry: Registry, units: readonly string[]): string {
+  const texts = units.map(u => registry.block(u)!).map(b => `‹${b.id}›${b.text.trim()}`)
+  // List items stay one to a line.
+  return texts.join(units.some(u => /^\s*(?:[-*+]|\d+[.)])\s/u.test(registry.block(u)!.text)) ? "\n" : " ")
+}
+
+export type PackageWhy = "this round" | "edge" | "open item"
+export interface PackageObject { object: string; name: string; why: PackageWhy; via: string[]; view: string }
 
 /**
- * The round's package (DESIGN §6a step 3, §12j.7 items 6, 9): what the executor and the reviewer are given of the
- * requirements. This round's text; every block in force of the objects this round adds or revises; the blocks of
- * earlier objects a relation edge connects to those objects; the blocks open items rest on. Each block once, in force
- * as it stands now, in round and document order.
+ * The round's package (DESIGN §6c, round package; §6a step 3), by object: the objects this round adds or revises;
+ * earlier objects one relation edge of the attribution away from them; the objects the open items' units belong to.
+ * One hop only, nothing inferred. Each with its current view; this round's first, then the earlier ones, each in id
+ * order.
  */
-export function roundPackage(registry: Registry, round: number, openUnits: readonly string[] = []): PackageBlock[] {
+export function roundPackage(registry: Registry, round: number, open: readonly { id: string; units: readonly string[] }[] = []): PackageObject[] {
+  const num = (id: string) => Number(id.slice(1))
   const changed = new Set(registry.roundScope(round).map(c => c.object))
-  const ownerOf = (id: string) => /^O\d+$/u.test(id) ? id : registry.coverOf(id)?.owner
-  const related = new Set<string>()
+  const ownerOf = (id: string) => { const o = /^O\d+$/u.test(id) ? id : registry.coverOf(id)?.owner; return o && o !== "none" && registry.objects.has(o) ? o : null }
+  const earlier = new Map<string, { why: PackageWhy; via: string[] }>()
+  const bring = (o: string | null, why: PackageWhy, via: string) => {
+    if (!o || changed.has(o)) return
+    const e = earlier.get(o) ?? { why, via: [] }
+    if (why === "edge") e.why = "edge"
+    if (!e.via.includes(via)) e.via.push(via)
+    earlier.set(o, e)
+  }
   for (const e of registry.references.filter(x => x.round <= round)) {
     const from = ownerOf(e.from), to = ownerOf(e.to)
-    if (from && changed.has(from) && to && to !== "none" && !changed.has(to)) related.add(to)
-    if (to && changed.has(to) && from && from !== "none" && !changed.has(from)) related.add(from)
+    if (from && changed.has(from)) bring(to, "edge", `${e.from} ${e.kind} ${e.to}`)
+    if (to && changed.has(to)) bring(from, "edge", `${e.from} ${e.kind} ${e.to}`)
   }
-  const within = (inner: string, outer: string) => registry.lineage(inner).some(b => b.id === outer)
-  const open = new Set<string>()
-  for (const u of openUnits) for (const [id] of registry.assigned) if (within(u, id) || within(id, u)) open.add(id)
-  const out: PackageBlock[] = []
-  for (const source of [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)) {
-    for (const b of source.blocks) {
-      const owner = registry.assigned.get(b.id)
-      if (owner === undefined) continue
-      const why: PackageBlock["why"] | null = b.round === round ? "this round" : changed.has(owner) ? "object changed" : related.has(owner) ? "related" : open.has(b.id) ? "open item" : null
-      if (!why) continue
-      const text = b.round === round ? b.text : effectiveText(registry, b.id, round)
-      if (text === null) continue
-      out.push({ id: b.id, round: b.round, object: owner === "none" ? null : owner, text, why })
-    }
-  }
-  return out
+  for (const item of open) for (const u of item.units) bring(ownerOf(u), "open item", item.id)
+  const make = (object: string, why: PackageWhy, via: string[]): PackageObject => ({ object, name: registry.objects.get(object)!.name, why, via, view: currentView(registry, object, round) })
+  return [
+    ...[...changed].filter(o => registry.objects.has(o)).sort((a, b) => num(a) - num(b)).map(o => make(o, "this round", [])),
+    ...[...earlier.entries()].sort((a, b) => num(a[0]) - num(b[0])).map(([o, e]) => make(o, e.why, e.via)),
+  ].filter(p => p.view.trim() !== "")
 }
 
+/** A guard of the package (§6c, round package item 3): what it runs and what it gets now, never what it expects. */
+export interface PackageGuard { id: string; object: string | null; args: string[]; files: string[]; units: string[]; output: string | null }
+
+export const packageHeader = (p: PackageObject) => `### ${p.object} ${p.name} — ${p.why === "this round" ? "this round" : `earlier, brought in by ${p.why === "edge" ? "the edge" : "the open item"} ${p.via.join("; ")}`}`
+
+/** The package's requirements as the executor, the reviewer and the formalizer read them: each object's header and view. */
+export function renderPackage(pkg: readonly PackageObject[]): string {
+  return pkg.map(p => `${packageHeader(p)}\n\n${p.view.trimEnd()}\n`).join("\n")
+}
+
+export function renderGuardList(guards: readonly PackageGuard[]): string {
+  return guards.map(g => `- ${g.id} (rests on ${g.units.join(", ")}): command ${JSON.stringify(g.args)}; input files ${g.files.join(", ") || "none"}${g.output !== null ? `; now: ${g.output}` : ""}`).join("\n")
+}
+
+export interface PackageOverflow { limit: number; chars: number; dropped: string[]; outputs_dropped: boolean; still_over: boolean }
+
 /**
- * The package as the reviewer reads it, round by round as the control group's text is laid out (§12j.7 item 6): this
- * round's text whole, and of each earlier round the package's blocks, adjacent ones joined as in the source.
+ * The package within its limit (§6c, round package item 5: three times this round's text): first the earlier objects
+ * brought in only by refers_to edges go, the last in order first; then the guards' outputs. This round's objects and
+ * the open items' objects stay. Null overflow: it fitted.
  */
-export function packageSources(registry: Registry, round: number, blocks: readonly PackageBlock[]): { round: number; text: string }[] {
-  const out: { round: number; text: string }[] = []
-  for (const r of [...new Set(blocks.map(b => b.round))].sort((a, b) => a - b)) {
-    if (r === round) { out.push({ round: r, text: registry.sources.get(r)!.text }); continue }
-    let text = "", end = -1
-    for (const b of blocks.filter(x => x.round === r)) {
-      const at = registry.block(b.id)!
-      text += end === at.start ? b.text : `${text ? "\n\n" : ""}${b.text.replace(/^\n+/u, "")}`
-      end = at.end
-    }
-    out.push({ round: r, text: text.trimEnd() + "\n" })
-  }
-  return out
+export function fitPackage(registry: Registry, round: number, pkg: readonly PackageObject[], guards: readonly PackageGuard[]): { pkg: PackageObject[]; guards: PackageGuard[]; overflow: PackageOverflow | null } {
+  const limit = 3 * (registry.sources.get(round)?.text.length ?? 0)
+  const size = (p: readonly PackageObject[], g: readonly PackageGuard[]) => renderPackage(p).length + renderGuardList(g).length
+  const p = [...pkg]
+  let g = [...guards]
+  const chars = size(p, g)
+  if (chars <= limit) return { pkg: p, guards: g, overflow: null }
+  const dropped: string[] = []
+  const droppable = (x: PackageObject) => x.why === "edge" && x.via.every(v => / refers_to /u.test(v))
+  for (let i = p.length - 1; i >= 0 && size(p, g) > limit; i--) if (droppable(p[i])) { dropped.push(p[i].object); p.splice(i, 1) }
+  let outputs = false
+  if (size(p, g) > limit) { g = g.map(x => ({ ...x, output: null })); outputs = true }
+  return { pkg: p, guards: g, overflow: { limit, chars, dropped: dropped.reverse(), outputs_dropped: outputs, still_over: size(p, g) > limit } }
 }

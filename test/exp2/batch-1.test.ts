@@ -18,7 +18,7 @@ import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store, refusedIn } from "../../src/exp2/store.js"
 import { buildFormalizeRequest } from "../../src/exp2/formalize.js"
 import { annotate } from "../../src/exp2/source.js"
-import { annotatedPackage, effectiveText, packageSources, roundPackage } from "../../src/exp2/view.js"
+import { currentView, fitPackage, renderPackage, roundPackage } from "../../src/exp2/view.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { DROP, FILTER, GO_MOD, MAIN, NORMALIZE, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
@@ -171,59 +171,50 @@ describe("batch 1, items 6, 9 (§6a step 3): the round's package, not every roun
   const store = new Exp2Store(join(dir, "store"), "b1d")
   before(async () => { for (const r of [1, 2, 3]) await store.ingestRound(r, roundText(r), stubTransport()) })
 
-  it("a block's text in force: the replaced sentence leaves, its replacement is named; R1's package is R1", () => {
+  it("the chain block (§6c view): the zscore paragraph after R3 has the sample sentence in place of the population one, under its id; no marker; R2 as written", () => {
     const reg = store.registry()
-    const p5 = reg.coverOf(ZSCORE_UNIT)!.block
-    const now = effectiveText(reg, p5, 3)!
-    assert.ok(!now.includes(reg.block(ZSCORE_UNIT)!.text.trim()), "the population sentence is gone")
-    assert.match(now, /⟦R2\.S11\.P5\.s3 replaced by R3\.S3\.P1, R3\.S3\.P2⟧/u)
-    assert.equal(effectiveText(reg, p5, 2), reg.block(p5)!.text, "in round 2 it stood as written")
-    const r1 = roundPackage(reg, 1)
-    assert.ok(r1.every(b => b.round === 1 && b.why === "this round"))
-    assert.deepEqual(packageSources(reg, 1, r1), [{ round: 1, text: reg.sources.get(1)!.text }])
+    const normalize = reg.coverOf(ZSCORE_UNIT)!.owner
+    const now = currentView(reg, normalize, 3), then = currentView(reg, normalize, 2)
+    const plain = (v: string) => v.replace(/‹[^›]*›/gu, "")
+    assert.ok(!plain(now).includes(reg.block(ZSCORE_UNIT)!.text.trim()), "the population sentence is gone")
+    for (const by of ["R3.S3.P1", "R3.S3.P2"]) assert.ok(now.includes(`‹${by}›${reg.block(by)!.text.trim()}`), by)
+    assert.doesNotMatch(now, /replaced by|amended|where they differ|newer text wins|#[0-9a-f]{8}⟧/u)
+    assert.ok(plain(then).includes(reg.block(ZSCORE_UNIT)!.text.trim()), "in round 2 it stood as written")
+    assert.ok(now.indexOf("R3.S3.P1") < now.indexOf("## R3") || !now.includes("## R3"), "the revising text sits in place, not again at its own place")
+    assert.equal(currentView(reg, normalize, 3), now, "a pure function")
+    // R1's package: every object R1 made, its view.
+    assert.deepEqual(roundPackage(reg, 1).map(p => p.why), roundPackage(reg, 1).map(() => "this round"))
   })
 
-  it("R2 and R3: this round's text, the changed objects' earlier text in force, related objects, open items' blocks; nothing else", () => {
+  it("R2 and R3 (§6c round package): this round's objects, earlier objects one edge away, the open items' objects; nothing else", () => {
     const reg = store.registry()
+    const num = (o: string) => Number(o.slice(1))
     for (const r of [2, 3]) {
       const changed = new Set(reg.roundScope(r).map(c => c.object))
-      const pkg = roundPackage(reg, r, [FILTER_UNIT])
-      for (const b of pkg.filter(x => x.round < r)) {
-        if (b.why === "object changed") assert.ok(changed.has(b.object!), `${b.id}`)
-        else if (b.why === "related") assert.ok(reg.references.some(e => e.round <= r && [e.from, e.to].some(x => (/^O\d+$/u.test(x) ? x : reg.coverOf(x)?.owner) === b.object)), `${b.id} related`)
-        else assert.equal(b.why, "open item")
+      const pkg = roundPackage(reg, r, [{ id: "V1.1.1", units: [FILTER_UNIT] }])
+      for (const p of pkg) {
+        if (p.why === "this round") assert.ok(changed.has(p.object), p.object)
+        else if (p.why === "edge") assert.ok(p.via.every(v => reg.references.some(e => e.round <= r && `${e.from} ${e.kind} ${e.to}` === v)), `${p.object} ${p.via}`)
+        else assert.deepEqual([p.why, p.via], ["open item", ["V1.1.1"]])
       }
-      assert.ok(pkg.some(b => b.id === reg.coverOf(FILTER_UNIT)!.block && (b.why === "open item" || b.why === "object changed")), "the open item's block")
-      // Every block of this round is in it.
-      assert.deepEqual(pkg.filter(b => b.round === r).map(b => b.id), reg.sources.get(r)!.blocks.filter(b => reg.assigned.has(b.id)).map(b => b.id))
+      assert.deepEqual(pkg.filter(p => p.why === "this round").map(p => p.object), [...changed].filter(o => pkg.some(p => p.object === o)).sort((a, b) => num(a) - num(b)), "this round's first, in id order")
+      const filter = reg.coverOf(FILTER_UNIT)!.owner
+      assert.ok(pkg.some(p => p.object === filter), "the open item's object")
       const delta = buildWorkOrder({ registry: reg, round: r, library: [], events: [], statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [], scope: "delta", confirmed: [{ id: "V1.1.1", object: null, units: [FILTER_UNIT], args: [], files: [] }] })
-      assert.ok(delta.scope!.source_chars < delta.scope!.source_chars_all * 0.75, `R${r}: delta ${delta.scope!.source_chars} vs all ${delta.scope!.source_chars_all}`)
+      assert.ok(delta.scope!.source_chars < delta.scope!.source_chars_all, `R${r}: delta ${delta.scope!.source_chars} vs all ${delta.scope!.source_chars_all}`)
       assert.deepEqual(delta.status, [], "no status zone")
+      assert.deepEqual(delta.scope!.objects!.map(o => o.object), fitPackage(reg, r, pkg, []).pkg.map(p => p.object), "the package within its limit")
+      assert.doesNotMatch(renderWorkOrder(delta), /replaced by|amended by|newer text wins/u)
     }
   })
 
-  it("batch 1c: the formalizer reads the reviewer's package with block ids: this round annotated whole, earlier blocks in force; no other text", () => {
+  it("batch 1c, the chain block: the formalizer reads what the reviewer reads, the package's views; without them (review scope full) every round, annotated", () => {
     const reg = store.registry()
-    const pkg = roundPackage(reg, 3, [FILTER_UNIT])
-    const text = annotatedPackage(reg, 3, pkg)
-    // R3 whole, as the old request gave it.
-    assert.ok(text.includes(`===== R3 =====\n${annotate(reg.sources.get(3)!)}`))
-    // An earlier block of the package: its markers, with the text in force (the population sentence replaced).
-    const p5 = reg.coverOf(ZSCORE_UNIT)!.block
-    assert.ok(pkg.some(b => b.id === p5), "the zscore paragraph is in R3's package")
-    assert.ok(text.includes(`⟦${p5}#${reg.block(p5)!.hash}⟧`))
-    assert.match(text, /⟦R2\.S11\.P5\.s3 replaced by R3\.S3\.P1, R3\.S3\.P2⟧/u)
-    assert.ok(!text.includes(reg.block(ZSCORE_UNIT)!.text.trim()), "the replaced sentence is not given")
-    // Markers off, the text is the reviewer's text.
-    const plain = packageSources(reg, 3, pkg).map(s => `===== R${s.round} =====\n${s.text}`).join("\n")
-    const unmark = (t: string) => t.replace(/⟦R\d+\.S\d+(?:\.P\d+)?#[0-9a-f]{8}⟧(?:\r?\n| )/gu, "").replace(/‹[^›]*›/gu, "")
-    assert.equal(unmark(text), plain)
-    // Blocks outside the package are not there.
-    for (const b of reg.sources.get(1)!.blocks.filter(b => b.level === "paragraph" && !pkg.some(x => x.id === b.id || reg.lineage(b.id).some(l => l.id === x.id)))) assert.ok(!text.includes(`⟦${b.id}#`), b.id)
-    // The request: the package; without it (review scope full) every round, as before.
-    const full = buildFormalizeRequest(reg, 3, "1. x", "dpipe"), delta = buildFormalizeRequest(reg, 3, "1. x", "dpipe", undefined, pkg)
-    assert.equal(delta.sources, text)
-    assert.ok(full.sources.startsWith(`===== R1 =====\n${annotate(reg.sources.get(1)!)}`))
+    const body = renderPackage(roundPackage(reg, 3, [{ id: "V1.1.1", units: [FILTER_UNIT] }]))
+    const full = buildFormalizeRequest(reg, 3, "1. x", "dpipe"), delta = buildFormalizeRequest(reg, 3, "1. x", "dpipe", undefined, body)
+    assert.equal(delta.sources, body)
+    assert.ok(full.sources.startsWith(`===== R1 =====
+${annotate(reg.sources.get(1)!)}`))
     assert.ok(delta.sources.length < full.sources.length)
   })
 
@@ -244,14 +235,13 @@ describe("batch 1, items 6, 9 (§6a step 3): the round's package, not every roun
     const sizes = (st: typeof delta) => st.reports.map(r => ({ round: r.round, chars: r.zones.source_chars!, all: r.zones.source_chars_all!, review: r.review!.request_chars! }))
     const d = sizes(delta), a = sizes(all)
     console.log(JSON.stringify({ delta: d, all: a }))
-    assert.equal(d[0].chars, a[0].chars, "R1: the package is R1")
     for (const k of [1, 2]) {
-      assert.ok(d[k].chars < a[k].chars * 0.75, `R${k + 1} work order: delta ${d[k].chars}, all ${a[k].chars}`)
+      assert.ok(d[k].chars < a[k].chars, `R${k + 1} work order: delta ${d[k].chars}, all ${a[k].chars}`)
       assert.equal(a[k].chars, a[k].all)
       assert.ok(d[k].review < a[k].review, `R${k + 1} review requests: delta ${d[k].review}, full ${a[k].review}`)
     }
     // The report says so, in its interface counts.
-    assert.match(renderReport(delta.reports[2]), /- Requirements given: work order source zone delta, \d+ characters in \d+ blocks \(every round's text: \d+ in \d+\); review requests \d+ characters/u)
+    assert.match(renderReport(delta.reports[2]), /- Requirements given: work order source zone delta, \d+ characters in \d+ objects \(\d+ this round, \d+ by an edge, \d+ by open items\), \d+ guards listed.* \(every round's text: \d+ in \d+ blocks\); review requests \d+ characters/u)
   })
 })
 

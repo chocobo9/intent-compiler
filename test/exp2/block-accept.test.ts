@@ -377,7 +377,7 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       assert.match(text, /- Check writing: admitted \d+\/\d+, unknown never told the model 0; dropped after the repairs \d+ .*; runs refused as an unknown subcommand \d+; units no check rests on \d+ \(reported only\)\./u)
       assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
       assert.match(text, /- Requirements given: work order source zone delta, \d+ characters/u)
-      assert.match(text, /- Revisions recorded: \d+ paragraphs of this round's text read like a revision/u)
+      assert.match(text, /- Revision recall: no gold set for this task\.\n- Relation recall: no gold set for this task\./u)
       assert.ok(!/Probes|Ledger:|Guard coverage|Zones:/u.test(text), "nothing else is rendered")
     }
     // R1: the stand-in's sort compares as text; the reviewer reports it; the stand-in cannot fix it; guards were born from the library's passes.

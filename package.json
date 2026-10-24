@@ -40,7 +40,8 @@
     "intent-exp2-compare": "./dist/cli/exp2-compare.js",
     "intent-exp2-mutate": "./dist/cli/exp2-mutate.js",
     "intent-exp2-replay": "./dist/cli/exp2-replay.js",
-    "intent-exp2-measures": "./dist/cli/exp2-measures.js"
+    "intent-exp2-measures": "./dist/cli/exp2-measures.js",
+    "intent-exp2-attribute": "./dist/cli/exp2-attribute.js"
   },
   "engines": {
     "node": ">=22"

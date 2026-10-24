@@ -37,8 +37,10 @@ export function reviewBaseText(sources: readonly { round: number; text: string }
 /** What §12i adds to a review request, each part a paragraph of its own after the requirements. */
 export interface ReviewFocus {
   round: number
-  /** Units this round added or revised (empty when the whole text is new, as in round 1). */
+  /** Review scope full: earlier units this round revised or withdrew, quoted (empty in round 1). */
   units: { id: string; text: string }[]
+  /** The round's package (§6c, review request item 2): the ids of the units this round added or revised. */
+  unit_ids?: string[]
   /** Guards that passed on an earlier program and fail on this one, where this round's text changed behind them. */
   guardFailures: { id: string; args: string[]; files: { path: string; content: string }[]; expected: string; got: string; changed: string[]; was: { id: string; text: string }[]; now: { id: string; text: string }[] }[]
   /** Findings of automatic checks and judgments that are not confirmed: the reviewer verifies them (§12i item 3). */
@@ -53,7 +55,8 @@ export function reviewAppendix(f: ReviewFocus): string {
   out.push("# Focus of this review")
   if (f.round === 1) out.push(`Round ${f.round} is the first round: all of the requirements are new.`)
   else {
-    out.push(`The text under \`${roundHeading(f.round)}\` is what this round added or revised; check it with particular care. The text of earlier rounds was reviewed when it arrived and is context here; a deviation found anywhere is still a deviation.`)
+    if (f.unit_ids) out.push(`The requirements above are each object's text as it stands after round ${f.round}. Units round ${f.round} added or revised, to check with particular care: ${f.unit_ids.join(", ") || "none"}. The rest was reviewed when it arrived and is context here; a deviation found anywhere is still a deviation.`)
+    else out.push(`The text under \`${roundHeading(f.round)}\` is what this round added or revised; check it with particular care. The text of earlier rounds was reviewed when it arrived and is context here; a deviation found anywhere is still a deviation.`)
     if (f.units.length) { out.push("Earlier text this round revised or withdrew (no longer in force as written):"); for (const u of f.units) out.push(quote(clip(u.text, 600))) }
   }
   if (f.guardFailures.length) {
@@ -72,6 +75,17 @@ export function reviewAppendix(f: ReviewFocus): string {
     for (const l of f.leads) out.push(`- ${l.id}: ${clip(l.text, 700).replace(/\n/gu, " ")}`)
   }
   return out.join("\n")
+}
+
+/** Under the round's package (§6c): the two instructions, the package's views as the requirements, the appendix. */
+export function reviewRequestOn(body: string, focus: ReviewFocus): string {
+  return `${REVIEW_INTRO}
+${REVIEW_REPLY}
+
+${body.trimEnd()}
+
+${reviewAppendix(focus)}
+`
 }
 
 /** The whole request: the base text word for word, then the appendix as separate paragraphs. */

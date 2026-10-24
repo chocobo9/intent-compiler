@@ -295,8 +295,8 @@ export interface AcceptRoundRecord {
   guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; flips?: { id: string; cycle: string; how: "changed_text" | "regression"; sources: string[]; expected: string[] }[]; retired: { id: string; reason: string }[] }
   reverted: number
   trial: { runs: number; failures: number }
-  /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind. */
-  leads: { library: number; judgment: number }
+  /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind; dropped: past the cap of one review (§6c). */
+  leads: { library: number; judgment: number; dropped?: number }
 }
 
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })

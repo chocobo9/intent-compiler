@@ -19,6 +19,8 @@ import { emptyCassette, loadCassette, recordingTransports, saveCassette } from "
 import { createOpenCodeFormalizeTransport, createOpenCodeAttributionTransport, createOpenCodeChecksTransport } from "./transport.js"
 import { OpenCodeReviewer } from "./review.js"
 import type { FormalizeTransport, Premise } from "./formalize.js"
+import { fileURLToPath } from "node:url"
+import { GOLD_DIR, loadGold } from "./gold.js"
 
 /**
  * The local run's configuration file and its assembly into a Serial (READY-FOR-LOCAL §0). Paths are resolved
@@ -93,6 +95,8 @@ export interface LocalConfig {
    * coverage_obligation (false): units the checks leave uncovered go back to the writer (§12j.7 item 3: reported only).
    * mode, probes, stale_by_reference: gone with the probes path (§12j.4–5); a file may keep them at review/false.
    */
+  /** measure.gold_task: the task's name in the gold sets (e.g. deterministic-data-pipeline-go); gold_dir defaults to the code's exp2/evidence/corpus-scan-2026-10-23. */
+  measure?: { gold_task?: string; gold_dir?: string }
   acceptance?: { mode?: "review"; probes?: boolean; stale_by_reference?: boolean; workorder_scope?: "delta" | "all"; review_scope?: "delta" | "full"; coverage_obligation?: boolean; reviews?: number; trial_fixes?: number; review_agent?: string; premise_block?: string[]; fallback?: "items" | "review" | "off"; void_without_runs?: boolean; expire_reproduced?: boolean; checks_once?: boolean; checks_in_background?: boolean }
   /**
    * Builds record which functions each run executes (`go build -cover`), so a cycle runs only the checks and probes a
@@ -242,8 +246,11 @@ export function assembleSerial(c: LocalConfig & { base: string }): { serial: Ser
   const texts = Array.from({ length: c.rounds }, (_, i) => join(at(c.inputs_dir), `round-${pad(i + 1)}.md`)).filter(existsSync).map(f => readFileSync(f, "utf8"))
   const binary = binaryFromSource(texts) ?? "app"
   const reviewRole = roleOptions({ providerId: c.coding.provider, modelId: c.coding.model, variant: c.coding.variant }, c, "review")
+  const gold = c.measure?.gold_task ? loadGold(c.measure.gold_dir ? at(c.measure.gold_dir) : codeGoldDir(), c.measure.gold_task) : null
+  if (c.measure?.gold_task && !gold) throw new Error(`measure.gold_task ${c.measure.gold_task}: no gold sets in ${c.measure.gold_dir ?? codeGoldDir()}`)
   const config: SerialConfig = {
     store: new Exp2Store(at(c.state_dir), c.run_id, c.ablation),
+    ...(gold ? { gold } : {}),
     workdir: at(c.repo_dir),
     checkpoints: at(c.checkpoints_dir),
     copies: join(at(c.builds_dir), "review-copies"),
@@ -306,4 +313,15 @@ export function scoringHook(command: string[], repo: string): (round: number, co
     if (!Number.isSafeInteger(parsed.passed) || !Number.isSafeInteger(parsed.total)) throw new Error(`scoring output is not {passed, total}: ${out.slice(0, 200)}`)
     return { passed: parsed.passed as number, total: parsed.total as number }
   }
+}
+
+/** The gold sets as the code's checkout holds them (dist/exp2 → the repository root). */
+export function codeGoldDir(): string {
+  return join(fileURLToPath(new URL("../../", import.meta.url)), GOLD_DIR)
+}
+
+/** The attribution transport a configuration describes (its management server and model), for attribution alone. */
+export function attributionTransportOf(c: LocalConfig): AttributionTransport {
+  const management = { client: openCodeHttpClient(c.management), directory: c.management.directory, providerId: c.management.provider, modelId: c.management.model, variant: c.management.variant, timeoutMs: c.management.request_timeout_ms }
+  return createOpenCodeAttributionTransport(management, c.rate_limit ? { delaysMs: c.rate_limit.delays_ms } : undefined)
 }

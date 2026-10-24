@@ -7,9 +7,8 @@ import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord
 import { commitStep, head, resetTo } from "./git.js"
 import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, type GuardEvent, type GuardRecord } from "./guards.js"
 import { sessionInput, type ReviewMaterials } from "./materials.js"
-import type { PackageBlock } from "./view.js"
 import type { Registry } from "./registry.js"
-import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
+import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, reviewRequestOn, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import { runChecks, runDigest, type CheckRun } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
@@ -65,8 +64,11 @@ export interface AcceptDeps {
   binary: string
   /** The requirements of rounds 1..this, verbatim, for the reviewer. */
   sources: readonly { round: number; text: string }[]
-  /** The round's package those sources lay out (review scope delta): the formalizer reads it with block ids (batch 1c). */
-  package?: readonly PackageBlock[]
+  /**
+   * Review scope delta (§6c): the round's package as current views, the body of the review request in place of
+   * `sources`; the formalizer reads the same text.
+   */
+  body?: string
   /** A fresh directory for a copy of the program, by label. */
   copyDir: (label: string) => string
   /** Judgments on this program (probes and judge, when on): wrong verdicts as leads for the reviewer, never repairs. */
@@ -122,6 +124,16 @@ export function renderGuardItem(g: GuardRecord, check: CheckRecord, run: CheckRu
 }
 
 /** Where a check's expected values come from (verbatim / derived / computed), recorded with each flip (§6b). */
+/** Leads given to one review at most (§6c, review request item 2). */
+export const LEADS_MAX = 20
+
+/** The leads one review gets (§6c): at most LEADS_MAX, those resting on units no guard covers first, then by id. */
+export function pickLeads(registry: Registry, library: readonly CheckRecord[], guards: readonly GuardRecord[], runs: readonly CheckRun[]): { given: CheckRun[]; dropped: number } {
+  const units = guards.flatMap(g => g.units)
+  const covered = (k: string) => (library.find(c => c.id === k)?.blocks ?? []).some(b => units.some(u => registry.lineage(u).some(x => x.id === b) || registry.lineage(b).some(x => x.id === u)))
+  const sorted = [...runs].sort((a, b) => Number(covered(a.check)) - Number(covered(b.check)) || Number(a.check.slice(1)) - Number(b.check.slice(1)))
+  return { given: sorted.slice(0, LEADS_MAX), dropped: Math.max(0, sorted.length - LEADS_MAX) }
+}
 const expectedKinds = (k: CheckRecord) => [...new Set(k.assertions.map(a => a.source.kind))].sort()
 const placeName = (t: CheckRecord["assertions"][number]["target"]) => [t.kind, t.path, t.line !== null ? `line ${t.line}` : null, t.pointer, t.column].filter(x => x !== null && x !== undefined && x !== "").join(" ")
 
@@ -200,7 +212,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       reviewSessions++
       const label = `R${round}-review${n}-${attempts}`
       const dir = copyProgram(workdir, at.commit, deps.copyDir(label))
-      const request = reviewRequest(deps.sources.filter(s => s.round <= round), focus)
+      const request = deps.body ? reviewRequestOn(deps.body, focus) : reviewRequest(deps.sources.filter(s => s.round <= round), focus)
       let out: Awaited<ReturnType<Reviewer["review"]>> | null = null, error: string | undefined
       try { out = await timed("review", () => withTimeout(deps.reviewer.review(dir, request, label), limits.callTimeoutMs)) } catch (e) {
         if (!(e instanceof SessionBroken) && !(e instanceof CallTimeout)) { discardCopy(dir); throw e }
@@ -369,10 +381,11 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       // Leads: library checks failing that never passed, and judgments (when on), each once per round at an output.
       const leads: ReviewFocus["leads"] = []
       // After a revert the library ran on the reverted program: its failures are no leads for a review of the kept one.
-      for (const r of (cycle.reverted ? [] : libRuns).filter(x => x.outcome === "fail" && x.failure?.reason !== "timeout")) {
-        const d = runDigest(r)
-        if (leadsGiven.get(r.check) === d) continue
-        leadsGiven.set(r.check, d)
+      // At most LEADS_MAX (§6c, review request item 2): those resting on units no guard covers first, then by id.
+      const { given, dropped } = pickLeads(registry, library, live(), (cycle.reverted ? [] : libRuns).filter(x => x.outcome === "fail" && x.failure?.reason !== "timeout" && leadsGiven.get(x.check) !== runDigest(x)))
+      if (dropped) accept.leads.dropped = (accept.leads.dropped ?? 0) + dropped
+      for (const r of given) {
+        leadsGiven.set(r.check, runDigest(r))
         leads.push({ id: r.check, text: renderEvidence([r], [r.check], library, registry, new Set()) })
         accept.leads.library++
       }
@@ -395,7 +408,9 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         })
       }
       const revised = registry.objects.size ? [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts.map(p => ({ id: p, text: `${registry.block(p)?.text.trim() ?? ""} (${m.kind === "withdraw" ? "withdrawn" : m.kind === "partial" ? "partly revised" : "replaced"} by ${m.by.join(", ")} in round ${round})` }))))) : []
-      const focus: ReviewFocus = { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
+      // Under the round's package the reviewer reads the text in force; the appendix names this round's units (§6c).
+      const thisRound = round === 1 ? [] : [...new Set(registry.roundScope(round).flatMap(c => c.entries.map(e => e.block)))].sort((a, b) => registry.block(a)!.start - registry.block(b)!.start)
+      const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
       const r = await review(current, focus, n2)
       reviews++
       const summary: ReviewSummary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length, program_runs: r?.out?.runs.length ?? 0, fallback: 0, logged: 0 }
@@ -432,7 +447,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
             leads: leads.flatMap(l => { const k = library.find(c => c.id === l.id); return k ? [{ id: k.id, check: k }] : [] }),
             files: r.out.materials?.files ?? [], commands: r.out.materials?.commands ?? [], ...(r.out.materials?.unreadable ? { unreadable: r.out.materials.unreadable } : {}),
           }
-          const f = await timed("formalize", () => formalizeReview(registry, round, reply, deps.binary, deps.formalize, { reviewId: `R${round}.${n2}`, callId: k => `F${round}.${n2}.${k}`, materials, ...(deps.package ? { pkg: deps.package } : {}) }))
+          const f = await timed("formalize", () => formalizeReview(registry, round, reply, deps.binary, deps.formalize, { reviewId: `R${round}.${n2}`, callId: k => `F${round}.${n2}.${k}`, materials, ...(deps.body ? { body: deps.body } : {}) }))
           await deps.record.formalize(f.calls)
           if (f.unavailable && fallbackMode === "off") throw new RoleUnavailable("formalize", f.unavailable, f.calls)
           const own: { n: number; text: string; units: string[]; failure: { premise: Premise; detail: string }; rec?: ReviewItemRecord }[] = []

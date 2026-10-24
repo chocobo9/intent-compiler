@@ -6,7 +6,6 @@ import { methodB, replacedBasis, statedIn, targetProblems, type Assertion, type 
 import { LIVE_STATES, type Registry } from "./registry.js"
 import { safePath, type CheckInput, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import { annotate } from "./source.js"
-import { annotatedPackage, type PackageBlock } from "./view.js"
 import { inputFromMaterials, NO_MATERIALS, type ReviewMaterials } from "./materials.js"
 import { runCheck, type CheckRun } from "./verdict.js"
 
@@ -172,15 +171,15 @@ export const FORMALIZE_SYSTEM_PROMPT = [
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })
 
 /**
- * The formalizer's request. `pkg`: the round's package the reviewer read (batch 1c), its blocks annotated; without
- * it (review scope full), every round's text, annotated.
+ * The formalizer's request. `body`: the requirements the reviewer read, the round's package as current views with
+ * unit ids (batch 1c, the chain block); without it (review scope full), every round's text, annotated.
  */
-export function buildFormalizeRequest(registry: Registry, round: number, review: string, program: string, materials: ReviewMaterials = NO_MATERIALS, pkg?: readonly PackageBlock[]): FormalizeRequest {
+export function buildFormalizeRequest(registry: Registry, round: number, review: string, program: string, materials: ReviewMaterials = NO_MATERIALS, body?: string): FormalizeRequest {
   const rounds = [...registry.sources.values()].filter(s => s.round <= round).sort((a, b) => a.round - b.round)
   const clip = (t: string, n: number) => t.length > n ? `${t.slice(0, n)}…` : t
   const given = materials.leads.length || materials.files.length || materials.commands.length
   return {
-    round, sources: pkg ? annotatedPackage(registry, round, pkg) : rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n"), review, program,
+    round, sources: body ?? rounds.map(s => `===== R${s.round} =====\n${annotate(s)}`).join("\n"), review, program,
     ...(given ? { materials: { leads: materials.leads.map(l => ({ id: l.id, args: l.check.input.args, files: l.check.input.files })), files: materials.files.map(f => ({ path: f.path, content: clip(f.content, 4000) })), commands: materials.commands.slice(-80).map(c => ({ command: clip(c.command, 600), output: clip(c.output, 1200) })) } } : {}),
   }
 }
@@ -289,10 +288,10 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
  * Asks for the items of one review: the first answer and one repair with the problems code found. Items that still
  * have problems are reported as malformed (not sent, not counted as findings). Transport failures are retried.
  */
-export async function formalizeReview(registry: Registry, round: number, review: string, program: string, transport: FormalizeTransport, o: { reviewId: string; callId: (n: number) => string; materials?: ReviewMaterials; pkg?: readonly PackageBlock[] }): Promise<{ items: FormalItem[]; malformed: { item: number | null; message: string }[]; calls: FormalizeCallRecord[]; unavailable?: string; texts: { item: number; text: string }[] }> {
+export async function formalizeReview(registry: Registry, round: number, review: string, program: string, transport: FormalizeTransport, o: { reviewId: string; callId: (n: number) => string; materials?: ReviewMaterials; body?: string }): Promise<{ items: FormalItem[]; malformed: { item: number | null; message: string }[]; calls: FormalizeCallRecord[]; unavailable?: string; texts: { item: number; text: string }[] }> {
   const calls: FormalizeCallRecord[] = []
   const materials = o.materials ?? NO_MATERIALS
-  let request = buildFormalizeRequest(registry, round, review, program, materials, o.pkg)
+  let request = buildFormalizeRequest(registry, round, review, program, materials, o.body)
   let items: FormalItem[] = [], malformed: { item: number | null; message: string }[] = [], failures = 0
   // The items' texts as the last parsed answer quotes them (a malformed item is still sent in the reviewer's words).
   let texts: { item: number; text: string }[] = []

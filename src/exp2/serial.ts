@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
 import { AuthInvalid, QuotaExhausted, RoleUnavailable, type AttributionTransport, type ModelReply } from "./attribution.js"
-import { codeFacts, libraryCovers, type ChecksTransport } from "./checks.js"
+import { codeFacts, libraryCovers, type CheckRecord, type ChecksTransport } from "./checks.js"
 import { type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor, type SupersededItem } from "./execution.js"
 import { head, initRepo, resetTo } from "./git.js"
 import { acceptanceFromLedger, acceptanceSummary, buildReport, codingCost, renderReport, type RoundReport, type StageCost } from "./report.js"
@@ -21,7 +21,8 @@ import { acceptRound, renderGuardItem, renderReviewList, type CarriedItem } from
 import { guardCheck, guardCoverage, liveGuards, runGuards } from "./guards.js"
 import { itemCheckRecord, notInForce, type FormalizeTransport, type Premise } from "./formalize.js"
 import { runChecks, type CheckRun } from "./verdict.js"
-import { packageSources, roundPackage } from "./view.js"
+import { fitPackage, renderPackage, roundPackage, type PackageGuard } from "./view.js"
+import type { GoldSets } from "./gold.js"
 import type { Reviewer } from "./review.js"
 
 /**
@@ -76,6 +77,8 @@ export interface AcceptanceConfig {
 
 export interface SerialConfig {
   store: Exp2Store
+  /** The task's gold sets (the chain block, effect 4): each round's report measures attribution against them. */
+  gold?: GoldSets
   workdir: string
   checkpoints: string
   acceptance?: AcceptanceConfig
@@ -354,6 +357,17 @@ export class Serial {
     const links = [...state.executions.flatMap(e => e.links), ...nameLinks(registry, anchorsNow, round)]
     const steps: PreviousStep[] = state.executions.flatMap(e => e.cycles.filter(c => c.id === e.kept).map(c => ({ id: c.id, round: c.round, status: "committed", objects: e.task.filter(o => !e.carried.includes(o)).map(object => ({ object, coverage: "full" as const })), anchors: c.anchors })))
     const previous = state.reports.find(r => r.round === round - 1)
+    // The round's package (§6c): the objects' current views and the guards on them, with what each gets on the baseline now.
+    const deltaWork = (a.workorderScope ?? "delta") === "delta", deltaReview = (a.reviewScope ?? "delta") === "delta"
+    let pkg: ReturnType<typeof fitPackage> | undefined
+    if (deltaWork || deltaReview) {
+      const objects = roundPackage(registry, round, carried.map(c => ({ id: c.id, units: c.check ? [...c.check.blocks] : [] })))
+      const inPkg = new Set(objects.map(o => o.object))
+      const gs = liveGuards(state.guards, state.guard_events).filter(g => g.units.some(u => inPkg.has(registry.coverOf(u)?.owner ?? "")))
+      const runs = baseline.kind !== "null" && gs.length ? await this.timed("guard list", () => runGuards(gs, state.checks, baseline, this.c.runner, round, registry, codeFacts(registry, round), limits.checkTimeoutMs)) : []
+      const guards: PackageGuard[] = gs.map((g, i) => { const k = guardCheck(g, state.checks); return { id: g.id, object: g.object, args: k.input.args, files: k.input.files.map(f => f.path), units: g.units, output: runs[i] ? guardOutput(k, runs[i].run) : null } })
+      pkg = fitPackage(registry, round, objects, guards)
+    }
     const workorder: WorkOrder = buildWorkOrder({
       registry, round, library: state.checks, events: state.check_events, statuses: start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
       previous_task: previous ? state.executions.find(x => x.round === round - 1)?.task ?? [] : [],
@@ -361,18 +375,19 @@ export class Serial {
       // The round's package (§6a step 3) by default; failures in the task zone are confirmed items and guards only.
       scope: a.workorderScope ?? "delta",
       confirmed: carried.map(c => ({ id: c.id, object: c.check && c.check.object !== "none" ? c.check.object : null, units: c.check ? [...c.check.blocks] : [], args: c.check?.input.args ?? [], files: c.check?.input.files.map(f => f.path) ?? [] })),
+      ...(deltaWork && pkg ? { package: { objects: pkg.pkg, guards: pkg.guards, overflow: pkg.overflow } } : {}),
     })
-    // The reviewer reads the same package, laid out by round (§12j.7 item 6); full is the control group's text (ablation).
-    // The formalizer reads that package too, with block ids (batch 1c).
-    const reviewPackage = (a.reviewScope ?? "delta") === "full" ? undefined : roundPackage(registry, round, carried.flatMap(c => c.check ? [...c.check.blocks] : []))
-    const sources = reviewPackage ? packageSources(registry, round, reviewPackage) : state.sources.map(x => ({ round: x.round, text: x.text }))
+    // The reviewer reads the package's views, without the guards (§6c); the formalizer the same text. Full is the
+    // control group's text (ablation).
+    const body = deltaReview && pkg ? renderPackage(pkg.pkg) : undefined
+    const sources = state.sources.map(x => ({ round: x.round, text: x.text }))
     const carriedText = carried.length ? `\n${CARRIED_HEADER_REVIEW}\n\n${renderReviewList(carried)}\n` : ""
     const binary = this.c.binary ?? "app"
     // 4. Execution and acceptance.
     const execution = await acceptRound(workdir, workorder, renderWorkOrder(workorder) + carriedText, this.c.executor(round), {
       registry, library: state.checks, events: state.check_events, facts: codeFacts(registry, round), guards: state.guards, guardEvents: state.guard_events,
       runner: this.c.runner, sandbox: this.c.sandbox, anchors: this.c.anchors, build: this.c.build, ...(this.c.trial ? { trial: this.c.trial } : {}),
-      reviewer: this.c.reviewer, formalize: withWatchdog(this.c.formalize, limits.managementTimeoutMs), binary, sources, ...(reviewPackage ? { package: reviewPackage } : {}),
+      reviewer: this.c.reviewer, formalize: withWatchdog(this.c.formalize, limits.managementTimeoutMs), binary, sources, ...(body ? { body } : {}),
       copyDir: label => join(this.c.copies ?? join(this.c.checkpoints, "review-copies"), label),
       ...(checkWriting ? { libraryNow: async () => { await checksReady(); const n = store.inspect(); return { library: n.checks, events: n.check_events } } } : {}),
       record: { review: r => store.recordReviewCall(r), formalize: c => store.recordFormalizeCalls(c), guards: (b, e) => store.recordGuards(b, e) },
@@ -391,7 +406,7 @@ export class Serial {
     const ledgerNow = ledgerOf({ ...state, executions: [...state.executions, execution] }, registry, ledgerOptions)
     const summary = acceptanceFromLedger(acceptanceSummary({ library: state.checks, runs: verdict.runs, events: state.check_events, findings: [], gaps: gapState(registry, state.probe_rounds, libraryCovers(registry, state.checks, state.check_events)) }).by_kind, ledgerNow)
     const report = buildReport({
-      round, registry, workorder, execution, summary, ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: verdict.statuses,
+      round, registry, workorder, execution, summary, ...(this.c.gold ? { gold: this.c.gold } : {}), ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: verdict.statuses,
       understand: state.calls.filter(c => c.round === round), acceptance: state.check_calls.filter(c => c.round === round),
       interrupted: {
         attempts: interrupted.length, understand: interrupted.flatMap(x => x.calls), acceptance: interrupted.flatMap(x => [...x.check_calls, ...(x.probe_calls ?? []), ...(x.judge_calls ?? []), ...(x.review_calls ?? []), ...(x.formalize_calls ?? [])]),
@@ -497,4 +512,11 @@ export function checkWritingCounts(state: Pick<Exp2State, "checks" | "check_roun
     refused_calls: execution.cycles.reduce((n, c) => n + c.runs.filter(r => r.failure === "not_landed/refused_call").length, 0),
     uncovered: (record?.coverage?.gaps ?? []).reduce((n, g) => n + g.units.length, 0),
   }
+}
+
+/** A guard's output now, for the package's guard list (§6c): its exit code and what its assertions read, never what they expect. */
+function guardOutput(k: CheckRecord, run: CheckRun): string {
+  const clip = (t: string, n: number) => t.length > n ? `${t.slice(0, n)}…` : t
+  const read = run.assertions.filter(x => k.assertions.find(y => y.id === x.id)?.target.kind !== "exit_code").map(x => { const t = k.assertions.find(y => y.id === x.id)!.target; return `${[t.kind, t.path, t.line, t.pointer, t.column].filter(v => v !== null && v !== undefined).join(" ")} = ${clip(JSON.stringify(x.actual) ?? "null", 200)}` })
+  return clip([`exit ${run.exit_code ?? "?"}`, ...read].join("; "), 400)
 }
