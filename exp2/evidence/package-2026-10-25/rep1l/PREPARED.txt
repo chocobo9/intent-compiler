@@ -1,0 +1,5 @@
+rep1l: real run of the package batch with the paragraphInForce fix, R1-R2 first (the user's decision 2026-10-25); R3-R6 later only if the user decides.
+Code: branch ccr-992739b3-u5bcay @ 6458a9e (HEAD 54c2c0c adds NOTES only), worktree D:\huawei\intent_compiler\project-exp2-dev.
+Config: copied from rep1k; run id, ports (46013/46014), cache keys, label changed. rounds 6 (prepared for six), --to 2; delta, executor low.
+Baseline = rep1j R1-R2: official 177/480; report by DESIGN 6c's B row.
+Started 2026-10-25, --to 2.
