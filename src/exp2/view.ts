@@ -211,12 +211,17 @@ function inlineText(registry: Registry, units: readonly string[]): string {
 
 /**
  * A paragraph (or section) as it stands after `round`: units later rounds revised replaced in place by the units
- * revising them (each under its id), withdrawn units and revised code blocks or tables gone; hashes dropped.
+ * revising them (each under its id), withdrawn units and revised code blocks or tables gone; hashes dropped. Empty
+ * when the paragraph itself, or a block holding it, was wholly replaced or withdrawn.
  */
 export function paragraphInForce(registry: Registry, paragraph: string, round: number): string {
   const p = registry.block(paragraph)!
+  const mods = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(own => own.modifications.filter(x => x.round <= round)))
+  // Wholly replaced or withdrawn (the paragraph itself, or a block holding it): nothing of it is in force; what
+  // replaced it is that round's own text.
+  if (mods.some(m => m.parts.some(part => registry.lineage(paragraph).some(b => b.id === part)))) return ""
   const cuts: Cut[] = []
-  for (const o of registry.objects.values()) for (const own of o.blocks) for (const m of own.modifications.filter(x => x.round <= round)) {
+  for (const m of mods) {
     const amended = new Set(m.amended ?? [])
     const parts = m.parts.map(x => registry.block(x)!).filter(x => x && x.start >= p.start && x.end <= p.end && x.id !== p.id).sort((a, b) => a.start - b.start)
     const replaced = m.kind === "withdraw" ? [] : parts.filter(x => !amended.has(x.id))
@@ -257,6 +262,8 @@ export function roundPackage(registry: Registry, round: number, open: readonly {
     const at = segs.get(paragraph)
     if (at && WHY_RANK[at.why] <= WHY_RANK[why]) { if (via && !at.via.includes(via)) at.via.push(via); return }
     const text = b.round === round ? renderSpan(registry, b, []) : paragraphInForce(registry, paragraph, round)
+    // A paragraph nothing of which is in force comes only as the earlier text of what this round revised.
+    if (!text && why !== "revised") return
     const path = [`R${b.round}`, ...headingPath(registry, contextOf(registry, paragraph)).map(h => h.replace(/^#+\s*/u, ""))].join(" › ")
     segs.set(paragraph, { object, name: registry.objects.get(object)!.name, paragraph, round: b.round, path, why, via: [...(at?.via ?? []), ...(via ? [via] : [])], text })
   }
@@ -295,7 +302,7 @@ export function roundPackage(registry: Registry, round: number, open: readonly {
   }
   for (const item of open) for (const u of item.units) if (registry.block(u)) add(paragraphOf(registry, u), owner(u), "open item", item.id)
   const segments = [...segs.values()]
-  for (const s of segments) for (const p of earlier.get(s.paragraph) ?? []) s.text = `${s.text.trimEnd()}\nearlier text of ${p}: ${registry.block(p)!.text.trim()}`
+  for (const s of segments) for (const p of earlier.get(s.paragraph) ?? []) s.text = `${s.text.trimEnd() ? `${s.text.trimEnd()}\n` : ""}earlier text of ${p}: ${registry.block(p)!.text.trim()}`
   // An object with text in the package needs no head line.
   const withText = new Set(segments.map(s => s.object))
   return { segments: orderSegments(registry, segments), heads: [...heads.values()].filter(h => !withText.has(h.object)), comparisons: [], edges }

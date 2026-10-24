@@ -13,7 +13,7 @@ import { packageUse, renderReport, type RoundReport } from "../../src/exp2/repor
 import { reviewRequestOn } from "../../src/exp2/review.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import type { CheckRun } from "../../src/exp2/verdict.js"
-import { currentView, fitPackage, PACKAGE_BUDGET, packageComparisons, renderPackage, roundPackage, type PackageSegment } from "../../src/exp2/view.js"
+import { currentView, fitPackage, PACKAGE_BUDGET, packageComparisons, paragraphInForce, renderPackage, roundPackage, type PackageSegment } from "../../src/exp2/view.js"
 import { roundText } from "./inputs.js"
 import { stubTransport } from "./stubs.js"
 
@@ -141,6 +141,31 @@ describe("the chain block, the round's package and its limit (§6c, round packag
   const store = new Exp2Store(join(dir, "store"), "chp")
   before(async () => { for (const r of [1, 2, 3]) await store.ingestRound(r, roundText(r), stubTransport()) })
   const seg = (paragraph: string, why: PackageSegment["why"], size: number): PackageSegment => ({ object: "O1", name: "o", paragraph, round: 1, path: "R1", why, via: [], text: "x".repeat(size) })
+
+  for (const kind of ["revise", "withdraw"] as const) {
+    it(`a paragraph wholly ${kind === "revise" ? "replaced" : "withdrawn"} this round (a made-up record): its old text is only the earlier-text line, never text in force; as an open item it brings nothing`, () => {
+      const reg = store.registry()
+      // An R2 paragraph of an object, ${kind === "revise" ? "replaced" : "withdrawn"} by R3.S3.P1 (no stand-in round does it to a whole paragraph).
+      const own = [...reg.objects.values()].flatMap(o => o.blocks.map(b => ({ o, b }))).find(x => x.b.round === 2 && x.b.modifications.length === 0 && reg.block(x.b.block)!.children.some(c => reg.block(c)!.level === "paragraph" && reg.block(c)!.kind !== "heading"))!
+      const para = reg.block(own.b.block)!.children.find(c => reg.block(c)!.level === "paragraph" && reg.block(c)!.kind !== "heading")!, old = reg.block(para)!.text.trim()
+      const saved = own.b.modifications
+      own.b.modifications = [...saved, { round: 3, change: "R3 change", kind, parts: [para], by: ["R3.S3.P1"], by_object: own.o.id }]
+      try {
+        assert.equal(paragraphInForce(reg, para, 3), "")
+        assert.ok(paragraphInForce(reg, para, 2).length > 0, "in R2 it stood")
+        const pkg = roundPackage(reg, 3, [{ id: "V2.1.1", units: [para] }])
+        const seg = pkg.segments.find(x => x.paragraph === para)!
+        assert.equal(seg.why, "revised")
+        assert.equal(seg.text, `earlier text of ${para}: ${old}`, "only the earlier text, once")
+        assert.equal(renderPackage(pkg).split(old).length - 1, 1, "the old text appears once in the whole package")
+        // As an open item alone (no revision this round), a paragraph out of force brings nothing.
+        const later = roundPackage(reg, 3, [])
+        own.b.modifications = [...saved, { round: 2, change: "R2 change", kind, parts: [para], by: ["R2.S1"], by_object: own.o.id }]
+        assert.ok(!roundPackage(reg, 3, [{ id: "V2.1.1", units: [para] }]).segments.some(x => x.paragraph === para), "out of force since R2: not brought by an open item")
+        assert.ok(later.segments.some(x => x.paragraph === para && x.why === "revised"))
+      } finally { own.b.modifications = saved }
+    })
+  }
 
   it("over the budget (40k): the paragraphs edges brought go first, the last first; then those of open items; this round's and the revised ones stay", () => {
     const pkg = (segments: PackageSegment[]) => ({ segments, heads: [], comparisons: [], edges: { to_block: 0, to_object: 0 } })
