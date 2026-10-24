@@ -1,0 +1,15 @@
+rep1j R1: official 177 (first delivery 108); flips 2 (regressions 2), reverted 2; reviews 3 (survivors 9,4,8); review request chars 74956; uncached formalizer 55800 reviewer 143446; conservation errors 0 no_input 0; package 22490 chars, 9 objects
+rep1j R2: official 480 (first delivery 395); flips 1 (regressions 0), reverted 0; reviews 3 (survivors 6,8,2); review request chars 163604; uncached formalizer 70993 reviewer 247696; conservation errors 0 no_input 0; package 48781 chars, 8 objects
+rep1j R2 failures: R1 transform.derive 1
+rep1j R2 first delivery (C2.1) wrote: profile, compare, deduplicate, split, assert, normalize, encode, hash; missing: rollup, detect, bin; output tokens 7858
+
+rep1l R1: official 190 (first delivery 140); flips 0 (regressions 0), reverted 0; reviews 3 (survivors 8,6,3); review request chars 79546; uncached formalizer 57352 reviewer 123071; conservation errors 0 no_input 0; package 23350 chars, 40 paragraphs, 16 objects; use objects 8/16, paragraphs 18/40
+rep1l R2: official 364 (first delivery 275); flips 0 (regressions 0), reverted 0; reviews 3 (survivors 14,6,4); review request chars 133567; uncached formalizer 103140 reviewer 175147; conservation errors 0 no_input 1; package 39147 chars, 41 paragraphs, 19 objects; use objects 13/19, paragraphs 20/41
+rep1l R2 failures: R2 profile 54, R2 compare 19, R2 transform.rollup 16, R1 transform.pivot 10, R2 transform.detect 8, R1 transform.fill 2, R1 error-handling 2, R1 transform.rename-drop 2, R1 transform.derive 1, R2 transform.hash 1, R1 pipeline 1, R2 transform.bin 1
+rep1l R2 first delivery (C2.1) wrote: profile, compare; missing: deduplicate, split, assert, normalize, encode, rollup, detect, bin, hash; output tokens 5049
+
+rep1m R1: official 206 (first delivery 162); flips 0 (regressions 0), reverted 0; reviews 3 (survivors 6,5,6); review request chars 76066; uncached formalizer 103649 reviewer 127823; conservation errors 0 no_input 0; package 23193 chars, 40 paragraphs, 17 objects; use objects 7/17, paragraphs 10/40
+rep1m R2: official 450 (first delivery 312); flips 0 (regressions 0), reverted 0; reviews 3 (survivors 7,12,7); review request chars 130976; uncached formalizer 61111 reviewer 170953; conservation errors 0 no_input 0; package 39021 chars, 46 paragraphs, 18 objects; use objects 9/18, paragraphs 16/46
+rep1m R2 failures: R2 transform.rollup 16, R1 transform.pivot 10, R1 transform.fill 2, R2 profile 2, R1 transform.derive 1
+rep1m R2 first delivery (C2.1) wrote: profile, compare, deduplicate, split, assert, normalize, hash; missing: encode, rollup, detect, bin; output tokens 7439
+

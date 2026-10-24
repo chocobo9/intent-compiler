@@ -1,0 +1,4 @@
+{"round":1,"commit":"24e77b3f505296911f235f8e54d31edeec247acf","passed":206,"total":219,"prediction_sha256":"b4d70ed54f01cfd10c66fb247f326665aab452d7dc6a05b4d881cb2773442886"}
+{"round":1,"commit":"6a7cee91f23188ae1dc1ab9fbe9e22044e23688e","kind":"first_delivery","passed":162,"total":219}
+{"round":2,"commit":"521ee123301b5143d7e46360e64002f79e3fafd2","passed":450,"total":481,"prediction_sha256":"8fb87fb70debcc1cbc0cdfdbcfe5d71f8c10b994897d3eda6fcf14759f8e6973"}
+{"round":2,"commit":"e374eb9e748c04f7ab49cb0b01530dc15cb1b275","kind":"first_delivery","passed":312,"total":481}

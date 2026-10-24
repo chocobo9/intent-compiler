@@ -1,0 +1,4 @@
+rep1m: the second repetition of rep1l (the user's decision 2026-10-25; the last repetition), R1-R2.
+Code: branch ccr-992739b3-u5bcay, src identical to 6458a9e (later commits add NOTES only), worktree D:\huawei\intent_compiler\project-exp2-dev.
+Config: copied from rep1l; run id, ports (46015/46016), cache keys, label changed. rounds 6 (prepared for six), --to 2; delta, executor low.
+Started 2026-10-25, --to 2.
