@@ -43,3 +43,15 @@ withdrawals, with a cost slope against accumulated text. No individual mechanism
 | gold sets | two annotators + kappa for revision links, flip labels, attribution | single model + spot checks |
 | threats | tests as sole oracle; dpipe leakage into design (held-out mandatory); model drift; fail-stop scoring; single-annotator labels | recorded |
 | artifact | code, prompts, logs, records, containers | partly |
+
+## Collision sweep of 2026 venues and tool docs (second subagent, Sonnet, abstracts and program pages only)
+No fetched source does the whole loop. Nearest three: SpecPath (2608.09799, benchmark: revision history matters, no
+mechanism); Regression Accumulation (2607.01855, ASE 2026 listing: reruns earlier tests with rollback, treats every earlier
+failure as regression — no superseded/regression distinction stated in the abstract); EvoCode-Bench with ECK (2608.16295,
+AgenticDev: executable knowledge units with provenance/freshness, bound to code not requirement sentences). Partial
+traceability work: TraceDev (ISSTA 2026), Agent-HAnS (ASE 2026 tools), ReqEvolve (ASE 2026, 2609.10590). Tool docs
+(OpenHands, SWE-agent, Aider, Cursor, Claude Code memory, Kiro, Spec Kit, OpenSpec README): no requirement↔test linkage,
+no cross-session regression guards with provenance, no obsolete-test decision after a spec change. Not checked: Devin,
+Codex AGENTS.md docs, NeurIPS/ICLR 2026 lists, the remainder of the FSE/ISSTA/ICSE program pages. To follow up:
+"Don't Retest Everything: Auditable Regression Scoping" (ASE 2026 title only) and the full text of 2607.01855 for any
+supersession handling. Coverage: moderate-low.
