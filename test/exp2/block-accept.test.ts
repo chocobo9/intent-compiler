@@ -9,7 +9,7 @@ import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { goBuilder, goTrial } from "../../src/exp2/build.js"
 import { codeFacts, type CheckRecord } from "../../src/exp2/checks.js"
 import { DEFAULT_LIMITS } from "../../src/exp2/execution.js"
-import { assessPremises, checkPremises, claimProblems, DEFAULT_PREMISE_BLOCK, itemCheckRecord, parseCsvGo, parsedFacts, reproduces, type FormalItem } from "../../src/exp2/formalize.js"
+import { checkPremises, itemCheckRecord, reproduces, type FormalItem } from "../../src/exp2/formalize.js"
 import { git, head, initRepo } from "../../src/exp2/git.js"
 import { changedTextBehind, guardCoverage, type GuardEvent, type GuardRecord } from "../../src/exp2/guards.js"
 import { ledgerOf } from "../../src/exp2/ledger.js"
@@ -105,16 +105,6 @@ describe("exp2 acceptance block §2: the premises code checks before an item is 
   const sandbox = new LocalScriptSandbox(), runner = new LocalProcessRunner()
   before(async () => { for (const r of [1, 2, 3, 4, 5]) await store.ingestRound(r, roundText(r), stubTransport()) })
 
-  it("the standard CSV parser reads as Go does: a blank line is no record, a single-column file has no empty cell there", () => {
-    assert.deepEqual(parseCsvGo("v\n10\n20\n30\n\n"), { ok: true, records: [["v"], ["10"], ["20"], ["30"]] })
-    assert.deepEqual(parsedFacts("now.csv", "v\n10\n20\n30\n\n"), { path: "now.csv", parses: true, records: 3, empty_cells: 0, columns: ["v"] })
-    assert.deepEqual(parsedFacts("t.csv", "a,b\n1,\n,2\n"), { path: "t.csv", parses: true, records: 2, empty_cells: 2, columns: ["a", "b"] })
-    assert.equal(parseCsvGo("a,b\n1,2,3\n").ok, false, "a record with another field count is an error")
-    assert.deepEqual(parseCsvGo("a,b\r\n\"x,y\",\"q\"\"r\"\r\n"), { ok: true, records: [["a", "b"], ["x,y", "q\"r"]] })
-    assert.deepEqual(parsedFacts("x.json", "{\"a\":1}"), { path: "x.json", parses: true, records: null, empty_cells: null, columns: null })
-    assert.deepEqual(parsedFacts("x.json", "{"), { path: "x.json", parses: false, records: null, empty_cells: null, columns: null })
-  })
-
   it("premises hold: the item is sent (its check fails on the program and is kept for the repair)", async () => {
     const it = filterItem(1, FILTER_ITEM_TEXT, FILTER_UNIT)
     const p = await checkPremises(store.registry(), 1, it, sandbox, 10_000)
@@ -138,21 +128,6 @@ describe("exp2 acceptance block §2: the premises code checks before an item is 
     assert.ok((await checkPremises(store.registry(), 4, it, sandbox, 10_000)).ok)
   })
 
-  it("a single-column CSV with an 'empty cell' that is a blank line: the parse contradicts the claim, logged, the check still built (batch 2a)", async () => {
-    const base = filterItem(1, "null_rate_change must be reported", "R3.S6.P1")
-    const it: FormalItem = {
-      ...base, units: [FILTER_UNIT],
-      input: { args: ["drift", "--baseline", "base.csv", "--current", "now.csv", "--output", "d.json"], files: [{ path: "base.csv", content: "v\n10\n20\n30\n" }, { path: "now.csv", content: "v\n10\n20\n30\n\n" }] },
-      claims: [{ path: "base.csv", parses: true, records: 3, empty_cells: 0, columns: ["v"] }, { path: "now.csv", parses: true, records: 4, empty_cells: 1, columns: ["v"] }],
-      assertions: [resolvedDraft("n", target("json", { path: "d.json", pointer: "/null_rate_change" }), true)], reference_script: { language: "python", code: "print('{\"n\": true}')" },
-    }
-    assert.deepEqual(claimProblems(it.input!, it.claims), ["now.csv: claimed 4 data records, parsed 3", "now.csv: claimed 1 empty cells, parsed 0"])
-    const a = await assessPremises(store.registry(), 3, it, sandbox, 10_000)
-    assert.deepEqual(a.failures.map(f => f.premise), ["input_claim_false"], JSON.stringify(a.failures))
-    assert.ok(a.check && a.check.assertions.length === 1, "a false claim stops nothing: the check is built and goes to reproduction")
-    assert.ok(!DEFAULT_PREMISE_BLOCK.includes("input_claim_false"))
-  })
-
   it("a numeric expectation stated in words, not computed: blocked; stated by the text: passes", async () => {
     const base = filterItem(1, "the threshold must be 42", FILTER_UNIT)
     const spoken: FormalItem = { ...base, assertions: [{ id: "n", role: "business", target: target("csv_cell", { path: "out.csv", line: 1, column: "value" }), expect_json: "42", tolerance: null, source: { kind: "verbatim", block: FILTER_UNIT } }], reference_script: null }
@@ -168,8 +143,6 @@ describe("exp2 acceptance block §2: the premises code checks before an item is 
     assert.ok(!d.ok && d.failure.premise === "reference_failed")
   })
 })
-
-const resolvedDraft = (id: string, t: CheckRecord["assertions"][number]["target"], value: unknown): FormalItem["assertions"][number] => ({ id, role: "business", target: t, expect_json: JSON.stringify(value), tolerance: null, source: { kind: "derived", block: null } })
 
 describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed item becomes a guard, a repair that breaks a guard is reverted", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-acc-round-"))

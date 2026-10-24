@@ -84,7 +84,7 @@
     "reviews": 3,
     "trial_fixes": 2,
     "review_agent": "build",
-    "premise_block": ["unit_not_in_force", "not_reproduced", "input_claim_false"],
+    "premise_block": ["unit_not_in_force", "not_reproduced"],
     "fallback": "items",
     "void_without_runs": false,
     "expire_reproduced": false,

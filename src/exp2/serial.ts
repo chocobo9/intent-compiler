@@ -345,7 +345,7 @@ export class Serial {
       for (const r of open) { const why = r.units.map(u => notInForce(registryNow, round, u)).find(x => !!x); if (why) superseded.push({ id: r.id, reason: `round ${round}: ${why}` }) }
       const items = open.filter(r => !superseded.some(x => x.id === r.id))
       if (items.length) {
-        const records = items.map(r => itemCheckRecord(r.id, r.round, { item: r.item, text: r.text, units: r.units, input: r.check!.input, why_no_input: null, claims: [], assertions: [], reference_script: r.check!.reference_script }, r.check!))
+        const records = items.map(r => itemCheckRecord(r.id, r.round, { item: r.item, text: r.text, units: r.units, input: r.check!.input, why_no_input: null, assertions: [], reference_script: r.check!.reference_script }, r.check!))
         const rs = await this.timed("carry-over", () => runChecks(records, baseline, this.c.runner, round, registryStart, facts, limits.checkTimeoutMs))
         items.forEach((r, i) => { if (rs[i].outcome === "fail") carried.push({ id: r.id, text: r.text, check: records[i], digest: runDigest(rs[i]) }) })
       }

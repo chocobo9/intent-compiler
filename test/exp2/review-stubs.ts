@@ -13,7 +13,7 @@ import type { CheckInput } from "../../src/exp2/runner.js"
  * reviewer stand-in builds the copy of the program it is given and runs it on the filter and sort inputs it knows,
  * then lists what it saw as a reviewer would (requirement, command and input, what the program did), or answers
  * NO ISSUES; a scripted variant answers from a table. The formalizer stand-in writes the items the way a model
- * would from such a list: units from the text, the input rebuilt, claims counted, assertions with their sources.
+ * would from such a list: units from the text, the input rebuilt, assertions with their sources.
  */
 
 export const FILTER_INPUT: CheckInput = {
@@ -105,10 +105,6 @@ const py = (code: string) => ({ language: "python" as const, code })
 const t = (kind: string, extra: Record<string, unknown> = {}) => ({ kind, path: null, line: null, pointer: null, column: null, ...extra }) as FormalItem["assertions"][number]["target"]
 const derived = (id: string, target: FormalItem["assertions"][number]["target"], value: unknown): FormalItem["assertions"][number] => ({ id, role: "business", target, expect_json: JSON.stringify(value), tolerance: null, source: { kind: "derived", block: null } })
 
-const csvClaim = (path: string, content: string) => {
-  const rows = content.trim().split("\n")
-  return { path, parses: true, records: rows.length - 1, empty_cells: rows.slice(1).reduce((n, r) => n + r.split(",").filter(c => c === "").length, 0), columns: rows[0].split(",") }
-}
 
 /** The filter item as the formalizer writes it: the expected lines worked out, and a script that works them out too. */
 export function filterItem(n: number, text: string, unit: string): FormalItem {
@@ -125,7 +121,6 @@ export function filterItem(n: number, text: string, unit: string): FormalItem {
   ].join("\n")
   return {
     item: n, text, units: [unit], input: FILTER_INPUT, why_no_input: null,
-    claims: [csvClaim("data.csv", FILTER_INPUT.files[0].content), { path: "recipe.json", parses: true, records: null, empty_cells: null, columns: null }],
     assertions: [derived("l1", t("file_line", { path: "out.csv", line: 1 }), "id,value"), derived("l2", t("file_line", { path: "out.csv", line: 2 }), "2,20"), derived("l3", t("file_line", { path: "out.csv", line: 3 }), "4,12"), derived("exit", t("exit_code"), 0)],
     reference_script: py(script),
   }
@@ -144,7 +139,6 @@ export function sortItem(n: number, text: string, unit: string): FormalItem {
   ].join("\n")
   return {
     item: n, text, units: [unit], input: SORT_INPUT, why_no_input: null,
-    claims: [csvClaim("data.csv", SORT_INPUT.files[0].content), { path: "recipe.json", parses: true, records: null, empty_cells: null, columns: null }],
     assertions: [derived("l1", t("file_line", { path: "out.csv", line: 1 }), "id,value"), derived("l2", t("file_line", { path: "out.csv", line: 2 }), "3,3"), derived("l3", t("file_line", { path: "out.csv", line: 3 }), "1,5"), derived("l4", t("file_line", { path: "out.csv", line: 4 }), "4,12"), derived("l5", t("file_line", { path: "out.csv", line: 5 }), "2,20"), derived("exit", t("exit_code"), 0)],
     reference_script: py(script),
   }
@@ -164,7 +158,7 @@ export function stubFormalizer(units: { filter: string; sort: string }, extra: (
       const n = k + 1
       if (text.startsWith(FILTER_ITEM_TEXT.slice(0, 40))) return filterItem(n, text, units.filter)
       if (text.startsWith(SORT_ITEM_TEXT.slice(0, 40))) return sortItem(n, text, units.sort)
-      return extra(text, n, request) ?? { item: n, text, units: [units.filter], input: null, why_no_input: "the item does not give the command or the files it used", claims: [], assertions: [], reference_script: null }
+      return extra(text, n, request) ?? { item: n, text, units: [units.filter], input: null, why_no_input: "the item does not give the command or the files it used", assertions: [], reference_script: null }
     })
     const answer: FormalizeAnswer = { items }
     return { text: JSON.stringify(answer), stub: true, usage: { input_tokens: 30_000, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 1200, reasoning_tokens: 0 }, model: "stub:formalizer" }

@@ -61,7 +61,7 @@ export function replayedFormalizer(texts: string[]): FormalizeTransport {
   return async () => reply(texts[Math.min(n++, texts.length - 1)])
 }
 /** For a run with no formalizer reply (rep1c): every entry of the review, no input, as the real formalizer answered rep1b. */
-export const noInputFormalizer: FormalizeTransport = async request => reply(JSON.stringify({ items: reviewEntries(request.review).map((text, k) => ({ item: k + 1, text, units: ["R1.S3.P2"], input: null, why_no_input: "the file contents are not given", claims: [], assertions: [], reference_script: null })) }))
+export const noInputFormalizer: FormalizeTransport = async request => reply(JSON.stringify({ items: reviewEntries(request.review).map((text, k) => ({ item: k + 1, text, units: ["R1.S3.P2"], input: null, why_no_input: "the file contents are not given", assertions: [], reference_script: null })) }))
 
 export function scripted(script: { text: string; runs?: ProgramRun[]; materials?: ReturnType<typeof sessionMaterials> }[]): AcceptDeps["reviewer"] {
   let n = 0

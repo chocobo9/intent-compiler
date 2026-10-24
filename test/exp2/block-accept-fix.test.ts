@@ -61,7 +61,7 @@ function replayedFormalizer(texts: string[]): FormalizeTransport & { calls: { n:
 /** A formalizer stand-in shaped as the real one answered rep1b: every entry of the review, its units, no input. */
 function noInputFormalizer(unit: string): FormalizeTransport {
   return async request => {
-    const items = reviewEntries(request.review).map((text, k) => ({ item: k + 1, text, units: [unit], input: null, why_no_input: "the file contents are not given", claims: [], assertions: [], reference_script: null }))
+    const items = reviewEntries(request.review).map((text, k) => ({ item: k + 1, text, units: [unit], input: null, why_no_input: "the file contents are not given", assertions: [], reference_script: null }))
     return { text: JSON.stringify({ items }), stub: true, usage: { input_tokens: 1000, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 100, reasoning_tokens: 0 }, model: "stub:formalizer" }
   }
 }
@@ -123,7 +123,7 @@ describe("fix block A4, A6: the interfaces on the real replies", () => {
     assert.equal(item.assertions.items.properties.source.properties.block.pattern, UNIT_ID_PATTERN)
     assert.match(FORMALIZE_SYSTEM_PROMPT, /R1\.S3\.P12\.s10\.c1/u)
     assert.match(FORMALIZE_SYSTEM_PROMPT, /not part of the id/u)
-    const one = (units: string[]) => formalizeProblems(store.registry(), 1, { items: [{ item: 1, text: "x", units, input: null, why_no_input: "none", claims: [], assertions: [], reference_script: null }] }).problems.map(p => p.message)
+    const one = (units: string[]) => formalizeProblems(store.registry(), 1, { items: [{ item: 1, text: "x", units, input: null, why_no_input: "none", assertions: [], reference_script: null }] }).problems.map(p => p.message)
     assert.match(one(["R1.S3.P12:x9"])[0], /is not in the unit id format; write unit ids as R<round>/u)
     assert.match(one(["R1.S99.P1"])[0], /R1\.S99\.P1 does not exist in the requirements so far/u)
     assert.deepEqual(one(["R1.S99.P1", "R1.S3.P12#f683eb75:s10.c1"]), [], "an unknown id beside a known one is dropped, not a problem")
@@ -139,7 +139,7 @@ describe("fix block A4, A6: the interfaces on the real replies", () => {
     // The slips the real reply made, read the one way they can mean: an unquoted string, a verbatim value whose unit is unknown.
     const raw = JSON.parse(FORMALIZE[0].response_text) as { items: { assertions: { expect_json: string }[] }[] }
     assert.equal(raw.items[0].assertions[1].expect_json, "ERROR: invalid recipe: join key id not found in right dataset")
-    const withInput = { items: [{ item: 1, text: "x", units: ["R1.S8.P1.s1"], input: { args: ["verify"], files: [] }, why_no_input: null, claims: [], reference_script: null, assertions: [{ id: "a", target: { kind: "stderr", path: null, line: null, pointer: null, column: null }, expect_json: "ERROR: file not found: x", tolerance: null, source: { kind: "verbatim", block: null } }] }] }
+    const withInput = { items: [{ item: 1, text: "x", units: ["R1.S8.P1.s1"], input: { args: ["verify"], files: [] }, why_no_input: null, reference_script: null, assertions: [{ id: "a", target: { kind: "stderr", path: null, line: null, pointer: null, column: null }, expect_json: "ERROR: file not found: x", tolerance: null, source: { kind: "verbatim", block: null } }] }] }
     const r = formalizeProblems(store.registry(), 1, withInput)
     assert.deepEqual(r.problems, [])
     assert.deepEqual([r.items[0].assertions[0].expect_json, r.items[0].assertions[0].source.block], [JSON.stringify("ERROR: file not found: x"), null])
@@ -283,20 +283,9 @@ describe("fix block A3: two tiers of premises", () => {
     assert.deepEqual(record.accept!.premise_logged, { value_not_stated: 1 })
     const ledger = ledgerOf({ ...store.inspect(), executions: [record] }, store.registry())
     assert.deepEqual(ledger.find(x => x.id === "V1.1.1")!.logged?.map(l => l.premise), ["value_not_stated"])
-    const strict = await round(dir, store, [wd => write(wd, files({ filterWrong: true }))], { reviewer: reviewer(), formalize: withSpoken, limits: { premiseBlock: ["unit_not_in_force", "not_reproduced", "input_claim_false", "value_not_stated"] } })
+    const strict = await round(dir, store, [wd => write(wd, files({ filterWrong: true }))], { reviewer: reviewer(), formalize: withSpoken, limits: { premiseBlock: ["unit_not_in_force", "not_reproduced", "value_not_stated"] } })
     assert.equal(strict.executor.log.messages.length, 1)
     assert.deepEqual(strict.record.accept!.premise_blocked, { value_not_stated: 1 })
-  })
-
-  it("a claim about the input that its parse contradicts, the check reproducing: sent, input_claim_false logged (batch 2a)", async () => {
-    const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: FILTER_UNIT }, () => null)
-    const miscounted = (): FormalItem => { const it = filterItem(1, FILTER_ITEM_TEXT, FILTER_UNIT); return { ...it, claims: it.claims.map(c => c.path === "data.csv" ? { ...c, records: (c.records ?? 0) + 1, empty_cells: (c.empty_cells ?? 0) + 1 } : c) } }
-    const withMiscount: FormalizeTransport = async req => { const r = await formalize(req); const a = JSON.parse(r.text) as { items: FormalItem[] }; a.items = a.items.map(() => miscounted()); return { ...r, text: JSON.stringify(a) } }
-    const { record, executor } = await round(dir, store, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files())], { reviewer: scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }]), formalize: withMiscount })
-    assert.equal(executor.log.messages.length, 2, "the repair message went out")
-    const rec = record.review_items!.find(x => x.id === "V1.1.1")!
-    assert.deepEqual([rec.disposition, rec.logged?.map(l => l.premise), rec.premise, !!rec.check, rec.guard], ["logged", ["input_claim_false"], null, true, "G1"])
-    assert.deepEqual([record.accept!.premise_logged, record.accept!.premise_blocked ?? {}], [{ input_claim_false: 1 }, {}])
   })
 
   it("the replay shows both: strict (every premise blocks) and the tiers, item by item", async () => {

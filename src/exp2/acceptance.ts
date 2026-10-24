@@ -233,7 +233,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
         if (!rep.reproduced) failures.push({ premise: "not_reproduced", detail: `the check passes on the program (exit ${rep.run.exit_code})` })
         else rec.check = a.check
       }
-      const order: Premise[] = ["unit_not_in_force", "no_input", "no_assertion", "input_claim_false", "value_not_computed", "value_not_stated", "reference_failed", "not_reproduced"]
+      const order: Premise[] = ["unit_not_in_force", "no_input", "no_assertion", "value_not_computed", "value_not_stated", "reference_failed", "not_reproduced"]
       rec.strict = order.find(x => failures.some(y => y.premise === x)) ?? null
       const stop = failures.find(x => block.has(x.premise))
       const logged = failures.filter(x => !block.has(x.premise))

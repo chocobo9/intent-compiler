@@ -26,8 +26,6 @@ export interface FormalItem {
   /** The call: the program's arguments and the files it needs, as the reviewer used them. Null when the text does not say. */
   input: CheckInput | null
   why_no_input: string | null
-  /** What each CSV or JSON input file holds, in the parser's terms (§12i item 2). */
-  claims: InputClaim[]
   assertions: AssertionDraft[]
   reference_script: CheckDraft["reference_script"]
   /** A lead the item names (batch C, effect 3): its library check is the item's check. */
@@ -36,9 +34,6 @@ export interface FormalItem {
   input_from?: string
   produced?: { path: string; by: string[] }[]
 }
-
-/** records: data records after the header; empty_cells: empty fields among them; columns: the header. */
-export interface InputClaim { path: string; parses: boolean; records: number | null; empty_cells: number | null; columns: string[] | null }
 
 export interface FormalizeAnswer { items: FormalItem[] }
 
@@ -101,7 +96,7 @@ export const FORMALIZE_SCHEMA = {
       type: "array",
       description: "One entry per deviation in the review, in the review's order; none when the review lists none.",
       items: {
-        type: "object", additionalProperties: false, required: ["item", "text", "units", "input", "why_no_input", "claims", "assertions", "reference_script"],
+        type: "object", additionalProperties: false, required: ["item", "text", "units", "input", "why_no_input", "assertions", "reference_script"],
         properties: {
           item: { type: "integer", description: "1-based position in the review's list" },
           text: { type: "string", description: "the item's text as the review states it, verbatim" },
@@ -112,20 +107,6 @@ export const FORMALIZE_SCHEMA = {
             properties: { args: { type: "array", items: { type: "string" } }, files: { type: "array", items: { type: "object", additionalProperties: false, required: ["path", "content", "from"], properties: { path: { type: "string" }, content: { type: ["string", "null"], description: "the file's full content; null when `from` names where code takes it" }, from: { type: ["string", "null"], description: "\"session\" for a file of `materials.files` (the reviewer wrote it), a lead id (K12) for that lead's file; null when content is given" } } } } },
           },
           why_no_input: { type: ["string", "null"], description: "when input is null: what the review leaves out" },
-          claims: {
-            type: "array",
-            description: "for every input file ending in .csv or .json: what the item relies on it holding, in the standard parser's terms",
-            items: {
-              type: "object", additionalProperties: false, required: ["path", "parses", "records", "empty_cells", "columns"],
-              properties: {
-                path: { type: "string" },
-                parses: { type: "boolean", description: "whether the standard parser of the format (RFC 4180 CSV as Go reads it, JSON) accepts the file" },
-                records: { type: ["integer", "null"], description: "CSV: data records after the header line (blank lines are not records); null for JSON or when it does not parse" },
-                empty_cells: { type: ["integer", "null"], description: "CSV: empty fields among the data records; null for JSON or when it does not parse" },
-                columns: { type: ["array", "null"], items: { type: "string" }, description: "CSV: the header's column names; null for JSON" },
-              },
-            },
-          },
           assertions: {
             type: "array",
             description: "what a program that follows the requirement produces for this call; each one fact, each failing on the reviewed program",
@@ -162,7 +143,6 @@ export const FORMALIZE_SYSTEM_PROMPT = [
   "For each deviation in the list, in order, write one item:",
   `- units: the ids of the units of \`sources\` the deviation breaks (the finest units that state the rule: a sentence, a list item, a clause); ${UNIT_SYNTAX}.`,
   "- input: the call the reviewer made, rebuilt exactly: the arguments after the program name, and every input file with its complete content. `materials`, when given, holds what the reviewer had and did: `leads` (checks it was asked to verify, with their arguments and files), `files` (the files it wrote in its session) and `commands` (what it ran, with the output). Take the call from there when the review names it: a file of `materials.files` is given with content null and from \"session\", a lead's file with from set to the lead id. Only when neither the review nor the materials give the call, set input to null and say in why_no_input what is missing. Do not invent content.",
-  "- claims: for every input file ending in .csv or .json, what the item relies on the file holding, as the standard parser sees it: whether it parses (CSV as RFC 4180 the way Go's encoding/csv reads it: a blank line is skipped, every record has the header's field count; JSON as JSON.parse), the number of data records after the header, the number of empty fields among them, the header's columns. Count them yourself from the content you wrote; code checks these against the parser.",
   "- assertions: what a program that follows the requirement produces for this call, one fact each (an exit code, a line, a cell, a JSON field), stated so that they fail on the reviewed program and would pass once it is fixed. Every expected value has a source: verbatim when the requirement states the value (block is the id of the unit that states it; code checks that the value occurs there); derived when you worked it out from the input (then reference_script must print it too, under the assertion's id); computed for a digest or hash (expect_json \"null\"; reference_script alone gives it). A number that the text does not state is never verbatim: work it out in reference_script.",
   "- reference_script: needed when any assertion is derived or computed. It runs in a directory holding only the input files and prints one JSON object mapping each such assertion's id to its value. It must not run the program.",
   "If the review reports no deviation, answer with an empty list. When `problems` is given, fix exactly those in `previous_answer` and return the whole answer.",
@@ -234,7 +214,7 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
       const good = (Array.isArray(it.assertions) ? it.assertions as Partial<AssertionDraft>[] : []).filter(x => x && typeof x.id === "string" && x.target && !targetProblems(x.target as Target) && typeof x.expect_json === "string" && x.source && ["verbatim", "derived", "computed"].includes(String(x.source.kind))) as AssertionDraft[]
       const script = it.reference_script && typeof it.reference_script === "object" && (it.reference_script.language === "python" || it.reference_script.language === "node") && typeof it.reference_script.code === "string" ? it.reference_script : null
       const usable = good.filter(x => x.source.kind === "verbatim" || script)
-      items.push({ item: n, text: it.text!, units: [...new Set(it.units!)], input: null, why_no_input: typeof it.why_no_input === "string" && it.why_no_input.trim() ? it.why_no_input : "the formalizer gave no input and no reason", claims: [], assertions: usable.map(x => ({ id: x.id, role: "business", target: { kind: x.target.kind, path: x.target.path ?? null, line: x.target.line ?? null, pointer: x.target.pointer ?? null, column: x.target.column ?? null }, expect_json: x.expect_json, tolerance: typeof x.tolerance === "number" ? x.tolerance : null, source: { kind: x.source.kind, block: x.source.block ?? null } })), reference_script: usable.some(x => x.source.kind !== "verbatim") ? script : null })
+      items.push({ item: n, text: it.text!, units: [...new Set(it.units!)], input: null, why_no_input: typeof it.why_no_input === "string" && it.why_no_input.trim() ? it.why_no_input : "the formalizer gave no input and no reason", assertions: usable.map(x => ({ id: x.id, role: "business", target: { kind: x.target.kind, path: x.target.path ?? null, line: x.target.line ?? null, pointer: x.target.pointer ?? null, column: x.target.column ?? null }, expect_json: x.expect_json, tolerance: typeof x.tolerance === "number" ? x.tolerance : null, source: { kind: x.source.kind, block: x.source.block ?? null } })), reference_script: usable.some(x => x.source.kind !== "verbatim") ? script : null })
       continue
     }
     {
@@ -248,15 +228,7 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
         else add(`input file ${f.path}: content is null and ${lead ? `lead ${lead.id} has no such file` : `materials.files has no file ${f.path}`}`)
       }
       if (!Array.isArray(i.args) || !i.args.every(x => typeof x === "string") || !Array.isArray(i.files) || !i.files.every(f => f && typeof f.path === "string" && typeof f.content === "string")) add("input must be {args: string[], files: {path, content}[]}")
-      else {
-        for (const f of i.files) if (!safePath(f.path)) add(`input path ${f.path} must be relative and inside the run directory`)
-        const claims = Array.isArray(it.claims) ? it.claims as Partial<InputClaim>[] : []
-        for (const f of i.files.filter(x => /\.(csv|json)$/iu.test(x.path))) {
-          const c = claims.find(x => x?.path === f.path)
-          if (!c || typeof c.parses !== "boolean") { add(`claims must say whether ${f.path} parses`); continue }
-          if (/\.csv$/iu.test(f.path) && c.parses && (!Number.isInteger(c.records) || !Number.isInteger(c.empty_cells))) add(`claims for ${f.path} must give records and empty_cells as integers`)
-        }
-      }
+      else for (const f of i.files) if (!safePath(f.path)) add(`input path ${f.path} must be relative and inside the run directory`)
     }
     if (!Array.isArray(it.assertions)) { add("assertions must be a list"); continue }
     if (it.input && !it.assertions.length) add("an item with an input needs at least one assertion")
@@ -276,7 +248,7 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
     if (problems.some(p => p.item === n)) continue
     items.push({
       item: n, text: it.text!, units: [...new Set(it.units!)], input: it.input ? { args: [...it.input.args], files: it.input.files.map(f => ({ path: f.path, content: f.content as string })) } : null,
-      why_no_input: it.input ? null : it.why_no_input!, claims: (Array.isArray(it.claims) ? it.claims : []).map(c => ({ path: c.path, parses: c.parses === true, records: Number.isInteger(c.records) ? c.records! : null, empty_cells: Number.isInteger(c.empty_cells) ? c.empty_cells! : null, columns: Array.isArray(c.columns) ? c.columns.map(String) : null })),
+      why_no_input: it.input ? null : it.why_no_input!,
       assertions: (it.assertions as AssertionDraft[]).map(x => ({ id: x.id, role: "business", target: { kind: x.target.kind, path: x.target.path ?? null, line: x.target.line ?? null, pointer: x.target.pointer ?? null, column: x.target.column ?? null }, expect_json: x.expect_json, tolerance: typeof x.tolerance === "number" ? x.tolerance : null, source: { kind: x.source.kind, block: x.source.block ?? null } })),
       reference_script: derived ? it.reference_script! : null,
     })
@@ -334,87 +306,6 @@ export function completeInput(it: FormalItem, materials: ReviewMaterials, binary
   return { ...it, why_no_input: `${found.why}; the formalizer: ${it.why_no_input ?? "no reason given"}` }
 }
 
-// ---------------------------------------------------------------- standard parsers
-
-/**
- * CSV as Go's encoding/csv reads it with its defaults: RFC 4180 quoting, CRLF or LF, an empty line is skipped, the
- * first record fixes the field count and a record with another count is an error, a quote inside an unquoted field
- * is an error.
- */
-export function parseCsvGo(text: string): { ok: true; records: string[][] } | { ok: false; error: string } {
-  const records: string[][] = []
-  let i = 0
-  const n = text.length
-  let lineNo = 0
-  while (i < n) {
-    lineNo++
-    // An empty line (only a line break) is skipped.
-    if (text[i] === "\n") { i++; continue }
-    if (text[i] === "\r" && text[i + 1] === "\n") { i += 2; continue }
-    const row: string[] = []
-    for (;;) {
-      let field = ""
-      if (text[i] === "\"") {
-        i++
-        for (;;) {
-          if (i >= n) return { ok: false, error: `line ${lineNo}: extraneous or missing " in quoted-field` }
-          if (text[i] === "\"") {
-            if (text[i + 1] === "\"") { field += "\""; i += 2; continue }
-            i++
-            break
-          }
-          field += text[i++]
-        }
-        if (i < n && text[i] !== "," && text[i] !== "\n" && !(text[i] === "\r" && text[i + 1] === "\n")) return { ok: false, error: `line ${lineNo}: extraneous or missing " in quoted-field` }
-      } else {
-        while (i < n && text[i] !== "," && text[i] !== "\n" && !(text[i] === "\r" && text[i + 1] === "\n")) {
-          if (text[i] === "\"") return { ok: false, error: `line ${lineNo}: bare " in non-quoted-field` }
-          field += text[i++]
-        }
-      }
-      row.push(field)
-      if (i < n && text[i] === ",") { i++; continue }
-      break
-    }
-    if (i < n && text[i] === "\r") i++
-    if (i < n && text[i] === "\n") i++
-    if (records.length && row.length !== records[0].length) return { ok: false, error: `record on line ${lineNo}: wrong number of fields` }
-    records.push(row)
-  }
-  return { ok: true, records }
-}
-
-/** What the standard parser says a file holds, in the claim's terms. */
-export function parsedFacts(path: string, content: string): InputClaim | null {
-  if (/\.csv$/iu.test(path)) {
-    const p = parseCsvGo(content)
-    if (!p.ok) return { path, parses: false, records: null, empty_cells: null, columns: null }
-    const data = p.records.slice(1)
-    return { path, parses: true, records: data.length, empty_cells: data.reduce((n, r) => n + r.filter(c => c === "").length, 0), columns: p.records[0] ?? [] }
-  }
-  if (/\.json$/iu.test(path)) {
-    try { JSON.parse(content); return { path, parses: true, records: null, empty_cells: null, columns: null } } catch { return { path, parses: false, records: null, empty_cells: null, columns: null } }
-  }
-  return null
-}
-
-/** The claims the standard parser contradicts (premise 2): each as the claim, what the parser found. */
-export function claimProblems(input: CheckInput, claims: readonly InputClaim[]): string[] {
-  const out: string[] = []
-  for (const c of claims) {
-    const f = input.files.find(x => x.path === c.path)
-    if (!f) { out.push(`${c.path}: the item claims a file the input does not give`); continue }
-    const facts = parsedFacts(f.path, f.content)
-    if (!facts) continue
-    if (c.parses !== facts.parses) { out.push(`${c.path}: claimed ${c.parses ? "parses" : "does not parse"}, the standard parser ${facts.parses ? "accepts it" : "rejects it"}`); continue }
-    if (!facts.parses) continue
-    if (c.records !== null && c.records !== facts.records) out.push(`${c.path}: claimed ${c.records} data records, parsed ${facts.records}`)
-    if (c.empty_cells !== null && c.empty_cells !== facts.empty_cells) out.push(`${c.path}: claimed ${c.empty_cells} empty cells, parsed ${facts.empty_cells}`)
-    if (c.columns !== null && facts.columns && JSON.stringify(c.columns) !== JSON.stringify(facts.columns)) out.push(`${c.path}: claimed columns ${JSON.stringify(c.columns)}, parsed ${JSON.stringify(facts.columns)}`)
-  }
-  return out
-}
-
 // ---------------------------------------------------------------- premises
 
 /**
@@ -422,7 +313,7 @@ export function claimProblems(input: CheckInput, claims: readonly InputClaim[]):
  * not_formalized (the formalizer left a listed deviation out) and formalize_failed (the call failed) are code's own
  * failures to verify, not findings about the item (fix block A1).
  */
-export type Premise = "unit_not_in_force" | "input_claim_false" | "value_not_stated" | "value_not_computed" | "reference_failed" | "no_input" | "no_assertion" | "not_reproduced" | "malformed" | "not_formalized" | "formalize_failed"
+export type Premise = "unit_not_in_force" | "value_not_stated" | "value_not_computed" | "reference_failed" | "no_input" | "no_assertion" | "not_reproduced" | "malformed" | "not_formalized" | "formalize_failed"
 
 export interface PremiseFailure { premise: Premise; detail: string }
 
@@ -456,9 +347,8 @@ export function notInForce(registry: Registry, round: number, u: string): string
 
 /**
  * Every premise the code checks before an item is sent (no model), each one, not only the first that fails: every
- * cited unit is a requirement in force (owned, live, not wholly replaced by a later round); the input's files show
- * what the item claims under their standard parser; each stated value occurs in the unit cited for it, or else in one
- * of the item's units (a number the text does not state has to be computed); each worked-out value comes from the
+ * cited unit is a requirement in force (owned, live, not wholly replaced by a later round); each stated value occurs
+ * in the unit cited for it, or else in one of the item's units (a number the text does not state has to be computed); each worked-out value comes from the
  * reference script and agrees with it. The check is built from what could be resolved (null without an input, or when
  * nothing resolved); the caller decides by tier what a failure means.
  */
@@ -470,8 +360,6 @@ export async function assessPremises(registry: Registry, round: number, item: Fo
   if (item.from_lead) return { failures, check: { input: item.from_lead.input, assertions: item.from_lead.assertions, reference_script: item.from_lead.reference_script, object: item.from_lead.object } }
   if (!item.input) { fail("no_input", item.why_no_input ?? "the review does not give the input"); return { failures, check: null } }
   if (!item.assertions.length) { fail("no_assertion", `the input is known (${item.input_from ?? "from the formalizer"}) but the formalizer wrote no assertion for the item`); return { failures, check: null } }
-  const claims = claimProblems(item.input, item.claims)
-  if (claims.length) fail("input_claim_false", claims.join("; "))
   const assertions: AssertionDraft[] = []
   for (const a of item.assertions) {
     if (a.source.kind !== "verbatim") { assertions.push(a); continue }
@@ -490,12 +378,12 @@ export async function assessPremises(registry: Registry, round: number, item: Fo
 }
 
 /**
- * The premises as one verdict, in their order (unit, input, claims, stated values, references): the check, or the
+ * The premises as one verdict, in their order (unit, input, stated values, references): the check, or the
  * first premise that failed. Used where every premise blocks (the replay's strict column, tests).
  */
 export async function checkPremises(registry: Registry, round: number, item: FormalItem, sandbox: ScriptSandbox, timeoutMs: number): Promise<{ ok: true; check: ItemCheck } | { ok: false; failure: PremiseFailure }> {
   const a = await assessPremises(registry, round, item, sandbox, timeoutMs)
-  const order: Premise[] = ["unit_not_in_force", "no_input", "no_assertion", "input_claim_false", "value_not_computed", "value_not_stated", "reference_failed"]
+  const order: Premise[] = ["unit_not_in_force", "no_input", "no_assertion", "value_not_computed", "value_not_stated", "reference_failed"]
   const first = order.map(p => a.failures.find(f => f.premise === p)).find(f => !!f)
   if (first) return { ok: false, failure: first }
   if (!a.check) return { ok: false, failure: { premise: "reference_failed", detail: "no assertion could be resolved" } }

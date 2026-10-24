@@ -1707,3 +1707,18 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
    结果 `rep1i-R1.2.json`。
 3. 七个真实 R1 重放（replay-baseline.test）：与 fe6562d 基线逐项相同（rep1b/c/d/e/g 的 blocked 原本都是 0，发出数不变；rep1、rep1f 无审查）。未另存新基线。
 4. 离线测试：block-accept §2"声明与解析不符"一条从"挡下"改为"记录、检查照建"（assessPremises 报 `input_claim_false`，检查仍建出）；block-accept-fix 新增"声明错、检查能复现：发出，logged 记 input_claim_false，premise_blocked 为空"。两文件 44 过 0 败。
+
+### 26.2 B2b：formalizer 不再写输入声明
+
+**做法**：B2a 之后输入声明（claims）只剩一个用处：报告里的 `input_claim_false` 记录，没有任何环节消费它。按设计会话"不留空壳"，整段去掉：
+
+- 去掉的请求部分：formalizer 输出 schema 里每个条目的 `claims` 字段（及其 required）；系统提示里"claims: 对每个 .csv/.json 输入文件写出解析器眼里的记录数、空格数、列名，自己数"那一行；解析时"claims 必须说明文件是否能解析、CSV 必须给整数记录数和空格数"两条校验（原来不满足会让 formalizer 重答）。
+- 随之去掉的代码：`FormalItem.claims`、`InputClaim`、`claimProblems`、只为它服务的 `parsedFacts` 和 Go 式 CSV 解析器 `parseCsvGo`；前提 `input_claim_false`（类型、`assessPremises`、严格顺序、配置可选项）。
+- 旧运行记录下来的 formalizer 回复里仍带 `claims`，解析时忽略，不报错。
+- 配置 `acceptance.premise_block` 不再接受 `input_claim_false`：这条前提已经没有数据来源，消融也无从做。
+
+**验收**：
+- rep1i R1.2、rep1m R2.1 用 B2b 代码再重放（同样起运行自己的服务读会话，不调模型）：逐条结果、修复消息全文与 B2a 新层逐字相同（rep1i 发 9、V1.2.9 不复现；rep1m 发 15）。
+- 七个真实 R1 重放（replay-baseline.test，用的是带 claims 的旧回复）：与 fe6562d 基线相同。
+- B2a 的遗漏：示例配置 `exp2/local-config.example.json` 显式写着旧的三条挡送，B2a 没改；这里改成 `unit_not_in_force, not_reproduced`。真实运行目录的配置都不写 `premise_block`（rep1f–rep1m 逐个查过），走的是代码默认值，所以 B2a 的重放结论不受影响。
+- 测试：删去两条只测声明的用例（CSV 解析器、声明与解析不符）和 B2a 新加的"声明错照发"用例，测试桩不再写 claims。

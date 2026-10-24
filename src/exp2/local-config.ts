@@ -157,7 +157,7 @@ export function localConfigProblems(c: LocalConfig): string[] {
   if (c.acceptance?.stale_by_reference === true) p.push("acceptance.stale_by_reference: staleness by reference is deleted (DESIGN §12j.5); remove it or set it to false")
   if (c.acceptance?.workorder_scope !== undefined && !["delta", "all"].includes(c.acceptance.workorder_scope)) p.push("acceptance.workorder_scope must be delta or all")
   if (c.acceptance?.review_scope !== undefined && !["delta", "full"].includes(c.acceptance.review_scope)) p.push("acceptance.review_scope must be delta or full")
-  const premises = ["unit_not_in_force", "input_claim_false", "value_not_stated", "value_not_computed", "reference_failed", "no_input", "no_assertion", "not_reproduced", "malformed", "not_formalized", "formalize_failed"]
+  const premises = ["unit_not_in_force", "value_not_stated", "value_not_computed", "reference_failed", "no_input", "no_assertion", "not_reproduced", "malformed", "not_formalized", "formalize_failed"]
   if (c.acceptance?.premise_block !== undefined && (!Array.isArray(c.acceptance.premise_block) || c.acceptance.premise_block.some(x => !premises.includes(x)))) p.push(`acceptance.premise_block must list premises among ${premises.join(", ")}`)
   if (c.acceptance?.fallback !== undefined && !["items", "review", "off"].includes(c.acceptance.fallback)) p.push("acceptance.fallback must be items, review or off")
   if (c.roles === null) p.push("roles: null switches the formalizer off, and the round needs it; give the roles or leave them out for the defaults")
