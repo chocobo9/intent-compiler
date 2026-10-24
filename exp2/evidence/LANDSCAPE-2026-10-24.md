@@ -55,3 +55,13 @@ no cross-session regression guards with provenance, no obsolete-test decision af
 Codex AGENTS.md docs, NeurIPS/ICLR 2026 lists, the remainder of the FSE/ISSTA/ICSE program pages. To follow up:
 "Don't Retest Everything: Auditable Regression Scoping" (ASE 2026 title only) and the full text of 2607.01855 for any
 supersession handling. Coverage: moderate-low.
+
+## Follow-ups closed (2026-10-24, read in source)
+- Regression Accumulation (2607.01855, body read): the 8-turn chains only ADD requirements ("later turns add new
+  requirements while preserving those established earlier"); none of its six change types is a revision or withdrawal.
+  The Verification Gate reruns the same benchmark-validated tests every turn and treats any pass-rate drop as a regression;
+  no test retirement, no provenance, no test-to-requirement mapping; evaluated on 2 of 6 models. Our setting (revise/withdraw,
+  agent-born guards bound to sentences, superseded-vs-regression) is outside its scope. Cite as the rerun-gate precedent.
+- "Don't Retest Everything: Auditable Regression Scoping for Safety-Critical Systems" (ASE 2026, DOI 10.1145/3832783.3837416):
+  CoCoS, regression scoping for safety-critical C via semantic differencing, AST and call-graph propagation, with Thales Alenia
+  Space. Not an agent harness, no requirement text; no collision. Cite only if guard-rerun scoping is ever discussed.
