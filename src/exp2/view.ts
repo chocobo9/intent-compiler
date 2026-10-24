@@ -322,7 +322,9 @@ export function renderComparisons(cs: readonly PackageComparison[]): string {
   const out = ["## Behaviour bound to earlier text this round revises (what the program does now; decide from the requirements as they stand)"]
   for (const c of cs) {
     out.push(`- ${c.guard}: command ${JSON.stringify(c.args)}; input files ${c.files.join(", ") || "none"}${c.output !== null ? `; now: ${c.output}` : ""}`)
-    for (const u of c.units) out.push(`  - earlier text of ${u.id}: ${u.earlier}${u.now.length ? `; now: ${u.now.join(" ")}` : "; withdrawn"}`)
+    // A whole paragraph or section on either side is quoted to its first 400 characters; the package has the rest.
+    const clip = (t: string) => { const one = t.replace(/\s+/gu, " "); return one.length > 400 ? `${one.slice(0, 400)}…` : one }
+    for (const u of c.units) out.push(`  - earlier text of ${u.id}: ${clip(u.earlier)}${u.now.length ? `; now: ${clip(u.now.join(" "))}` : "; withdrawn"}`)
   }
   return out.join("\n")
 }
@@ -348,11 +350,22 @@ export function fitPackage(pkg: RoundPackage, limit = PACKAGE_BUDGET): { pkg: Ro
   return { pkg: fitted, overflow: { limit, chars, dropped: dropped.reverse(), still_over: renderPackage(fitted).length > limit } }
 }
 
-/** A guard of the work order's protection zone (§6c, round package item 3): what it runs and gets now, never what it expects. */
-export interface PackageGuard { id: string; object: string | null; args: string[]; files: string[]; units: string[]; output: string | null }
-
-export function renderGuardList(guards: readonly PackageGuard[]): string {
-  return guards.map(g => `- ${g.id} (rests on ${g.units.join(", ")}): command ${JSON.stringify(g.args)}; input files ${g.files.join(", ") || "none"}${g.output !== null ? `; now: ${g.output}` : ""}`).join("\n")
+/**
+ * The comparisons of the round (§6c revision item 4): the live guards resting on a unit this round revised or
+ * withdrew, each with what it runs, what it gets on the baseline now (`outputs`, by guard; null when not run) and the
+ * unit's earlier and present text. Holding the other guards is code's: none of them is delivered.
+ */
+export function packageComparisons(registry: Registry, round: number, guards: readonly { id: string; units: readonly string[]; input?: { args: string[]; files: { path: string }[] }; check?: string }[], library: readonly { id: string; input: { args: string[]; files: { path: string }[] } }[], outputs: ReadonlyMap<string, string>): PackageComparison[] {
+  const revised = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts.map(p => ({ id: p, by: m.by })))))
+  const out: PackageComparison[] = []
+  for (const g of guards) {
+    const units = revised.filter(r => g.units.some(u => overlaps(registry, u, r.id)))
+    if (!units.length) continue
+    const input = g.input ?? library.find(k => k.id === g.check)?.input
+    if (!input) continue
+    out.push({ guard: g.id, args: input.args, files: input.files.map(f => f.path), output: outputs.get(g.id) ?? null, units: [...new Map(units.map(u => [u.id, u])).values()].map(u => ({ id: u.id, earlier: registry.block(u.id)!.text.trim(), now: u.by.map(b => registry.block(b)!.text.trim()) })) })
+  }
+  return out
 }
 
 /** The package's budget in characters (§6c revision item 5). */

@@ -2,7 +2,7 @@ import type { Anchor } from "./anchors.js"
 import { activeChecks, type CheckEvent, type CheckRecord } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import type { CheckRun, ObjectStatus } from "./verdict.js"
-import { contextOf, fitPackage, packageSizes, renderGuardList, renderPackage, roundPackage, type PackageGuard, type PackageOverflow, type RoundPackage } from "./view.js"
+import { contextOf, fitPackage, packageSizes, renderPackage, roundPackage, type PackageOverflow, type RoundPackage } from "./view.js"
 
 /**
  * The round's work order (DESIGN §6): five zones computed by code. Zones other than the source zone cite ids only;
@@ -48,8 +48,8 @@ export interface WorkOrder {
    * Characters of the source zone as rendered, and what it would be with every round's text (all), for the report.
    */
   scope?: { kind: "delta" | "all"; source_chars: number; source_chars_all: number; blocks: number; blocks_all: number; segments?: { object: string; paragraph: string; why: string; via: string[] }[]; heads?: string[]; edges?: { to_block: number; to_object: number }; sizes?: Record<string, number>; guards?: number; overflow?: PackageOverflow | null }
-  /** Scope delta (§6c): the round's package, by paragraph (the source zone), and the guards (the protection zone). */
-  package?: { pkg: RoundPackage; guards: PackageGuard[] }
+  /** Scope delta (§6c): the round's package, by paragraph, with its comparisons (the source zone); guards are not listed. */
+  package?: { pkg: RoundPackage }
 }
 
 /** A failure the round must fix: a confirmed item (the reviewer's, verified) or a guard failing; never a hypothesis. */
@@ -78,8 +78,8 @@ export interface WorkOrderInput {
   zoning?: boolean
   /** The source zone: the round's package (delta) or every round's text (all, the default here; ablation in the serial). */
   scope?: "delta" | "all"
-  /** Scope delta: the package as the serial fitted it, with the guards on its objects; absent, computed here without guards. */
-  package?: { pkg: RoundPackage; guards: PackageGuard[]; overflow: PackageOverflow | null }
+  /** Scope delta: the package as the serial built and fitted it (with its comparisons); absent, computed here without them. */
+  package?: { pkg: RoundPackage; overflow: PackageOverflow | null }
   /**
    * Under the review acceptance (§12j.7 items 4, 10): the failures that make an object a task are these (confirmed items
    * and guards), not the library's hypotheses, and there is no status zone. Absent: the library's statuses, as before.
@@ -209,10 +209,10 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   const order = (g: Map<string | null, unknown>) => [...g.keys()].sort((a, b) => a === null ? 1 : b === null ? -1 : Number(a.slice(1)) - Number(b.slice(1)))
   const all = order(groups).map(k => ({ object: k, name: k === null ? "(no requirement)" : name(k), blocks: groups.get(k)! }))
   let source = all
-  let pkg: { pkg: RoundPackage; guards: PackageGuard[]; overflow: PackageOverflow | null } | undefined
+  let pkg: { pkg: RoundPackage; overflow: PackageOverflow | null } | undefined
   if (input.scope === "delta") {
     // The round's package (DESIGN §6c): the objects' current views, the guards on them; the rest held by the guards.
-    pkg = input.package ?? (() => { const f = fitPackage(roundPackage(registry, round, (input.confirmed ?? []).map(c => ({ id: c.id, units: c.units })))); return { pkg: f.pkg, guards: [], overflow: f.overflow } })()
+    pkg = input.package ?? (() => { const f = fitPackage(roundPackage(registry, round, (input.confirmed ?? []).map(c => ({ id: c.id, units: c.units })))); return { pkg: f.pkg, overflow: f.overflow } })()
     source = []
   }
 
@@ -229,8 +229,8 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   const chars = (zone: WorkOrder["source"]) => renderSource(zone).length
   const blocksAll = all.reduce((n, g) => n + g.blocks.length, 0)
   if (pkg) return {
-    round, task, protect: [], status: statusZone, source, anchors: anchorZone.filter(a => inTask.has(a.object)), edges, package: { pkg: pkg.pkg, guards: pkg.guards },
-    scope: { kind: "delta", source_chars: renderPackage(pkg.pkg).length, source_chars_all: chars(all), blocks: pkg.pkg.segments.length, blocks_all: blocksAll, segments: pkg.pkg.segments.map(s => ({ object: s.object, paragraph: s.paragraph, why: s.why, via: s.via })), heads: pkg.pkg.heads.map(h => h.object), edges: pkg.pkg.edges, sizes: packageSizes(pkg.pkg), guards: pkg.guards.length, overflow: pkg.overflow },
+    round, task, protect: [], status: statusZone, source, anchors: anchorZone.filter(a => inTask.has(a.object)), edges, package: { pkg: pkg.pkg },
+    scope: { kind: "delta", source_chars: renderPackage(pkg.pkg).length, source_chars_all: chars(all), blocks: pkg.pkg.segments.length, blocks_all: blocksAll, segments: pkg.pkg.segments.map(s => ({ object: s.object, paragraph: s.paragraph, why: s.why, via: s.via })), heads: pkg.pkg.heads.map(h => h.object), edges: pkg.pkg.edges, sizes: packageSizes(pkg.pkg), guards: pkg.pkg.comparisons.length, overflow: pkg.overflow },
   }
   return { round, task, protect, status: statusZone, source, anchors: anchorZone, edges, scope: { kind: input.scope ?? "all", source_chars: chars(source), source_chars_all: chars(all), blocks: source.reduce((n, g) => n + g.blocks.length, 0), blocks_all: blocksAll } }
 }
@@ -274,9 +274,11 @@ export function renderWorkOrder(w: WorkOrder): string {
     for (const c of t.conventions) out.push(`  - affected by the revision of convention ${c.convention} (checks ${c.checks.join(", ")} to be derived again)`)
     for (const e of t.evidence) out.push(`  - ${e.reason === "reading" ? "failing, not counted against the program" : "failing"} ${e.check} (${e.reason}): args ${JSON.stringify(e.args)}; ${e.mismatches.map(m => `${m.assertion} expected ${JSON.stringify(m.expected)}, got ${JSON.stringify(m.actual)}${m.reading ? ` (this expectation rests on a reading the text does not state: ${m.reading})` : ""}`).join("; ")}`)
   }
-  out.push("", "## Protection zone (must not break; these checks are rerun)", "")
-  if (w.package) { if (w.package.guards.length) out.push(renderGuardList(w.package.guards)) }
-  else for (const p of w.protect) out.push(`- ${p.object} ${p.name}: checks ${p.checks.join(", ") || "(none)"}; shared anchors ${p.shared_anchors.join(", ")}`)
+  // Under the round's package the guards are held by code and not listed (§6c revision item 4).
+  if (!w.package) {
+    out.push("", "## Protection zone (must not break; these checks are rerun)", "")
+    for (const p of w.protect) out.push(`- ${p.object} ${p.name}: checks ${p.checks.join(", ") || "(none)"}; shared anchors ${p.shared_anchors.join(", ")}`)
+  }
   // Under the review acceptance there is no status zone (§12j.7 item 4); an empty one is not printed.
   if (w.status.length || !w.scope) out.push("", "## Status zone (for information, not tasks)", "")
   for (const s of w.status) {

@@ -13,7 +13,7 @@ import { renderReport, type RoundReport } from "../../src/exp2/report.js"
 import { reviewRequestOn } from "../../src/exp2/review.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import type { CheckRun } from "../../src/exp2/verdict.js"
-import { currentView, fitPackage, PACKAGE_BUDGET, renderGuardList, renderPackage, roundPackage, type PackageSegment } from "../../src/exp2/view.js"
+import { currentView, fitPackage, PACKAGE_BUDGET, packageComparisons, renderPackage, roundPackage, type PackageSegment } from "../../src/exp2/view.js"
 import { roundText } from "./inputs.js"
 import { stubTransport } from "./stubs.js"
 
@@ -87,6 +87,28 @@ describe("the chain block, the current view (§6c, view)", () => {
   })
 })
 
+describe("the package's comparisons (§6c revision item 4): only guards on units this round revises, what they get now, the earlier and present text", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-chain-cmp-"))
+  const store = new Exp2Store(join(dir, "store"), "chc")
+  before(async () => { for (const r of [1, 2, 3, 4, 5]) await store.ingestRound(r, roundText(r), stubTransport()) })
+
+  it("R5 withdraws the R1 sidecar clause: the guard on it is delivered (command, input files, output now, earlier text, withdrawn); the sort guard is not; R4 has none", () => {
+    const reg = store.registry()
+    const input = { args: ["transform", "--input", "data.csv"], files: [{ path: "data.csv" }] }
+    const guards = [{ id: "G1", units: ["R1.S3.P24.s1"], input }, { id: "G2", units: ["R1.S3.P9.s2"], input }]
+    const cs = packageComparisons(reg, 5, guards, [], new Map([["G1", "exit 0; file_exists out.csv.sha256 = true"]]))
+    assert.deepEqual(cs.map(c => c.guard), ["G1"])
+    assert.deepEqual([cs[0].args, cs[0].files, cs[0].output], [input.args, ["data.csv"], "exit 0; file_exists out.csv.sha256 = true"])
+    assert.ok(cs[0].units.some(u => u.id === "R1.S3.P24.s1.c3" && u.earlier === reg.block("R1.S3.P24.s1.c3")!.text.trim()))
+    assert.deepEqual(packageComparisons(reg, 4, guards, [], new Map()), [])
+    const pkg = roundPackage(reg, 5)
+    const text = renderPackage({ ...pkg, comparisons: cs })
+    assert.match(text, /## Behaviour bound to earlier text this round revises[^]*- G1: command \["transform","--input","data\.csv"\]; input files data\.csv; now: exit 0/u)
+    assert.ok(!/- G2:/u.test(text), "no other guard")
+    assert.doesNotMatch(renderPackage(pkg), /G1|G2/u, "nothing about guards without comparisons")
+  })
+})
+
 describe("the chain block, the round's package and its limit (§6c, round package)", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-chain-pkg-"))
   const store = new Exp2Store(join(dir, "store"), "chp")
@@ -104,11 +126,6 @@ describe("the chain block, the round's package and its limit (§6c, round packag
     assert.deepEqual(g.pkg.segments.map(s => s.paragraph), ["P1", "P2", "P7"], "edges, then open items")
     assert.equal(g.overflow!.still_over, true, "this round's paragraphs are never cut")
     assert.equal(fitPackage(pkg([seg("P1", "this round", 10)])).overflow, null)
-  })
-
-  it("the guard list gives the command, the input files, the output now and the units; never an expected value", () => {
-    const text = renderGuardList([{ id: "G7", object: "O3", args: ["transform", "--input", "d.csv"], files: ["d.csv", "r.json"], units: ["R1.S3.P9.s2"], output: "exit 0; file_line out.csv 2 = \"3,3\"" }])
-    assert.equal(text, '- G7 (rests on R1.S3.P9.s2): command ["transform","--input","d.csv"]; input files d.csv, r.json; now: exit 0; file_line out.csv 2 = "3,3"')
   })
 
   it("the review request (§6c, review request): the package's views as the requirements, this round's unit ids, no quoted old text, no guard list", () => {

@@ -21,7 +21,7 @@ import { acceptRound, renderGuardItem, renderReviewList, type CarriedItem } from
 import { guardCheck, guardCoverage, liveGuards, runGuards } from "./guards.js"
 import { itemCheckRecord, notInForce, type FormalizeTransport, type Premise } from "./formalize.js"
 import { runChecks, type CheckRun } from "./verdict.js"
-import { fitPackage, renderPackage, roundPackage, type PackageGuard } from "./view.js"
+import { fitPackage, packageComparisons, renderPackage, roundPackage } from "./view.js"
 import type { GoldSets } from "./gold.js"
 import type { Reviewer } from "./review.js"
 
@@ -359,14 +359,16 @@ export class Serial {
     const previous = state.reports.find(r => r.round === round - 1)
     // The round's package (§6c): the objects' current views and the guards on them, with what each gets on the baseline now.
     const deltaWork = (a.workorderScope ?? "delta") === "delta", deltaReview = (a.reviewScope ?? "delta") === "delta"
-    let pkg: (ReturnType<typeof fitPackage> & { guards: PackageGuard[] }) | undefined
+    let pkg: ReturnType<typeof fitPackage> | undefined
     if (deltaWork || deltaReview) {
       const built = roundPackage(registry, round, carried.map(c => ({ id: c.id, units: c.check ? [...c.check.blocks] : [] })))
-      const inPkg = new Set(built.segments.map(s => s.object))
-      const gs = liveGuards(state.guards, state.guard_events).filter(g => g.units.some(u => inPkg.has(registry.coverOf(u)?.owner ?? "")))
-      const runs = baseline.kind !== "null" && gs.length ? await this.timed("guard list", () => runGuards(gs, state.checks, baseline, this.c.runner, round, registry, codeFacts(registry, round), limits.checkTimeoutMs)) : []
-      const guards: PackageGuard[] = gs.map((g, i) => { const k = guardCheck(g, state.checks); return { id: g.id, object: g.object, args: k.input.args, files: k.input.files.map(f => f.path), units: g.units, output: runs[i] ? guardOutput(k, runs[i].run) : null } })
-      pkg = { ...fitPackage(built), guards }
+      // The comparisons (§6c revision item 4): the guards on units this round revises, what they get on the baseline now.
+      const live = liveGuards(state.guards, state.guard_events)
+      const bound = packageComparisons(registry, round, live, state.checks, new Map())
+      const gs = live.filter(g => bound.some(b => b.guard === g.id))
+      const runs = baseline.kind !== "null" && gs.length ? await this.timed("comparisons", () => runGuards(gs, state.checks, baseline, this.c.runner, round, registry, codeFacts(registry, round), limits.checkTimeoutMs)) : []
+      built.comparisons = packageComparisons(registry, round, live, state.checks, new Map(gs.flatMap((g, i) => runs[i] ? [[g.id, guardOutput(guardCheck(g, state.checks), runs[i].run)] as const] : [])))
+      pkg = fitPackage(built)
     }
     const workorder: WorkOrder = buildWorkOrder({
       registry, round, library: state.checks, events: state.check_events, statuses: start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
@@ -375,7 +377,7 @@ export class Serial {
       // The round's package (§6a step 3) by default; failures in the task zone are confirmed items and guards only.
       scope: a.workorderScope ?? "delta",
       confirmed: carried.map(c => ({ id: c.id, object: c.check && c.check.object !== "none" ? c.check.object : null, units: c.check ? [...c.check.blocks] : [], args: c.check?.input.args ?? [], files: c.check?.input.files.map(f => f.path) ?? [] })),
-      ...(deltaWork && pkg ? { package: { pkg: pkg.pkg, guards: pkg.guards, overflow: pkg.overflow } } : {}),
+      ...(deltaWork && pkg ? { package: { pkg: pkg.pkg, overflow: pkg.overflow } } : {}),
     })
     // The reviewer reads the package's views, without the guards (§6c); the formalizer the same text. Full is the
     // control group's text (ablation).
