@@ -1730,3 +1730,33 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 **依据**：B2a 之后默认挡送层与严格一栏的差别正是被记录、照发的那些前提；两条口径并存时，重放表上同一条目会有两个结论，读数要先说清用哪一栏。
 
 **验收**：七个真实 R1 重放（replay-baseline.test）与 fe6562d 基线相同（基线不含 strict 计数）；重放工具的离线测试改为按挡送层断言（发出、记录、审查员原话），通过。
+
+## 27. 送修条目的结局：fixed / touched / untouched（DESIGN-DEEP §4.1 的基线，离线）
+
+**做法**：脚本 `exp2/evidence/repair-outcome-2026-10-25/outcome.mjs`，口径写在脚本头部；输出 `outcome.md`（汇总表、按消息大小分组、逐条表）和 `outcome.json`。只读运行状态和 app 仓库的 git 历史，不调模型、不跑程序、不碰官方测试。
+
+- 送出：上一周期的条目记录里 action=send 的条目送进下一周期；本轮第一周期送进的是 `carried_in`。最后一个周期的 send 没有后续周期，不算。
+- 结局（每次送出各一个，在送进的那个周期判）：该周期条目记录 verdict=pass → fixed；否则该周期 diff（`cycle.anchors`，与前一周期相比变了的锚点）碰到条目命令的锚点 → touched；否则 untouched。轮末结局 = 本轮最后一次送出的结局。
+- 条目的命令：检查所属对象（`check.object`）。锚点：前后两个提交的程序里，按映射连到该对象的锚点（按运行时的方式从每个提交的源码树里抽锚点）。
+- 没有检查的条目（按审查员原话发出）单列 no_check；映射不到命令的单列 unmapped，不猜。
+- 停送：本轮有一次 hold 且原因含 "no progress"。带入下一轮：下一轮 `carried_in` 里有它。
+
+**发现：设计稿说的"nameLinks 已有"在这四次运行里几乎不起作用。** nameLinks 要求派发锚点名与对象全名相同，而归属给对象起的名字是 "pivot operation""profile command""Transformation" 这类，派发锚点名是 `pivot`、`profile`。严格按 nameLinks，310 条里 160 条映射不到命令（rep1j–m 的执行记录 `links` 也是空的）。所以给两种映射：
+- strict：按 nameLinks 原样；
+- stem：把对象名末尾的 "operation" / "command" 去掉再比。对这类名字的对象，前后两个提交里都没有同名派发，说明命令根本没写，算 untouched，并单独计数（absent）；其他名字（"Transformation""Ingestion""window transformation"……）映射不到的仍算 unmapped。
+
+**结果（stem 映射；strict 的表在 outcome.md）**：
+
+| 运行 | 送出条目（轮次合计）| fixed | touched | untouched | no check | unmapped | untouched 中被停送 |
+|---|---|---|---|---|---|---|---|
+| rep1j R1–R6 | 90 | 40 | 3 | 7 | 3 | 37 | 4 |
+| rep1k R1–R6 | 121 | 49 | 16 | 40 | 8 | 8 | 40 |
+| rep1l R1–R2 | 50 | 18 | 4 | 24 | 4 | 0 | 22 |
+| rep1m R1–R2 | 49 | 21 | 0 | 10 | 5 | 13 | 8 |
+| 合计 | 310 | 128（41%）| 23（7%）| 81（26%）| 20 | 58 | 74 |
+
+- 去掉 no_check 和 unmapped 后有结局的 232 条：fixed 55%、touched 10%、untouched 35%。§4.3 定的线是 untouched ≤ 10%、fixed ≥ 70%，这就是基线。
+- untouched 的 81 条里 74 条被"无进展"停送，48 条带进了下一轮。命令根本没写（absent）的 4 条：rep1l R2 的 normalize、encode、rollup、detect。
+- 所有被停送的 141 条按轮末结局分：untouched 74、unmapped 41、touched 21、no_check 4、fixed 1。也就是说，停送规则停下的条目里，碰过的（touched）只占约六分之一。
+- 按送出它的那条消息有几条条目分组（每次送出各算一次）：1–5 条 68 次，untouched 占有结局的 43%；6–10 条 193 次，38%；11 条以上 109 次，33%。**在这四次运行里，消息越大，untouched 的比例并没有更高。** 大消息里 touched 多（27 次，对 1–5 条的 3 次）。这和设计稿"大消息里 untouched 多"的观察对不上，至少在这个口径下对不上。
+- 每轮的数字见 outcome.md。rep1k R3、R4 的 untouched 最多（10/16、12/20），而且全部被停送。
