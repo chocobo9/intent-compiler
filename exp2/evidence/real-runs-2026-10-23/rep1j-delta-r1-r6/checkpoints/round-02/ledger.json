@@ -1,0 +1,2311 @@
+[
+ {
+  "id": "V1.1.1",
+  "source": "review",
+  "unit": "R1.S3.P9",
+  "case": null,
+  "units": [
+   "R1.S3.P9",
+   "R1.S3.P10",
+   "R1.S3.P11"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2",
+   "C1.3",
+   "R2 work order",
+   "C2.3"
+  ],
+  "held": [
+   "C1.4",
+   "C2.1",
+   "C2.2",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues:\n\n- Aggregate now mutates the active dataset and produces grouped results.\n- Join dispatch is active and preserves left-row order.\n- Pipeline verification failures now produce `PIPELINE FAILED at step N: ...`.\n- Window ordering honors ascending/descending order.\n- `rank`, `",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Fixed the remaining reported issues:\n\n- Pivot now preserves the first matching value even when it is empty.\n- Pivot missing `value` columns now report the correct missing column name.\n- Ingest uniqueness staging remains limited to rows passing all validation.\n- Profile numeric inference excludes mix",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2
+  ],
+  "digest": "87fd4a32a21d30ee1a49fb1020ab736b20982ab416fb817670ab954f8b64176a",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.2",
+  "source": "review",
+  "unit": "R1.S3.P12.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P12.s1",
+   "R1.S3.P12.s5",
+   "R1.S3.P12.s6",
+   "R1.S3.P12.s7",
+   "R1.S3.P12.s8",
+   "R1.S3.P12.s9"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2",
+   "C1.3",
+   "R2 work order",
+   "C2.1"
+  ],
+  "held": [
+   "C1.4",
+   "C2.2",
+   "C2.3",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues:\n\n- Aggregate now mutates the active dataset and produces grouped results.\n- Join dispatch is active and preserves left-row order.\n- Pipeline verification failures now produce `PIPELINE FAILED at step N: ...`.\n- Window ordering honors ascending/descending order.\n- `rank`, `",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   },
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported issues:\n\n- Corrected `ntile` when `n` exceeds partition size.\n- Added `rollup`, `detect`, and `bin` transforms.\n- Completed profile statistics:\n  - `skewness`\n  - `kurtosis`\n  - `mode`\n  - `histogram`\n  - `most_common`\n  - datetime `earliest` and `latest`\n- Fixed empty profile gen",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2
+  ],
+  "digest": "83aef5d7e07308947df1c2c70d53a8196dc8f454d9779be22f1520f8fa7e87a6",
+  "confirmed": null,
+  "end": null,
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a1: 0 is not stated in R1.S3.P12.s1, which reads \"- `join`: Join current dataset with another CSV file.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.3",
+  "source": "review",
+  "unit": "R1.S3.P13",
+  "case": null,
+  "units": [
+   "R1.S3.P13",
+   "R1.S3.P14",
+   "R1.S3.P15",
+   "R1.S3.P16",
+   "R1.S3.P17"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "98b253b3306010b9e95ac2a4407dfe45b3171ccbd7342f744c69d79bfec7d19e",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.2"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.4",
+  "source": "review",
+  "unit": "R1.S3.P18",
+  "case": null,
+  "units": [
+   "R1.S3.P18",
+   "R1.S3.P19"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "576be967db6d78805f70cf5ee29e0aac428cc934ab4f025dce01224a152a99e8",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.2"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a1: 0 is not stated in R1.S3.P18, which reads \"- `pivot`: Reshape data from long format to wide format.\\n    - `index`: array of column names that identify each output row (the row keys).\\n    - `column`: the \""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.5",
+  "source": "review",
+  "unit": "R1.S3.P20",
+  "case": null,
+  "units": [
+   "R1.S3.P20",
+   "R1.S3.P21"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "baa9c27312c91bc8ce11f7bed1f8ff426560c79034623aae32ca5a06a1ef686e",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.2"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a1: 0 is not stated in R1.S3.P20, which reads \"- `unpivot`: Reshape data from wide format to long format (reverse of pivot).\\n    - `index`: array of column names to keep as-is (the row identifiers).\\n    - `c\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.6",
+  "source": "review",
+  "unit": "R1.S3.P2.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P2.s4",
+   "R1.S3.P2.s5",
+   "R1.S3.P3",
+   "R1.S3.P5",
+   "R1.S3.P7",
+   "R1.S3.P8"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "e631c70669b1a538661113ac86c23501e5821467c5371e712eca153602c9d10e",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.2"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.7",
+  "source": "review",
+  "unit": "R1.S3.P4.s1",
+  "case": null,
+  "units": [
+   "R1.S3.P4.s1",
+   "R1.S3.P4.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "2bd458eff8ab7c7e9583d1d7473e4108398a1ed7e34e1cc73d7ad920ce228665",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.2"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_computed",
+    "detail": "assertion a1: 0 is not stated in R1.S3.P4.s1, which reads \"Division by zero produces `NaN`.\""
+   },
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a2: \"id,value,label,quotient\\n1,2,A,NaN\\n2,12,A,NaN\\n3,20,B,NaN\\n4,4,B,NaN\\n\" is not stated in R1.S3.P4.s1, which reads \"Division by zero produces `NaN`.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.1.8",
+  "source": "review",
+  "unit": "R1.S8.P1.s1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1",
+   "R1.S4.P2.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "302e2feaa4844d71c4f0f5b4983b45594bdc213498285b76dfbc4ef70b8cd4b6",
+  "confirmed": null,
+  "end": {
+   "round": 1,
+   "how": "fixed",
+   "detail": "no longer failing on C1.2"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.1.9",
+  "source": "review",
+  "unit": "R1.S6.P2.s2",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.1"
+  },
+  "sent": [
+   "C1.1",
+   "C1.2",
+   "C1.3"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.2",
+    "text": "Addressed all reported issues:\n\n- Added `aggregate` with grouping, aggregations, sorting, and `having`\n- Added `join` with inner/left behavior and left-row ordering\n- Added `window` ranking support\n- Added `pivot` and `unpivot`\n- Replaced the expression evaluator with precedence-aware parsing\n- Adde",
+    "contest": false
+   },
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues:\n\n- Aggregate now mutates the active dataset and produces grouped results.\n- Join dispatch is active and preserves left-row order.\n- Pipeline verification failures now produce `PIPELINE FAILED at step N: ...`.\n- Window ordering honors ascending/descending order.\n- `rank`, `",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "c21789a851786b83f786f6478dea300bec422d642556900fde5445a9c625d47a",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "superseded",
+   "detail": "round 2: R1.S6.P2.s2 is superseded (revise in round 2 by R2.S18; revise in round 2 by R2.S29)"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.1",
+  "source": "review",
+  "unit": "R1.S3.P9.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P9.s5",
+   "R1.S3.P9.s6",
+   "R1.S3.P10.s1",
+   "R1.S3.P10.s2",
+   "R1.S3.P10.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.4",
+   "C2.1",
+   "C2.2"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues:\n\n- Aggregate now mutates the active dataset and produces grouped results.\n- Join dispatch is active and preserves left-row order.\n- Pipeline verification failures now produce `PIPELINE FAILED at step N: ...`.\n- Window ordering honors ascending/descending order.\n- `rank`, `",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "2b9841b05a692792f9c4e5761ba9b9cfebc945a751c104301565b2ea2712154e",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.2",
+  "source": "review",
+  "unit": "R1.S3.P13.s3",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s3",
+   "R1.S3.P14.s2",
+   "R1.S3.P14.s3",
+   "R1.S3.P15.s1",
+   "R1.S3.P15.s2",
+   "R1.S3.P16.s1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3",
+   "R2 work order",
+   "C2.1"
+  ],
+  "held": [
+   "C1.4",
+   "C2.2",
+   "C2.3",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues:\n\n- Aggregate now mutates the active dataset and produces grouped results.\n- Join dispatch is active and preserves left-row order.\n- Pipeline verification failures now produce `PIPELINE FAILED at step N: ...`.\n- Window ordering honors ascending/descending order.\n- `rank`, `",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   },
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported issues:\n\n- Corrected `ntile` when `n` exceeds partition size.\n- Added `rollup`, `detect`, and `bin` transforms.\n- Completed profile statistics:\n  - `skewness`\n  - `kurtosis`\n  - `mode`\n  - `histogram`\n  - `most_common`\n  - datetime `earliest` and `latest`\n- Fixed empty profile gen",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1,
+   2
+  ],
+  "digest": "9d9e3bfc925e249a172c30a25cb3252eb6ca5d929dd729e1033c1f427f6c7879",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.3",
+  "source": "review",
+  "unit": "R1.S3.P14.s7",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s7",
+   "R1.S3.P15.s1",
+   "R1.S3.P15.s2",
+   "R1.S3.P16.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues:\n\n- Aggregate now mutates the active dataset and produces grouped results.\n- Join dispatch is active and preserves left-row order.\n- Pipeline verification failures now produce `PIPELINE FAILED at step N: ...`.\n- Window ordering honors ascending/descending order.\n- `rank`, `",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "10c0dc1dc9987c4ad67a708592d1ac907cf3cded5ff7c98936c099c19691fa07",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.2.4",
+  "source": "review",
+  "unit": "R1.S3.P19.s4",
+  "case": null,
+  "units": [
+   "R1.S3.P19.s4",
+   "R1.S3.P19.s6"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [
+   "C1.2",
+   "C1.3",
+   "R2 work order"
+  ],
+  "held": [
+   "C1.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C1.3",
+    "text": "Fixed the reported issues:\n\n- Aggregate now mutates the active dataset and produces grouped results.\n- Join dispatch is active and preserves left-row order.\n- Pipeline verification failures now produce `PIPELINE FAILED at step N: ...`.\n- Window ordering honors ascending/descending order.\n- `rank`, `",
+    "contest": false
+   },
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "40d3498b38cf59ca5e20e00bc7ad53305e309a000c72d5a0f8bdd67ba596a47c",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.1",
+  "source": "review",
+  "unit": "R1.S3.P13.s3",
+  "case": null,
+  "units": [
+   "R1.S3.P13.s3",
+   "R1.S3.P14.s3",
+   "R1.S3.P15.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "46d798ed68c956693c7c419e0b99394fadf560b976f324967dcadb0fe509fe2d",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"id,value,label,rank\" is not stated in R1.S3.P15.s1, which reads \"Output: all original columns in their original order, plus the new column appended.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.3.2",
+  "source": "review",
+  "unit": "R1.S3.P14.s5",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s5",
+   "R1.S3.P15.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "71514c287906015d0d31f47ea73015289dd4b9345d2e84f3b2e42f69a086ca2a",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.3",
+  "source": "review",
+  "unit": "R1.S3.P14.s7",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s7",
+   "R1.S3.P15.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "aab33cfe3c293717099bfb3a4a65dc40cef207cbecb892ed0007f89896d9c6e1",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.4",
+  "source": "review",
+  "unit": "R1.S3.P17",
+  "case": null,
+  "units": [
+   "R1.S3.P17"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "4dfe476da46ec0041c90a6738af6fb2012cd7e9cb0bed33dd8a76e60b91bb973",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.5",
+  "source": "review",
+  "unit": "R1.S8.P1.s3.c2",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s3.c2",
+   "R1.S8.P1.s3.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "6c71f74b0048def01192f82ab4d354ea4f07ec258275f4d099ba59829e5bfc7b",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "superseded",
+   "detail": "round 2: R1.S8.P1.s3.c2 is superseded (revise in round 2 by R2.S6; revise in round 2 by R2.S24)"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.6",
+  "source": "review",
+  "unit": "R1.S3.P19.s4.c3",
+  "case": null,
+  "units": [
+   "R1.S3.P19.s4.c3",
+   "R1.S3.P19.s4.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4",
+   "R2 work order"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   },
+   {
+    "cycle": "C2.1",
+    "text": "Implemented round 2 changes in `main.go`:\n\n- Fixed window ordering, ranking, lag/lead, running sums/averages, and validation errors.\n- Fixed pivot first-match behavior.\n- Added linear fill.\n- Added deduplicate, split, assert, normalize, encode, and hash transforms.\n- Added `profile` and `compare` co",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "6076244c6310c3a2e73b693672b7daeb4229bf719adca314e1742f97845282a0",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"id,A,B\" is not stated in R1.S3.P19.s6, which reads \"- Output columns: `index` columns (in declaration order), followed by the new pivot columns sorted in ascending lexicographic order.\""
+   }
+  ]
+ },
+ {
+  "id": "V1.3.7",
+  "source": "review",
+  "unit": "R1.S6.P2.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S6.P2.s2.c1",
+   "R1.S6.P2.s2.c2",
+   "R1.S6.P2.s2.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "8f5121b3495da547f3178db692b4638291b40ac889e835f612221ced2cfe4b12",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "superseded",
+   "detail": "round 2: R1.S6.P2.s2.c1 is superseded (revise in round 2 by R2.S18; revise in round 2 by R2.S29)"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V1.3.8",
+  "source": "review",
+  "unit": "R1.S8.P1.s1.c1",
+  "case": null,
+  "units": [
+   "R1.S8.P1.s1.c1",
+   "R1.S8.P1.s1.c2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.3"
+  },
+  "sent": [
+   "C1.3",
+   "C1.4"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C1.4",
+    "text": "Fixed the reported regressions:\n\n- Aggregate now applies and updates the active dataset.\n- Invalid aggregate columns return structured recipe errors instead of panicking.\n- Join remains dispatched correctly.\n- Window functions now honor descending order and support:\n  - `rank`\n  - `dense_rank`\n  - `",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 1,
+    "cycle": "C1.3",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   1
+  ],
+  "digest": "74662a9db2aa1aaebc054043f8011b98df70cb46f44cc3e17b7722f67a5fd9e4",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "superseded",
+   "detail": "round 2: R1.S8.P1.s1.c1 is superseded (revise in round 2 by R2.S6; revise in round 2 by R2.S24)"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "K1",
+  "source": "check",
+  "unit": "R1.S2.P1",
+  "case": null,
+  "units": [
+   "R1.S2.P1",
+   "R1.S2.P2",
+   "R1.S2.P3",
+   "R1.S2.P4",
+   "R1.S2.P5",
+   "R1.S2.P6"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1,
+   2
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K4",
+  "source": "check",
+  "unit": "R1.S3.P18",
+  "case": null,
+  "units": [
+   "R1.S3.P18",
+   "R1.S3.P19",
+   "R1.S3.P20",
+   "R1.S3.P21",
+   "R1.S3.P22",
+   "R1.S3.P23"
+  ],
+  "reason": "reference_pending",
+  "state": "closed",
+  "opened": {
+   "round": 1,
+   "cycle": "C1.2"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   1
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "superseded",
+   "detail": "basis R1.S3.P22: R1.S3.P22 replaced in round 2 by R2.S13"
+  }
+ },
+ {
+  "id": "V2.1.1",
+  "source": "review",
+  "unit": "R2.S15.P1",
+  "case": null,
+  "units": [
+   "R2.S15.P1",
+   "R2.S15.P3",
+   "R2.S15.P4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported issues:\n\n- Corrected `ntile` when `n` exceeds partition size.\n- Added `rollup`, `detect`, and `bin` transforms.\n- Completed profile statistics:\n  - `skewness`\n  - `kurtosis`\n  - `mode`\n  - `histogram`\n  - `most_common`\n  - datetime `earliest` and `latest`\n- Fixed empty profile gen",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "89be0f1874bbae1e85312dffde91c8dd28b041843be6218b9cdd840f907effd7",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.2",
+  "source": "review",
+  "unit": "R2.S16.P1",
+  "case": null,
+  "units": [
+   "R2.S16.P1",
+   "R2.S16.P3",
+   "R2.S16.P7"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported issues:\n\n- Corrected `ntile` when `n` exceeds partition size.\n- Added `rollup`, `detect`, and `bin` transforms.\n- Completed profile statistics:\n  - `skewness`\n  - `kurtosis`\n  - `mode`\n  - `histogram`\n  - `most_common`\n  - datetime `earliest` and `latest`\n- Fixed empty profile gen",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "af87dc73a7e7ca6c722b759621e004dad2a949839aa6558220e3a36baad14955",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.3",
+  "source": "review",
+  "unit": "R2.S17.P1",
+  "case": null,
+  "units": [
+   "R2.S17.P1",
+   "R2.S17.P3",
+   "R2.S17.P7"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported issues:\n\n- Corrected `ntile` when `n` exceeds partition size.\n- Added `rollup`, `detect`, and `bin` transforms.\n- Completed profile statistics:\n  - `skewness`\n  - `kurtosis`\n  - `mode`\n  - `histogram`\n  - `most_common`\n  - datetime `earliest` and `latest`\n- Fixed empty profile gen",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "c32a80f91e978ef5750e23579a591ac1d3e5213e0a43add1b41c180c91dfd9f8",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.4",
+  "source": "review",
+  "unit": "R2.S3.P8",
+  "case": null,
+  "units": [
+   "R2.S3.P8",
+   "R2.S3.P9",
+   "R2.S3.P10",
+   "R2.S3.P11",
+   "R2.S3.P12",
+   "R2.S3.P13"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported issues:\n\n- Corrected `ntile` when `n` exceeds partition size.\n- Added `rollup`, `detect`, and `bin` transforms.\n- Completed profile statistics:\n  - `skewness`\n  - `kurtosis`\n  - `mode`\n  - `histogram`\n  - `most_common`\n  - datetime `earliest` and `latest`\n- Fixed empty profile gen",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "83165c14e7d60aba416d4dd432db2dde2122bc07612ea67fb1aff2e5926401b4",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "logged",
+  "logged": [
+   {
+    "premise": "reference_failed",
+    "detail": "assertion a2: methods disagree: A 0, B -1.1999999999999975; assertion a4: methods disagree: A [[{\"low\":1,\"high\":1.2,\"count\":1},{\"low\":1.2,\"high\":1.4,\"count\":0},{\"low\":1.4,\"high\":1.6,\"count\":0},{\"low\":1.6,\"high\":1.8,\"count\":0},{\"low\":1.8,\"high\":2,\"count\":1},{\"low\":2,\"high\":2.2,\"count\":0},{\"low\":2.2,\"high\":2.4,\"count\":0},{\"low\":2.4,\"high\":2.6,\"count\":0},{\"low\":2.6,\"high\":2.8,\"count\":0},{\"low\":2.8,\"high\":3,\"count\":1}]], B [{\"low\":1,\"high\":1.2,\"count\":1},{\"low\":1.2,\"high\":1.4,\"count\":0},{\"low\":1.4,\"high\":1.6,\"count\":0},{\"low\":1.6,\"high\":1.8,\"count\":0},{\"low\":1.8,\"high\":2,\"count\":0},{\"low\":2,\"high\":2.2,\"count\":1},{\"low\":2.2,\"high\":2.4000000000000004,\"count\":0},{\"low\":2.4000000000000004,\"high\":2.6,\"count\":0},{\"low\":2.6,\"high\":2.8,\"count\":0},{\"low\":2.8,\"high\":3,\"count\":2}]"
+   }
+  ]
+ },
+ {
+  "id": "V2.1.5",
+  "source": "review",
+  "unit": "R2.S3.P1",
+  "case": null,
+  "units": [
+   "R2.S3.P1",
+   "R2.S3.P3",
+   "R2.S5.P1"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1",
+   "C2.2"
+  ],
+  "held": [
+   "C2.3",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported issues:\n\n- Corrected `ntile` when `n` exceeds partition size.\n- Added `rollup`, `detect`, and `bin` transforms.\n- Completed profile statistics:\n  - `skewness`\n  - `kurtosis`\n  - `mode`\n  - `histogram`\n  - `most_common`\n  - datetime `earliest` and `latest`\n- Fixed empty profile gen",
+    "contest": false
+   },
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "fa512e5748ad9ba536dcd1ae012218136edcea3c6dcd13537764ecbc38bbba17",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.1.6",
+  "source": "review",
+  "unit": "R1.S3.P19.s4.c3",
+  "case": null,
+  "units": [
+   "R1.S3.P19.s4.c3",
+   "R1.S3.P19.s4.c4",
+   "R1.S3.P19.s5.c1"
+  ],
+  "reason": "premise_failed",
+  "state": "report_only",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "blocked",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": null,
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "blocked",
+   "detail": "input_claim_false: review-pivot.csv: claimed 2 empty cells, parsed 1"
+  },
+  "disposition": "blocked",
+  "logged": [
+   {
+    "premise": "value_not_stated",
+    "detail": "assertion a1: \"\" is not stated in R1.S3.P19.s4.c4, which reads \"(by input order)\""
+   }
+  ]
+ },
+ {
+  "id": "V2.1.7",
+  "source": "review",
+  "unit": "R1.S3.P14.s9.c3",
+  "case": null,
+  "units": [
+   "R1.S3.P14.s9.c3",
+   "R1.S3.P14.s9.c4",
+   "R1.S3.P14.s9.c5"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.1"
+  },
+  "sent": [
+   "C2.1"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.2",
+    "text": "Fixed the reported issues:\n\n- Corrected `ntile` when `n` exceeds partition size.\n- Added `rollup`, `detect`, and `bin` transforms.\n- Completed profile statistics:\n  - `skewness`\n  - `kurtosis`\n  - `mode`\n  - `histogram`\n  - `most_common`\n  - datetime `earliest` and `latest`\n- Fixed empty profile gen",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.1",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "7e9324d980ba245253578f529b015a1d1099229724b8b008b305d794eb2e8f74",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.1",
+  "source": "review",
+  "unit": "R2.S17.P1",
+  "case": null,
+  "units": [
+   "R2.S17.P1",
+   "R2.S17.P4.s1",
+   "R2.S17.P5.s2"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "8c94e617248156f67fdb269c83a617bcab292466ac38de3e1e73ee14c4938de8",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.2",
+  "source": "review",
+  "unit": "R1.S3.P9",
+  "case": null,
+  "units": [
+   "R1.S3.P9",
+   "R1.S3.P10.s1",
+   "R1.S3.P11.s5"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [
+   "C2.3",
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "10b5ae2f2c768de4849bda27924cc5c4bb404f9e0d4c65831b7d45e1cece0daf",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.3",
+  "source": "review",
+  "unit": "R1.S3.P4.s3",
+  "case": null,
+  "units": [
+   "R1.S3.P4.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "911a9b3538e8c22f0d451efdead65536c8dd588b3facb3ab6697537b1589cb70",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.4",
+  "source": "review",
+  "unit": "R2.S16.P9.s1",
+  "case": null,
+  "units": [
+   "R2.S16.P9.s1",
+   "R2.S3.P6"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "4229eea55bda79f7d5c69cc2e0988fbc5f1b9860ec7745307e845a58d9f2b9c5",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.5",
+  "source": "review",
+  "unit": "R2.S4.P1.s1",
+  "case": null,
+  "units": [
+   "R2.S4.P1.s1",
+   "R2.S4.P5.s5"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2",
+   "C2.3"
+  ],
+  "held": [
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Fixed the remaining reported issues:\n\n- Pivot now preserves the first matching value even when it is empty.\n- Pivot missing `value` columns now report the correct missing column name.\n- Ingest uniqueness staging remains limited to rows passing all validation.\n- Profile numeric inference excludes mix",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "e1a9b56d08712d19da9b931ecbf1725f8a69cafce548cba1139a5fa1ba6ebd92",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.6",
+  "source": "review",
+  "unit": "R2.S23.P1.s1",
+  "case": null,
+  "units": [
+   "R2.S23.P1.s1",
+   "R2.S23.P1.s3"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "96f104493b8e302b02c3c8161fd11028d26949e11738d61a5ac8501147392ea6",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.7",
+  "source": "review",
+  "unit": "R1.S2.P4.s2.c1",
+  "case": null,
+  "units": [
+   "R1.S2.P4.s2.c1",
+   "R1.S2.P4.s2.c2",
+   "R1.S2.P4.s2.c3"
+  ],
+  "reason": "program_wrong",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2",
+   "C2.3"
+  ],
+  "held": [
+   "C2.4"
+  ],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   },
+   {
+    "cycle": "C2.4",
+    "text": "Fixed the remaining reported issues:\n\n- Pivot now preserves the first matching value even when it is empty.\n- Pivot missing `value` columns now report the correct missing column name.\n- Ingest uniqueness staging remains limited to rows passing all validation.\n- Profile numeric inference excludes mix",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   }
+  ],
+  "rounds": [
+   2
+  ],
+  "digest": "2804639b6f5f01238647ff82f6a4d0f4ff3589408a49b2a05536633ee8687c48",
+  "confirmed": null,
+  "end": null,
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.2.8",
+  "source": "review",
+  "unit": "R1.S3.P21.s6.c1",
+  "case": null,
+  "units": [
+   "R1.S3.P21.s6.c1",
+   "R1.S3.P21.s6.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.2"
+  },
+  "sent": [
+   "C2.2"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.3",
+    "text": "Fixed the reported issues:\n\n- Corrected `bin` row corruption so every original row is preserved.\n- Fixed empty profile output to emit valid JSON.\n- Fixed aggregate mutation so grouped output is applied.\n- Corrected `filter neq` handling for non-numeric/`NaN` values.\n- Corrected MAD median interpolat",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.2",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "0ca57a5ff75fec1caaa18fd181e385bd202cde07ce31e0173101f391b18d9881",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.1",
+  "source": "review",
+  "unit": "R1.S3.P19.s4.c2",
+  "case": null,
+  "units": [
+   "R1.S3.P19.s4.c2",
+   "R1.S3.P19.s4.c4",
+   "R1.S3.P19.s4.c5"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Fixed the remaining reported issues:\n\n- Pivot now preserves the first matching value even when it is empty.\n- Pivot missing `value` columns now report the correct missing column name.\n- Ingest uniqueness staging remains limited to rows passing all validation.\n- Profile numeric inference excludes mix",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "cdeec12144721874df48560c99b88d0d4583a855096eca003e04e482ad4027f7",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "V2.3.2",
+  "source": "review",
+  "unit": "R1.S3.P19.s8.c2",
+  "case": null,
+  "units": [
+   "R1.S3.P19.s8.c2",
+   "R1.S3.P19.s8.c3",
+   "R1.S3.P19.s8.c4"
+  ],
+  "reason": "program_wrong",
+  "state": "closed",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.3"
+  },
+  "sent": [
+   "C2.3"
+  ],
+  "held": [],
+  "replies": [
+   {
+    "cycle": "C2.4",
+    "text": "Fixed the remaining reported issues:\n\n- Pivot now preserves the first matching value even when it is empty.\n- Pivot missing `value` columns now report the correct missing column name.\n- Ingest uniqueness staging remains limited to rows passing all validation.\n- Profile numeric inference excludes mix",
+    "contest": false
+   }
+  ],
+  "verdicts": [
+   {
+    "round": 2,
+    "cycle": "C2.3",
+    "verdict": "wrong",
+    "by": "run"
+   },
+   {
+    "round": 2,
+    "cycle": "C2.4",
+    "verdict": "pass",
+    "by": "run"
+   }
+  ],
+  "rounds": [],
+  "digest": "911aaaabb5d5395e7594e073695d61f6ce05d10ea356a3099861cad74c08ddfa",
+  "confirmed": null,
+  "end": {
+   "round": 2,
+   "how": "fixed",
+   "detail": "no longer failing on C2.4"
+  },
+  "disposition": "sent"
+ },
+ {
+  "id": "K8",
+  "source": "check",
+  "unit": "R2.S8",
+  "case": null,
+  "units": [
+   "R2.S8",
+   "R2.S9",
+   "R2.S10",
+   "R2.S11",
+   "R2.S28"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   2
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K11",
+  "source": "check",
+  "unit": "R2.S19.P1",
+  "case": null,
+  "units": [
+   "R2.S19.P1",
+   "R2.S19.P2",
+   "R2.S20",
+   "R2.S21",
+   "R2.S22",
+   "R2.S23",
+   "R2.S25",
+   "R2.S26"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   2
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K14",
+  "source": "check",
+  "unit": "R2.S13",
+  "case": null,
+  "units": [
+   "R2.S13",
+   "R2.S13.P4"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   2
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ },
+ {
+  "id": "K16",
+  "source": "check",
+  "unit": "R2.S16",
+  "case": null,
+  "units": [
+   "R2.S16",
+   "R2.S17"
+  ],
+  "reason": "reference_pending",
+  "state": "open",
+  "opened": {
+   "round": 2,
+   "cycle": "C2.4"
+  },
+  "sent": [],
+  "held": [],
+  "replies": [],
+  "verdicts": [],
+  "rounds": [
+   2
+  ],
+  "digest": null,
+  "confirmed": null,
+  "end": null
+ }
+]

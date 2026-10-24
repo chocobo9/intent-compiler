@@ -1,0 +1,20 @@
+rep1j (2026-10-25 01:1x–03:0x), code ccr-992739b3-u5bcay @ ab190b9 (chain block + guard-id fix), delta scope, executor low,
+6 rounds. Valid. Attempt 1 (42eebfd) void after minutes.
+
+Scores (first delivery → final; control L rep1 / rep2 same round):
+R1 108 → 177/219 80.8% (64.4 / 90.4); R2 395 → 480/481 99.8% (95.0 / 93.3); R3 534 → 534/535 99.8% (98.9 / 96.1);
+R4 630 → 638/639 99.8% (98.1 / 96.1); R5 673 → 673/680 99.0% (97.6 / 95.6); R6 699 → 710/716 99.2% (97.8 / 95.8).
+From R2 on, every round above both control replicates. (ic15 all-scope: 68/72/73%.)
+
+Reviews per round: 3,3,3,3,3,2. Reviewer items reported: 21,17,4,6,9,3 (entered 21,16,4,4,6,3). no_input 0 all rounds;
+conservation yes all rounds; 1 malformed fallback (R4).
+Guards: 8 → 31 → 46 → 54 → 60 → 72. Flips: G3 (R1, review-born, window) regression ×2 → 2 repairs reverted in R1;
+G3 (R2) changed text (object, edge) → superseded; G1 (R5, sidecar) changed text (revision, object) → superseded, correct;
+G57 (R5, library K37 on R5.S1.P2.s5 / P3.s4, derived expectation) flipped on unchanged text in C5.3/C5.4/C5.5 → 3 repairs
+reverted; flagged again in R6 → the G29 pattern (library-born guard with a derived expectation blocking repairs).
+Cost (non-executor, M): 0.436, 0.750, 0.719, 0.733, 0.812, 0.454 = 3.90M for R1–R6; control L rep1 3.75M, rep2 3.58M.
+Ratio ≈ 1.05–1.09: cost premise not met. Reviews stayed at 3 because 2–6 items kept surviving to repair each round;
+R6's 2 reviews is the first "no new finding" stop.
+Package: R3+ over the cap and "still over" after dropping edge objects and guard outputs (cap = 3 × this round's text; later
+rounds' text is small: R6 cap 9,966 vs package 55,086). Review requests 75k/164k/172k/147k/159k/120k per round (3 sessions).
+Recall: revision R3 2/4, R5 7/8; relation R2 5/5, R3 5/5, R5 2/2, R6 1/3.

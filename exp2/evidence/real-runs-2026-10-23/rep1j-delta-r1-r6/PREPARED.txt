@@ -1,0 +1,4 @@
+rep1j: 6-round delta run at executor low, chain-block code (latest origin/ccr-992739b3-u5bcay at launch), config cloned from
+rep1i (ports 46009/46010, gold_task dpipe), rounds 6. Purpose (user, 2026-10-24 night): R1-R3 re-verify the closure conditions,
+R4-R6 show whether review count per round and rework fall once guards accumulate. Known risk: the revert-path guard-id defect
+(rep1h R4) may abort a round if the fix is not in the launched commit; recorded in logs if it happens.
