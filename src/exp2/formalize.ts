@@ -377,19 +377,6 @@ export async function assessPremises(registry: Registry, round: number, item: Fo
   return { failures, check: b.assertions.length ? { input: b.input, assertions: b.assertions, reference_script: item.reference_script, object: owner } : null }
 }
 
-/**
- * The premises as one verdict, in their order (unit, input, stated values, references): the check, or the
- * first premise that failed. Used where every premise blocks (the replay's strict column, tests).
- */
-export async function checkPremises(registry: Registry, round: number, item: FormalItem, sandbox: ScriptSandbox, timeoutMs: number): Promise<{ ok: true; check: ItemCheck } | { ok: false; failure: PremiseFailure }> {
-  const a = await assessPremises(registry, round, item, sandbox, timeoutMs)
-  const order: Premise[] = ["unit_not_in_force", "no_input", "no_assertion", "value_not_computed", "value_not_stated", "reference_failed"]
-  const first = order.map(p => a.failures.find(f => f.premise === p)).find(f => !!f)
-  if (first) return { ok: false, failure: first }
-  if (!a.check) return { ok: false, failure: { premise: "reference_failed", detail: "no assertion could be resolved" } }
-  return { ok: true, check: a.check }
-}
-
 /** The item's check as a library record, so the runner and the comparison run it as any check. */
 export function itemCheckRecord(id: string, round: number, item: FormalItem, check: ItemCheck): CheckRecord {
   return {

@@ -1722,3 +1722,11 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - 七个真实 R1 重放（replay-baseline.test，用的是带 claims 的旧回复）：与 fe6562d 基线相同。
 - B2a 的遗漏：示例配置 `exp2/local-config.example.json` 显式写着旧的三条挡送，B2a 没改；这里改成 `unit_not_in_force, not_reproduced`。真实运行目录的配置都不写 `premise_block`（rep1f–rep1m 逐个查过），走的是代码默认值，所以 B2a 的重放结论不受影响。
 - 测试：删去两条只测声明的用例（CSV 解析器、声明与解析不符）和 B2a 新加的"声明错照发"用例，测试桩不再写 claims。
+
+### 26.3 B2c：重放工具去掉"严格"一栏
+
+**做法**：重放（`replayReview`、`intent-exp2-replay` 的 review 模式）原来每条多算一个 `strict`（假定所有前提都挡送时，第一条不过的前提），表头有"strict: blocked / strict: sent"两栏、条目表有 strict 列、缺陷表有 strict 列。按设计会话"消融走 `acceptance.premise_block` 配置，不留第二条口径"，这些全部去掉；重放只按配置的挡送层判一次。随之去掉 `checkPremises`（"所有前提都挡送"的单一判决，只给严格一栏和测试用）；§2 的前提测试改为直接看 `assessPremises` 报出的每条不过的前提。
+
+**依据**：B2a 之后默认挡送层与严格一栏的差别正是被记录、照发的那些前提；两条口径并存时，重放表上同一条目会有两个结论，读数要先说清用哪一栏。
+
+**验收**：七个真实 R1 重放（replay-baseline.test）与 fe6562d 基线相同（基线不含 strict 计数）；重放工具的离线测试改为按挡送层断言（发出、记录、审查员原话），通过。

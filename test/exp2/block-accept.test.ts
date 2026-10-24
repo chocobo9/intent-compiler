@@ -9,7 +9,7 @@ import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { goBuilder, goTrial } from "../../src/exp2/build.js"
 import { codeFacts, type CheckRecord } from "../../src/exp2/checks.js"
 import { DEFAULT_LIMITS } from "../../src/exp2/execution.js"
-import { checkPremises, itemCheckRecord, reproduces, type FormalItem } from "../../src/exp2/formalize.js"
+import { assessPremises, itemCheckRecord, reproduces, type FormalItem } from "../../src/exp2/formalize.js"
 import { git, head, initRepo } from "../../src/exp2/git.js"
 import { changedTextBehind, guardCoverage, type GuardEvent, type GuardRecord } from "../../src/exp2/guards.js"
 import { ledgerOf } from "../../src/exp2/ledger.js"
@@ -107,8 +107,8 @@ describe("exp2 acceptance block §2: the premises code checks before an item is 
 
   it("premises hold: the item is sent (its check fails on the program and is kept for the repair)", async () => {
     const it = filterItem(1, FILTER_ITEM_TEXT, FILTER_UNIT)
-    const p = await checkPremises(store.registry(), 1, it, sandbox, 10_000)
-    assert.ok(p.ok, JSON.stringify(p))
+    const p = await assessPremises(store.registry(), 1, it, sandbox, 10_000)
+    assert.ok(!p.failures.length && p.check, JSON.stringify(p))
     assert.deepEqual(p.check.assertions.map(a => [a.id, a.expect]), [["l1", "id,value"], ["l2", "2,20"], ["l3", "4,12"], ["exit", 0]])
     const src = join(dir, "wrong"); mkdirSync(src, { recursive: true }); write(src, files({ filterWrong: true }))
     const program = goBuilder(join(dir, "b"), {}, "dpipe")(src, "wrong").program!
@@ -121,26 +121,27 @@ describe("exp2 acceptance block §2: the premises code checks before an item is 
 
   it("the unit it rests on was replaced (R5 withdrew the sidecar clause): blocked, unit not in force", async () => {
     const it: FormalItem = { ...filterItem(1, "transform must write <output>.sha256", "R1.S3.P24.s1.c3"), units: ["R1.S3.P24.s1.c3"] }
-    const p = await checkPremises(store.registry(), 5, it, sandbox, 10_000)
-    assert.ok(!p.ok && p.failure.premise === "unit_not_in_force", JSON.stringify(p))
-    assert.match((p as { failure: { detail: string } }).failure.detail, /R1\.S3\.P24\.s1\.c3.*withdrawn in round 5 by R5\.S1\.P2\.s4/u)
+    const p = await assessPremises(store.registry(), 5, it, sandbox, 10_000)
+    assert.deepEqual(p.failures.map(f => f.premise), ["unit_not_in_force"], JSON.stringify(p))
+    assert.match(p.failures[0].detail, /R1\.S3\.P24\.s1\.c3.*withdrawn in round 5 by R5\.S1\.P2\.s4/u)
     // The same clause is still in force in round 4.
-    assert.ok((await checkPremises(store.registry(), 4, it, sandbox, 10_000)).ok)
+    assert.deepEqual((await assessPremises(store.registry(), 4, it, sandbox, 10_000)).failures, [])
   })
 
-  it("a numeric expectation stated in words, not computed: blocked; stated by the text: passes", async () => {
+  it("a numeric expectation stated in words, not computed: fails its premise; stated by the text: passes", async () => {
     const base = filterItem(1, "the threshold must be 42", FILTER_UNIT)
     const spoken: FormalItem = { ...base, assertions: [{ id: "n", role: "business", target: target("csv_cell", { path: "out.csv", line: 1, column: "value" }), expect_json: "42", tolerance: null, source: { kind: "verbatim", block: FILTER_UNIT } }], reference_script: null }
-    const p = await checkPremises(store.registry(), 1, spoken, sandbox, 10_000)
-    assert.ok(!p.ok && p.failure.premise === "value_not_computed", JSON.stringify(p))
+    const p = await assessPremises(store.registry(), 1, spoken, sandbox, 10_000)
+    assert.deepEqual(p.failures.map(f => f.premise), ["value_not_computed"], JSON.stringify(p))
     // R1 states exit code 1 for the error convention: a stated number the code finds in the unit.
     const stated: FormalItem = { ...base, units: ["R1.S8.P1.s1"], assertions: [{ id: "e", role: "business", target: target("exit_code"), expect_json: "1", tolerance: null, source: { kind: "verbatim", block: "R1.S8.P1.s1" } }], reference_script: null }
     assert.match(store.registry().block("R1.S8.P1.s1")!.text, /exit code 1/u)
-    assert.ok((await checkPremises(store.registry(), 1, stated, sandbox, 10_000)).ok)
-    // A worked-out value whose script disagrees: blocked as well.
+    const q = await assessPremises(store.registry(), 1, stated, sandbox, 10_000)
+    assert.ok(!q.failures.length && q.check, JSON.stringify(q))
+    // A worked-out value whose script disagrees: its premise fails as well.
     const disagree: FormalItem = { ...base, reference_script: { language: "python", code: "print('{\"l1\": \"id,value\", \"l2\": \"nope\", \"l3\": \"4,12\", \"exit\": 0}')" } }
-    const d = await checkPremises(store.registry(), 1, disagree, sandbox, 10_000)
-    assert.ok(!d.ok && d.failure.premise === "reference_failed")
+    const d = await assessPremises(store.registry(), 1, disagree, sandbox, 10_000)
+    assert.deepEqual(d.failures.map(f => f.premise), ["reference_failed"])
   })
 })
 

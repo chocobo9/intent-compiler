@@ -106,10 +106,10 @@ export interface ReviewedProduct {
   voided: number
   /**
    * Every entry of the reviews: the formalizer's items and the entries it could not write. `premise` is what stops
-   * it under the blocking tier (null: it would be sent, with `disposition`); `strict` is the first premise that fails
-   * when every premise blocks (the block-12 rule, for the comparison).
+   * it under the blocking tier (null: it would be sent, with `disposition`). Another tier is a configuration
+   * (`acceptance.premise_block`), not a second column.
    */
-  items: (ReviewItemRecord & { review_n: number; strict: Premise | null })[]
+  items: (ReviewItemRecord & { review_n: number })[]
   malformed: { review_n: number; message: string }[]
   /** Library checks failing on the product (leads given to the reviewer), and those passing (guards it would have). */
   library: { failing: string[]; passing: string[] }
@@ -198,8 +198,8 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
       if (f.unavailable && (d.fallback ?? "items") === "off") throw new RoleUnavailable("formalize", f.unavailable, f.calls)
       result.malformed.push(...f.malformed.map(m => ({ review_n: n, message: m.message })))
       const entries = reviewEntries(text)
-      const own: (ReviewItemRecord & { review_n: number; strict: Premise | null })[] = []
-      const ownItem = (k: number, t: string, premise: Premise, detail: string) => own.push({ id: `V${p.round}.${n}.${k}`, round: p.round, review: `${p.name}.${n}`, review_n: n, item: k, text: t, units: [], premise: null, strict: premise, logged: [{ premise, detail }] })
+      const own: (ReviewItemRecord & { review_n: number })[] = []
+      const ownItem = (k: number, t: string, premise: Premise, detail: string) => own.push({ id: `V${p.round}.${n}.${k}`, round: p.round, review: `${p.name}.${n}`, review_n: n, item: k, text: t, units: [], premise: null, logged: [{ premise, detail }] })
       const handled = new Set<number>()
       if (f.unavailable) entries.forEach((t, k) => ownItem(k + 1, t, "formalize_failed", f.unavailable!))
       else {
@@ -225,7 +225,7 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
     }
     async function classify(it: FormalItem, n: number) {
       const id = `V${p.round}.${n}.${it.item}`
-      const rec: ReviewItemRecord & { review_n: number; strict: Premise | null } = { id, round: p.round, review: `${p.name}.${n}`, review_n: n, item: it.item, text: it.text, units: it.units, premise: null, strict: null, ...(it.input_from ? { input_from: it.input_from } : {}) }
+      const rec: ReviewItemRecord & { review_n: number } = { id, round: p.round, review: `${p.name}.${n}`, review_n: n, item: it.item, text: it.text, units: it.units, premise: null, ...(it.input_from ? { input_from: it.input_from } : {}) }
       const a = await assessPremises(registry, p.round, it, d.sandbox, d.timeoutMs)
       const failures = [...a.failures]
       if (a.check) {
@@ -233,8 +233,6 @@ export async function replayReview(d: ReviewReplayDeps, products: readonly Produ
         if (!rep.reproduced) failures.push({ premise: "not_reproduced", detail: `the check passes on the program (exit ${rep.run.exit_code})` })
         else rec.check = a.check
       }
-      const order: Premise[] = ["unit_not_in_force", "no_input", "no_assertion", "value_not_computed", "value_not_stated", "reference_failed", "not_reproduced"]
-      rec.strict = order.find(x => failures.some(y => y.premise === x)) ?? null
       const stop = failures.find(x => block.has(x.premise))
       const logged = failures.filter(x => !block.has(x.premise))
       if (logged.length) rec.logged = logged

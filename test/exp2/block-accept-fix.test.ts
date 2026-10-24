@@ -288,7 +288,7 @@ describe("fix block A3: two tiers of premises", () => {
     assert.deepEqual(strict.record.accept!.premise_blocked, { value_not_stated: 1 })
   })
 
-  it("the replay shows both: strict (every premise blocks) and the tiers, item by item", async () => {
+  it("the replay shows the tiers item by item: blocked, sent, logged or in the reviewer's words", async () => {
     const root = mkdtempSync(join(tmpdir(), "exp2-fix-replay-"))
     const product = (name: string, o: { filterWrong?: boolean }) => { const p = join(root, "src", name); mkdirSync(p, { recursive: true }); write(p, files(o)); return { name, round: 1, path: p } }
     const OTHER = "- pivot is unsupported: `dpipe transform --input data.csv --recipe recipe-pivot.json --output pivot-out.csv --seed 1` exited 1."
@@ -297,9 +297,9 @@ describe("fix block A3: two tiers of premises", () => {
       reviewer: workingReviewer(join(root, "rb"), { also: () => [OTHER] }), formalize: stubFormalizer({ filter: FILTER_UNIT, sort: FILTER_UNIT }), binary: "dpipe",
     }, [product("filter_wrong", { filterWrong: true }), product("clean", {})])
     const [wrong, clean] = result
-    assert.deepEqual(wrong.items.filter(i => i.item === 1).map(i => [i.strict, i.premise, i.disposition]), [[null, null, "sent"]])
-    assert.ok(wrong.items.some(i => i.disposition === "fallback" && i.premise === null && (i.strict === "no_input" || i.strict === "not_formalized")), JSON.stringify(wrong.items.map(i => [i.item, i.strict, i.disposition])))
-    assert.ok(clean.items.length > 0 && clean.items.every(i => i.disposition === "fallback"), JSON.stringify(clean.items.map(i => [i.item, i.strict, i.disposition])))
+    assert.deepEqual(wrong.items.filter(i => i.item === 1).map(i => [i.premise, i.disposition]), [[null, "sent"]])
+    assert.ok(wrong.items.some(i => i.disposition === "fallback" && i.premise === null && i.logged?.some(l => l.premise === "no_input" || l.premise === "not_formalized")), JSON.stringify(wrong.items.map(i => [i.item, i.logged?.map(l => l.premise), i.disposition])))
+    assert.ok(clean.items.length > 0 && clean.items.every(i => i.disposition === "fallback"), JSON.stringify(clean.items.map(i => [i.item, i.logged?.map(l => l.premise), i.disposition])))
   })
 })
 
