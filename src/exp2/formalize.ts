@@ -427,7 +427,11 @@ export type Premise = "unit_not_in_force" | "input_claim_false" | "value_not_sta
 export interface PremiseFailure { premise: Premise; detail: string }
 
 /** The premises that stop an item by default (fix block A3): code's conclusions about the item itself. The rest are logged. */
-export const DEFAULT_PREMISE_BLOCK: readonly Premise[] = ["unit_not_in_force", "not_reproduced", "input_claim_false"]
+/**
+ * The premises that stop a reviewer's item (DESIGN §12j.3): its unit still in force, and it reproduces on the program
+ * as it stands. Every other failing is a record: counted in the report, the item sent (batch 2).
+ */
+export const DEFAULT_PREMISE_BLOCK: readonly Premise[] = ["unit_not_in_force", "not_reproduced"]
 /** Failures that are code's own, not the item's: under the fallback the item goes out in the reviewer's words (A1). */
 export const OWN_FAILURES: ReadonlySet<Premise> = new Set(["no_input", "no_assertion", "malformed", "not_formalized", "formalize_failed"])
 

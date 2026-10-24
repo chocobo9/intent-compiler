@@ -9,7 +9,7 @@ import { GoAnchorExtractor } from "../../src/exp2/anchors.js"
 import { goBuilder, goTrial } from "../../src/exp2/build.js"
 import { codeFacts, type CheckRecord } from "../../src/exp2/checks.js"
 import { DEFAULT_LIMITS } from "../../src/exp2/execution.js"
-import { checkPremises, claimProblems, itemCheckRecord, parseCsvGo, parsedFacts, reproduces, type FormalItem } from "../../src/exp2/formalize.js"
+import { assessPremises, checkPremises, claimProblems, DEFAULT_PREMISE_BLOCK, itemCheckRecord, parseCsvGo, parsedFacts, reproduces, type FormalItem } from "../../src/exp2/formalize.js"
 import { git, head, initRepo } from "../../src/exp2/git.js"
 import { changedTextBehind, guardCoverage, type GuardEvent, type GuardRecord } from "../../src/exp2/guards.js"
 import { ledgerOf } from "../../src/exp2/ledger.js"
@@ -138,17 +138,19 @@ describe("exp2 acceptance block §2: the premises code checks before an item is 
     assert.ok((await checkPremises(store.registry(), 4, it, sandbox, 10_000)).ok)
   })
 
-  it("a single-column CSV with an 'empty cell' that is a blank line: the parse contradicts the claim, blocked", async () => {
+  it("a single-column CSV with an 'empty cell' that is a blank line: the parse contradicts the claim, logged, the check still built (batch 2a)", async () => {
     const base = filterItem(1, "null_rate_change must be reported", "R3.S6.P1")
     const it: FormalItem = {
       ...base, units: [FILTER_UNIT],
       input: { args: ["drift", "--baseline", "base.csv", "--current", "now.csv", "--output", "d.json"], files: [{ path: "base.csv", content: "v\n10\n20\n30\n" }, { path: "now.csv", content: "v\n10\n20\n30\n\n" }] },
       claims: [{ path: "base.csv", parses: true, records: 3, empty_cells: 0, columns: ["v"] }, { path: "now.csv", parses: true, records: 4, empty_cells: 1, columns: ["v"] }],
-      assertions: [resolvedDraft("n", target("json", { path: "d.json", pointer: "/null_rate_change" }), true)], reference_script: null,
+      assertions: [resolvedDraft("n", target("json", { path: "d.json", pointer: "/null_rate_change" }), true)], reference_script: { language: "python", code: "print('{\"n\": true}')" },
     }
     assert.deepEqual(claimProblems(it.input!, it.claims), ["now.csv: claimed 4 data records, parsed 3", "now.csv: claimed 1 empty cells, parsed 0"])
-    const p = await checkPremises(store.registry(), 3, it, sandbox, 10_000)
-    assert.ok(!p.ok && p.failure.premise === "input_claim_false", JSON.stringify(p))
+    const a = await assessPremises(store.registry(), 3, it, sandbox, 10_000)
+    assert.deepEqual(a.failures.map(f => f.premise), ["input_claim_false"], JSON.stringify(a.failures))
+    assert.ok(a.check && a.check.assertions.length === 1, "a false claim stops nothing: the check is built and goes to reproduction")
+    assert.ok(!DEFAULT_PREMISE_BLOCK.includes("input_claim_false"))
   })
 
   it("a numeric expectation stated in words, not computed: blocked; stated by the text: passes", async () => {

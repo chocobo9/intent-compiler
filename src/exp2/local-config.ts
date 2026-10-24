@@ -82,7 +82,7 @@ export interface LocalConfig {
    * The acceptance (DESIGN §12i). mode review (default): the reviewer finds, code guards. probes (default false): under
    * mode review, probes are still written once per unit and judged as leads. stale_by_reference (default false): the
    * reference, reading and convention staleness rules. reviews (3), trial_fixes (2), review_agent ("build").
-   * premise_block (default unit_not_in_force, not_reproduced, input_claim_false): premises that stop a reviewer's item;
+   * premise_block (default unit_not_in_force, not_reproduced; DESIGN §12j.3): premises that stop a reviewer's item;
    * any other failing is logged and the item sent. fallback ("items"): items code cannot verify for its own reasons
    * (formalizer malformed or no input, entries it left out, the call failing) go out in the reviewer's words; "review"
    * only when nothing else of that review was sent or verified; "off" blocks them. void_without_runs (false): void and

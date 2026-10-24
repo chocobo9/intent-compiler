@@ -1,0 +1,223 @@
+{
+ "run": "exp2-icacc-r6-luna56-low-rep1m-20261025",
+ "round": 2,
+ "review": 1,
+ "cycle": "C2.1",
+ "commit": "e374eb9e",
+ "entries": 15,
+ "items": [
+  {
+   "id": "V2.1.1",
+   "units": [
+    "R2.S3.P5.s1",
+    "R2.S3.P12.s1",
+    "R2.S3.P13.s1"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.2",
+   "units": [
+    "R2.S2.P2.s5"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.3",
+   "units": [
+    "R2.S21.P1",
+    "R2.S22.P2.s2",
+    "R2.S22.P3.s2"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.4",
+   "units": [
+    "R2.S23.P1",
+    "R2.S23.P1.s2",
+    "R2.S23.P1.s3"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.5",
+   "units": [
+    "R2.S24.P1.s3.c1",
+    "R2.S20.P1.s3"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.6",
+   "units": [
+    "R2.S24.P1.s6.c1",
+    "R2.S24.P1.s6.c2"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.7",
+   "units": [
+    "R2.S9.P1.s1",
+    "R2.S9.P3.s2"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.8",
+   "units": [
+    "R2.S10.P3.s3.c1",
+    "R2.S10.P3.s3.c2",
+    "R2.S10.P3.s3.c3"
+   ],
+   "premises": [
+    "input_claim_false",
+    "value_not_stated"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.9",
+   "units": [
+    "R1.S3.P19.s3.c1",
+    "R1.S3.P19.s4.c3",
+    "R1.S3.P19.s6.c1"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.10",
+   "units": [
+    "R2.S14.P5.s1.c1",
+    "R2.S14.P5.s2.c1",
+    "R2.S14.P5.s3.c1"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.11",
+   "units": [
+    "R2.S15.P4",
+    "R2.S15.P6.s1",
+    "R2.S15.P6.s2"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.12",
+   "units": [
+    "R2.S16.P1.s1",
+    "R2.S16.P3.s3",
+    "R2.S16.P5.s2.c2"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.13",
+   "units": [
+    "R2.S17.P1.s1",
+    "R2.S17.P3.s4.c1",
+    "R2.S17.P7.s1"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.14",
+   "units": [
+    "R2.S28.P4",
+    "R2.S28.P5.s1.c1",
+    "R2.S28.P5.s1.c2"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V2.1.15",
+   "units": [
+    "R1.S3.P14.s2",
+    "R1.S3.P14.s2.c1",
+    "R1.S3.P14.s2.c2"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  }
+ ],
+ "malformed": 0,
+ "sent": {
+  "old": 7,
+  "new": 15
+ },
+ "repair_list_new": "1. **Profile statistics are missing.** Requirement: numeric, datetime, string statistics and correlations must be included. Command: `dpipe.exe profile --input review-profile.csv --output review-profile.json`, with columns `id,score,label,when` and numeric/datetime data. The output contained only basic counts/types and `\"correlations\": []`; fields such as `median`, `earliest`, and correlation values were absent.\n\n2. **Empty profile columns are inferred as `int` instead of `string`.** Requirement: a column with zero non-empty values has type `string`. Command: `dpipe.exe profile --input review-empty.csv --output review-empty-profile.json`, input `a,b\\n,\\n,\\n`. Output classified both columns as `\"type\": \"int\"`.\n\n3. **Compare output has incorrect structure and summary.** Requirement: row fields must be objects, and summary must include added, removed, modified, and unchanged counts. Command: `dpipe.exe compare --left review-left.csv --right review-right.csv --key id --tolerance 0.1 --ignore note --output review-compare.json`. Output used arrays for `row`, `left`, and `right`, and summary contained only `left_rows` and `right_rows`.\n\n4. **Compare changes are ordered incorrectly.** Requirement: ordering is added, removed, modified. The same compare command produced added, modified, removed.\n\n5. **Missing compare `--key` has the wrong error.** Requirement: `ERROR: --key is required`. Command: `dpipe.exe compare --left review-left.csv --right review-right.csv --output review-no-key.json`. Output: `ERROR: invalid key: column  not found`.\n\n6. **Missing compare `--output` has the wrong error.** Requirement: `ERROR: --output is required`. Command: `dpipe.exe compare --left review-left.csv --right review-right.csv --key id`. Output: `ERROR: open : The system cannot find the file specified.`\n\n7. **`split` ignores the delimiter field.** Requirement: split on the supplied delimiter. Command used input `full_name` values `Alice Smith` and `Bob` with recipe `{\"op\":\"split\",\"column\":\"full_name\",\"delimiter\":\" \",\"names\":[\"first\",\"last\"]}`. Output was `A,lice Smith` and `B,ob`, rather than `Alice,Smith` and `Bob,`.\n\n8. **`assert` rejects valid recipes.** Requirement: a passing assertion leaves data unchanged. Command: `dpipe.exe transform --input review-in.csv --recipe review-assert.json --output review-out-assert.csv --seed 1`, expression `value > 0 && value < 100`. Output: `ERROR: invalid recipe: column  not found`.\n\n9. **`pivot` rejects a valid recipe.** Requirement: the referenced `index`, `column`, and `value` columns must produce the pivot. Command used `{\"op\":\"pivot\",\"index\":[\"id\"],\"column\":\"status\",\"value\":\"name\"}`. Output: `ERROR: invalid recipe: column  not found`.\n\n10. **`encode` is not implemented.** Requirement: one-hot encoding must append or replace categorical columns. Command used `{\"op\":\"encode\",\"column\":\"status\",\"method\":\"onehot\",\"drop\":true}`. Output was unchanged: no encoded columns were added.\n\n11. **`rollup` is not implemented.** Requirement: detail, subtotal, and grand-total rows must be produced. Command used a `rollup` sum aggregation over `status` and `id`. Output was `ERROR: invalid recipe: column  not found`.\n\n12. **`detect` is not implemented.** Requirement: append an outlier indicator column. Command used `{\"op\":\"detect\",\"column\":\"value\",\"method\":\"iqr\",\"as\":\"outlier\",\"factor\":1.5}`. Output was unchanged and lacked the `outlier` column.\n\n13. **`bin` is not implemented.** Requirement: append width/quantile bin labels. Command used `{\"op\":\"bin\",\"column\":\"value\",\"method\":\"width\",\"bins\":2,\"as\":\"bucket\"}`. Output was unchanged and lacked the `bucket` column.\n\n14. **`hash` includes an extra trailing null separator.** Requirement: values are joined by separators only between values. Command used `{\"op\":\"hash\",\"columns\":[\"id\",\"name\"],\"as\":\"row_hash\"}` for `1,Alice`. Output hash was `7aa86393e0bc407d2c567a67867d14e79b2d783bcbad9a6421487965f24a63f`, instead of the required hash for input `1\\x00Alice`.\n\n15. **Window ranking compares numeric values lexicographically.** Requirement: the supplied ranking case ranks value `10` above `7`. Command used partition `cat`, descending `value`, with values `10,10,7`. Output assigned ranks `2,2,1`; expected `1,1,3`."
+}

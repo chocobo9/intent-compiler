@@ -1686,3 +1686,24 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - R1：三次分别是 177、190、206，包批两次都高于基线。
 - R2：480、364、450，同一份代码两次差 86 分，主要差在执行方首次交付做了多少（2 个对 7 个命令和变换）。rep1m 另有 8 条被输入声明前提挡下。
 - 原文未改的翻转和回退：包批两次运行 R1–R2 都是 0；基线 R1 有 2 次，回退 2 次。
+
+## 26. 批 2：前提只剩两条（DESIGN §12j.3）
+
+用户放行（2026-10-25，经设计会话）：B2a → B2b → B2c 依次提交；验收全部离线，读会话只起运行自己的服务，不调模型。
+
+### 26.1 B2a：默认挡送只剩"单元在效""能复现"
+
+**做法**：`DEFAULT_PREMISE_BLOCK` 从 `unit_not_in_force, not_reproduced, input_claim_false` 改为 `unit_not_in_force, not_reproduced`（`src/exp2/formalize.ts`）。输入声明与解析不符（`input_claim_false`）不再挡送，记为 logged，进报告的 logged 计数；条目照常走复现。配置 `acceptance.premise_block` 保留，消融时可以把它加回去。
+
+**依据的运行**：rep1m R2 第 1 次审查 8 条被 `input_claim_false` 挡下（共用的 review-in.csv 声称 3 个空格，解析出 4 个），其中有 rollup 未实现、pivot 拒收合法配方两条本轮要紧的；rep1i R1 第 2 次审查 9 条同样被挡。
+
+**验收**（重放脚本 `exp2/evidence/batch2-2026-10-25/replay-premises.mjs`：运行的真实审查回复、记录下来的 formalizer 回复、从运行自己的编码服务读回的审查会话材料、被审的那次提交在 docker 里构建运行；旧挡送层与新挡送层逐条判）：
+
+1. rep1m R2.1（C2.1，e374eb9e）：15 条，malformed 0。旧层重现运行记录（发 7、挡 8，V2.1.7–V2.1.14 全为 `input_claim_false`）；新层 15 条全部发出，8 条全部复现（reproduced=true，verified）。新修复消息第 9 条是 pivot 拒收合法配方，第 11 条是 rollup 未实现（按条目文字核对，消息里不带编号）。守恒：两层都是 15 = 发 + 挡（7+8，15+0）。复现不成立的条目：无。结果 `rep1m-R2.1.json`。
+2. rep1i R1.2（C1.2，007d0169）：10 条。旧层重现运行（发 1、挡 9）；新层发 9、挡 1。
+   - 8 条复现成立，发出（verified）。
+   - V1.2.2（排序按字典序）：参考脚本与断言不符（`reference_failed`），没有可复现的检查，按审查员原话发出（words）——与批 A1 以来的规则一致。
+   - V1.2.9（ingest 校验顺序）：**复现不成立，挡下**。原因：formalizer 给这条写的断言只看 ingest 输出文件的第 2、3 行（R1.S2.P4.s1、R1.S2.P6.s2 的行序），不涉及条目说的"先做全列必填/类型检查，再做范围、模式检查"的顺序；被审程序的输出满足这两条断言，所以检查在程序上通过。检查没有测到条目说的缺陷，挡下是"能复现"这条前提的正常结果，不是声明问题。
+   结果 `rep1i-R1.2.json`。
+3. 七个真实 R1 重放（replay-baseline.test）：与 fe6562d 基线逐项相同（rep1b/c/d/e/g 的 blocked 原本都是 0，发出数不变；rep1、rep1f 无审查）。未另存新基线。
+4. 离线测试：block-accept §2"声明与解析不符"一条从"挡下"改为"记录、检查照建"（assessPremises 报 `input_claim_false`，检查仍建出）；block-accept-fix 新增"声明错、检查能复现：发出，logged 记 input_claim_false，premise_blocked 为空"。两文件 44 过 0 败。

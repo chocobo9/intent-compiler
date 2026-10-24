@@ -288,6 +288,17 @@ describe("fix block A3: two tiers of premises", () => {
     assert.deepEqual(strict.record.accept!.premise_blocked, { value_not_stated: 1 })
   })
 
+  it("a claim about the input that its parse contradicts, the check reproducing: sent, input_claim_false logged (batch 2a)", async () => {
+    const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: FILTER_UNIT }, () => null)
+    const miscounted = (): FormalItem => { const it = filterItem(1, FILTER_ITEM_TEXT, FILTER_UNIT); return { ...it, claims: it.claims.map(c => c.path === "data.csv" ? { ...c, records: (c.records ?? 0) + 1, empty_cells: (c.empty_cells ?? 0) + 1 } : c) } }
+    const withMiscount: FormalizeTransport = async req => { const r = await formalize(req); const a = JSON.parse(r.text) as { items: FormalItem[] }; a.items = a.items.map(() => miscounted()); return { ...r, text: JSON.stringify(a) } }
+    const { record, executor } = await round(dir, store, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files())], { reviewer: scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }]), formalize: withMiscount })
+    assert.equal(executor.log.messages.length, 2, "the repair message went out")
+    const rec = record.review_items!.find(x => x.id === "V1.1.1")!
+    assert.deepEqual([rec.disposition, rec.logged?.map(l => l.premise), rec.premise, !!rec.check, rec.guard], ["logged", ["input_claim_false"], null, true, "G1"])
+    assert.deepEqual([record.accept!.premise_logged, record.accept!.premise_blocked ?? {}], [{ input_claim_false: 1 }, {}])
+  })
+
   it("the replay shows both: strict (every premise blocks) and the tiers, item by item", async () => {
     const root = mkdtempSync(join(tmpdir(), "exp2-fix-replay-"))
     const product = (name: string, o: { filterWrong?: boolean }) => { const p = join(root, "src", name); mkdirSync(p, { recursive: true }); write(p, files(o)); return { name, round: 1, path: p } }

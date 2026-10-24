@@ -1,0 +1,159 @@
+{
+ "run": "exp2-icacc-r3-luna56-low-rep1i-20261024",
+ "round": 1,
+ "review": 2,
+ "cycle": "C1.2",
+ "commit": "007d0169",
+ "entries": 10,
+ "items": [
+  {
+   "id": "V1.2.1",
+   "units": [
+    "R1.S3.P2.s4"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V1.2.2",
+   "units": [
+    "R1.S3.P9.s2",
+    "R1.S2.P6.s2"
+   ],
+   "premises": [
+    "input_claim_false",
+    "reference_failed"
+   ],
+   "reproduced": null,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (words)"
+  },
+  {
+   "id": "V1.2.3",
+   "units": [
+    "R1.S3.P2.s5",
+    "R1.S3.P8.s1"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V1.2.4",
+   "units": [
+    "R1.S3.P3",
+    "R1.S3.P4",
+    "R1.S3.P5"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V1.2.5",
+   "units": [
+    "R1.S3.P13",
+    "R1.S3.P14.s2",
+    "R1.S3.P15"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V1.2.6",
+   "units": [
+    "R1.S3.P12.s3",
+    "R1.S3.P12.s4",
+    "R1.S3.P12.s6"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V1.2.7",
+   "units": [
+    "R1.S3.P9.s7",
+    "R1.S3.P10.s1",
+    "R1.S3.P10.s3"
+   ],
+   "premises": [
+    "input_claim_false",
+    "value_not_stated"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V1.2.8",
+   "units": [
+    "R1.S6.P2.s1",
+    "R1.S6.P2.s2",
+    "R1.S8.P1.s1"
+   ],
+   "premises": [],
+   "reproduced": true,
+   "recorded": "sent",
+   "old": "sent (verified)",
+   "new": "sent (verified)"
+  },
+  {
+   "id": "V1.2.9",
+   "units": [
+    "R1.S2.P4.s1"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": false,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "blocked not_reproduced"
+  },
+  {
+   "id": "V1.2.10",
+   "units": [
+    "R1.S3.P14.s2",
+    "R1.S3.P15.s2"
+   ],
+   "premises": [
+    "input_claim_false"
+   ],
+   "reproduced": true,
+   "recorded": "blocked",
+   "old": "blocked input_claim_false",
+   "new": "sent (verified)"
+  }
+ ],
+ "malformed": 0,
+ "sent": {
+  "old": 1,
+  "new": 9
+ },
+ "repair_list_new": "1. **Filter ignores the required recipe fields.**\n   - Requirement: `filter` must use `column`, `condition`, and `threshold`.\n   - Command: `go run . transform --input review-data.csv --recipe review-recipe.json --output run-filter.csv --seed 1`\n   - Input recipe: `{\"op\":\"filter\",\"column\":\"value\",\"condition\":\"gt\",\"threshold\":5}`\n   - Program: Wrote only the header, retaining no rows. It looks for an unsupported `expression` field instead.\n\n2. **Sort is lexicographic instead of numeric by default.**\n   - Requirement: Sort according to the column’s declared/natural type.\n   - Command: `go run . transform --input review-data.csv --recipe review-sort.json --output run-sort.csv --seed 1`\n   - Program output values in order `10, 2.5, 20, 2000`, rather than numeric order `2.5, 10, 20, 2000`.\n\n3. **Derive crashes on valid input.**\n   - Requirement: Derive evaluates numeric expressions and writes the result.\n   - Command: `go run . transform --input review-data.csv --recipe review-expr.json --output run-expr.csv --seed 1`\n   - Recipe: `{\"op\":\"derive\",\"name\":\"x\",\"expression\":\"round(2.345, 2)}`\n   - Program: Panicked with `runtime error: index out of range`, exit status 2.\n\n4. **Expression evaluator is substantially incomplete.**\n   - Requirement: Supports `%`, logical operators, comparisons, and functions including `ceil`, `floor`, `round`, `pow`, `log`, `min`, `max`, `if`, `clamp`, and `coalesce`, with required precedence and NaN behavior.\n   - Command/input: Same derive command above.\n   - Program: Does not support the required `round` function or the required expression grammar; valid expressions can fail or panic. Division/modulo by zero handling also does not produce the required `NaN`.\n\n5. **Window recipe format is not implemented.**\n   - Requirement: One window operation has `function`, `partition_by`, `order_by` (array), and `as`.\n   - Command: `go run . transform --input review-data.csv --recipe review-window-exact.json --output run-window-exact.csv --seed 1`\n   - Program: Wrote the original CSV unchanged, with no appended rank column. The implementation expects a nonstandard `functions` array and treats `order_by` as a string.\n\n6. **Join uses the wrong recipe fields and joins every right row.**\n   - Requirement: `on` is a string key and `type` selects `inner` or `left`; duplicate right keys use only the first match.\n   - Command: `go run . transform --input review-data.csv --recipe review-join.json --output run-join.csv --seed 1`\n   - Program: Output duplicated the right-side rows for every left row, retained the right `id` column, and did not perform the requested key join.\n\n7. **Aggregate emits incorrect results for nonnumeric values.**\n   - Requirement: `avg`, `min`, and `max` produce `NaN` when no numeric values exist.\n   - Command: `go run . transform --input review-data.csv --recipe review-aggregate.json --output run-aggregate.csv --seed 1`\n   - Program: Produced an empty string for `avg_label` instead of `NaN`.\n\n8. **Pipeline command does not implement the required step execution.**\n   - Requirement: Read `steps`, execute each step sequentially, and report `PIPELINE OK` or `PIPELINE FAILED at step N`.\n   - Command: `go run . pipeline --config review-pipeline.json`\n   - Program: Failed immediately with `ERROR: invalid pipeline config: input, output, and steps required`, because it incorrectly requires top-level `input` and `output` and does not dispatch the configured steps.\n\n9. **Window output ordering and rank semantics are not implemented.**\n    - Requirement: Preserve original row order after computing partitioned results; `rank` must skip ranks for ties and support ordering directions.\n    - Command: `go run . transform --input review-data.csv --recipe review-window-exact.json --output run-window-exact.csv --seed 1`\n    - Program: Added no result column. The implementation, when its nonstandard format is used, sorts the table itself and treats `rank` and `dense_rank` identically."
+}
