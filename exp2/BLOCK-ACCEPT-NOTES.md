@@ -910,3 +910,23 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
   - 另 2 项（block11 §5、block9 "a hung or broken session"）的报错都是 `the host blocked … spawn UNKNOWN`。
   - block-accept 的 serial R1–R3（连带 2 项取消）在全量里 "stopped"，单独连跑两次都通过（2/2），同属主机拦截。
   - serial 中断续跑那项本次通过。
+
+### 22.12 真实 R1 冒烟（rep1h，00a0a7f，delta 档）
+
+运行目录 `D:\huawei\EvoCodeBench\harbor_runs\exp2-icacc-r1-luna56-low-rep1h-20261024`。配置照 rep1g，只改了运行编号、端口（46003/46004）、缓存键和 rounds（2，以便 R2 从 R1 检查点接着跑）。没有写 scope 项，delta 是代码的默认值。
+
+| 达标项 | 结果 |
+|---|---|
+| 报 = 进 + 挡 | 32 = 31 + 1（挡下的 1 条是 input_claim_false）；核实 29，记日志 2，fallback 0 |
+| 守恒 | yes |
+| no_input | 0 |
+| 准入 ≈ 入库 | 19/19；未告知 0；被拒调用 0 |
+| 假守卫 | 无（被拒调用 0，没有靠被拒调用通过的守卫） |
+| 守卫 | 0 → 28（库检查 10，审查 18）；翻转 0，回退 0 |
+| 原文区 | delta，48 块 21,631 字符（R1 与 all 档相同）；审查请求 3 次，共 69,681 字符 |
+
+- 状态 done，续跑 0 次，墙钟 1152 秒；3 次审查都有效；3 个修补周期用完，轮末 13 条未结。
+- 分数只记录：首次交付 74，保留的 C1.4 为 146/219。rep1g（fe6562d，同一配置）是 56 → 187。
+- R1 看不到的两项：
+  - R2 工单原文区与 all 档的对比，要跑 R2；
+  - "Flip classification" 一行，R1 没有翻转，所以没出现。
