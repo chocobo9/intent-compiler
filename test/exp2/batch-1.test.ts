@@ -64,7 +64,7 @@ const sortGuard = (object: string): GuardRecord => ({
 const passing = (g: string, round: number): GuardEvent => ({ guard: g, round, cycle: `C${round}.1`, status: "passing" })
 const noop = { review: async () => {}, formalize: async () => {}, guards: async () => {} }
 
-async function round3(dir: string, store: Exp2Store, messages: ((wd: string) => void)[], o: { guards: GuardRecord[]; reviewer: AcceptDeps["reviewer"]; record?: AcceptDeps["record"] }) {
+async function round3(dir: string, store: Exp2Store, messages: ((wd: string) => void)[], o: { guards: GuardRecord[]; reviewer: AcceptDeps["reviewer"]; record?: AcceptDeps["record"]; library?: CheckRecord[] }) {
   const workdir = join(dir, `work-${Math.random().toString(36).slice(2, 8)}`)
   mkdirSync(workdir, { recursive: true })
   initRepo(workdir)
@@ -72,7 +72,7 @@ async function round3(dir: string, store: Exp2Store, messages: ((wd: string) => 
   const w = buildWorkOrder({ registry, round: 3, library: [], events: [], statuses: [], runs: [], anchors: anchors.extract(workdir), links: [], steps: [], previous_task: [] })
   const executor = new StubExecutor({ messages })
   const record = await acceptRound(workdir, w, renderWorkOrder(w), executor, {
-    registry, library: [], events: [], facts: codeFacts(registry, 3), guards: o.guards, guardEvents: o.guards.map(g => passing(g.id, g.round)),
+    registry, library: o.library ?? [], events: [], facts: codeFacts(registry, 3), guards: o.guards, guardEvents: o.guards.map(g => passing(g.id, g.round)),
     runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), anchors, build: goBuilder(join(dir, "builds"), {}, "dpipe"),
     reviewer: o.reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), binary: "dpipe", sources: store.inspect().sources.map(s => ({ round: s.round, text: s.text })),
     copyDir: label => join(dir, "copies", label), record: o.record ?? noop, checkTimeoutMs: 10_000,
@@ -163,6 +163,37 @@ describe("batch 1, item 11: a flip is classified before any revert; only a regre
     assert.equal(record.kept, "C3.3", "the third program fixes the filter and keeps the sort")
     assert.match(executor.log.messages[2].text, /reverted by the controller: it made G1 fail/u)
     assert.ok(!reviewer.requests.some(r => /# Leads to verify[^]*- G1: /u.test(r.request)), "no lead: it is the executor's")
+  })
+})
+
+describe("a reverted cycle leaves no guard id (rep1h R4: 'guard G100 is out of sequence (next is G90)')", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-b1-revert-ids-"))
+  const store = new Exp2Store(join(dir, "store"), "b1ri")
+  before(async () => { for (const r of [1, 2, 3]) await store.ingestRound(r, roundText(r), stubTransport()) })
+
+  it("a library check passes first on a repair that is reverted: the guard it would be is not born there; the next cycle gives it the next id", async () => {
+    const reg = store.registry()
+    const sort = reg.coverOf(SORT_UNIT)!.owner, filter = reg.coverOf(FILTER_UNIT)!.owner
+    const filterCheck: CheckRecord = {
+      id: "K1", round: 3, key: "filter-gt", object: filter, blocks: [FILTER_UNIT], uses: [], direction: "holds", input: FILTER_INPUT,
+      assertions: [{ id: "l2", role: "business", target: target("file_line", { path: "out.csv", line: 2 }), expect: "2,20", tolerance: null, source: { kind: "verbatim", block: null } }, { id: "l3", role: "business", target: target("file_line", { path: "out.csv", line: 3 }), expect: "4,12", tolerance: null, source: { kind: "verbatim", block: null } }],
+      unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
+    }
+    // The store's own check: every guard born is the next id after those before it (G1 is the sort guard).
+    const born: string[] = []
+    const record = { ...noop, guards: async (b: GuardRecord[]) => { for (const g of b) { assert.equal(g.id, `G${2 + born.length}`, `born in sequence: ${[...born, g.id].join(", ")}`); born.push(g.id) } } }
+    const { record: r } = await round3(dir, store, [
+      wd => write(wd, program({ stddev: "sample", filterWrong: true })),
+      wd => write(wd, program({ stddev: "sample", sortText: true })),
+      wd => write(wd, program({ stddev: "sample" })),
+    ], { guards: [sortGuard(sort)], reviewer: workingReviewer(join(dir, "rb")), library: [filterCheck], record })
+    const reverted = r.cycles.find(c => c.reverted)!
+    assert.ok(reverted, "the sort-breaking repair is reverted")
+    assert.ok(reverted.runs.some(x => x.check === "K1" && x.outcome === "pass"), "K1 passed on the reverted program")
+    assert.deepEqual(reverted.guards!.born, [], "no guard born on it")
+    const after = r.cycles[r.cycles.indexOf(reverted) + 1]
+    assert.equal(after.guards!.born[0], "G2", "the next cycle's first guard takes the next id")
+    assert.deepEqual(r.accept!.guards.born, born)
   })
 })
 

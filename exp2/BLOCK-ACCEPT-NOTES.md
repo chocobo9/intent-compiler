@@ -1311,3 +1311,26 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
    - (b) 库检查成守卫要等审查员看过一次它所在对象；
    - (c) 规则不变，靠审查员在翻转时说明。现在原文未改的翻转不问审查员。
 2. **闭环验收 d(i)**：按 §6c 的规则，包按对象组成、未结条目带入整个对象、每句带编号，审查请求不会比按块小。上限按 §6c 第 5 条也裁不掉未结条目的对象。这条验收是保留，还是改为同一运行内对比 all 档，还是 §6c 第 1、5 条对未结条目的范围再定？
+
+## 24. 回退的周期不留守卫编号
+
+**现象**：rep1h R4（设计会话续跑，代码 1c）停在 C4.4，`store.recordGuards` 抛出 "guard G100 is out of sequence (next is G90)"。现场在 origin/exp2-pure-ic 的 `exp2/evidence/real-runs-2026-10-23/rep1h-delta-r1-r3/exp2-state.crashed-R4.json`。
+
+**原因**：accept.ts 的每个周期里，先给通过的库检查分配守卫编号（`nextGuard++`），再判是否回退。周期被回退时，这些守卫不记录，编号计数器却没有退回。C4.2、C4.3 两次回退共占掉 10 个编号，C4.4 出生的第一个守卫是 G100，而 store 里下一个是 G90。
+
+**做法**（accept.ts，两行）：分配编号前记下计数器（`firstGuard`）；回退分支里把它退回（`nextGuard = firstGuard`）。回退分支本来就不记录、不发事件，所以回退的周期既不留守卫，也不留编号。审查条目修好后出生的守卫只在不回退的分支里，不受影响。
+
+**验收**
+- **崩溃现场重放**（`test/exp2/revert-ids-replay.test.ts`）：
+  - 固定材料在 `exp2/evidence/replay-2026-10-23/revert-ids-rep1h-r4/`：R1–R4 归属、检查、R1–R3 的 85 个守卫、R4 三次真实审查和五次 formalizer 回复；四个真实程序 C4.1–C4.4（e671bf5、4be6dcc、bd5fe4a、23e4ab3），取自运行目录的 app 仓库，被回退的两个提交还在；
+  - 守卫经真实 store 的 `recordGuards` 记录，与原运行相同。
+  - 结果：C4.1 出生 G86–G89（与崩溃现场一致）；C4.2、C4.3 被回退，出生 0；C4.4 出生 G90–G97，紧接 G89。store 里的守卫编号 G1–G97 连续，整轮跑完。
+  - 去掉这两行修复再跑，重放复现原错误 "guard G100 is out of sequence (next is G90)"。
+- **替身测试**（`batch-1.test.ts`，"a reverted cycle leaves no guard id"）：
+  - R3 的 sort 守卫 G1，加一条 filter 库检查 K1；
+  - 第一个程序 filter 错，K1 失败；
+  - 第二个程序修好 filter，但把 sort 改坏。K1 在这个程序上第一次通过，同一周期 G1 翻转（原文未改），周期被回退；
+  - 第三个程序都对。
+  - 结果：回退周期出生 0 个守卫，下一周期 K1 出生为 G2。记录回调逐个核对编号连续。去掉修复时，出生的是 G3。
+- 乱路径文件的清理是单独一个提交（42eebfd）：删掉 36 个文件，`.gitignore` 加 `/C<U+F03A>*`。
+- **全量 `npm test`**（本机）：972 项，959 通过，1 跳过，12 失败。其中 10 项是已知的（9 项环境 + repair-batch）；另 2 项（block11 §5 参考值裁决、变异测试）的报错都是 `the host blocked … spawn UNKNOWN`。

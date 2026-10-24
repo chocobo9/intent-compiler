@@ -288,6 +288,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     cycle.runs = [...guardRuns.map(r => ({ check: r.guard, outcome: r.run.outcome, failure: r.run.failure ? `${r.run.failure.class}/${r.run.failure.reason}` : null })), ...libRuns.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null }))]
     const flipped = guardRuns.filter(r => r.outcome === "fail" && statusBefore.get(r.guard) === "passing").map(r => r.guard)
     const born: GuardRecord[] = [], evs: GuardEvent[] = []
+    // Library checks that pass are born as guards unless the cycle is reverted below; then their ids are given back.
+    const firstGuard = nextGuard
     for (const r of libRuns.filter(x => x.outcome === "pass")) {
       const k = unguarded.find(c => c.id === r.check)!
       const g: GuardRecord = { id: `G${nextGuard++}`, round, source: "library", check: k.id, units: [...k.blocks], object: k.object, born: { cycle: id, program: current.program.id } }
@@ -310,6 +312,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       resetTo(workdir, good.commit)
       deps.time?.("revert", revertedAt, Date.now())
       lastCommit = good.commit
+      // A reverted cycle leaves no guard: the ones born on its program are dropped, and so are their ids.
+      nextGuard = firstGuard
       cycle.reverted = { to: good.commit, guards: breaking, resent: sentInRepair }
       accept.reverted++
       const seen = record.cycles.flatMap(c => c.items ?? [])
