@@ -37,3 +37,6 @@ __pycache__/
 !/docs/authority/
 /docs/authority/*
 !/docs/authority/spec.md
+
+# Test runs on Windows can write a temp path whose colon became U+F03A (CUsers…) into the work tree.
+/C*
