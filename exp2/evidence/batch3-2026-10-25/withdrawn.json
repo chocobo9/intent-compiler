@@ -1,0 +1,193 @@
+{
+ "scan": [
+  {
+   "run": "r1",
+   "checks": 30,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r1-rep1b",
+   "checks": 20,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r1-rep1c",
+   "checks": 21,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r1-rep1d",
+   "checks": 21,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r1-rep1e",
+   "checks": 22,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r1-rep1f",
+   "checks": 13,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r1-rep1g",
+   "checks": 13,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r1-rep1h",
+   "checks": 42,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r3-rep1i",
+   "checks": 46,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r6-rep1j",
+   "checks": 48,
+   "withdrawn": [
+    "K37"
+   ],
+   "guards": [
+    "G57 (from K37, born C5.2)"
+   ]
+  },
+  {
+   "run": "r6-rep1k",
+   "checks": 63,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r6-rep1l",
+   "checks": 36,
+   "withdrawn": [],
+   "guards": []
+  },
+  {
+   "run": "r6-rep1m",
+   "checks": 33,
+   "withdrawn": [],
+   "guards": []
+  }
+ ],
+ "cycles": [
+  {
+   "cycle": "C5.1",
+   "message": "work",
+   "built": false,
+   "now": {},
+   "born": null,
+   "reverted": null
+  },
+  {
+   "cycle": "C5.2",
+   "message": "trial",
+   "built": true,
+   "now": {
+    "K37": {
+     "outcome": "fail",
+     "assertions": "exit=0, old_sidecar_removed=true (no)"
+    }
+   },
+   "born": "G57",
+   "reverted": null
+  },
+  {
+   "cycle": "C5.3",
+   "message": "repair",
+   "built": true,
+   "now": {
+    "K37": {
+     "outcome": "pass",
+     "assertions": "exit=0, old_sidecar_removed=false"
+    }
+   },
+   "born": null,
+   "reverted": [
+    "G57"
+   ]
+  },
+  {
+   "cycle": "C5.4",
+   "message": "repair",
+   "built": true,
+   "now": {
+    "K37": {
+     "outcome": "pass",
+     "assertions": "exit=0, old_sidecar_removed=false"
+    }
+   },
+   "born": null,
+   "reverted": [
+    "G57"
+   ]
+  },
+  {
+   "cycle": "C5.5",
+   "message": "repair",
+   "built": true,
+   "now": {
+    "K37": {
+     "outcome": "pass",
+     "assertions": "exit=0, old_sidecar_removed=false"
+    }
+   },
+   "born": null,
+   "reverted": [
+    "G57"
+   ]
+  },
+  {
+   "cycle": "C6.1",
+   "message": "work",
+   "built": true,
+   "now": {
+    "K37": {
+     "outcome": "pass",
+     "assertions": "exit=0, old_sidecar_removed=false"
+    }
+   },
+   "born": null,
+   "reverted": null
+  },
+  {
+   "cycle": "C6.2",
+   "message": "repair",
+   "built": true,
+   "now": {
+    "K37": {
+     "outcome": "pass",
+     "assertions": "exit=0, old_sidecar_removed=false"
+    }
+   },
+   "born": null,
+   "reverted": null
+  },
+  {
+   "cycle": "C6.3",
+   "message": "repair",
+   "built": true,
+   "now": {
+    "K37": {
+     "outcome": "pass",
+     "assertions": "exit=0, old_sidecar_removed=false"
+    }
+   },
+   "born": null,
+   "reverted": null
+  }
+ ]
+}

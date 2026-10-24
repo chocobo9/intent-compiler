@@ -18,7 +18,7 @@ export interface AssertionResult { id: string; ok: boolean; actual: unknown; rol
 
 export type FailureClass = "not_landed" | "unknown" | "disputed"
 export type FailureReason =
-  | "value_mismatch" | "missing_name" | "still_present" | "crash" | "refused" | "timeout" | "reading"
+  | "value_mismatch" | "missing_name" | "crash" | "refused" | "timeout" | "reading"
   | "position" | "input_incomplete" | "contested" | "reference"
   /** The program answered the call as it answers an unknown command: what the check tests never ran (batch C, effect 2). */
   | "refused_call"
@@ -41,7 +41,7 @@ export interface CheckRun {
   check: string
   round: number
   program: string
-  /** pass: holds-checks satisfied, withdrawn-checks not satisfied. */
+  /** pass: every assertion satisfied. */
   outcome: "pass" | "fail"
   assertions: AssertionResult[]
   exit_code: number | null
@@ -158,7 +158,7 @@ export function crashed(out: RunOutput): string | null {
 }
 
 /**
- * Why a check failed (BLOCK9 §2.3), in this order: timeout; a crash; a removed behaviour still there; a name not in
+ * Why a check failed (BLOCK9 §2.3), in this order: timeout; a crash; a name not in
  * the program; an unstated reading; evidence against the check (disputed, unless a ruling upheld the check against
  * that kind of dispute); a refused input; a wrong value.
  */
@@ -168,7 +168,6 @@ export function classify(check: CheckRecord, results: AssertionResult[], out: Ru
   if (out.timed_out) return { class: "unknown", reason: "timeout", detail: "the program did not finish in time", roles }
   const crash = crashed(out)
   if (crash) return { class: "not_landed", reason: "crash", detail: `the program crashed: ${crash}`, roles: ["business"] }
-  if (check.direction === "withdrawn") return { class: "not_landed", reason: "still_present", detail: "the removed behaviour still happens", roles: [...new Set(results.map(r => r.role))] }
   const missing = invokedNames(check, registry).filter(n => !hasLiteral(literals, n))
   if (missing.length) return { class: "not_landed", reason: "missing_name", detail: `no string literal in the program names ${missing.join(", ")}`, roles: ["business"] }
   // Only assertions resting on an unstated reading failed (DESIGN §12d item 10): the reading may be wrong, not the program.
@@ -286,7 +285,7 @@ export function runDigest(run: Pick<CheckRun, "outcome" | "assertions" | "exit_c
 function checkRun(check: CheckRecord, out: RunOutput, program: ProgramRef, runner: CheckRunner, round: number, registry: Registry, facts: CodeFacts, upheld: ReadonlySet<DisputeKind>, refused = false): CheckRun {
   const assertions = compare(check.assertions, out)
   const satisfied = assertions.every(a => a.ok)
-  const pass = check.direction === "holds" ? satisfied : !satisfied
+  const pass = satisfied
   // A call the program refused never ran what the check tests: it cannot pass, so it never becomes a guard (batch C,
   // effect 2). A refused call that fails anyway keeps the cause the classification gives (a missing command names it).
   if (refused && pass) return { check: check.id, round, program: program.id, outcome: "fail", assertions, exit_code: out.exit_code, stderr_head: out.stderr.slice(0, 300), stdout_head: out.stdout.slice(0, 600), failure: { class: "not_landed", reason: "refused_call", detail: `the program answered ${JSON.stringify(check.input.args[0])} as it answers an unknown subcommand`, roles: ["business"] } }
@@ -320,14 +319,14 @@ export function dataAssertions(check: Pick<CheckRecord, "assertions" | "input">)
   }).map(a => a.id)
 }
 
-/** Strong = fails on the baseline (holds) or passes on it (withdrawn), and has an assertion about data. */
+/** Strong = fails on the baseline and has an assertion about data. */
 export function strength(check: CheckRecord, baselineRun: CheckRun, baseline: ProgramRef): Strength {
   const data = dataAssertions(check)
   const satisfied = baselineRun.assertions.every(a => a.ok)
-  const baselineOk = check.direction === "holds" ? !satisfied : satisfied
+  const baselineOk = !satisfied
   const strong = baselineOk && data.length > 0
   const reason = strong ? "fails on the previous program and asserts data" : !baselineOk
-    ? (check.direction === "holds" ? "passes on the previous program, so it does not tell the requirement apart" : "the previous program does not show the removed behaviour")
+    ? "passes on the previous program, so it does not tell the requirement apart"
     : "no assertion about data (only exit code, existence or help)"
   return { strong, baseline: baseline.id, baseline_ok: baselineOk, data_assertions: data, reason }
 }

@@ -220,7 +220,7 @@ export class Exp2Store {
     if (outcome.status === "accepted") for (const draft of outcome.draft!.checks) {
       const b = await methodB(draft, deps.sandbox, timeout)
       const record: Omit<CheckRecord, "id" | "calls"> = {
-        round, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses, direction: draft.direction,
+        round, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses,
         input: b.input ?? draft.input, assertions: b.assertions, unknown: b.unknown, reference_script: draft.reference_script,
         ...(b.computed_inputs.length ? { computed_inputs: b.computed_inputs } : {}),
         admission: b.assertions.length ? "admitted" : "unknown", admission_reason: b.assertions.length ? null : b.unknown.map(u => `${u.assertion.id}: ${u.reason}`).join("; "),

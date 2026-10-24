@@ -16,7 +16,7 @@ describe("exp2 block 9: failure classes (BLOCK9 §2.3)", () => {
   const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b9-")), "b9")
   before(async () => { await store.ingestRound(1, roundText(1), stubTransport()) })
   const check = (assertions: CheckRecord["assertions"], args = ["pipeline", "--config", "config.json"]): CheckRecord => ({
-    id: "K1", round: 1, key: "k", object: store.registry().objectByName("pipeline")!.id, blocks: ["R1.S6.P2"], uses: [], direction: "holds",
+    id: "K1", round: 1, key: "k", object: store.registry().objectByName("pipeline")!.id, blocks: ["R1.S6.P2"], uses: [],
     input: { args, files: [{ path: "config.json", content: "{}" }] }, assertions, unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
   })
   const t = (kind: string, line: number | null = null) => ({ kind, path: null, line, pointer: null, column: null }) as CheckRecord["assertions"][number]["target"]

@@ -16,7 +16,7 @@ function libraryCheck(id: string, round: number, object: string, blocks: string[
   const exit: Assertion = { id: "exit", role: "business", target: { kind: "exit_code", path: null, line: null, pointer: null, column: null }, expect: 0, tolerance: null, source: { kind: "derived", block: null, quote: null } }
   const verbatim = quotes.map(([block, quote], i): Assertion => ({ id: `q${i}`, role: "business", target: { kind: "stdout", path: null, line: null, pointer: null, column: null }, expect: quote, tolerance: null, source: { kind: "verbatim", block, quote } }))
   return {
-    id, round, key: id, object, blocks, uses, direction: "holds", input: { args: [], files: [] }, assertions: [exit, ...verbatim], unknown: [], reference_script: null,
+    id, round, key: id, object, blocks, uses, input: { args: [], files: [] }, assertions: [exit, ...verbatim], unknown: [], reference_script: null,
     admission: "admitted", admission_reason: null, strength: { strong: true, baseline: "b", baseline_ok: true, data_assertions: [], reason: "" }, status: "active", calls: [],
   }
 }
@@ -50,7 +50,7 @@ describe("exp2 block 4: propagation over the real R1–R15 registry", () => {
     const request = buildCheckRequest(registry, 10, [k], events)
     assert.deepEqual(request.stale.map(s => s.id), ["K1"])
     const again: CheckDraft = {
-      key: "again", object: det, blocks: ["R1.S7"], uses: [], direction: "holds", note: null, reference_script: { language: "python", code: "print('{}')" },
+      key: "again", object: det, blocks: ["R1.S7"], uses: [], note: null, reference_script: { language: "python", code: "print('{}')" },
       input: { args: ["manifest", "--dir", ".", "--output", "m.json"], files: [] },
       assertions: [{ id: "x", role: "business", target: { kind: "exit_code", path: null, line: null, pointer: null, column: null }, expect_json: "0", tolerance: null, source: { kind: "derived", block: null, quote: null } }],
     }

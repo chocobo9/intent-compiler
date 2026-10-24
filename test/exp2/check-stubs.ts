@@ -25,7 +25,7 @@ function ids(request: CheckRequest) {
   }
 }
 
-const check = (c: Omit<CheckDraft, "direction" | "note"> & Partial<Pick<CheckDraft, "direction" | "note">>): CheckDraft => ({ direction: "holds", note: null, ...c })
+const check = (c: Omit<CheckDraft, "note"> & Partial<Pick<CheckDraft, "note">>): CheckDraft => ({ note: null, ...c })
 
 /**
  * The expected exit code of a successful call: derived (the text states no success code), so method B prints it too.
@@ -56,7 +56,7 @@ function r1(request: CheckRequest, first: boolean): CheckDraft[] {
   const filterRecipe = JSON.stringify([{ op: "filter", column: "value", condition: "gt", threshold: 10 }])
   return [
     succeeds({
-      direction: "holds", note: null,
+      note: null,
       key: "filter-gt", object: id("filter"), blocks: ["R1.S3.P2.s4"], uses: [],
       // First answer: an option the requirements never show.
       input: { args: first ? [...transformArgs, "--precision", "2"] : transformArgs, files: [{ path: "data.csv", content: DATA }, { path: "recipe.json", content: filterRecipe }] },
@@ -198,21 +198,15 @@ function r5(request: CheckRequest): CheckDraft[] {
   })] : []
   const recipe = JSON.stringify([{ op: "filter", column: "value", condition: "gt", threshold: 10 }])
   return [...verify, check({
-    // The old behaviour, stated as it was: transform wrote <output>.sha256 with the output's digest. It must no longer happen.
-    key: "transform-no-sidecar", object: id("transform"), blocks: ["R5.S1.P3.s5"], uses: [], direction: "withdrawn",
+    // What R5 requires now: transform writes no <output>.sha256 (the text names the file; batch 3c).
+    key: "transform-no-sidecar", object: id("transform"), blocks: ["R5.S1.P3.s5"], uses: [],
     input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [{ path: "data.csv", content: DATA }, { path: "recipe.json", content: recipe }] },
     assertions: [
       derived("exit", t("exit_code"), 0),
-      { id: "sidecar", role: "business", target: t("file_line", { path: "out.csv.sha256", line: 1 }), expect_json: "null", tolerance: null, source: { kind: "computed", block: null, quote: null } },
+      derived("head", t("file_line", { path: "out.csv", line: 1 }), "id,value"),
+      { id: "sidecar", role: "business", target: t("file_exists", { path: "out.csv.sha256" }), expect_json: "false", tolerance: null, source: { kind: "verbatim", block: "R5.S1.P3.s5", quote: null } },
     ],
-    reference_script: py([
-      "import csv, json, hashlib",
-      "rows = list(csv.reader(open('data.csv')))",
-      "op = json.load(open('recipe.json'))[0]",
-      "i = rows[0].index(op['column'])",
-      "body = '\\n'.join([','.join(rows[0])] + [','.join(r) for r in rows[1:] if float(r[i]) > op['threshold']]) + '\\n'",
-      "print(json.dumps({'exit': 0, 'sidecar': hashlib.sha256(body.encode()).hexdigest()}))",
-    ].join("\n")),
+    reference_script: py("import json\nprint(json.dumps({'exit': 0, 'head': open('data.csv').readline().strip()}))"),
   })]
 }
 
@@ -225,7 +219,7 @@ function r10(request: CheckRequest): CheckDraft[] {
   const json = (pointer: string) => t("json", { path: "report.json", pointer })
   return [
     succeeds({
-      direction: "holds", note: null,
+      note: null,
       key: "reconcile-diff", object: id("reconcile"), blocks: ["R10.S4", "R10.S5"], uses: [],
       input: { args, files: [{ path: "left.json", content: manifest([["a.csv", "11"], ["b.csv", "22"]]) }, { path: "right.json", content: manifest([["b.csv", "33"], ["c.csv", "44"]]) }] },
       assertions: [

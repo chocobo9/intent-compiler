@@ -175,7 +175,7 @@ describe("a reverted cycle leaves no guard id (rep1h R4: 'guard G100 is out of s
     const reg = store.registry()
     const sort = reg.coverOf(SORT_UNIT)!.owner, filter = reg.coverOf(FILTER_UNIT)!.owner
     const filterCheck: CheckRecord = {
-      id: "K1", round: 3, key: "filter-gt", object: filter, blocks: [FILTER_UNIT], uses: [], direction: "holds", input: FILTER_INPUT,
+      id: "K1", round: 3, key: "filter-gt", object: filter, blocks: [FILTER_UNIT], uses: [], input: FILTER_INPUT,
       assertions: [{ id: "l2", role: "business", target: target("file_line", { path: "out.csv", line: 2 }), expect: "2,20", tolerance: null, source: { kind: "verbatim", block: null } }, { id: "l3", role: "business", target: target("file_line", { path: "out.csv", line: 3 }), expect: "4,12", tolerance: null, source: { kind: "verbatim", block: null } }],
       unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
     }
@@ -283,7 +283,7 @@ describe("batch 1, item 7: a call the program refused goes back to the check's w
     const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b1-ref-")), "b1ref")
     for (const r of [1, 2]) await store.ingestRound(r, roundText(r), stubTransport())
     const s = store.inspect()
-    const k: CheckRecord = { id: "K1", round: 1, key: "k", object: store.registry().coverOf(FILTER_UNIT)!.owner, blocks: [FILTER_UNIT], uses: [], direction: "holds", input: { args: ["dpipe", "transform"], files: [] }, assertions: [], unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [] }
+    const k: CheckRecord = { id: "K1", round: 1, key: "k", object: store.registry().coverOf(FILTER_UNIT)!.owner, blocks: [FILTER_UNIT], uses: [], input: { args: ["dpipe", "transform"], files: [] }, assertions: [], unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [] }
     const refused = refusedIn({ executions: [], check_runs: [{ check: "K1", round: 1, program: "p", outcome: "fail", assertions: [], exit_code: 1, stderr_head: "", stdout_head: "", failure: { class: "not_landed", reason: "refused_call", detail: "the program answered \"dpipe\" as it answers an unknown subcommand", roles: ["business"] } }] } as unknown as Parameters<typeof refusedIn>[0], 1)
     const ev = refusedChecks([k], s.check_events, 2, refused)
     assert.deepEqual(ev.map(e => [e.check, e.status, e.cause?.kind]), [["K1", "stale", "refused"]])

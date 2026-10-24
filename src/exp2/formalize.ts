@@ -369,7 +369,7 @@ export async function assessPremises(registry: Registry, round: number, item: Fo
     if (!stater) fail(typeof expect === "number" ? "value_not_computed" : "value_not_stated", `assertion ${a.id}: ${a.expect_json} is not stated in ${a.source.block ?? item.units.join(", ")}${cited ? `, which reads ${JSON.stringify(cited.text.trim().slice(0, 160))}` : ""}`)
     assertions.push(stater && stater.id !== a.source.block ? { ...a, source: { ...a.source, block: stater.id } } : a)
   }
-  const draft: CheckDraft = { key: `item ${item.item}`, object: "", blocks: item.units, uses: [], direction: "holds", input: item.input, assertions, reference_script: item.reference_script, note: null }
+  const draft: CheckDraft = { key: `item ${item.item}`, object: "", blocks: item.units, uses: [], input: item.input, assertions, reference_script: item.reference_script, note: null }
   const b = await methodB(draft, sandbox, timeoutMs)
   if (b.unknown.length) fail("reference_failed", b.unknown.map(u => `assertion ${u.assertion.id}: ${u.reason}`).join("; "))
   if (!b.input) { fail("reference_failed", b.input_failure ?? "the input could not be filled"); return { failures, check: null } }
@@ -380,7 +380,7 @@ export async function assessPremises(registry: Registry, round: number, item: Fo
 /** The item's check as a library record, so the runner and the comparison run it as any check. */
 export function itemCheckRecord(id: string, round: number, item: FormalItem, check: ItemCheck): CheckRecord {
   return {
-    id, round, key: `item ${item.item}`, object: check.object ?? "none", blocks: item.units, uses: [], direction: "holds", input: check.input, assertions: check.assertions, unknown: [],
+    id, round, key: `item ${item.item}`, object: check.object ?? "none", blocks: item.units, uses: [], input: check.input, assertions: check.assertions, unknown: [],
     reference_script: check.reference_script, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
   }
 }

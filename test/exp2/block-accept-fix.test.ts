@@ -342,7 +342,7 @@ describe("fix block B2: library checks are written once per unit, when it enters
     const related = (a: string, b: string) => a === b || reg.lineage(a).some(x => x.id === b) || reg.lineage(b).some(x => x.id === a)
     const scope = reg.roundScope(2).find(c => c.entries.length && reg.objects.get(c.object)!.blocks.some(b => b.block.startsWith("R1.") && ![...fresh].some(f => related(b.block, f))))!
     const old = reg.objects.get(scope.object)!.blocks.find(b => b.block.startsWith("R1.") && ![...fresh].some(f => related(b.block, f)))!.block
-    const draft = (blocks: string[]) => ({ checks: [{ key: "k", object: scope.object, blocks, uses: [], direction: "holds" as const, input: { args: ["transform"], files: [] }, assertions: [], reference_script: null, note: null }], retire: [] })
+    const draft = (blocks: string[]) => ({ checks: [{ key: "k", object: scope.object, blocks, uses: [], input: { args: ["transform"], files: [] }, assertions: [], reference_script: null, note: null }], retire: [] })
     const codes = (blocks: string[], unitsOnce: boolean) => checkChecks(reg, 2, draft(blocks), [], [], codeFacts(reg, 2), { unitsOnce }).map(i => i.code)
     assert.ok(codes([old], true).includes("unit_unchanged"))
     assert.ok(!codes([old], false).includes("unit_unchanged"), "off: the block 12 rule")

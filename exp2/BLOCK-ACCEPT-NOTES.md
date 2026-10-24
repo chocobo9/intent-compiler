@@ -1790,4 +1790,20 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 **验收**：
 - rep1j R5 三次审查用记录下来的回复重放（起运行自己的服务读会话，记录下来的程序在 docker 里跑；脚本沿用 `batch2-2026-10-25/replay-premises.mjs`，结果在 `exp2/evidence/batch3-2026-10-25/rep1j-R5.{1,2,3}-c.json`）：value_not_stated 3 → 0。三条仍然发出、仍然能复现；另外 6 条结果和运行记录相同（V5.x.2 发出，V5.x.3 不复现、挡下）。
 - 测试：库检查一条（引用提到 `.sha256` 的单元算已陈述，引用不提这个文件的单元要重答），条目前提一条（引用 R5.S1.P3.s5 不报，引用过滤单元报 value_not_stated）。
-- 全量测试：这次主机连续拦截新构建的程序（spawn UNKNOWN，每跑一次有二十多处，逐个文件重跑也拦），本地全量测试不能当闸门。逐个文件重跑后，凡是失败的都伴有 spawn UNKNOWN，或者属于已知的 10 条环境问题，没有一条是断言失败；recording.test 有一条没报 spawn 的失败，单独重跑通过。replay-baseline（七个 R1 重放）在本地构建 dpipe.exe，连跑三次都被拦，这次没跑成。
+- 全量测试：这次主机连续拦截新构建的程序（spawn UNKNOWN，每跑一次有二十多处，逐个文件重跑也拦），本地全量测试不能当闸门。逐个文件重跑后，凡是失败的都伴有 spawn UNKNOWN，或者属于已知的 10 条环境问题，没有一条是断言失败；recording.test 有一条没报 spawn 的失败，单独重跑通过。replay-baseline（七个 R1 重放）在本地构建 dpipe.exe，连跑三次都被拦，这次没跑成；B2b 那次 (b) 的全量测试拦截少了，它跑通了，和基线相同（这时 (c) 和 (b) 都已在内）。
+
+### 29.2（b）检查不再有取反方向
+
+**做法**：检查只陈述当前文本要求的行为。
+- 去掉 `CheckDraft.direction`：检查编写的输出 schema 里的这个字段及其 required、形状校验、store 记录检查时的拷贝，以及 formalize 和 guards 里写死的 `"holds"`。
+- verdict：通过 = 全部断言满足（不再对 withdrawn 取反）；去掉失败原因 `still_present`；强度只按"在上一版程序上挂、且有关于数据的断言"判。
+- 旧记录：`CheckRecord.direction` 留成可选字段，只为读旧状态，代码不再读它。写成 withdrawn 的旧检查，断言照原样当作当前要求读；每轮报告的 Check writing 一行列出这些检查（`checks.read_as_holds`）。设计会话同意不加出生校验。
+- 测试桩：R5 的 transform-no-sidecar 原来写成 withdrawn（"写 sidecar 且内容是摘要"，取反后才对），现在改成直接陈述 R5 的要求：`out.csv.sha256` 不存在（verbatim，引用 R5.S1.P3.s5，靠 (c) 才算已陈述），另加一条输出首行的断言，让它仍然是强检查。checks.test 对应用例改为：在 R3（还写 sidecar）上挂，在 R5 上过。
+
+**依据**：rep1j 的 K37 写成 withdrawn，断言却已经是新要求（sidecar 不存在），取反后在 sidecar 存在时通过，出生为 G57，把 C5.3–C5.5 三次正确的修补都判成回退（§28 之后查明）。
+
+**验收**（`exp2/evidence/batch3-2026-10-25/replay-withdrawn.mjs`，输出 `withdrawn.md` / `withdrawn.json`；只读状态和 git 历史，程序按运行时的方式在 docker 里构建，不调模型）：
+- 全部 13 次真实运行：写成 withdrawn 的检查只有 rep1j 的 K37，由它出生的守卫只有 G57（C5.2）。其他运行没有 withdrawn 检查，它们的守卫判定在新旧代码下相同，受影响的守卫只有 G57。
+- rep1j R5–R6 每个周期的程序上按新读法跑 K37：C5.1 构建失败；C5.2 挂（sidecar 存在），所以不出生守卫（运行里 G57 就是在这里出生的）；C5.3、C5.4、C5.5 都过（sidecar 已经去掉）；C6.1–C6.3 都过。运行记录里 C5.3–C5.5 三次回退的"挂掉的守卫"都只有 G57，没有 G57 就没有这三次回退。
+- 推断（未重放）：没有这三次回退，V5.1.1/V5.2.1/V5.3.1 这三条 sidecar 条目在 R5 就会按修补后的程序判；K37 在同样的程序上已经过了，说明 sidecar 在那几次修补里已经去掉。
+- 测试：全量 976 条里 965 过；失败的只有已知的 10 条环境问题，replay-baseline 通过。checks.test 用 tsx 单独跑时还有两条失败（R10 的 JSON 比较、R5 的 verify-blake2b），在批 3 之前的提交 5c34df5 上同样失败（生成的 Node 替身程序里有一处语法错误），编译后的全量测试里它们是通过的。

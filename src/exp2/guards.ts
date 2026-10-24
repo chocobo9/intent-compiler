@@ -56,7 +56,7 @@ export function guardCheck(g: GuardRecord, library: readonly CheckRecord[]): Che
     return k
   }
   return {
-    id: g.id, round: g.round, key: g.id, object: g.object ?? "none", blocks: g.units, uses: [], direction: "holds",
+    id: g.id, round: g.round, key: g.id, object: g.object ?? "none", blocks: g.units, uses: [],
     input: g.input!, assertions: g.assertions!, unknown: [], reference_script: g.reference_script ?? null,
     admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
   }

@@ -56,7 +56,7 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
     assert.match(checkAnswer(r6, 6, wrong).issues[0].message, /There is no object O999 yet \(objects so far: O1–O\d+\)/u)
     // R7 partly revises lineage (O40), which R6.S2.P3 refers to: staleness through the edge is deleted (§12j.5).
     const all = store.registry()
-    const check = { id: "K1", round: 6, key: "k", object: all.coverOf("R6.S2.P3")!.owner, blocks: ["R6.S2.P3"], uses: [], direction: "holds", input: { args: [], files: [] }, assertions: [], unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [] } as unknown as CheckRecord
+    const check = { id: "K1", round: 6, key: "k", object: all.coverOf("R6.S2.P3")!.owner, blocks: ["R6.S2.P3"], uses: [], input: { args: [], files: [] }, assertions: [], unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [] } as unknown as CheckRecord
     assert.deepEqual(staleChecks(all, [check], [], 7), [])
   })
 
@@ -183,7 +183,7 @@ describe("exp2 readings the text does not state (§12d item 10), on the real R4 
   const draft = (JSON.parse(r4.answer) as ChecksPatch).upsert.find(k => k.key === "validate_violation_report")!
   const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-reading-")), "reading")
   const record = (assertions: AssertionDraft[]): CheckRecord => ({
-    id: "K99", round: 4, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses, direction: "holds", input: draft.input,
+    id: "K99", round: 4, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses, input: draft.input,
     assertions: assertions.map(({ expect_json, ...a }) => ({ ...a, expect: JSON.parse(expect_json) })), unknown: [], reference_script: null,
     admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
   })

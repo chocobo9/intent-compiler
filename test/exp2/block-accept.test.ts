@@ -49,14 +49,14 @@ const target = (kind: string, extra: Record<string, unknown> = {}) => ({ kind, p
 const resolved = (id: string, t: CheckRecord["assertions"][number]["target"], expect: unknown, kind: "verbatim" | "derived" = "derived", block: string | null = null): CheckRecord["assertions"][number] => ({ id, role: "business", target: t, expect, tolerance: null, source: { kind, block } })
 /** A library check for the sort (its values worked out already, as an admitted check holds them). */
 const sortCheck = (id: string, object: string): CheckRecord => ({
-  id, round: 1, key: "sort-asc", object, blocks: [SORT_UNIT], uses: [], direction: "holds", input: SORT_INPUT,
+  id, round: 1, key: "sort-asc", object, blocks: [SORT_UNIT], uses: [], input: SORT_INPUT,
   // Stated values: a failure is the program's.
   assertions: [resolved("l2", target("file_line", { path: "out.csv", line: 2 }), "3,3", "verbatim", SORT_UNIT), resolved("l5", target("file_line", { path: "out.csv", line: 5 }), "2,20", "verbatim", SORT_UNIT), resolved("exit", target("exit_code"), 0, "verbatim", SORT_UNIT)],
   unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
 })
 /** A library check for the R1 sidecar: transform writes <output>.sha256. */
 const sidecarCheck = (id: string, object: string): CheckRecord => ({
-  id, round: 1, key: "transform-sidecar", object, blocks: [SIDECAR_UNIT], uses: [], direction: "holds", input: FILTER_INPUT,
+  id, round: 1, key: "transform-sidecar", object, blocks: [SIDECAR_UNIT], uses: [], input: FILTER_INPUT,
   assertions: [resolved("side", target("file_exists", { path: "out.csv.sha256" }), true, "verbatim", SIDECAR_UNIT), resolved("exit", target("exit_code"), 0)],
   unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [],
 })

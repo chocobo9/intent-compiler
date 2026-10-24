@@ -65,8 +65,6 @@ export interface CheckDraft {
   object: string
   blocks: string[]
   uses: string[]
-  /** holds: the assertions state what must hold now. withdrawn: they state behaviour the text has removed. */
-  direction: "holds" | "withdrawn"
   input: CheckInput
   assertions: AssertionDraft[]
   /**
@@ -113,7 +111,7 @@ const DIGEST = /(?<![0-9A-Fa-f])[0-9A-Fa-f]{32,}(?![0-9A-Fa-f])/gu
 export interface Strength {
   strong: boolean
   baseline: string
-  /** holds: did the baseline fail the check; withdrawn: did it satisfy it. */
+  /** Did the baseline fail the check. */
   baseline_ok: boolean
   data_assertions: string[]
   reason: string
@@ -126,7 +124,12 @@ export interface CheckRecord {
   object: string
   blocks: string[]
   uses: string[]
-  direction: "holds" | "withdrawn"
+  /**
+   * Older records only: a check once written as "withdrawn" (its assertions taken as behaviour the text removed, the
+   * outcome inverted). It is read as every check is, stating what the text in force requires (batch 3b), and the
+   * round's report names it.
+   */
+  direction?: "holds" | "withdrawn"
   input: CheckInput
   assertions: Assertion[]
   /** Derived assertions whose two methods disagreed, or could not be compared: unknown, left out of the check. */
@@ -630,7 +633,6 @@ export function checksShapeProblems(value: unknown): string[] {
     if (!obj(k)) { p.push(`${at}: not an object`); return }
     for (const f of ["key", "object"]) if (typeof k[f] !== "string") p.push(`${at}.${f}: not a string`)
     if (!strs(k.blocks) || !strs(k.uses)) p.push(`${at}: blocks and uses must be string arrays`)
-    if (k.direction !== "holds" && k.direction !== "withdrawn") p.push(`${at}.direction: holds or withdrawn`)
     if (!obj(k.input) || !strs(k.input.args) || !Array.isArray(k.input.files) || !k.input.files.every(f => obj(f) && typeof f.path === "string" && typeof f.content === "string")) p.push(`${at}.input: {args: string[], files: {path, content}[]}`)
     if (!Array.isArray(k.assertions) || !k.assertions.every(a => obj(a) && typeof a.id === "string" && (a.role === "convention" || a.role === "business") && obj(a.target) && typeof a.target.kind === "string" && typeof a.expect_json === "string" && obj(a.source) && (a.source.kind === "verbatim" || a.source.kind === "derived" || a.source.kind === "computed") && (a.reading === undefined || a.reading === null || typeof a.reading === "string"))) p.push(`${at}.assertions: malformed`)
     if (k.reference_script !== null && !(obj(k.reference_script) && (k.reference_script.language === "python" || k.reference_script.language === "node") && typeof k.reference_script.code === "string")) p.push(`${at}.reference_script: {language, code} or null`)
@@ -914,13 +916,12 @@ const stringArray = { type: "array", items: { type: "string" } }
 const checkSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["key", "object", "blocks", "uses", "direction", "input", "assertions", "reference_script", "note"],
+  required: ["key", "object", "blocks", "uses", "input", "assertions", "reference_script", "note"],
   properties: {
     key: { type: "string", description: "Your name for this check within the draft." },
     object: { type: "string", description: "The object (id) whose requirement the check tests; one of this round's scope." },
     blocks: { ...stringArray, description: "Source blocks the check rests on." },
     uses: { ...stringArray, description: "Shared-convention objects (ids) whose rules the expected output follows, e.g. an error-message format." },
-    direction: { type: "string", enum: ["holds", "withdrawn"], description: "holds: the assertions state what must hold now. withdrawn: they state behaviour the text has removed (it must no longer happen)." },
     input: {
       type: "object", additionalProperties: false, required: ["args", "files"],
       properties: {

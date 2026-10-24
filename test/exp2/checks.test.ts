@@ -232,16 +232,16 @@ describe("exp2 block 2: the check library over R1–R3, against stand-in program
     assert.equal(runOf("10:r10", "filter-gt").outcome, "pass")
   })
 
-  it("R5 (constructed): a withdrawn behaviour is strong when the baseline still shows it, passes when it is gone, fails while it stays", () => {
+  it("R5 (constructed): the withdrawn sidecar, checked as what R5 requires (no <output>.sha256): fails while the program still writes it, passes when it is gone", () => {
     const k = check("transform-no-sidecar")
-    assert.equal(k.direction, "withdrawn")
+    assert.equal(k.direction, undefined, "a check states what the text in force requires; no direction (batch 3b)")
     assert.equal(k.strength!.baseline, "r3")
-    assert.equal(k.strength!.baseline_ok, true, "the R3 program still writes the sidecar")
-    assert.equal(k.strength!.strong, true)
+    assert.equal(k.strength!.baseline_ok, true, "the R3 program still writes the sidecar, so it fails the check")
+    assert.equal(k.strength!.strong, true, "it fails on R3 and asserts data (the output's header line)")
     assert.equal(runOf("5:r5", "transform-no-sidecar").outcome, "pass")
     const stays = runOf("5:r3", "transform-no-sidecar")
     assert.equal(stays.outcome, "fail")
-    assert.deepEqual([stays.failure!.class, stays.failure!.reason], ["not_landed", "still_present"])
+    assert.equal(stays.failure!.class, "not_landed")
     assert.equal(status("5:r3", "transform").status, "not_landed")
     assert.equal(status("5:r5", "transform").status, "landed")
   })
@@ -287,7 +287,7 @@ describe("exp2 check admission: definite errors only", () => {
     const registry = store.registry()
     const id = (n: string) => registry.objectByName(n)!.id
     const base: CheckDraft = {
-      key: "k", object: id("filter"), blocks: ["R1.S3.P2.s4"], uses: [], direction: "holds", note: null, reference_script: null,
+      key: "k", object: id("filter"), blocks: ["R1.S3.P2.s4"], uses: [], note: null, reference_script: null,
       input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [{ path: "data.csv", content: "id,value\n1,5\n" }, { path: "recipe.json", content: "[{\"op\": \"filter\", \"column\": \"value\", \"condition\": \"gt\", \"threshold\": 1}]" }] },
       assertions: [
         { id: "a", role: "business", target: { kind: "file_line", path: "out.csv", line: 2, pointer: null, column: null }, expect_json: "\"1,5\"", tolerance: null, source: { kind: "derived", block: null, quote: null } },
@@ -323,7 +323,7 @@ describe("exp2 check admission: a file's existence is stated by naming the file"
     const unit = "R1.S3.P24.s1"
     assert.match(registry.block(unit)!.text, /\.sha256/u)
     const draft = (block: string): CheckDraft => ({
-      key: "k", object: registry.coverOf(unit)!.owner, blocks: [unit], uses: [], direction: "holds", note: null, reference_script: null,
+      key: "k", object: registry.coverOf(unit)!.owner, blocks: [unit], uses: [], note: null, reference_script: null,
       input: { args: ["transform", "--input", "data.csv", "--recipe", "recipe.json", "--output", "out.csv", "--seed", "1"], files: [{ path: "data.csv", content: "id,value\n1,5\n" }, { path: "recipe.json", content: "[{\"op\": \"filter\", \"column\": \"value\", \"condition\": \"gt\", \"threshold\": 1}]" }] },
       assertions: [
         { id: "side", role: "business", target: { kind: "file_exists", path: "out.csv.sha256", line: null, pointer: null, column: null }, expect_json: "true", tolerance: null, source: { kind: "verbatim", block, quote: null } },
