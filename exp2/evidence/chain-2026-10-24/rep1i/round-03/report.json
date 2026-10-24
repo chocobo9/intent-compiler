@@ -1,0 +1,2012 @@
+{
+  "round": 3,
+  "official_score": {
+    "passed": 485,
+    "total": 535
+  },
+  "status": "done",
+  "stages": {
+    "understand": {
+      "calls": 1,
+      "tokens": {
+        "input_tokens": 29351,
+        "cache_read_tokens": 5120,
+        "cache_write_tokens": 0,
+        "output_tokens": 766,
+        "reasoning_tokens": 1273
+      },
+      "stub_calls": 0
+    },
+    "acceptance": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 98463,
+        "cache_read_tokens": 15744,
+        "cache_write_tokens": 0,
+        "output_tokens": 11233,
+        "reasoning_tokens": 4104
+      },
+      "stub_calls": 0
+    },
+    "coding": {
+      "calls": 4,
+      "tokens": {
+        "input_tokens": 79481,
+        "cache_read_tokens": 3508992,
+        "cache_write_tokens": 0,
+        "output_tokens": 12477,
+        "reasoning_tokens": 1658
+      },
+      "stub_calls": 0
+    }
+  },
+  "interrupted": {
+    "attempts": 0,
+    "stages": {
+      "understand": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "acceptance": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      },
+      "coding": {
+        "calls": 0,
+        "tokens": {
+          "input_tokens": 0,
+          "cache_read_tokens": 0,
+          "cache_write_tokens": 0,
+          "output_tokens": 0,
+          "reasoning_tokens": 0
+        },
+        "stub_calls": 0
+      }
+    }
+  },
+  "scope": [
+    "O17",
+    "O20",
+    "O22",
+    "O24",
+    "O28",
+    "O35",
+    "O36",
+    "O37"
+  ],
+  "zones": {
+    "task": 19,
+    "protect": 0,
+    "status": 0,
+    "source_blocks": 188,
+    "anchors": 0,
+    "source_scope": "delta",
+    "source_chars": 55616,
+    "source_chars_all": 65484,
+    "source_blocks_all": 222,
+    "package": {
+      "objects": [
+        {
+          "object": "O17",
+          "why": "this round",
+          "via": []
+        },
+        {
+          "object": "O20",
+          "why": "this round",
+          "via": []
+        },
+        {
+          "object": "O22",
+          "why": "this round",
+          "via": []
+        },
+        {
+          "object": "O24",
+          "why": "this round",
+          "via": []
+        },
+        {
+          "object": "O28",
+          "why": "this round",
+          "via": []
+        },
+        {
+          "object": "O35",
+          "why": "this round",
+          "via": []
+        },
+        {
+          "object": "O36",
+          "why": "this round",
+          "via": []
+        },
+        {
+          "object": "O37",
+          "why": "this round",
+          "via": []
+        },
+        {
+          "object": "O2",
+          "why": "edge",
+          "via": [
+            "R1.S6.P2 applies_to O2",
+            "R1.S8.P1 applies_to O2",
+            "V1.3.8",
+            "V2.2.5",
+            "V2.3.2"
+          ]
+        },
+        {
+          "object": "O3",
+          "why": "edge",
+          "via": [
+            "R1.S6.P2 applies_to O3",
+            "R1.S8.P1 applies_to O3"
+          ]
+        },
+        {
+          "object": "O6",
+          "why": "open item",
+          "via": [
+            "V1.1.3",
+            "V1.3.1",
+            "V2.1.1"
+          ]
+        },
+        {
+          "object": "O7",
+          "why": "open item",
+          "via": [
+            "V1.1.4",
+            "V1.3.7",
+            "V2.1.2"
+          ]
+        },
+        {
+          "object": "O12",
+          "why": "open item",
+          "via": [
+            "V1.1.5"
+          ]
+        },
+        {
+          "object": "O14",
+          "why": "open item",
+          "via": [
+            "V2.1.3",
+            "V2.3.4"
+          ]
+        },
+        {
+          "object": "O18",
+          "why": "edge",
+          "via": [
+            "R1.S6.P2 applies_to O18",
+            "R1.S8.P1 applies_to O18"
+          ]
+        },
+        {
+          "object": "O19",
+          "why": "edge",
+          "via": [
+            "R1.S6.P2 applies_to O19",
+            "R1.S8.P1 applies_to O19"
+          ]
+        },
+        {
+          "object": "O25",
+          "why": "open item",
+          "via": [
+            "V2.1.4",
+            "V2.3.3"
+          ]
+        },
+        {
+          "object": "O29",
+          "why": "open item",
+          "via": [
+            "V2.1.9",
+            "V2.3.5"
+          ]
+        },
+        {
+          "object": "O30",
+          "why": "open item",
+          "via": [
+            "V2.1.10",
+            "V2.3.6"
+          ]
+        },
+        {
+          "object": "O31",
+          "why": "open item",
+          "via": [
+            "V2.1.11",
+            "V2.3.7"
+          ]
+        },
+        {
+          "object": "O32",
+          "why": "open item",
+          "via": [
+            "V2.1.12",
+            "V2.3.8"
+          ]
+        },
+        {
+          "object": "O33",
+          "why": "open item",
+          "via": [
+            "V2.1.13",
+            "V2.2.6",
+            "V2.3.9"
+          ]
+        }
+      ],
+      "guards": 19,
+      "overflow": {
+        "limit": 28308,
+        "chars": 62005,
+        "dropped": [],
+        "outputs_dropped": true,
+        "still_over": true
+      }
+    }
+  },
+  "revisions": {
+    "cue_paragraphs": 7,
+    "recorded": 0,
+    "modifications": 3,
+    "unrecorded": [
+      "R3.S2.P1",
+      "R3.S2.P3",
+      "R3.S3.P1",
+      "R3.S3.P4",
+      "R3.S5.P1",
+      "R3.S9.P3",
+      "R3.S16.P1"
+    ]
+  },
+  "gold": {
+    "task": "deterministic-data-pipeline-go",
+    "revision": {
+      "gold": 4,
+      "located": 4,
+      "hit": 2,
+      "missed": [
+        "R3.S2.P3 → R2.S13.P4.s4.c3",
+        "R3.S3.P1 → R2.S11.P5.s3"
+      ],
+      "unlocated": 0,
+      "precision": {
+        "recorded": 3,
+        "on_gold": 1
+      }
+    },
+    "relation": {
+      "gold": 5,
+      "located": 5,
+      "hit": 5,
+      "missed": [],
+      "unlocated": 0,
+      "by_edge": 2,
+      "by_object": 3,
+      "by_kind": {
+        "depends_on": {
+          "gold": 1,
+          "hit": 1
+        },
+        "extends": {
+          "gold": 2,
+          "hit": 2
+        },
+        "same_rules": {
+          "gold": 2,
+          "hit": 2
+        }
+      }
+    }
+  },
+  "execution": {
+    "status": "cycles_spent",
+    "cycles": 4,
+    "repairs": 3,
+    "kept": "C3.4",
+    "failing_at_end": 1,
+    "contests": 0,
+    "carried_objects": [
+      "O2",
+      "O6",
+      "O12",
+      "O20",
+      "O22",
+      "O24",
+      "O29",
+      "O30",
+      "O32",
+      "O33"
+    ],
+    "sessions": 1,
+    "broken_sessions": 0
+  },
+  "checks": {
+    "entered": 10,
+    "stale": 2,
+    "retired": 0,
+    "run": 43,
+    "passed": 32,
+    "failed": 11,
+    "admitted": 10,
+    "unknown": 0,
+    "unknown_not_fed_back": 0,
+    "dropped": {},
+    "normalized": {
+      "doubled escapes": 2
+    },
+    "refused_calls": 0,
+    "uncovered": 65
+  },
+  "objects": [
+    {
+      "object": "O1",
+      "name": "dpipe CLI",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K1"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O2",
+      "name": "ingest command",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K2"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O3",
+      "name": "transform command",
+      "status": "unknown",
+      "reasons": [
+        "disputed_check"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": [
+        "K3"
+      ]
+    },
+    {
+      "object": "O4",
+      "name": "transform operations",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K4"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O5",
+      "name": "filter operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K5"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O6",
+      "name": "derive operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K6"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O7",
+      "name": "expression evaluator",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K7"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O8",
+      "name": "sample operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K8"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O9",
+      "name": "sort operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K9"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O10",
+      "name": "rename operation",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O11",
+      "name": "drop operation",
+      "status": "unknown",
+      "reasons": [
+        "no_checks"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O12",
+      "name": "aggregate operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K10"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O13",
+      "name": "join operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K11"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O14",
+      "name": "window operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K12"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O15",
+      "name": "pivot operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K13"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O16",
+      "name": "unpivot operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K14"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O17",
+      "name": "fill operation",
+      "status": "unknown",
+      "reasons": [
+        "disputed_check"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": [
+        "K37"
+      ]
+    },
+    {
+      "object": "O18",
+      "name": "verify command",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K16"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O19",
+      "name": "manifest command",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O20",
+      "name": "pipeline command",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [
+        "K23",
+        "K44"
+      ],
+      "not_landed": [
+        "K18"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O21",
+      "name": "determinism contract",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K19"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O22",
+      "name": "error handling",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K20"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O23",
+      "name": "build requirement",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K21"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O24",
+      "name": "profile command",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K25",
+        "K39"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O25",
+      "name": "deduplicate operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K26"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O26",
+      "name": "split operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K27"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O27",
+      "name": "assert operation",
+      "status": "unknown",
+      "reasons": [
+        "only_weak"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O28",
+      "name": "normalize operation",
+      "status": "unknown",
+      "reasons": [
+        "disputed_check"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": [
+        "K38"
+      ]
+    },
+    {
+      "object": "O29",
+      "name": "encode operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K30"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O30",
+      "name": "rollup operation",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K31"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O31",
+      "name": "detect operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K32"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O32",
+      "name": "bin operation",
+      "status": "unknown",
+      "reasons": [
+        "disputed_check"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": [
+        "K33"
+      ]
+    },
+    {
+      "object": "O33",
+      "name": "compare command",
+      "status": "unknown",
+      "reasons": [
+        "disputed_check"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": [
+        "K34"
+      ]
+    },
+    {
+      "object": "O34",
+      "name": "hash operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K35"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O35",
+      "name": "drift command",
+      "status": "not_landed",
+      "reasons": [],
+      "passing_strong": [],
+      "not_landed": [
+        "K40"
+      ],
+      "unknown": []
+    },
+    {
+      "object": "O36",
+      "name": "resample operation",
+      "status": "landed",
+      "reasons": [],
+      "passing_strong": [
+        "K41",
+        "K42"
+      ],
+      "not_landed": [],
+      "unknown": []
+    },
+    {
+      "object": "O37",
+      "name": "watermark operation",
+      "status": "unknown",
+      "reasons": [
+        "disputed_check"
+      ],
+      "passing_strong": [],
+      "not_landed": [],
+      "unknown": [
+        "K43"
+      ]
+    }
+  ],
+  "loss": {
+    "boundary": [
+      "O3",
+      "O10",
+      "O11",
+      "O17",
+      "O19",
+      "O27",
+      "O28",
+      "O32",
+      "O33",
+      "O37"
+    ],
+    "ic": [
+      "O18",
+      "O23"
+    ],
+    "executor": [
+      "O20",
+      "O30",
+      "O35"
+    ]
+  },
+  "management_calls": 4,
+  "wall": {
+    "round_ms": 1025841,
+    "stages": [
+      {
+        "stage": "attribution",
+        "ms": 12853,
+        "spans": 1,
+        "first_start_ms": 0,
+        "last_end_ms": 12853
+      },
+      {
+        "stage": "check writing",
+        "ms": 89761,
+        "spans": 1,
+        "first_start_ms": 14016,
+        "last_end_ms": 103777
+      },
+      {
+        "stage": "checks",
+        "ms": 19095,
+        "spans": 1,
+        "first_start_ms": 14045,
+        "last_end_ms": 33140
+      },
+      {
+        "stage": "carry-over",
+        "ms": 17927,
+        "spans": 2,
+        "first_start_ms": 33166,
+        "last_end_ms": 51114
+      },
+      {
+        "stage": "guard list",
+        "ms": 9787,
+        "spans": 1,
+        "first_start_ms": 51180,
+        "last_end_ms": 60967
+      },
+      {
+        "stage": "coding",
+        "ms": 102085,
+        "spans": 1,
+        "first_start_ms": 61044,
+        "last_end_ms": 163129
+      },
+      {
+        "stage": "build",
+        "ms": 4650,
+        "spans": 4,
+        "first_start_ms": 163129,
+        "last_end_ms": 918967
+      },
+      {
+        "stage": "trial",
+        "ms": 12015,
+        "spans": 4,
+        "first_start_ms": 164296,
+        "last_end_ms": 922144
+      },
+      {
+        "stage": "waiting for checks",
+        "ms": 14,
+        "spans": 2,
+        "first_start_ms": 167535,
+        "last_end_ms": 998336
+      },
+      {
+        "stage": "guard rerun",
+        "ms": 238139,
+        "spans": 12,
+        "first_start_ms": 167549,
+        "last_end_ms": 998181
+      },
+      {
+        "stage": "review",
+        "ms": 350950,
+        "spans": 3,
+        "first_start_ms": 214002,
+        "last_end_ms": 871966
+      },
+      {
+        "stage": "formalize",
+        "ms": 91978,
+        "spans": 3,
+        "first_start_ms": 390901,
+        "last_end_ms": 887589
+      },
+      {
+        "stage": "premise checks",
+        "ms": 17908,
+        "spans": 3,
+        "first_start_ms": 416637,
+        "last_end_ms": 889335
+      },
+      {
+        "stage": "repair",
+        "ms": 115574,
+        "spans": 3,
+        "first_start_ms": 425915,
+        "last_end_ms": 917856
+      }
+    ]
+  },
+  "acceptance": {
+    "by_kind": {
+      "A": 4,
+      "B": 39,
+      "C": 0
+    },
+    "open": {
+      "program_wrong": [
+        "V1.1.5",
+        "V1.1.14",
+        "V1.2.8",
+        "V1.3.1",
+        "V1.3.8",
+        "V2.1.9",
+        "V2.1.10",
+        "V2.1.12",
+        "V2.3.2",
+        "V2.3.5",
+        "V2.3.6",
+        "V2.3.8",
+        "V3.1.9",
+        "V3.1.10",
+        "V3.1.11",
+        "V3.1.12",
+        "V3.2.5"
+      ],
+      "uncovered": [],
+      "reference_pending": [
+        "K11",
+        "K12",
+        "K25",
+        "K26",
+        "G29",
+        "K3",
+        "K33",
+        "K37",
+        "K38",
+        "K43"
+      ],
+      "ambiguous": [],
+      "uncheckable": [],
+      "expired": [],
+      "confirmed": []
+    }
+  },
+  "ledger": {
+    "open": {
+      "program_wrong": [
+        "V1.1.5",
+        "V1.1.14",
+        "V1.2.8",
+        "V1.3.1",
+        "V1.3.8",
+        "V2.1.9",
+        "V2.1.10",
+        "V2.1.12",
+        "V2.3.2",
+        "V2.3.5",
+        "V2.3.6",
+        "V2.3.8",
+        "V3.1.9",
+        "V3.1.10",
+        "V3.1.11",
+        "V3.1.12",
+        "V3.2.5"
+      ],
+      "uncovered": [],
+      "reference_pending": [
+        "K11",
+        "K12",
+        "K25",
+        "K26",
+        "G29",
+        "K3",
+        "K33",
+        "K37",
+        "K38",
+        "K43"
+      ]
+    },
+    "confirmed": [],
+    "report_only": [
+      {
+        "id": "V1.1.13",
+        "how": "unverified",
+        "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+      },
+      {
+        "id": "V1.2.1",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.2.2",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.2.3",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.2.4",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.2.5",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.2.6",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.2.7",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.2.9",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.2.10",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V1.3.5",
+        "how": "blocked",
+        "detail": "not_reproduced: the check passes on the program as it stands (exit 0)"
+      },
+      {
+        "id": "V2.1.7",
+        "how": "unverified",
+        "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+      },
+      {
+        "id": "V2.2.3",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V2.2.4",
+        "how": "unverified",
+        "detail": "sent in the reviewer's words; no check tells whether it was fixed"
+      },
+      {
+        "id": "V2.2.7",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V2.2.8",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V2.2.9",
+        "how": "blocked",
+        "detail": "input_claim_false: review-data.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V3.1.3",
+        "how": "blocked",
+        "detail": "input_claim_false: recipe.json: claimed parses, the standard parser rejects it"
+      },
+      {
+        "id": "V3.1.5",
+        "how": "blocked",
+        "detail": "input_claim_false: current.csv: claimed 1 empty cells, parsed 2"
+      },
+      {
+        "id": "V3.3.2",
+        "how": "blocked",
+        "detail": "input_claim_false: review-current.csv: claimed 1 empty cells, parsed 2"
+      }
+    ],
+    "ended": [
+      {
+        "id": "V1.1.3",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V1.1.4",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V1.3.7",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.1.1",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.1.2",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V2.1.3",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.1.4",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.1.5",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.1.6",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.1.8",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.1.11",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.1.13",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.2.1",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.2.2",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.2.5",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.2.6",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.3.1",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.3.3",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.3.4",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.3.7",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V2.3.9",
+        "how": "fixed",
+        "cycles": 0
+      },
+      {
+        "id": "V3.1.1",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.1.2",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.1.3",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V3.1.4",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.1.5",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V3.1.6",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.1.7",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.1.8",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.2.1",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.2.2",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.2.3",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.2.4",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.2.6",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.2.7",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.2.8",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.3.1",
+        "how": "fixed",
+        "cycles": 1
+      },
+      {
+        "id": "V3.3.2",
+        "how": "blocked",
+        "cycles": 0
+      },
+      {
+        "id": "V3.3.3",
+        "how": "fixed",
+        "cycles": 1
+      }
+    ],
+    "sends": 28,
+    "held": [
+      "V1.1.5",
+      "V1.1.14",
+      "V1.2.8",
+      "V1.3.1",
+      "V1.3.8",
+      "V2.1.4",
+      "V2.1.9",
+      "V2.1.10",
+      "V2.1.11",
+      "V2.1.12",
+      "V2.3.2",
+      "V2.3.3",
+      "V2.3.5",
+      "V2.3.6",
+      "V2.3.7",
+      "V2.3.8",
+      "G29",
+      "V3.1.6",
+      "V3.1.9",
+      "V3.1.10",
+      "V3.1.11",
+      "V3.1.12",
+      "V3.2.5"
+    ]
+  },
+  "review": {
+    "first_delivery": {
+      "cycle": "C3.1",
+      "commit": "2de075da651f423574cae0f7ef18ca45b8462ece"
+    },
+    "reviews": [
+      {
+        "n": 1,
+        "cycle": "C3.1",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 12,
+        "malformed": 0,
+        "blocked": 2,
+        "sent": 10,
+        "superseded": [
+          "G22"
+        ],
+        "leads": 16,
+        "program_runs": 25,
+        "fallback": 0,
+        "logged": 4,
+        "entered": 10,
+        "conservation": {
+          "reported": 12,
+          "sent": 6,
+          "logged": 4,
+          "fallback": 0,
+          "blocked": 2,
+          "ok": true
+        }
+      },
+      {
+        "n": 2,
+        "cycle": "C3.2",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 8,
+        "malformed": 0,
+        "blocked": 0,
+        "sent": 8,
+        "superseded": [],
+        "leads": 2,
+        "program_runs": 12,
+        "fallback": 0,
+        "logged": 2,
+        "entered": 8,
+        "conservation": {
+          "reported": 8,
+          "sent": 6,
+          "logged": 2,
+          "fallback": 0,
+          "blocked": 0,
+          "ok": true
+        }
+      },
+      {
+        "n": 3,
+        "cycle": "C3.3",
+        "attempts": 1,
+        "valid": true,
+        "no_issues": false,
+        "reported": 3,
+        "malformed": 0,
+        "blocked": 1,
+        "sent": 2,
+        "superseded": [],
+        "leads": 3,
+        "program_runs": 0,
+        "fallback": 0,
+        "logged": 0,
+        "entered": 2,
+        "conservation": {
+          "reported": 3,
+          "sent": 2,
+          "logged": 0,
+          "fallback": 0,
+          "blocked": 1,
+          "ok": true
+        }
+      }
+    ],
+    "voided": 0,
+    "reviewer": {
+      "calls": 3,
+      "tokens": {
+        "input_tokens": 234474,
+        "cache_read_tokens": 4791040,
+        "cache_write_tokens": 0,
+        "output_tokens": 16640,
+        "reasoning_tokens": 9402
+      },
+      "stub_calls": 0
+    },
+    "formalizer": {
+      "calls": 4,
+      "tokens": {
+        "input_tokens": 114526,
+        "cache_read_tokens": 16512,
+        "cache_write_tokens": 0,
+        "output_tokens": 15580,
+        "reasoning_tokens": 3965
+      },
+      "stub_calls": 0
+    },
+    "models": {
+      "reviewer": [
+        "gpt-5.6-luna-fast"
+      ],
+      "formalizer": [
+        "gpt-5.6-luna-fast"
+      ]
+    },
+    "items": {
+      "reported": 23,
+      "sent": 20,
+      "malformed": 0,
+      "verified": 14,
+      "logged": 6,
+      "fallback": 0,
+      "blocked": 3
+    },
+    "conservation_errors": [],
+    "premise_blocked": {
+      "input_claim_false": 3
+    },
+    "premise_logged": {
+      "reference_failed": 1,
+      "value_not_stated": 2,
+      "value_not_computed": 3
+    },
+    "fallback": {
+      "reviews": 0,
+      "whole": 0,
+      "items": 0,
+      "reasons": {}
+    },
+    "program_runs_zero": 1,
+    "guards": {
+      "at_start": 37,
+      "at_end": 85,
+      "born": [
+        "G38",
+        "G39",
+        "G40",
+        "G41",
+        "G42",
+        "G43",
+        "G44",
+        "G45",
+        "G46",
+        "G47",
+        "G48",
+        "G49",
+        "G50",
+        "G51",
+        "G52",
+        "G53",
+        "G54",
+        "G55",
+        "G56",
+        "G57",
+        "G58",
+        "G59",
+        "G60",
+        "G61",
+        "G62",
+        "G63",
+        "G64",
+        "G65",
+        "G66",
+        "G67",
+        "G68",
+        "G69",
+        "G70",
+        "G71",
+        "G72",
+        "G73",
+        "G74",
+        "G75",
+        "G76",
+        "G77",
+        "G78",
+        "G79",
+        "G80",
+        "G81",
+        "G82",
+        "G83",
+        "G84",
+        "G85",
+        "G86"
+      ],
+      "flipped_changed_text": [
+        "G22"
+      ],
+      "flipped_unchanged": [
+        "G29"
+      ],
+      "retired": [
+        {
+          "id": "G22",
+          "reason": "boundary cells with only one linear anchor are now required to use constant extrapolation, so the observed `40` is correct."
+        }
+      ],
+      "flips": [
+        {
+          "id": "G22",
+          "cycle": "C3.1",
+          "how": "changed_text",
+          "sources": [
+            "revision",
+            "object"
+          ],
+          "expected": [
+            "derived"
+          ]
+        },
+        {
+          "id": "G29",
+          "cycle": "C3.1",
+          "how": "regression",
+          "sources": [],
+          "expected": [
+            "derived"
+          ]
+        }
+      ]
+    },
+    "reverted": 0,
+    "trial": {
+      "runs": 4,
+      "failures": 0
+    },
+    "leads": {
+      "library": 21,
+      "judgment": 0
+    },
+    "coverage": {
+      "units": 416,
+      "covered": 103,
+      "uncovered": [
+        "R1.S2.P1.s1",
+        "R1.S2.P2.s1",
+        "R1.S2.P2.s2",
+        "R1.S2.P3.s2",
+        "R1.S2.P3.s3",
+        "R1.S2.P3.s4",
+        "R1.S2.P4.s2",
+        "R1.S2.P6.s3",
+        "R1.S6.P2.s1",
+        "R1.S6.P2.s2",
+        "R1.S8.P1.s1",
+        "R1.S8.P1.s2",
+        "R1.S8.P1.s3",
+        "R1.S8.P1.s4",
+        "R1.S8.P1.s5",
+        "R1.S3.P2.s2",
+        "R1.S3.P24.s1",
+        "R1.S3.P8.s1",
+        "R1.S3.P8.s2",
+        "R1.S3.P3.s2",
+        "R1.S3.P3.s4",
+        "R1.S3.P3.s5",
+        "R1.S3.P3.s6",
+        "R1.S3.P3.s7",
+        "R1.S3.P3.s8",
+        "R1.S3.P3.s9",
+        "R1.S3.P4.s3",
+        "R1.S3.P5.s2",
+        "R1.S3.P5.s4",
+        "R1.S3.P5.s5",
+        "R1.S3.P5.s7",
+        "R1.S3.P5.s8",
+        "R1.S3.P5.s9",
+        "R1.S3.P5.s10",
+        "R1.S3.P5.s11",
+        "R1.S3.P5.s12",
+        "R1.S3.P5.s13",
+        "R1.S3.P9.s3",
+        "R1.S3.P9.s4",
+        "R1.S3.P10.s3",
+        "R1.S3.P11.s1",
+        "R1.S3.P11.s3",
+        "R1.S3.P11.s4",
+        "R1.S3.P11.s5",
+        "R1.S3.P11.s8",
+        "R1.S3.P12.s1",
+        "R1.S3.P12.s2",
+        "R1.S3.P12.s5",
+        "R1.S3.P12.s10",
+        "R1.S3.P13.s2",
+        "R1.S3.P13.s4",
+        "R1.S3.P14.s1",
+        "R1.S3.P14.s3",
+        "R1.S3.P14.s4",
+        "R1.S3.P14.s6",
+        "R1.S3.P14.s7",
+        "R1.S3.P14.s8",
+        "R1.S3.P14.s9",
+        "R1.S3.P16.s1",
+        "R1.S3.P16.s2",
+        "R1.S3.P18.s1",
+        "R1.S3.P18.s2",
+        "R1.S3.P18.s3",
+        "R1.S3.P18.s4",
+        "R1.S3.P19.s2",
+        "R1.S3.P19.s3",
+        "R1.S3.P19.s6",
+        "R1.S3.P19.s7",
+        "R1.S3.P19.s8",
+        "R1.S3.P20.s1",
+        "R1.S3.P20.s2",
+        "R1.S3.P20.s3",
+        "R1.S3.P20.s4",
+        "R1.S3.P20.s5",
+        "R1.S3.P21.s2",
+        "R1.S3.P21.s3",
+        "R1.S3.P21.s4",
+        "R1.S4.P1.s1",
+        "R1.S4.P2.s1",
+        "R1.S4.P2.s2",
+        "R1.S5.P2.s1",
+        "R1.S5.P2.s2",
+        "R1.S5.P2.s3",
+        "R1.S5.P2.s4",
+        "R1.S5.P2.s5",
+        "R1.S7.P1.s3",
+        "R1.S8.P2.s1",
+        "R2.S13.P1.s1",
+        "R2.S13.P2.s1",
+        "R2.S13.P4.s1",
+        "R2.S13.P4.s2",
+        "R2.S13.P4.s3",
+        "R2.S13.P4.s5",
+        "R2.S13.P5.s1",
+        "R2.S24.P1.s1",
+        "R2.S24.P1.s2",
+        "R2.S24.P1.s3",
+        "R2.S24.P1.s4",
+        "R2.S24.P1.s5",
+        "R2.S24.P1.s6",
+        "R2.S2.P2.s1",
+        "R2.S2.P2.s2",
+        "R2.S2.P2.s5",
+        "R2.S3.P3.s2",
+        "R2.S3.P3.s3",
+        "R2.S3.P3.s4",
+        "R2.S3.P3.s5",
+        "R2.S3.P3.s6",
+        "R2.S3.P5.s1",
+        "R2.S3.P5.s2",
+        "R2.S3.P5.s3",
+        "R2.S3.P5.s4",
+        "R2.S3.P5.s5",
+        "R2.S3.P5.s6",
+        "R2.S3.P5.s7",
+        "R2.S3.P5.s8",
+        "R2.S3.P6.s1",
+        "R2.S3.P6.s2",
+        "R2.S3.P6.s3",
+        "R2.S3.P6.s4",
+        "R2.S3.P8.s1",
+        "R2.S3.P8.s2",
+        "R2.S3.P8.s3",
+        "R2.S3.P8.s4",
+        "R2.S3.P9.s1",
+        "R2.S3.P9.s2",
+        "R2.S3.P9.s3",
+        "R2.S3.P9.s4",
+        "R2.S3.P11.s2",
+        "R2.S3.P11.s3",
+        "R2.S3.P11.s4",
+        "R2.S3.P11.s5",
+        "R2.S3.P11.s6",
+        "R2.S3.P12.s2",
+        "R2.S3.P12.s3",
+        "R2.S3.P12.s5",
+        "R2.S3.P13.s2",
+        "R2.S3.P13.s3",
+        "R2.S4.P3.s1",
+        "R2.S4.P3.s2",
+        "R2.S4.P3.s3",
+        "R2.S4.P3.s4",
+        "R2.S4.P3.s5",
+        "R2.S4.P3.s6",
+        "R2.S4.P3.s7",
+        "R2.S4.P3.s8",
+        "R2.S4.P4.s1",
+        "R2.S4.P4.s2",
+        "R2.S4.P5.s1",
+        "R2.S4.P5.s2",
+        "R2.S4.P5.s3",
+        "R2.S4.P5.s4",
+        "R2.S4.P5.s5",
+        "R2.S5.P1.s1",
+        "R2.S5.P1.s3",
+        "R2.S8.P3.s2",
+        "R2.S8.P3.s3",
+        "R2.S8.P3.s4",
+        "R2.S8.P3.s6",
+        "R2.S9.P3.s1",
+        "R2.S9.P3.s2",
+        "R2.S9.P3.s3",
+        "R2.S9.P3.s6",
+        "R2.S9.P3.s7",
+        "R2.S9.P3.s8",
+        "R2.S9.P3.s9",
+        "R2.S10.P3.s1",
+        "R2.S10.P3.s2",
+        "R2.S10.P3.s3",
+        "R2.S10.P3.s4",
+        "R2.S11.P3.s1",
+        "R2.S11.P3.s2",
+        "R2.S11.P3.s3",
+        "R2.S11.P5.s1",
+        "R2.S11.P5.s4",
+        "R2.S11.P6.s2",
+        "R2.S11.P6.s5",
+        "R2.S11.P7.s1",
+        "R2.S11.P7.s2",
+        "R2.S14.P3.s1",
+        "R2.S14.P3.s2",
+        "R2.S14.P3.s3",
+        "R2.S14.P3.s4",
+        "R2.S14.P5.s1",
+        "R2.S14.P5.s2",
+        "R2.S14.P5.s3",
+        "R2.S14.P5.s4",
+        "R2.S14.P8.s1",
+        "R2.S14.P8.s2",
+        "R2.S14.P8.s3",
+        "R2.S14.P8.s4",
+        "R2.S15.P2.s1",
+        "R2.S15.P3.s1",
+        "R2.S15.P3.s2",
+        "R2.S15.P3.s3",
+        "R2.S15.P4.s1",
+        "R2.S15.P6.s1",
+        "R2.S15.P6.s2",
+        "R2.S15.P6.s3",
+        "R2.S15.P8.s1",
+        "R2.S15.P8.s2",
+        "R2.S15.P8.s3",
+        "R2.S16.P3.s2",
+        "R2.S16.P3.s3",
+        "R2.S16.P3.s4",
+        "R2.S16.P5.s2",
+        "R2.S17.P3.s1",
+        "R2.S17.P3.s2",
+        "R2.S17.P3.s3",
+        "R2.S17.P3.s4",
+        "R2.S17.P4.s1",
+        "R2.S17.P7.s1",
+        "R2.S17.P7.s2",
+        "R2.S17.P7.s3",
+        "R2.S17.P7.s6",
+        "R2.S17.P7.s7",
+        "R2.S17.P8.s5",
+        "R2.S17.P8.s6",
+        "R2.S20.P1.s1",
+        "R2.S20.P1.s2",
+        "R2.S20.P1.s3",
+        "R2.S20.P1.s4",
+        "R2.S20.P1.s5",
+        "R2.S20.P1.s6",
+        "R2.S20.P1.s11",
+        "R2.S22.P1.s1",
+        "R2.S22.P1.s2",
+        "R2.S22.P1.s3",
+        "R2.S22.P2.s1",
+        "R2.S22.P2.s2",
+        "R2.S22.P3.s1",
+        "R2.S22.P3.s2",
+        "R2.S22.P4.s1",
+        "R2.S22.P4.s2",
+        "R2.S22.P4.s3",
+        "R2.S22.P4.s4",
+        "R2.S23.P1.s1",
+        "R2.S25.P3.s1",
+        "R2.S25.P5.s4",
+        "R2.S28.P3.s1",
+        "R2.S28.P3.s2",
+        "R2.S28.P7.s2",
+        "R3.S2.P1.s1",
+        "R3.S2.P2.s3",
+        "R3.S16.P3.s1",
+        "R3.S16.P3.s2",
+        "R3.S11.P1.s1",
+        "R3.S11.P1.s2",
+        "R3.S11.P1.s4",
+        "R3.S5.P1.s1",
+        "R3.S5.P2.s1",
+        "R3.S5.P2.s2",
+        "R3.S5.P3.s1",
+        "R3.S3.P2.s1",
+        "R3.S3.P3.s1",
+        "R3.S3.P3.s2",
+        "R3.S3.P3.s3",
+        "R3.S3.P4.s1",
+        "R3.S3.P4.s2",
+        "R3.S7.P1.s1",
+        "R3.S7.P1.s2",
+        "R3.S7.P1.s3",
+        "R3.S7.P1.s4",
+        "R3.S8.P1.s1",
+        "R3.S8.P3.s1",
+        "R3.S8.P3.s2",
+        "R3.S8.P3.s3",
+        "R3.S8.P4.s1",
+        "R3.S8.P5.s1",
+        "R3.S8.P5.s2",
+        "R3.S8.P5.s3",
+        "R3.S8.P5.s4",
+        "R3.S9.P1.s1",
+        "R3.S9.P2.s1",
+        "R3.S9.P3.s1",
+        "R3.S9.P3.s2",
+        "R3.S9.P3.s3",
+        "R3.S9.P3.s4",
+        "R3.S9.P3.s5",
+        "R3.S9.P3.s6",
+        "R3.S9.P3.s7",
+        "R3.S9.P3.s8",
+        "R3.S9.P3.s9",
+        "R3.S9.P3.s10",
+        "R3.S9.P3.s11",
+        "R3.S9.P3.s12",
+        "R3.S10.P1.s1",
+        "R3.S10.P2.s1",
+        "R3.S10.P2.s2",
+        "R3.S12.P1.s1",
+        "R3.S14.P3.s1",
+        "R3.S14.P3.s2",
+        "R3.S14.P5.s1",
+        "R3.S14.P5.s2",
+        "R3.S14.P5.s3",
+        "R3.S14.P5.s4",
+        "R3.S14.P7.s1",
+        "R3.S14.P7.s2",
+        "R3.S14.P7.s3",
+        "R3.S14.P7.s4",
+        "R3.S14.P7.s5",
+        "R3.S14.P7.s6",
+        "R3.S14.P7.s7",
+        "R3.S14.P7.s8",
+        "R3.S14.P7.s10",
+        "R3.S14.P7.s11",
+        "R3.S15.P1.s1",
+        "R3.S15.P2.s1",
+        "R3.S15.P3.s1",
+        "R3.S15.P3.s2",
+        "R3.S15.P3.s3",
+        "R3.S15.P5.s1",
+        "R3.S15.P6.s2"
+      ]
+    },
+    "cache": {
+      "reviewer": 0.953,
+      "formalizer": 0.126
+    },
+    "request_chars": 182915
+  },
+  "measures": {
+    "round": 3,
+    "wall_ms": 1025841,
+    "stages_ms": {
+      "attribution": 12853,
+      "check writing": 89761,
+      "checks": 19095,
+      "carry-over": 17927,
+      "guard list": 9787,
+      "coding": 102085,
+      "build": 4650,
+      "trial": 12015,
+      "waiting for checks": 14,
+      "guard rerun": 238139,
+      "review": 350950,
+      "formalize": 91978,
+      "premise checks": 17908,
+      "repair": 115574
+    },
+    "first_delivery": {
+      "cycle": "C3.1",
+      "commit": "2de075da651f423574cae0f7ef18ca45b8462ece"
+    },
+    "guards": {
+      "at_start": 37,
+      "at_end": 85,
+      "born": 49
+    },
+    "regressions": {
+      "changed_text": 1,
+      "unchanged": 1
+    },
+    "reverted": 0,
+    "premise": {
+      "blocked": {
+        "input_claim_false": 3
+      },
+      "logged": {
+        "reference_failed": 1,
+        "value_not_stated": 2,
+        "value_not_computed": 3
+      }
+    },
+    "fallback": {
+      "reviews": 0,
+      "whole": 0,
+      "items": 0,
+      "reasons": {}
+    },
+    "reviews": 3,
+    "program_runs_zero": 1,
+    "checks": {
+      "entered": 10,
+      "admitted": 10,
+      "unknown_not_fed_back": 0,
+      "dropped": 0,
+      "refused_calls": 0
+    },
+    "items": {
+      "reported": 23,
+      "entered": 20,
+      "verified": 14,
+      "logged": 6,
+      "fallback": 0,
+      "blocked": 3,
+      "no_input": 0,
+      "conservation_errors": 0
+    },
+    "sources": {
+      "workorder_scope": "delta",
+      "workorder_chars": 55616,
+      "workorder_chars_all": 65484,
+      "review_chars": 182915
+    },
+    "tokens": {
+      "executor": {
+        "calls": 4,
+        "uncached_input": 79481,
+        "cache_read": 3508992,
+        "output": 12477,
+        "cache_write": 0
+      },
+      "attribution": {
+        "calls": 1,
+        "uncached_input": 29351,
+        "cache_read": 5120,
+        "output": 766,
+        "cache_write": 0
+      },
+      "checks": {
+        "calls": 3,
+        "uncached_input": 98463,
+        "cache_read": 15744,
+        "output": 11233,
+        "cache_write": 0
+      },
+      "reviewer": {
+        "calls": 3,
+        "uncached_input": 234474,
+        "cache_read": 4791040,
+        "output": 16640,
+        "cache_write": 0
+      },
+      "formalizer": {
+        "calls": 4,
+        "uncached_input": 114526,
+        "cache_read": 16512,
+        "output": 15580,
+        "cache_write": 0
+      },
+      "interrupted_management": {
+        "calls": 0,
+        "uncached_input": 0,
+        "cache_read": 0,
+        "output": 0,
+        "cache_write": 0
+      }
+    },
+    "non_executor_cost": 1003875
+  },
+  "first_delivery_score": {
+    "passed": 438,
+    "total": 535
+  }
+}

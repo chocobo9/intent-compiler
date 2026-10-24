@@ -1,0 +1,7 @@
+Chain block real run R1-R3 (local dev session, 2026-10-24), delta scope by default.
+Code: branch ccr-992739b3-u5bcay @ 6fc2aea (chain block b8059ee), worktree D:\huawei\intent_compiler\project-exp2-dev.
+Config: copied from rep1h; run id, ports (46005/46006), cache keys, rounds 3, measure.gold_task changed.
+Closed-loop acceptance (NOTES 23.3, 23.5): package objects by rule; G42/G51-type flips "text changed", no revert;
+conservation each round; d(i) review request chars and formalizer+checks+attribution uncached tokens below rep1h per
+round; d(ii) reviewer tokens reported; report has the revision recall, relation recall and flip classification lines.
+Started 2026-10-24 on 6fc2aea, --to 3.

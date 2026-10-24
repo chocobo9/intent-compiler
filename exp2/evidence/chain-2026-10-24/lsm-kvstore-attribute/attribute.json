@@ -1,0 +1,738 @@
+{
+ "task": "lsm-kvstore-engine",
+ "rounds": [
+  {
+   "round": 1,
+   "status": "accepted",
+   "calls": 1,
+   "modifications": [],
+   "edges": [
+    {
+     "from": "R1.S0.P1.s1",
+     "to": "O26",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S0.P1.s1",
+     "to": "O15",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S0.P1.s2",
+     "to": "O2",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S3.P1.s2",
+     "to": "O11",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S3.P1.s3",
+     "to": "O11",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S4.P1.s1",
+     "to": "O15",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S4.P1.s2",
+     "to": "O26",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S4.P2.s7",
+     "to": "O15",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S4.P3",
+     "to": "O28",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S8.P1",
+     "to": "O28",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S8.P3",
+     "to": "O33",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R1.S9.P4",
+     "to": "O29",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R1.S10.P2",
+     "to": "O31",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R1.S10.P2",
+     "to": "O32",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R1.S12.P1",
+     "to": "O29",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S12.P1",
+     "to": "O30",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S12.P2",
+     "to": "O29",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S12.P2",
+     "to": "O30",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S12.P2",
+     "to": "O26",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S13.P1",
+     "to": "O33",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S13.P1",
+     "to": "O27",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S14.P1",
+     "to": "O30",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S14.P1",
+     "to": "O28",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S15.P1",
+     "to": "O33",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S15.P1",
+     "to": "O26",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R1.S15.P2",
+     "to": "O36",
+     "kind": "refers_to"
+    }
+   ],
+   "revision": {
+    "gold": 0,
+    "located": 0,
+    "hit": 0,
+    "missed": [],
+    "unlocated": 0,
+    "precision": {
+     "recorded": 0,
+     "on_gold": 0
+    }
+   },
+   "relation": {
+    "gold": 0,
+    "located": 0,
+    "hit": 0,
+    "missed": [],
+    "unlocated": 0,
+    "by_edge": 0,
+    "by_object": 0,
+    "by_kind": {}
+   }
+  },
+  {
+   "round": 2,
+   "status": "accepted",
+   "calls": 1,
+   "modifications": [
+    {
+     "object": "O28",
+     "kind": "revise",
+     "parts": [
+      "R1.S9.P2"
+     ],
+     "by": [
+      "R2.S0.P5.s2"
+     ]
+    },
+    {
+     "object": "O28",
+     "kind": "revise",
+     "parts": [
+      "R1.S9.P3"
+     ],
+     "by": [
+      "R2.S0.P5.s3"
+     ]
+    },
+    {
+     "object": "O30",
+     "kind": "revise",
+     "parts": [
+      "R1.S11.P2"
+     ],
+     "by": [
+      "R2.S0.P5.s4"
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "from": "R2.S0.P1",
+     "to": "O4",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R2.S0.P1",
+     "to": "O7",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R2.S0.P1",
+     "to": "O33",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R2.S0.P3",
+     "to": "O3",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R2.S0.P3",
+     "to": "O16",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R2.S0.P3",
+     "to": "O23",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R2.S0.P5.s1",
+     "to": "O28",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R2.S0.P5.s1",
+     "to": "O30",
+     "kind": "applies_to"
+    }
+   ],
+   "revision": {
+    "gold": 0,
+    "located": 0,
+    "hit": 0,
+    "missed": [],
+    "unlocated": 0,
+    "precision": {
+     "recorded": 3,
+     "on_gold": 0
+    }
+   },
+   "relation": {
+    "gold": 2,
+    "located": 2,
+    "hit": 1,
+    "missed": [
+     "R2.S0.P1.s3 → R1.S8.P3.s1"
+    ],
+    "unlocated": 0,
+    "by_edge": 1,
+    "by_object": 0,
+    "by_kind": {
+     "same_rules": {
+      "gold": 1,
+      "hit": 0
+     },
+     "extends": {
+      "gold": 1,
+      "hit": 1
+     }
+    }
+   }
+  },
+  {
+   "round": 3,
+   "status": "accepted",
+   "calls": 3,
+   "modifications": [
+    {
+     "object": "O30",
+     "kind": "partial",
+     "parts": [
+      "R1.S11.P3"
+     ],
+     "by": [
+      "R3.S0.P3.s3"
+     ]
+    },
+    {
+     "object": "O30",
+     "kind": "partial",
+     "parts": [
+      "R2.S0.P5.s4"
+     ],
+     "by": [
+      "R3.S0.P3.s1"
+     ]
+    },
+    {
+     "object": "O30",
+     "kind": "partial",
+     "parts": [
+      "R2.S0.P5.s4"
+     ],
+     "by": [
+      "R3.S0.P3.s2"
+     ]
+    },
+    {
+     "object": "O31",
+     "kind": "partial",
+     "parts": [
+      "R1.S12.P1"
+     ],
+     "by": [
+      "R3.S0.P3.s4"
+     ]
+    },
+    {
+     "object": "O33",
+     "kind": "partial",
+     "parts": [
+      "R1.S13.P1.s3"
+     ],
+     "by": [
+      "R3.S0.P2.s1",
+      "R3.S0.P2.s2",
+      "R3.S0.P2.s3"
+     ]
+    }
+   ],
+   "edges": [],
+   "revision": {
+    "gold": 0,
+    "located": 0,
+    "hit": 0,
+    "missed": [],
+    "unlocated": 0,
+    "precision": {
+     "recorded": 5,
+     "on_gold": 0
+    }
+   },
+   "relation": {
+    "gold": 0,
+    "located": 0,
+    "hit": 0,
+    "missed": [],
+    "unlocated": 0,
+    "by_edge": 0,
+    "by_object": 0,
+    "by_kind": {}
+   }
+  },
+  {
+   "round": 4,
+   "status": "accepted",
+   "calls": 2,
+   "modifications": [],
+   "edges": [
+    {
+     "from": "R4.S0.P3",
+     "to": "O29",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R4.S0.P3",
+     "to": "O30",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R4.S0.P2.s1",
+     "to": "O28",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s3",
+     "to": "O4",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s3",
+     "to": "O7",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s4",
+     "to": "O4",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s4",
+     "to": "O7",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s4",
+     "to": "O12",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s4",
+     "to": "O13",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s4",
+     "to": "O19",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s4",
+     "to": "O20",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s5",
+     "to": "O15",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R4.S0.P2.s5",
+     "to": "O23",
+     "kind": "applies_to"
+    }
+   ],
+   "revision": {
+    "gold": 0,
+    "located": 0,
+    "hit": 0,
+    "missed": [],
+    "unlocated": 0,
+    "precision": {
+     "recorded": 0,
+     "on_gold": 0
+    }
+   },
+   "relation": {
+    "gold": 1,
+    "located": 1,
+    "hit": 1,
+    "missed": [],
+    "unlocated": 0,
+    "by_edge": 1,
+    "by_object": 0,
+    "by_kind": {
+     "extends": {
+      "gold": 1,
+      "hit": 1
+     }
+    }
+   }
+  },
+  {
+   "round": 5,
+   "status": "accepted",
+   "calls": 3,
+   "modifications": [
+    {
+     "object": "O7",
+     "kind": "partial",
+     "parts": [
+      "R1.S2.P1.s5.c1"
+     ],
+     "by": [
+      "R5.S0.P3.s1"
+     ]
+    },
+    {
+     "object": "O13",
+     "kind": "partial",
+     "parts": [
+      "R1.S3.P1.s3"
+     ],
+     "by": [
+      "R5.S0.P3.s3.c2"
+     ]
+    },
+    {
+     "object": "O20",
+     "kind": "partial",
+     "parts": [
+      "R1.S4.P2.s6"
+     ],
+     "by": [
+      "R5.S0.P3.s3.c3"
+     ]
+    },
+    {
+     "object": "O30",
+     "kind": "partial",
+     "parts": [
+      "R3.S0.P3.s1"
+     ],
+     "by": [
+      "R5.S0.P2"
+     ]
+    },
+    {
+     "object": "O30",
+     "kind": "partial",
+     "parts": [
+      "R3.S0.P3.s2.c3"
+     ],
+     "by": [
+      "R5.S0.P2.s8"
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "from": "R5.S0.P3.s3.c2",
+     "to": "O7",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R5.S0.P3.s3.c2",
+     "to": "O20",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R5.S0.P3.s3.c3",
+     "to": "O7",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R5.S0.P3.s3.c3",
+     "to": "O13",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R5.S0.P3.s4",
+     "to": "O13",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R5.S0.P3.s4",
+     "to": "O20",
+     "kind": "applies_to"
+    }
+   ],
+   "revision": {
+    "gold": 2,
+    "located": 2,
+    "hit": 2,
+    "missed": [],
+    "unlocated": 0,
+    "precision": {
+     "recorded": 5,
+     "on_gold": 5
+    }
+   },
+   "relation": {
+    "gold": 1,
+    "located": 1,
+    "hit": 1,
+    "missed": [],
+    "unlocated": 0,
+    "by_edge": 0,
+    "by_object": 1,
+    "by_kind": {
+     "depends_on": {
+      "gold": 1,
+      "hit": 1
+     }
+    }
+   }
+  },
+  {
+   "round": 6,
+   "status": "accepted",
+   "calls": 1,
+   "modifications": [],
+   "edges": [
+    {
+     "from": "R6.S0.P1",
+     "to": "O11",
+     "kind": "applies_to"
+    },
+    {
+     "from": "R6.S0.P3",
+     "to": "O41",
+     "kind": "refers_to"
+    },
+    {
+     "from": "R6.S0.P3",
+     "to": "O10",
+     "kind": "applies_to"
+    }
+   ],
+   "revision": {
+    "gold": 0,
+    "located": 0,
+    "hit": 0,
+    "missed": [],
+    "unlocated": 0,
+    "precision": {
+     "recorded": 0,
+     "on_gold": 0
+    }
+   },
+   "relation": {
+    "gold": 2,
+    "located": 2,
+    "hit": 1,
+    "missed": [
+     "R6.S0.P3.s5 → R1.S3.P1.s1"
+    ],
+    "unlocated": 0,
+    "by_edge": 1,
+    "by_object": 0,
+    "by_kind": {
+     "same_rules": {
+      "gold": 1,
+      "hit": 1
+     },
+     "depends_on": {
+      "gold": 1,
+      "hit": 0
+     }
+    }
+   }
+  },
+  {
+   "round": 7,
+   "status": "accepted",
+   "calls": 2,
+   "modifications": [
+    {
+     "object": "O28",
+     "kind": "partial",
+     "parts": [
+      "R1.S9.P4.s3"
+     ],
+     "by": [
+      "R7.S0.P2.s4"
+     ]
+    },
+    {
+     "object": "O28",
+     "kind": "partial",
+     "parts": [
+      "R1.S9.P4.s1",
+      "R1.S9.P4.s2"
+     ],
+     "by": [
+      "R7.S0.P2.s5"
+     ]
+    },
+    {
+     "object": "O43",
+     "kind": "partial",
+     "parts": [
+      "R6.S0.P2.s3",
+      "R6.S0.P2.s4"
+     ],
+     "by": [
+      "R7.S0.P3"
+     ]
+    }
+   ],
+   "edges": [
+    {
+     "from": "R7.S0.P2.s4",
+     "to": "O29",
+     "kind": "applies_to"
+    }
+   ],
+   "revision": {
+    "gold": 2,
+    "located": 2,
+    "hit": 2,
+    "missed": [],
+    "unlocated": 0,
+    "precision": {
+     "recorded": 3,
+     "on_gold": 2
+    }
+   },
+   "relation": {
+    "gold": 1,
+    "located": 1,
+    "hit": 1,
+    "missed": [],
+    "unlocated": 0,
+    "by_edge": 0,
+    "by_object": 1,
+    "by_kind": {
+     "same_rules": {
+      "gold": 1,
+      "hit": 1
+     }
+    }
+   }
+  },
+  {
+   "round": 8,
+   "status": "accepted",
+   "calls": 1,
+   "modifications": [],
+   "edges": [
+    {
+     "from": "R8.S0.P1",
+     "to": "O29",
+     "kind": "refers_to"
+    }
+   ],
+   "revision": {
+    "gold": 0,
+    "located": 0,
+    "hit": 0,
+    "missed": [],
+    "unlocated": 0,
+    "precision": {
+     "recorded": 0,
+     "on_gold": 0
+    }
+   },
+   "relation": {
+    "gold": 1,
+    "located": 1,
+    "hit": 0,
+    "missed": [
+     "R8.S0.P2.s4 → R1.S3.P1.s4.c2"
+    ],
+    "unlocated": 0,
+    "by_edge": 0,
+    "by_object": 0,
+    "by_kind": {
+     "depends_on": {
+      "gold": 1,
+      "hit": 0
+     }
+    }
+   }
+  }
+ ]
+}
