@@ -2255,3 +2255,8 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - rep1o R3：
   - drift–profile 单元 U3.c2（O28 drift command + O17 profile command）在包的跨命令交付里，交付 2/2；
   - 在审查名单的 Changes across commands 一节："U3.c2 same as profile: drift command, profile command"。
+
+**批 5 预注册**（下一次真实运行，设计会话 2026-10-26）：
+- 整周期回退次数 = 0；
+- 因回退丢失的已修条目 = 0；
+- 报告回归的一周期修回率（fixed_next / raised），以及持续回归的裁决结果（superseded / upheld / unasked）。
