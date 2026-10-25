@@ -8,6 +8,7 @@ import { pairKey, type Finding } from "./judge.js"
 import type { SweepRecord } from "./execution.js"
 import type { LedgerEntry, LedgerSummary } from "./ledger.js"
 import type { AcceptRoundRecord } from "./execution.js"
+import { scopeDeclarations } from "./units.js"
 import { relationRecall, renderRecall, revisionRecall as goldRevisionRecall, type GoldSets, type RecallLine } from "./gold.js"
 import type { PackageOverflow } from "./view.js"
 
@@ -32,6 +33,11 @@ export interface RoundReport {
   zones: { task: number; protect: number; status: number; source_blocks: number; anchors: number; source_scope?: "delta" | "all"; source_chars?: number; source_chars_all?: number; source_blocks_all?: number; package?: { segments: { object: string; paragraph: string; why: string; via: string[] }[]; heads: string[]; edges: { to_block: number; to_object: number }; sizes: Record<string, number>; guards: number; overflow: PackageOverflow | null; utilization?: PackageUse } }
   /** Attribution against the gold sets (the chain block, effect 4), when the run names its task. */
   gold?: { task: string; revision: RecallLine; relation: RecallLine }
+  /**
+   * Batch 4 E2: sentences of this round that declare earlier behaviour unchanged ("not mentioned above … continue",
+   * "remains unchanged"): every guard is in force this round. A record only: guard runs and flips are as ever.
+   */
+  scope_declarations?: { block: string; text: string }[]
   /**
    * How well attribution records revisions (§12j.7 item 12): paragraphs of this round's text that read like a revision
    * (instead of, now, previously, no longer, …), those of them that are the new text of a recorded modification, and the
@@ -275,6 +281,7 @@ function reportOf(i: ReportInput): RoundReport {
     stages: { understand: stageCost(i.understand), acceptance: stageCost(i.acceptance), coding: codingCost(e, i.executorIsStub) },
     interrupted: { attempts: i.interrupted.attempts, stages: { understand: stageCost(i.interrupted.understand), acceptance: stageCost(i.interrupted.acceptance), coding: i.interrupted.coding } },
     scope: i.registry.roundScope(i.round).map(c => c.object),
+    ...(scopeDeclarations(i.registry, i.round).length ? { scope_declarations: scopeDeclarations(i.registry, i.round) } : {}),
     zones: { task: i.workorder.task.length, protect: i.workorder.protect.length, status: i.workorder.status.length, source_blocks: i.workorder.package ? i.workorder.scope?.blocks ?? 0 : i.workorder.source.reduce((n, g) => n + g.blocks.length, 0), anchors: i.workorder.anchors.reduce((n, a) => n + a.anchors.length, 0), ...(i.workorder.scope ? { source_scope: i.workorder.scope.kind, source_chars: i.workorder.scope.source_chars, source_chars_all: i.workorder.scope.source_chars_all, source_blocks_all: i.workorder.scope.blocks_all, ...(i.workorder.scope.segments ? { package: { segments: i.workorder.scope.segments, heads: i.workorder.scope.heads ?? [], edges: i.workorder.scope.edges ?? { to_block: 0, to_object: 0 }, sizes: i.workorder.scope.sizes ?? {}, guards: i.workorder.scope.guards ?? 0, overflow: i.workorder.scope.overflow ?? null, utilization: packageUse(i.registry, i.workorder.scope.segments, (e.review_items ?? []).filter(x => x.round === i.round)) } } : {}) } : {}) },
     revisions: revisionRecall(i.registry, i.round),
     ...(i.gold ? { gold: { task: i.gold.task, revision: goldRevisionRecall(i.registry, i.round, i.gold), relation: relationRecall(i.registry, i.round, i.gold) } } : {}),
@@ -412,6 +419,7 @@ export function renderReport(r: RoundReport): string {
     ...(v?.repairs ? [renderRepairs(v.repairs)] : []),
     ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters${r.zones.package ? ` in ${r.zones.package.segments.length} paragraphs of ${new Set(r.zones.package.segments.map(x => x.object)).size} objects (${segmentCounts(r.zones.package)}), ${r.zones.package.heads.length} object heads; this round's edges to a block ${r.zones.package.edges.to_block}, to an object ${r.zones.package.edges.to_object}; ${r.zones.package.guards} comparisons (guards on revised units)${r.zones.package.overflow ? `; over the budget of ${r.zones.package.overflow.limit} (${r.zones.package.overflow.chars}): dropped ${r.zones.package.overflow.dropped.length} paragraphs${r.zones.package.overflow.still_over ? ", still over" : ""}` : ""}` : ` in ${r.zones.source_blocks} blocks`} (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all} blocks)${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions${v.leads.dropped ? `, ${v.leads.dropped} leads past the cap of 20` : ""}` : ""}.`] : []),
     ...(r.zones.package?.utilization ? [renderUse(r.zones.package.utilization)] : []),
+    ...(r.scope_declarations?.length ? [`- Scope declarations: ${r.scope_declarations.length} (every guard in force this round; recorded only): ${r.scope_declarations.map(d => `${d.block} ${JSON.stringify(d.text)}`).join("; ")}.`] : []),
     r.gold ? renderRecall(`Revision recall (gold set ${r.gold.task})`, r.gold.revision) : "- Revision recall: no gold set for this task.",
     r.gold ? renderRecall(`Relation recall (gold set ${r.gold.task})`, r.gold.relation) : "- Relation recall: no gold set for this task.",
     "",

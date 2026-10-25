@@ -59,6 +59,15 @@ describe("batch 4 E1a: change units and revision provenance, by code", () => {
     assert.deepEqual(objectsNamed(reg, "ingest"), ["O2"])
   })
 
+  it("E2: dpipe R12 declares earlier behaviour unchanged once; R5 does not", () => {
+    const reg = new Registry()
+    for (const r of [5, 12]) reg.addSource(splitRound(r, roundText(r)))
+    const d = scopeDeclarations(reg, 12)
+    assert.equal(d.length, 1)
+    assert.match(d[0].text, /remain unchanged/u)
+    assert.deepEqual(scopeDeclarations(reg, 5), [])
+  })
+
   it("scope declarations and a Changes to section are found in text, before any attribution", () => {
     const reg = new Registry()
     reg.addSource(splitRound(1, "## Base\n\nThe tool reads input.\n"))
