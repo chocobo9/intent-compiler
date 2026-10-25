@@ -1,0 +1,18 @@
+{
+  "_note": "Commits made before the [mech]/[behav] subject prefix (rule 2, 2026-10-26), by the independent review's 1(b): mech = its effect is fixed by replay (reports, renderings, fixes of defects); behav = it changes what a model receives. Later commits carry the prefix in their subject.",
+  "3e618fd": ["mech", "batch 2"],
+  "9191835": ["mech", "batch 2"],
+  "3cb48a6": ["mech", "batch 2"],
+  "2eed6c1": ["mech", "batch 3"],
+  "2acfdba": ["mech", "batch 3"],
+  "aac0f01": ["behav", "batch 3"],
+  "5453cac": ["behav", "batch 4"],
+  "4b76d26": ["behav", "batch 4"],
+  "40d9ddd": ["mech", "batch 4"],
+  "dea6e98": ["behav", "batch 4"],
+  "b60a695": ["behav", "batch 4"],
+  "ccfabcd": ["behav", "batch 4"],
+  "23ef517": ["mech", "batch 4"],
+  "4fa0cb6": ["behav", "batch 5"],
+  "8f13def": ["behav", "batch 5"]
+}

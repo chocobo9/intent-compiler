@@ -1,3 +1,4 @@
+<!-- Superseded 2026-10-26 by exp2/evidence/prereg/prereg.mjs (one script, one output: <run dir>/prereg.md). Kept for the record; its numbers are not to be quoted. -->
 # rep1o: batch 4's pre-registered lines
 
 1. R1 cases failing at the end of R2: 16 (line ≤ 1; rep1j 1). By ref: transform.derive 2, transform.window 3, transform.pivot 1, error-handling 1, transform.fill 4, transform.rename-drop 5.
