@@ -951,5 +951,27 @@
   ],
   "both_pass": [],
   "not_run": []
+ },
+ {
+  "run": "rep1j3",
+  "round": 3,
+  "cycle": "C3.2",
+  "kept": "C3.1",
+  "guards": [
+   "G49"
+  ],
+  "sent": 6,
+  "checked": 6,
+  "lost": [
+   "V3.1.1",
+   "V3.1.2",
+   "V3.1.3",
+   "V3.1.4",
+   "V3.1.5",
+   "V3.1.6"
+  ],
+  "both_fail": [],
+  "both_pass": [],
+  "not_run": []
  }
 ]

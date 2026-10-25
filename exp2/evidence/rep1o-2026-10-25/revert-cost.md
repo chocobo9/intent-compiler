@@ -25,5 +25,6 @@
 | rep1o | R6 C6.2 (kept C6.1) | G130 | 38 | 37 | 6 (G73, G75, V6.1.1, V6.1.2, V6.1.4, V6.1.5) | 31 | 0 | 0 |
 | rep1o | R6 C6.3 (kept C6.1) | G105, G120, G121, G130 | 42 | 40 | 9 (G73, G75, V6.1.1, V6.1.2, V6.1.4, V6.1.5, V6.2.1, V6.2.2, V6.2.4) | 31 | 0 | 0 |
 | rep1o | R6 C6.4 (kept C6.1) | G105, G109, G119, G120, G121, G130 | 10 | 9 | 8 (V6.2.1, V6.2.2, V6.2.4, V6.3.1, V6.3.2, V6.3.4, V6.3.5, V6.3.6) | 1 | 0 | 0 |
+| rep1j3 | R3 C3.2 (kept C3.1) | G49 | 6 | 6 | 6 (V3.1.1, V3.1.2, V3.1.3, V3.1.4, V3.1.5, V3.1.6) | 0 | 0 | 0 |
 
-Reverted repair cycles: 23, in 10 rounds. Items sent in them: 565 (539 with a check). Fixed by output on the reverted build and failing on the kept one: 216.
+Reverted repair cycles: 24, in 11 rounds. Items sent in them: 571 (545 with a check). Fixed by output on the reverted build and failing on the kept one: 222.

@@ -15,11 +15,11 @@ const [OUT, RUNS] = process.argv.slice(2)
 const costRows = JSON.parse(readFileSync(join(HERE, "..", "rep1o-2026-10-25", "revert-cost.json"), "utf8"))
 const ctrlDirs = readdirSync(RUNS).filter(d => /^exp2-review15-luna56-low-revmed-rep\d-dpipe-20261022$/u.test(d)).sort()
 const ctrlEnd = (d, r) => { const dir = join(RUNS, d, "official", `round-${String(r).padStart(2, "0")}`); const sub = existsSync(dir) ? readdirSync(dir) : []; return sub.length === 1 ? readCases(join(dir, sub[0], "verifier.log")) : null }
-const ics = readdirSync(RUNS).filter(d => /^exp2-icacc-r6-luna56-low-rep1[jknopq]-2026102\d$/u.test(d)).sort()
+const ics = readdirSync(RUNS).filter(d => /^exp2-icacc-r6-luna56-low-rep1(?:[jknopq]|j3)-2026102\d$/u.test(d)).sort()
 const KINDS = ["i", "ii", "iii", "iv", "other"]
 const summary = ["# IC against the control group, case by case at each round's end", "", `Control: ${ctrlDirs.join(", ")}. A: IC fails, both control runs pass. B: both control runs fail, IC passes. C: all three fail.`, "", "| run | round | A | B | C | A failing at first delivery: i / ii / iii / iv / other | A passing at first delivery |", "|---|---|---|---|---|---|---|"]
 for (const d of ics) {
-  const dir = join(RUNS, d), run = d.match(/rep1[a-z]/u)[0]
+  const dir = join(RUNS, d), run = d.match(/rep1[a-z]\d?/u)[0]
   const s = JSON.parse(readFileSync(join(dir, "state", "exp2-state.json"), "utf8"))
   const scores = readFileSync(join(dir, "checkpoints", "scores.jsonl"), "utf8").trim().split("\n").map(l => JSON.parse(l))
   const md = [`# ${run}: IC against the control group, case by case at each round's end`, "", `Control: ${ctrlDirs.join(", ")}.`, ""]
