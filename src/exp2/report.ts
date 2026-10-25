@@ -8,7 +8,7 @@ import { pairKey, type Finding } from "./judge.js"
 import type { SweepRecord } from "./execution.js"
 import type { LedgerEntry, LedgerSummary } from "./ledger.js"
 import type { AcceptRoundRecord } from "./execution.js"
-import { scopeDeclarations } from "./units.js"
+import { provenance, scopeDeclarations } from "./units.js"
 import { relationRecall, renderRecall, revisionRecall as goldRevisionRecall, type GoldSets, type RecallLine } from "./gold.js"
 import type { PackageOverflow, PackageUnits } from "./view.js"
 
@@ -38,6 +38,11 @@ export interface RoundReport {
    * "remains unchanged"): every guard is in force this round. A record only: guard runs and flips are as ever.
    */
   scope_declarations?: { block: string; text: string }[]
+  /**
+   * Batch 4 E5: this round's change units by source (cue, model, revision; guard: the checks of this round, one each),
+   * global units among them, and the provenance of this round's revisions (cue, with the cue's words, or inferred).
+   */
+  change_units?: { by_source: Record<string, number>; global: number; provenance: { cue: number; inferred: number } }
   /**
    * How well attribution records revisions (§12j.7 item 12): paragraphs of this round's text that read like a revision
    * (instead of, now, previously, no longer, …), those of them that are the new text of a recorded modification, and the
@@ -165,6 +170,8 @@ export interface ReviewReport {
   request_chars?: number
   /** Batch 3a: the untouched messages, the executor's answers, how their items came out, the questions to the reviewer. */
   repairs?: AcceptRoundRecord["repairs"]
+  /** Batch 4 E4: the review's lists, what the reviews ran, the coverage gaps and the items on listed commands. */
+  lists?: AcceptRoundRecord["lists"]
 }
 
 export interface AcceptanceSummary {
@@ -282,6 +289,7 @@ function reportOf(i: ReportInput): RoundReport {
     interrupted: { attempts: i.interrupted.attempts, stages: { understand: stageCost(i.interrupted.understand), acceptance: stageCost(i.interrupted.acceptance), coding: i.interrupted.coding } },
     scope: i.registry.roundScope(i.round).map(c => c.object),
     ...(scopeDeclarations(i.registry, i.round).length ? { scope_declarations: scopeDeclarations(i.registry, i.round) } : {}),
+    change_units: changeUnitsOf(i.registry, i.round, i.checks.entered),
     zones: { task: i.workorder.task.length, protect: i.workorder.protect.length, status: i.workorder.status.length, source_blocks: i.workorder.package ? i.workorder.scope?.blocks ?? 0 : i.workorder.source.reduce((n, g) => n + g.blocks.length, 0), anchors: i.workorder.anchors.reduce((n, a) => n + a.anchors.length, 0), ...(i.workorder.scope ? { source_scope: i.workorder.scope.kind, source_chars: i.workorder.scope.source_chars, source_chars_all: i.workorder.scope.source_chars_all, source_blocks_all: i.workorder.scope.blocks_all, ...(i.workorder.scope.segments ? { package: { segments: i.workorder.scope.segments, ...(i.workorder.scope.units ? { units: i.workorder.scope.units } : {}), sizes: i.workorder.scope.sizes ?? {}, guards: i.workorder.scope.guards ?? 0, overflow: i.workorder.scope.overflow ?? null, utilization: packageUse(i.registry, i.workorder.scope.segments, (e.review_items ?? []).filter(x => x.round === i.round)) } } : {}) } : {}) },
     revisions: revisionRecall(i.registry, i.round),
     ...(i.gold ? { gold: { task: i.gold.task, revision: goldRevisionRecall(i.registry, i.round, i.gold), relation: relationRecall(i.registry, i.round, i.gold) } } : {}),
@@ -344,7 +352,28 @@ function reviewReport(r: NonNullable<ReportInput["review"]>): ReviewReport {
     cache: { reviewer: cacheShare(reviewer.tokens), formalizer: cacheShare(formalizer.tokens) },
     request_chars: r.review_calls.reduce((n, c) => n + (c.request_chars ?? 0), 0),
     ...(a.repairs ? { repairs: a.repairs } : {}),
+    ...(a.lists ? { lists: a.lists } : {}),
   }
+}
+
+/** This round's change units by source and its revisions by provenance (batch 4 E5). */
+export function changeUnitsOf(registry: Registry, round: number, checksThisRound: number): NonNullable<RoundReport["change_units"]> {
+  const units = registry.units(round).filter(u => u.round === round)
+  const by_source: Record<string, number> = { cue: 0, model: 0, revision: 0, guard: checksThisRound }
+  for (const u of units) by_source[u.source] = (by_source[u.source] ?? 0) + 1
+  const mods = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round)))
+  const prov = mods.map(m => provenance(registry, m).kind)
+  return { by_source, global: units.filter(u => u.all).length, provenance: { cue: prov.filter(k => k === "cue").length, inferred: prov.filter(k => k === "inferred").length } }
+}
+
+export function renderChangeUnits(c: NonNullable<RoundReport["change_units"]>): string {
+  return `- Change units: cue ${c.by_source.cue ?? 0}, model ${c.by_source.model ?? 0}, revision ${c.by_source.revision ?? 0}, guard ${c.by_source.guard ?? 0} (one a check written this round); global ${c.global}. Revisions by provenance: cue ${c.provenance.cue}, inferred ${c.provenance.inferred}.`
+}
+
+/** The review's lists (batch 4 E5): what was listed, the appendix, what the reviews ran, the gaps, the findings on listed commands. */
+export function renderLists(l: NonNullable<AcceptRoundRecord["lists"]>): string {
+  const g = l.global_coverage.map(x => `${x.id} ${x.flag ?? "no flag: undecided"}${x.flag ? ` on ${x.commands.length} command${x.commands.length === 1 ? "" : "s"}` : ""}`).join(", ")
+  return `- Review lists: open ${l.open.length}${l.open.length ? ` (${l.open.map(o => o.object).join(", ")})` : ""}, patrol ${l.patrol.length}${l.patrol.length ? ` (${l.patrol.join(", ")})` : ""}, across commands ${l.cross.length}, global ${l.global.length}${g ? ` (${g})` : ""}; appendix ${l.chars} characters${l.dropped_text.length ? `, left out ${l.dropped_text.join(", ")}` : ""}; the reviews ran ${l.ran.length} commands; coverage gaps ${l.gaps.length}${l.gaps.length ? ` (${l.gaps.join("; ")})` : ""}; findings on listed commands ${l.findings.length}${l.findings.length ? ` (${l.findings.join(", ")})` : ""}.`
 }
 
 /**
@@ -417,6 +446,8 @@ export function renderReport(r: RoundReport): string {
     ...(v ? [`- Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}; flips on changed text ${v.guards.flipped_changed_text.length}${ids(v.guards.flipped_changed_text)}, on unchanged text ${v.guards.flipped_unchanged.length}${ids(v.guards.flipped_unchanged)}; retired as superseded ${v.guards.retired.length}${ids(v.guards.retired.map(x => x.id))}; repairs reverted ${v.reverted}.`] : []),
     ...(v?.guards.flips?.length ? [renderFlips(v.guards.flips)] : []),
     ...(v?.repairs ? [renderRepairs(v.repairs)] : []),
+    ...(r.change_units ? [renderChangeUnits(r.change_units)] : []),
+    ...(v?.lists ? [renderLists(v.lists)] : []),
     ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters${r.zones.package ? ` in ${r.zones.package.segments.length} paragraphs of ${new Set(r.zones.package.segments.map(x => x.object)).size} objects (${segmentCounts(r.zones.package)}), ${r.zones.package.units ? `change units touched ${r.zones.package.units.touched}; across commands ${r.zones.package.units.cross.length}, delivered to ${r.zones.package.units.cross.reduce((n, u) => n + u.delivered.length, 0)}/${r.zones.package.units.cross.reduce((n, u) => n + u.objects.length, 0)} of their commands` : "no change units recorded"}; ${r.zones.package.guards} comparisons (guards on revised units)${r.zones.package.overflow ? `; over the budget of ${r.zones.package.overflow.limit} (${r.zones.package.overflow.chars}): dropped ${r.zones.package.overflow.dropped.length} paragraphs${r.zones.package.overflow.still_over ? ", still over" : ""}` : ""}` : ` in ${r.zones.source_blocks} blocks`} (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all} blocks)${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions${v.leads.dropped ? `, ${v.leads.dropped} leads past the cap of 20` : ""}` : ""}.`] : []),
     ...(r.zones.package?.utilization ? [renderUse(r.zones.package.utilization)] : []),
     ...(r.scope_declarations?.length ? [`- Scope declarations: ${r.scope_declarations.length} (every guard in force this round; recorded only): ${r.scope_declarations.map(d => `${d.block} ${JSON.stringify(d.text)}`).join("; ")}.`] : []),

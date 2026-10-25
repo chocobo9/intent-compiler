@@ -5,6 +5,7 @@ import { before, describe, it } from "node:test"
 import assert from "node:assert/strict"
 import type { ExecutionRecord } from "../../src/exp2/execution.js"
 import { checkFact, coverageGaps, exercised, globalCoverage, globalFlag, openList, patrolList, PATROL_TEXT_MAX, patrolText, reviewLists, type OpenFact } from "../../src/exp2/lists.js"
+import { changeUnitsOf, renderChangeUnits, renderLists } from "../../src/exp2/report.js"
 import { reviewAppendix } from "../../src/exp2/review.js"
 import { currentView } from "../../src/exp2/view.js"
 import { Exp2Store } from "../../src/exp2/store.js"
@@ -96,5 +97,19 @@ describe("batch 4 E4: the review's lists", () => {
     assert.match(text, /# Commands with open problems/u)
     assert.match(text, /V1\.1\.1: untouched since R1/u)
     assert.match(text, /# Global changes[\s\S]*\(use --audit\)/u)
+  })
+})
+
+describe("batch 4 E5: the report's lines on change units and the lists", () => {
+  const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-lists-e5-")), "listse5")
+  before(async () => { for (const r of [1, 2, 3, 4, 5]) await store.ingestRound(r, roundText(r), stubTransport()) })
+
+  it("R5: units by source and revisions by provenance; the lists' line names gaps, global coverage and findings", () => {
+    const c = changeUnitsOf(store.registry(), 5, 3)
+    assert.ok(c.by_source.cue >= 1 && c.by_source.guard === 3 && c.by_source.revision >= 1, JSON.stringify(c))
+    assert.ok(c.provenance.cue >= 1, "R5's revisions say no longer / instead of")
+    assert.match(renderChangeUnits(c), /^- Change units: cue \d+, model \d+, revision \d+, guard 3 \(one a check written this round\); global \d+\. Revisions by provenance: cue \d+, inferred \d+\.$/u)
+    const line = renderLists({ open: [{ object: "O3", reasons: ["V1.1.1: untouched since R1"] }], patrol: ["O7"], cross: [{ id: "U5.c1", objects: ["O1", "O2"] }], global: ["U6.c1"], chars: 4200, dropped_text: [], ran: ["O3", "O7"], gaps: ["U5.c1 x: not run on O2"], findings: ["V5.1.2"], global_coverage: [{ id: "U6.c1", flag: "--audit", commands: ["ingest"] }] })
+    assert.match(line, /open 1 \(O3\), patrol 1 \(O7\), across commands 1, global 1 \(U6\.c1 --audit on 1 command\); appendix 4200 characters; the reviews ran 2 commands; coverage gaps 1 \(U5\.c1 x: not run on O2\); findings on listed commands 1 \(V5\.1\.2\)/u)
   })
 })
