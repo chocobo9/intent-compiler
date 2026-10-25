@@ -432,7 +432,7 @@ describe("batch 3a: an untouched item goes in a message of its own; the executor
     assert.deepEqual(seen, [["C1.1", null, "send", "repair"], ["C1.2", "untouched", "send", "untouched"], ["C1.3", "untouched", "hold", null]])
     assert.match(record.cycles[2].items!.find(i => i.id === "V1.1.1")!.why!, /untouched after its resend in the untouched message: carried/u)
     assert.ok(!record.cycles.flatMap(c => c.items ?? []).some(i => /no progress/u.test(i.why ?? "")))
-    assert.deepEqual(record.accept!.repairs, { untouched_messages: 1, untouched_items: 1, answers: { done: 0, not_done: 1, disagree: 0, none: 0 }, after_untouched: { judged: 1, fixed: 0, touched: 0, untouched: 1 }, rulings: [] })
+    assert.deepEqual(record.accept!.repairs, { untouched_messages: 1, untouched_items: 1, answers: { done: 0, not_done: 1, disagree: 0, none: 0 }, after_untouched: { judged: 1, fixed: 0, touched: 0, untouched: 1 }, rulings: [], regressions: { raised: 0, fixed_next: 0, persisted: 0, adjudicated: { superseded: 0, upheld: 0, unasked: 0 } } })
     assert.match(renderRepairs(record.accept!.repairs!), /still untouched 1 \(100%; the line is 26%\)/u)
     assert.deepEqual(record.final!.map(f => f.id), ["V1.1.1"], "open at the end: carried into the next round")
   })

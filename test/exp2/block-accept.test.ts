@@ -153,7 +153,7 @@ describe("exp2 acceptance block §2: the premises code checks before an item is 
   })
 })
 
-describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed item becomes a guard, a repair that breaks a guard is reverted", () => {
+describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed item becomes a guard, a repair that breaks a guard is not reverted (batch 5 A)", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-acc-round-"))
   const store = new Exp2Store(join(dir, "store"), "accr")
   before(async () => { await store.ingestRound(1, roundText(1), stubTransport()) })
@@ -194,25 +194,55 @@ describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed ite
     assert.deepEqual([e.source, e.units, e.sent, e.end?.how], ["review", [FILTER_UNIT], ["C1.1"], "fixed"])
   })
 
-  it("the repair of the filter breaks the sort guard: the repair is reverted, the tree back where it was; the item it was for is sent once more (§12j.7 item 2)", async () => {
+  it("the repair of the filter breaks the sort guard: not reverted (batch 5 A); the filter's fix stays, the sort guard goes back as an item with its material and is fixed on the next cycle", async () => {
     const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }])
     const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
-    // The second program fixes the filter and breaks the sort; the third, sent the item again, fixes it alone.
-    const { record, executor, workdir } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true })), wd => write(wd, files())], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
-    const [c1, c2, c3] = record.cycles
+    // The second program fixes the filter and breaks the sort; the third, sent the regression, fixes the sort.
+    const { record, executor } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true })), wd => write(wd, files())], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
+    const [, c2, c3] = record.cycles
     assert.equal(c2.message, "repair")
-    assert.deepEqual(c2.reverted, { to: c1.commit, guards: ["G1"], resent: ["V1.1.1"] })
-    assert.equal(record.accept!.reverted, 1)
-    assert.ok(git(workdir, ["show", `${c2.reverted!.to}:filter.go`]).includes("keep != true"), "the tree went back to the state before the repair")
-    assert.deepEqual(c2.items!.filter(i => i.id === "V1.1.1").map(i => i.action), ["send"])
-    // The item is sent again, with word of the revert; the next repair fixes it, and it is a guard (no discarded end).
-    assert.match(executor.log.messages[2].text, /Keep rows where the column satisfies the condition[^]*reverted by the controller: it made G1 fail[^]*listed above again\./u)
+    assert.equal(c2.reverted, undefined, "no repair is reverted")
+    assert.equal(record.accept!.reverted, 0)
+    assert.deepEqual(record.accept!.guards.flipped_unchanged, ["G1"])
+    assert.deepEqual(c2.items!.filter(i => i.id === "V1.1.1").map(i => i.verdict), ["pass"], "the filter's fix is kept")
+    assert.deepEqual(c2.items!.filter(i => i.id === "G1").map(i => [i.verdict, i.action, i.channel]), [["not_landed", "send", "repair"]])
+    // The regression in the repair list, with its material; no word of a revert.
+    const m = executor.log.messages[2].text
+    assert.match(m, /A check that passed on the previous version of the program fails now \(G1\)\.\nRequirement: "- `sort`: Sort rows[^]*\nCommand: \["transform"[^]*input files: data\.csv = [^]*\nWhat the program did: exit 0; file_line out\.csv line \d: expected "[^"]+", got "[^"]+"/u)
+    assert.ok(!m.includes("reverted"), m.slice(0, 300))
     assert.equal(record.kept, c3.id)
-    assert.ok(!git(workdir, ["show", "HEAD:filter.go"]).includes("keep != true"), "the filter is fixed on the kept program")
+    assert.deepEqual(c3.items!.filter(i => i.id === "G1").map(i => i.verdict), ["pass"])
+    assert.deepEqual(record.accept!.repairs!.regressions, { raised: 1, fixed_next: 1, persisted: 0, adjudicated: { superseded: 0, upheld: 0, unasked: 0 } })
     const ledger = ledgerOf({ ...store.inspect(), executions: [record] }, store.registry())
     assert.deepEqual(ledger.find(x => x.id === "V1.1.1")!.end?.how, "fixed")
-    assert.ok(!ledger.some(x => x.end?.how === "discarded"))
     assert.ok(executor.log.messages[1].text.startsWith(REPAIR_INTRO))
+  })
+
+  it("a regression still failing on the cycle after its send goes to the reviewer with its check; SUPERSEDED retires the guard, nothing reverted", async () => {
+    const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }, { text: "SUPERSEDED G1: the requirements order the rows otherwise." }])
+    const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
+    const { record, executor } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true })), wd => write(wd, files({ reverseInTransform: true }))], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
+    const [, , c3] = record.cycles
+    assert.equal(record.accept!.reverted, 0)
+    assert.deepEqual(c3.items!.filter(i => i.id === "G1").map(i => [i.action, i.ruling]), [["hold", "regression_persisted"]])
+    const q = reviewer.requests[2].request
+    assert.match(q, /\nG1 \(this check passed before, a repair made it fail, and it still fails on the cycle after it was sent with its material[^]*\nCheck: command \["transform"/u)
+    assert.deepEqual(record.accept!.guards.retired.map(x => x.id), ["G1"])
+    assert.deepEqual(record.accept!.repairs!.rulings.map(r => [r.id, r.why, r.word]), [["G1", "regression_persisted", "superseded"]])
+    assert.deepEqual(record.accept!.repairs!.regressions, { raised: 1, fixed_next: 0, persisted: 1, adjudicated: { superseded: 1, upheld: 0, unasked: 0 } })
+    assert.equal(record.kept, c3.id, "the round keeps its last program")
+    assert.equal(executor.log.messages.length, 3, "nothing more sent after the ruling")
+    assert.deepEqual(record.final, [])
+  })
+
+  it("the reviewer upholds a persisting regression: held for the round and carried, with its material, into the next", async () => {
+    const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }, { text: "NO ISSUES" }])
+    const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
+    const { record } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true })), wd => write(wd, files({ reverseInTransform: true }))], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
+    assert.deepEqual(record.accept!.repairs!.rulings.map(r => [r.id, r.word]), [["G1", "upheld"]])
+    assert.deepEqual(record.accept!.repairs!.regressions!.adjudicated, { superseded: 0, upheld: 1, unasked: 0 })
+    assert.deepEqual(record.final!.map(f => [f.id, f.verdict]), [["G1", "not_landed"]], "carried into the next round")
+    assert.equal(record.accept!.reverted, 0)
   })
 
   it("a judgment turned from ok to wrong on the same output is a lead for the reviewer: never a guard, never a repair", async () => {

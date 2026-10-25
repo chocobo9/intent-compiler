@@ -79,7 +79,7 @@ export function reviewAppendix(f: ReviewFocus): string {
   }
   if (f.itemQuestions?.length) {
     out.push("", "# Items the repairs did not settle")
-    out.push("Each item below was sent for repair and its check still fails; the code cannot tell from the program alone whether the check or the program is wrong. Decide from the requirements as they stand now: if what the check expects is not what the requirements say, write a line `SUPERSEDED <item id>: <why>` in your reply; if it is, write nothing about it (it stays open). Where a guard is listed with an item, a repair of the item made the guard fail and was reverted: if what the guard expects is no longer required, write `SUPERSEDED <guard id>: <why>`.")
+    out.push("Each item below was sent for repair and its check still fails; the code cannot tell from the program alone whether the check or the program is wrong. Decide from the requirements as they stand now: if what the check expects is not what the requirements say, write a line `SUPERSEDED <item id>: <why>` in your reply; if it is, write nothing about it (it stays open). An item whose id starts with G is a check that passed before and fails since a repair: the same applies to it.")
     for (const q of f.itemQuestions) {
       out.push("", `${q.id} (${q.why}): ${clip(q.text, 600).replace(/\n/gu, " ")}`)
       out.push(`Check: command ${JSON.stringify(q.args)}; input files ${q.files.map(x => `${x.path} = ${JSON.stringify(clip(x.content, 300))}`).join(", ") || "none"}; expected ${q.expected}; got ${q.got}.`)

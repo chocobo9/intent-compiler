@@ -6,7 +6,10 @@
  * - untouched is not stopped: it goes in a message of its own, apart from the other items, once a round after its
  *   first send; still untouched after that resend, it is carried into the next round;
  * - touched in two cycles in a row without a fix is stopped and goes to the reviewer with its check;
- * - a second revert of the same item sends the guard that broke and the item to the reviewer together;
+ * - a second revert of the same item sends the guard that broke and the item to the reviewer together (records before
+ *   batch 5: since then no repair is reverted);
+ * - a guard that regressed (it passed, and fails on text this round left as it was) is an item with its material; still
+ *   failing on the cycle after it was sent, it goes to the reviewer (batch 5 A);
  * - the executor answers each item of the untouched message done / not done / disagree; the answer only routes:
  *   disagree, or done while the check still fails, goes to the reviewer.
  * An item with the reviewer is held until the reviewer answers; one the reviewer upheld is held for the rest of the
@@ -16,7 +19,7 @@
 export type Outcome = "fixed" | "touched" | "untouched" | "reverted"
 export type Answer = "done" | "not done" | "disagree"
 export type Channel = "repair" | "untouched"
-export type RulingWhy = "touched_twice" | "reverted_twice" | "disagree" | "done_failing"
+export type RulingWhy = "touched_twice" | "reverted_twice" | "disagree" | "done_failing" | "regression_persisted"
 
 export interface RepairPlan {
   action: "send" | "hold"
@@ -38,6 +41,8 @@ interface ItemState {
   touched: number
   reverts: number
   answer?: Answer
+  /** A regression this round (batch 5 A): one repair cycle with its material, then the reviewer. */
+  regression?: boolean
   /** With the reviewer (asked or to be asked), or upheld by the reviewer: held for the rest of the round. */
   ruling?: RulingWhy
   upheld?: boolean
@@ -53,6 +58,7 @@ const RULING_WHY: Record<RulingWhy, string> = {
   reverted_twice: "a repair of it was reverted twice: the guard that broke and the item go to the reviewer together",
   disagree: "the executor disagrees: to the reviewer with its check",
   done_failing: "the executor answered done and the check still fails: to the reviewer with its check",
+  regression_persisted: "a regression still failing on the cycle after it was sent with its material: the guard goes to the reviewer",
 }
 
 export class Repairs {
@@ -68,6 +74,15 @@ export class Repairs {
     if (!s) return null
     return pass ? "fixed" : digest === s.sentAt ? "untouched" : "touched"
   }
+
+  /**
+   * A guard regressed (batch 5 A): it is a new item from here, whatever it went through before this round; its first
+   * send is the repair list.
+   */
+  regressed(id: string, digest: string): void { this.items.set(id, { sentAt: digest, sends: 0, untouchedSends: 0, touched: 0, reverts: 0, regression: true }) }
+
+  /** A regression sent once and seen again: whether this sighting is its first after the send (then it is judged). */
+  regressionSent(id: string): boolean { const s = this.items.get(id); return !!s?.regression && s.sends === 1 && !s.ruling && !s.upheld }
 
   /** The executor's answer on an item of the untouched message; it routes the next sighting only. */
   answer(id: string, a: Answer): void { const s = this.items.get(id); if (s) s.answer = a }
@@ -87,6 +102,7 @@ export class Repairs {
     if (!s) return { action: "send", channel: "repair" }
     if (s.upheld) return { action: "hold", why: "the reviewer upheld it: carried into the next round" }
     if (s.ruling) return { action: "hold", why: RULING_WHY[s.ruling] }
+    if (s.regression) return s.sends >= 1 ? { action: "hold", why: RULING_WHY.regression_persisted, ruling: "regression_persisted" } : { action: "send", channel: "repair" }
     const outcome = digest === s.sentAt ? "untouched" : "touched"
     if (s.answer === "disagree") return { action: "hold", why: RULING_WHY.disagree, ruling: "disagree" }
     if (s.answer === "done") return { action: "hold", why: RULING_WHY.done_failing, ruling: "done_failing" }

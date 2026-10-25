@@ -2173,3 +2173,34 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 **验收**（`exp2/evidence/batch5-2026-10-26/render-regressions.mjs` → `render-regressions.md`；在 docker 里用保存的构建重跑，不调模型）：
 - rep1o 14 个被回退周期里打破的守卫共 36 个（周期 × 守卫），按回归条目渲染，四项俱全 36/36。
 - 文件里附了 C2.3 G27、C3.2 G41、C4.2 G40 三条原文。G41 一条里带有 "same type inference rules and numeric statistics as the `profile` command" 这句，以及 "expected 2, got 1"、"expected \"normalized shift = 4\", got \"new column of type string\""。
+
+### 36.2 A：修补周期不再回退
+
+**做法**：
+- accept.ts：整周期回退的分支删除，原来的 else 分支成为唯一路径。
+  - 修补周期里，守卫在原文未改时翻转，和首次交付时一样成为回归条目，用 `renderGuardItem` 渲染（四项材料），与本周期其他条目一起进下一条修补消息。
+  - 本周期已修好的条目照常成为守卫，本周期通过的库检查照常生成守卫。
+  - 轮末保留最后一个能构建的周期。仍失败的回归进 `final`，作为带入条目进下一轮。
+  - 构建失败照旧走 trial 修复。
+- repairs.ts：
+  - `regressed(id, digest)`：守卫回归时，给它一份新的条目状态，不论这一轮之前它经历过什么。它第一次总是进修补清单，不进 untouched 消息。
+  - 回归条目送出后的下一个周期仍失败（不论 touched 还是 untouched），就 hold，ruling 为 `regression_persisted`，走现有的审查员问题通道。
+  - 审查员 SUPERSEDED 该守卫：条目结束，守卫退役。审查员不提：维持，本轮 hold，带入下一轮。
+  - 修好后再次回归，算一次新的回归。
+- 问题通道里给审查员的问题措辞："this check passed before, a repair made it fail, and it still fails on the cycle after it was sent with its material: is the check superseded by the requirements, or is the program wrong?"。审查请求里原来解释"守卫随条目列出 = 回退"的那句，改为"id 以 G 开头的条目是之前通过、修补后失败的检查，同样处理"。
+- 计数：`accept.repairs.regressions` 记 raised / fixed_next / persisted / adjudicated{superseded, upheld, unasked}。报告的 Repairs 行末尾加 "regressions n (no repair reverted): …"。`accept.reverted` 字段保留（旧记录要读），新运行恒为 0。
+- 去掉的：回退说明（voidedNote）、`sentInRepair`、`revertGuards`、对已回退周期跳过 lead 的判断、"guard superseded"这个审查结论（它只在回退两次时出现）。类型里的 `reverted` / `reverted_twice` 保留，旧记录要读。
+
+**测试**：
+- 改写按旧规则写的回退测试：block-accept 1 条，batch-1 3 条，revert-ids-replay 1 条。
+  - 现在验证：不回退；修好的条目留下；回归作为带材料的条目送出、下一周期修回；守卫编号连续。
+  - rep1h R4 重放：C4.2 不再回退，在那里多生成 10 个守卫（G90–G99）。
+- 新增：block-accept 2 条，覆盖持续回归送审查员后的两种结论：SUPERSEDED 退役；维持，带入下一轮。repairs.test 3 条（路由规则）。batch5.test 1 条（报告行）。
+- 一个真 bug 在测试里抓到：新的回归状态 sends 为 0，原 `plan()` 按"输出没变"把它判成 untouched，送进了 untouched 消息。已改为回归第一次总进修补清单。
+- block-accept-fix 有一个期望值加了 regressions 字段。
+
+**离线验收**（`replay-a.mjs` → `replay-a.md`；以 `rep1o-2026-10-25/revert-cost.json` 为基础，rep1o 的消息在 docker 里用保存的构建重跑后渲染，不调模型）：
+- 记录里 23 个被回退的周期，按新规则逐条判：每轮第一个被回退的周期（共 10 个）保留；其余 13 个是从回退后的树上开出来的，新规则下不存在。
+- 保留的 10 个周期上，在该构建上已修好、在回退目标上仍失败的条目共 80 个，全部留下。131 个"修好又丢掉"里，另外 51 个出在那 13 个不存在的周期上，要真实运行才知道。
+- rep1o 6 轮各自第一个被回退周期之后的下一条修补消息已渲染：回归 16 个，四项俱全 16/16；仍失败的条目 1、16、26、26、34、31 个照常再发；在保留构建上已修好的条目没有一个出现在消息里。
+- 离线做不到的：新规则下，那个被保留的周期上本应跑一次审查，它会带来新条目，这次重放里没有；执行方拿到材料后修没修回、持续回归有多少，也只能等真实运行。

@@ -92,7 +92,7 @@ function noRevisionRecorded(): AttributionTransport {
   }
 }
 
-describe("batch 1, item 11: a flip is classified before any revert; only a regression on unchanged text reverts", () => {
+describe("batch 1, item 11: a flip is classified first; a regression on unchanged text is an item with its material, never a revert (batch 5 A)", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-b1-flip-"))
   const recorded = new Exp2Store(join(dir, "recorded"), "b1r")
   const unrecorded = new Exp2Store(join(dir, "unrecorded"), "b1u")
@@ -122,7 +122,7 @@ describe("batch 1, item 11: a flip is classified before any revert; only a regre
     })
   }
 
-  it("a repair that breaks the sort (unchanged text, a stated value): reverted; the filter item it was sent for goes out once more, with word of the revert", async () => {
+  it("a repair that breaks the sort (unchanged text, a stated value): not reverted; the filter's fix stays; the sort goes out as an item with its material and the next program fixes it", async () => {
     const sort = recorded.registry().coverOf(SORT_UNIT)!.owner
     const reviewer = workingReviewer(join(dir, "rb-revert"))
     const { record, executor } = await round3(dir, recorded, [
@@ -131,21 +131,20 @@ describe("batch 1, item 11: a flip is classified before any revert; only a regre
       wd => write(wd, program({ stddev: "sample" })),
     ], { guards: [sortGuard(sort)], reviewer })
     const a = record.accept!
-    assert.equal(a.reverted, 1)
-    const reverted = record.cycles.find(c => c.reverted)!
-    assert.deepEqual(reverted.reverted!.guards, ["G1"])
-    assert.ok(reverted.reverted!.resent!.some(id => id.startsWith("V3.")), JSON.stringify(reverted.reverted))
-    // The message after the revert carries the note and the same item again; the third program fixes it.
+    assert.equal(a.reverted, 0)
+    assert.ok(record.cycles.every(c => !c.reverted))
+    assert.deepEqual(a.guards.flipped_unchanged, ["G1"])
+    // The message after the regression carries it with its material; the filter item, fixed there, is not in it.
     const after = executor.log.messages[2].text
-    assert.match(after, /reverted by the controller: it made G1 fail/u)
-    assert.match(after, /What it was meant to fix is listed above again\./u)
-    assert.match(after, /Keep rows where the column satisfies the condition/u)
-    assert.ok(!record.cycles.flatMap(c => c.items ?? []).some(i => i.action === "discarded"), "nothing is discarded")
+    assert.match(after, /fails now \(G1\)\.\nRequirement: [^]*\nCommand: \["transform"[^]*\nWhat the program did: /u)
+    assert.ok(!/reverted by the controller/u.test(after))
+    assert.ok(!/Keep rows where the column satisfies the condition/u.test(after), "the filter's fix was kept: not sent again")
+    assert.deepEqual(a.repairs!.regressions, { raised: 1, fixed_next: 1, persisted: 0, adjudicated: { superseded: 0, upheld: 0, unasked: 0 } })
     const ledger = ledgerOf({ ...recorded.inspect(), executions: [record] }, recorded.registry())
     assert.ok(!ledger.some(e => e.end?.how === "discarded"))
   })
 
-  it("batch 1b (§6b rule 1): a guard whose value is worked out (derived) flips on unchanged text: a regression; the repair is reverted; the flip's sources are none", async () => {
+  it("batch 1b (§6b rule 1): a guard whose value is worked out (derived) flips on unchanged text: a regression (its sources none), an item, nothing reverted", async () => {
     const sort = recorded.registry().coverOf(SORT_UNIT)!.owner
     assert.ok(!recorded.registry().roundScope(3).some(c => c.object === sort), "R3 does not touch the sort")
     // The sort guard with its value worked out (derived), as the formalizer writes most values.
@@ -157,21 +156,20 @@ describe("batch 1, item 11: a flip is classified before any revert; only a regre
       wd => write(wd, program({ stddev: "sample" })),
     ], { guards: [g], reviewer })
     const a = record.accept!
-    assert.equal(a.reverted, 1)
-    assert.deepEqual(record.cycles.find(c => c.reverted)!.reverted!.guards, ["G1"])
+    assert.equal(a.reverted, 0)
     assert.deepEqual(a.guards.flips!.map(f => [f.id, f.cycle, f.how, f.sources, f.expected]), [["G1", "C3.2", "regression", [], ["derived", "verbatim"]]])
-    assert.equal(record.kept, "C3.3", "the third program fixes the filter and keeps the sort")
-    assert.match(executor.log.messages[2].text, /reverted by the controller: it made G1 fail/u)
+    assert.equal(record.kept, "C3.3", "the third program fixes the sort; the filter's fix of the second is kept")
+    assert.match(executor.log.messages[2].text, /fails now \(G1\)/u)
     assert.ok(!reviewer.requests.some(r => /# Leads to verify[^]*- G1: /u.test(r.request)), "no lead: it is the executor's")
   })
 })
 
-describe("a reverted cycle leaves no guard id (rep1h R4: 'guard G100 is out of sequence (next is G90)')", () => {
+describe("guard ids stay in sequence when a repair breaks a guard (rep1h R4: 'guard G100 is out of sequence (next is G90)'; since batch 5 nothing is reverted)", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-b1-revert-ids-"))
   const store = new Exp2Store(join(dir, "store"), "b1ri")
   before(async () => { for (const r of [1, 2, 3]) await store.ingestRound(r, roundText(r), stubTransport()) })
 
-  it("a library check passes first on a repair that is reverted: the guard it would be is not born there; the next cycle gives it the next id", async () => {
+  it("a library check passes first on a repair that breaks the sort guard: it is born there, the next id; the repair is kept", async () => {
     const reg = store.registry()
     const sort = reg.coverOf(SORT_UNIT)!.owner, filter = reg.coverOf(FILTER_UNIT)!.owner
     const filterCheck: CheckRecord = {
@@ -187,12 +185,10 @@ describe("a reverted cycle leaves no guard id (rep1h R4: 'guard G100 is out of s
       wd => write(wd, program({ stddev: "sample", sortText: true })),
       wd => write(wd, program({ stddev: "sample" })),
     ], { guards: [sortGuard(sort)], reviewer: workingReviewer(join(dir, "rb")), library: [filterCheck], record })
-    const reverted = r.cycles.find(c => c.reverted)!
-    assert.ok(reverted, "the sort-breaking repair is reverted")
-    assert.ok(reverted.runs.some(x => x.check === "K1" && x.outcome === "pass"), "K1 passed on the reverted program")
-    assert.deepEqual(reverted.guards!.born, [], "no guard born on it")
-    const after = r.cycles[r.cycles.indexOf(reverted) + 1]
-    assert.equal(after.guards!.born[0], "G2", "the next cycle's first guard takes the next id")
+    assert.ok(r.cycles.every(c => !c.reverted))
+    const breaking = r.cycles.find(c => c.guards?.flipped.includes("G1"))!
+    assert.ok(breaking.runs.some(x => x.check === "K1" && x.outcome === "pass"), "K1 passed on the program that broke the sort")
+    assert.equal(breaking.guards!.born[0], "G2", "born there, the next id")
     assert.deepEqual(r.accept!.guards.born, born)
   })
 })

@@ -20,7 +20,8 @@ import { StubExecutor, write } from "./stub-executor.js"
  * rep1h R4 (code 1c), which stopped with "guard G100 is out of sequence (next is G90)": C4.1 gave G86–G89; C4.2 and
  * C4.3 were reverted, and the guards born on them took ids the store never got. Here the same state (R1–R4
  * attribution, the checks, the guards of R1–R3), the real reviews and formalizer replies of R4 and the four real
- * programs go through the current acceptance, the guards recorded by the store as in the run.
+ * programs go through the current acceptance, the guards recorded by the store as in the run. Since batch 5 no repair
+ * is reverted: the repairs that broke guards are kept, their regressions sent as items.
  */
 
 const FIX = resolve(process.cwd(), "exp2/evidence/replay-2026-10-23/revert-ids-rep1h-r4")
@@ -34,8 +35,8 @@ interface Fixture {
 const fx = JSON.parse(readFileSync(join(FIX, "state.json"), "utf8")) as Fixture
 const tree = (cycle: string) => ({ "go.mod": readFileSync(join(FIX, "programs", `${cycle}.go.mod`), "utf8"), "main.go": readFileSync(join(FIX, "programs", `${cycle}.main.go`), "utf8") })
 
-describe("rep1h R4 replayed (the crashed state): a reverted cycle leaves no guard id", () => {
-  it("the round runs to its end; every guard the store records is the next id; the first born after a reverted cycle follows the last one recorded", { timeout: 900_000 }, async () => {
+describe("rep1h R4 replayed (the crashed state): guard ids stay in sequence", () => {
+  it("the round runs to its end; no cycle is reverted; every guard the store records is the next id", { timeout: 900_000 }, async () => {
     assert.deepEqual(fx.crashed.guards_r4, ["G86", "G87", "G88", "G89"], "the crashed run recorded G86–G89 at C4.1")
     assert.equal(fx.guards.at(-1)!.id, "G85")
     const dir = mkdtempSync(join(tmpdir(), "exp2-r4-ids-"))
@@ -61,13 +62,9 @@ describe("rep1h R4 replayed (the crashed state): a reverted cycle leaves no guar
     console.log(JSON.stringify({ cycles, born: record.accept!.guards.born, reverted: record.accept!.reverted }))
     const ids = store.inspect().guards.map(g => Number(g.id.slice(1)))
     assert.deepEqual(ids, ids.map((_, i) => i + 1), "the store's guards are G1, G2, … with no gap")
-    assert.ok(cycles.some(c => c.reverted), "a repair is reverted, as in the run")
-    for (const c of cycles.filter(x => x.reverted)) assert.deepEqual(c.born, [], `${c.id} leaves no guard`)
-    // The first guard born after the first reverted cycle follows the last one recorded before it.
-    const k = cycles.findIndex(c => c.reverted)
-    const before = cycles.slice(0, k).flatMap(c => c.born), after = cycles.slice(k + 1).flatMap(c => c.born)
-    const last = before.length ? Number(before.at(-1)!.slice(1)) : 85
-    if (after.length) assert.equal(after[0], `G${last + 1}`)
-    assert.deepEqual(record.accept!.guards.born, [...before, ...after].concat(record.accept!.guards.born.filter(g => ![...before, ...after].includes(g))))
+    assert.ok(cycles.every(c => !c.reverted), "no repair is reverted (batch 5 A)")
+    assert.equal(record.accept!.reverted, 0)
+    assert.deepEqual(record.accept!.guards.born, cycles.flatMap(c => c.born), "every guard born is recorded once, in order")
+    assert.equal(record.accept!.guards.born[0], "G86", "the first born follows G85")
   })
 })

@@ -154,7 +154,7 @@ export interface ItemSighting {
   outcome?: "fixed" | "touched" | "untouched" | "reverted"
   /** Batch 3a: the message a send goes in (the repair list, or the message of untouched items), and why it goes to the reviewer. */
   channel?: "repair" | "untouched"
-  ruling?: "touched_twice" | "reverted_twice" | "disagree" | "done_failing"
+  ruling?: "touched_twice" | "reverted_twice" | "disagree" | "done_failing" | "regression_persisted"
 }
 
 export interface CycleRecord {
@@ -315,6 +315,11 @@ export interface AcceptRoundRecord {
     answers: { done: number; not_done: number; disagree: number; none: number }
     after_untouched: { judged: number; fixed: number; touched: number; untouched: number }
     rulings: { id: string; why: string; cycle: string; word: "superseded" | "guard superseded" | "upheld" | "unasked"; guards?: string[] }[]
+    /**
+     * Batch 5 A: guards that regressed this round (each became an item, no repair is reverted); fixed on the cycle
+     * after they were sent; still failing then (to the reviewer); and the reviewer's word on those.
+     */
+    regressions?: { raised: number; fixed_next: number; persisted: number; adjudicated: { superseded: number; upheld: number; unasked: number } }
   }
   /**
    * Batch 4 E4: the review's lists this round (open and patrol commands with their reasons, units across commands,

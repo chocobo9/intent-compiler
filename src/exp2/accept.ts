@@ -21,8 +21,9 @@ import type { WorkOrder } from "./workorder.js"
  * runs every guard in one batch, and holds a review: a fresh tool-using session reads all the requirements and lists
  * deviations. A model call writes the list as checks; the code checks their premises and that they fail on the
  * program; what survives goes back to the executor word for word, with the control group's repair message. After a
- * repair, every guard that passed must still pass, or the repair is reverted and its leads are dropped. A deviation
- * the executor fixed becomes a guard. A review that finds nothing ends the round's reviews. Judgments and library
+ * repair, every guard that passed must still pass; one that fails on text the round left as it was is a regression,
+ * an item with its material (no repair is reverted, batch 5 A), and still failing a cycle later it goes to the
+ * reviewer. A deviation the executor fixed becomes a guard. A review that finds nothing ends the round's reviews. Judgments and library
  * failures never confirmed are leads for the reviewer, never repairs. The adjudication session is not on this path.
  */
 
@@ -145,7 +146,7 @@ export function renderUntouchedItem(id: string, text: string, check: CheckRecord
   ].join("\n")
 }
 
-const RULING_TEXT: Record<string, string> = { touched_twice: "its output changed in two repairs in a row and the check still fails", reverted_twice: "two repairs of it were reverted because they made a guard fail", disagree: "the executor disagrees with the expected output", done_failing: "the executor answered done and the check still fails" }
+const RULING_TEXT: Record<string, string> = { touched_twice: "its output changed in two repairs in a row and the check still fails", reverted_twice: "two repairs of it were reverted because they made a guard fail", disagree: "the executor disagrees with the expected output", done_failing: "the executor answered done and the check still fails", regression_persisted: "this check passed before, a repair made it fail, and it still fails on the cycle after it was sent with its material: is the check superseded by the requirements, or is the program wrong?" }
 
 /** A question for the reviewer about an item the repairs could not settle (batch 3a), with its check and any guards. */
 export function itemQuestion(id: string, why: string, item: { text: string; record: CheckRecord }, run: CheckRun | null, guards: { id: string; check: CheckRecord }[]): NonNullable<ReviewFocus["itemQuestions"]>[number] {
@@ -203,13 +204,12 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   if (carried.size) record.carried_in = [...carried.values()].map(c => ({ id: c.id, digest: c.digest ?? "" }))
   if (deps.superseded?.length) record.superseded_in = [...deps.superseded]
   // The repair loop's decisions (batch 3a, DESIGN-DEEP §4.2): outcome by the check's output, untouched items in a
-  // message of their own, touched twice or a second revert to the reviewer.
+  // message of their own, touched twice or a regression still failing a cycle after its send to the reviewer.
   const sends = new Repairs(new Map([...carried.values()].map(c => [c.id, c.digest ?? ""])), new Set(deps.quiet?.keys() ?? []))
-  accept.repairs = { untouched_messages: 0, untouched_items: 0, answers: { done: 0, not_done: 0, disagree: 0, none: 0 }, after_untouched: { judged: 0, fixed: 0, touched: 0, untouched: 0 }, rulings: [] }
-  // The last failing run of each item (what the untouched message and the reviewer's question show), the guards a
-  // revert of it broke, where it went to the reviewer, and the questions already asked.
+  accept.repairs = { untouched_messages: 0, untouched_items: 0, answers: { done: 0, not_done: 0, disagree: 0, none: 0 }, after_untouched: { judged: 0, fixed: 0, touched: 0, untouched: 0 }, rulings: [], regressions: { raised: 0, fixed_next: 0, persisted: 0, adjudicated: { superseded: 0, upheld: 0, unasked: 0 } } }
+  // The last failing run of each item (what the untouched message and the reviewer's question show), where it went to
+  // the reviewer, and the questions already asked.
   const lastRun = new Map<string, CheckRun>()
-  const revertGuards = new Map<string, string[]>()
   const rulingAt = new Map<string, { why: string; cycle: string }>()
   const askedItems = new Set<string>()
   // The commands the round's reviews ran, with their runs and files (batch 4 E4).
@@ -231,8 +231,6 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   let trialFixes = 0, repairs = 0, reviews = 0, reviewSessions = 0, lastReviewFound = true
   let current: { cycle: string; commit: string; program: ProgramRef } | null = null
   let good: { cycle: string; commit: string; program: ProgramRef } | null = null
-  let sentInRepair: string[] = []
-  let voidedNote = ""
   const timed = async <T>(stage: string, f: () => Promise<T>): Promise<T> => { const a = Date.now(); try { return await f() } finally { deps.time?.(stage, a, Date.now()) } }
   const block = new Set<Premise>(limits.premiseBlock ?? DEFAULT_PREMISE_BLOCK)
   const fallbackMode = limits.fallback ?? "items"
@@ -371,8 +369,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     cycle.runs = [...guardRuns.map(r => ({ check: r.guard, outcome: r.run.outcome, failure: r.run.failure ? `${r.run.failure.class}/${r.run.failure.reason}` : null })), ...libRuns.map(r => ({ check: r.check, outcome: r.outcome, failure: r.failure ? `${r.failure.class}/${r.failure.reason}` : null }))]
     const flipped = guardRuns.filter(r => r.outcome === "fail" && statusBefore.get(r.guard) === "passing").map(r => r.guard)
     const born: GuardRecord[] = [], evs: GuardEvent[] = []
-    // Library checks that pass are born as guards unless the cycle is reverted below; then their ids are given back.
-    const firstGuard = nextGuard
+    // Library checks that pass are born as guards.
     for (const r of libRuns.filter(x => x.outcome === "pass")) {
       const k = unguarded.find(c => c.id === r.check)!
       const g: GuardRecord = { id: `G${nextGuard++}`, round, source: "library", check: k.id, units: [...k.blocks], object: k.object, born: { cycle: id, program: current.program.id } }
@@ -387,77 +384,53 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       return { g, run, behind, how: behind.length ? "changed_text" as const : "regression" as const }
     })
     for (const f of flips) accept.guards.flips = [...(accept.guards.flips ?? []), { id: f.g.id, cycle: id, how: f.how, sources: [...new Set(f.behind.map(b => b.source))], expected: expectedKinds(guardCheck(f.g, library)) }]
-    const breaking = flips.filter(f => f.how === "regression").map(f => f.g.id)
-    // A repair that made a passing guard fail on unchanged text is reverted. The code change goes, the findings stay
-    // (§12j.7 item 2): what the repair was sent for is sent again once, with word of the revert.
-    if (kind === "repair" && breaking.length && good) {
-      const revertedAt = Date.now()
-      resetTo(workdir, good.commit)
-      deps.time?.("revert", revertedAt, Date.now())
-      lastCommit = good.commit
-      // A reverted cycle leaves no guard: the ones born on its program are dropped, and so are their ids.
-      nextGuard = firstGuard
-      cycle.reverted = { to: good.commit, guards: breaking, resent: sentInRepair }
-      accept.reverted++
-      const seen = record.cycles.flatMap(c => c.items ?? [])
-      for (const sid of sentInRepair) {
-        const last = [...seen].reverse().find(x => x.id === sid)
-        const d = last?.digest ?? ""
-        // Its outcome is reverted: the first revert sends it once more, the second sends it to the reviewer with the guards.
-        const plan = sends.reverted(sid)
-        if (plan.ruling) revertGuards.set(sid, breaking)
-        items.push({ id: sid, digest: d, verdict: last?.verdict ?? "wrong", outcome: "reverted", ...plan, ...(plan.action === "send" ? { why: `the repair was reverted (it made ${breaking.join(", ")} fail); sent again` } : {}) })
+    // A repair that made a passing guard fail on unchanged text is not reverted (batch 5 A): the regression is an item
+    // with its material, sent with the cycle's other items; still failing on the cycle after, it goes to the reviewer.
+    // 3. Flips: this round's text changed behind the guard, or not (§12i item 6); fixed guards pass again.
+    const regressions: { g: GuardRecord; run: CheckRun }[] = []
+    for (const r of guardRuns) {
+      const g = guards.find(x => x.id === r.guard)!
+      if (r.outcome === "pass" && statusBefore.get(g.id) !== "passing") { if (sends.regressionSent(g.id)) accept.repairs!.regressions!.fixed_next++; evs.push({ guard: g.id, round, cycle: id, status: "passing", program: current.program.id }); items.push(sight(g.id, runDigest(r.run), "pass")); itemChecks.delete(g.id) }
+      if (r.outcome !== "fail") continue
+      if (flipped.includes(g.id)) {
+        const f = flips.find(x => x.g.id === g.id)!
+        evs.push({ guard: g.id, round, cycle: id, status: "failing", program: current.program.id, ...(f.behind.length ? { changed_text: f.behind.map(b => b.text), behind_sources: [...new Set(f.behind.map(b => b.source))] } : {}) })
+        if (f.how === "changed_text") { accept.guards.flipped_changed_text.push(g.id); asked.delete(g.id) }
+        else { accept.guards.flipped_unchanged.push(g.id); sends.regressed(g.id, runDigest(r.run)); accept.repairs!.regressions!.raised++; regressions.push({ g, run: r.run }) }
+        continue
       }
-      voidedNote = `Your previous change was reverted by the controller: it made ${breaking.join(", ")} fail, which passed before. The work tree is back at the state before that change. What it was meant to fix is listed above again.`
-      cycle.guards = { run: guardRuns.length, passed: guardRuns.filter(r => r.outcome === "pass").length, failed: guardRuns.filter(r => r.outcome === "fail").length, unknown: guardRuns.filter(r => r.outcome === "unknown").length, flipped, born: [] }
-      sentInRepair = []
-      current = good
-    } else {
-      // 3. Flips: this round's text changed behind the guard, or not (§12i item 6); fixed guards pass again.
-      const regressions: { g: GuardRecord; run: CheckRun }[] = []
-      for (const r of guardRuns) {
-        const g = guards.find(x => x.id === r.guard)!
-        if (r.outcome === "pass" && statusBefore.get(g.id) !== "passing") { evs.push({ guard: g.id, round, cycle: id, status: "passing", program: current.program.id }); items.push(sight(g.id, runDigest(r.run), "pass")); itemChecks.delete(g.id) }
-        if (r.outcome !== "fail") continue
-        if (flipped.includes(g.id)) {
-          const f = flips.find(x => x.g.id === g.id)!
-          evs.push({ guard: g.id, round, cycle: id, status: "failing", program: current.program.id, ...(f.behind.length ? { changed_text: f.behind.map(b => b.text), behind_sources: [...new Set(f.behind.map(b => b.source))] } : {}) })
-          if (f.how === "changed_text") { accept.guards.flipped_changed_text.push(g.id); asked.delete(g.id) }
-          else { accept.guards.flipped_unchanged.push(g.id); regressions.push({ g, run: r.run }) }
-          continue
+      // Failing already: awaiting the reviewer's word when this round's text stands behind it, a regression otherwise.
+      const last = [...events].reverse().find(e => e.guard === g.id && e.status === "failing")
+      if (last?.changed_text?.length) continue
+      if (sends.regressionSent(g.id)) accept.repairs!.regressions!.persisted++
+      regressions.push({ g, run: r.run })
+    }
+    await note(born, evs)
+    accept.guards.born.push(...born.map(g => g.id))
+    cycle.guards = { run: guardRuns.length, passed: guardRuns.filter(r => r.outcome === "pass").length, failed: guardRuns.filter(r => r.outcome === "fail").length, unknown: guardRuns.filter(r => r.outcome === "unknown").length, flipped, born: born.map(g => g.id) }
+    for (const { g, run } of regressions) {
+      items.push(sight(g.id, runDigest(run), "not_landed", run))
+      itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry, carried.has(g.id)), record: guardCheck(g, library) })
+    }
+    // 4. Items sent before (this round's review items, items carried in): fixed ones become guards; the rest are seen again.
+    const pending = [...itemChecks.entries()].filter(([k]) => !k.startsWith("G"))
+    if (pending.length) {
+      const runs = await timed("guard rerun", () => runChecks(pending.map(([, p]) => p.record), current!.program, deps.runner, round, registry, deps.facts, timeout))
+      const bornNow: GuardRecord[] = [], evNow: GuardEvent[] = []
+      pending.forEach(([k, p], i) => {
+        const run = runs[i]
+        if (run.outcome === "pass") {
+          items.push(sight(k, runDigest(run), "pass"))
+          const g: GuardRecord = { id: `G${nextGuard++}`, round, source: "review", units: [...p.record.blocks], object: p.record.object === "none" ? null : p.record.object, input: p.record.input, assertions: p.record.assertions, reference_script: p.record.reference_script, origin: { item: k, review: p.item?.review ?? "", text: p.text }, born: { cycle: id, program: current!.program.id } }
+          bornNow.push(g)
+          evNow.push({ guard: g.id, round, cycle: id, status: "passing", program: current!.program.id })
+          if (p.item) p.item.guard = g.id
+          itemChecks.delete(k)
+        } else if (run.failure?.reason !== "timeout") {
+          items.push(sight(k, runDigest(run), "wrong", run))
         }
-        // Failing already: awaiting the reviewer's word when this round's text stands behind it, a regression otherwise.
-        const last = [...events].reverse().find(e => e.guard === g.id && e.status === "failing")
-        if (last?.changed_text?.length) continue
-        regressions.push({ g, run: r.run })
-      }
-      await note(born, evs)
-      accept.guards.born.push(...born.map(g => g.id))
-      cycle.guards = { run: guardRuns.length, passed: guardRuns.filter(r => r.outcome === "pass").length, failed: guardRuns.filter(r => r.outcome === "fail").length, unknown: guardRuns.filter(r => r.outcome === "unknown").length, flipped, born: born.map(g => g.id) }
-      for (const { g, run } of regressions) {
-        items.push(sight(g.id, runDigest(run), "not_landed", run))
-        itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry, carried.has(g.id)), record: guardCheck(g, library) })
-      }
-      // 4. Items sent before (this round's review items, items carried in): fixed ones become guards; the rest are seen again.
-      const pending = [...itemChecks.entries()].filter(([k]) => !k.startsWith("G"))
-      if (pending.length) {
-        const runs = await timed("guard rerun", () => runChecks(pending.map(([, p]) => p.record), current!.program, deps.runner, round, registry, deps.facts, timeout))
-        const bornNow: GuardRecord[] = [], evNow: GuardEvent[] = []
-        pending.forEach(([k, p], i) => {
-          const run = runs[i]
-          if (run.outcome === "pass") {
-            items.push(sight(k, runDigest(run), "pass"))
-            const g: GuardRecord = { id: `G${nextGuard++}`, round, source: "review", units: [...p.record.blocks], object: p.record.object === "none" ? null : p.record.object, input: p.record.input, assertions: p.record.assertions, reference_script: p.record.reference_script, origin: { item: k, review: p.item?.review ?? "", text: p.text }, born: { cycle: id, program: current!.program.id } }
-            bornNow.push(g)
-            evNow.push({ guard: g.id, round, cycle: id, status: "passing", program: current!.program.id })
-            if (p.item) p.item.guard = g.id
-            itemChecks.delete(k)
-          } else if (run.failure?.reason !== "timeout") {
-            items.push(sight(k, runDigest(run), "wrong", run))
-          }
-        })
-        if (bornNow.length) { await note(bornNow, evNow); accept.guards.born.push(...bornNow.map(g => g.id)); cycle.guards.born.push(...bornNow.map(g => g.id)) }
-      }
+      })
+      if (bornNow.length) { await note(bornNow, evNow); accept.guards.born.push(...bornNow.map(g => g.id)); cycle.guards.born.push(...bornNow.map(g => g.id)) }
     }
     // 5. The review, when one may still lead to a repair and the last one found something (§12i item 1), or when items
     // the repairs could not settle wait for the reviewer's word (batch 3a).
@@ -468,9 +441,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const program = current.program
       // Leads: library checks failing that never passed, and judgments (when on), each once per round at an output.
       const leads: ReviewFocus["leads"] = []
-      // After a revert the library ran on the reverted program: its failures are no leads for a review of the kept one.
       // At most LEADS_MAX (§6c, review request item 2): those resting on units no guard covers first, then by id.
-      const { given, dropped } = pickLeads(registry, library, live(), (cycle.reverted ? [] : libRuns).filter(x => x.outcome === "fail" && x.failure?.reason !== "timeout" && leadsGiven.get(x.check) !== runDigest(x)))
+      const { given, dropped } = pickLeads(registry, library, live(), libRuns.filter(x => x.outcome === "fail" && x.failure?.reason !== "timeout" && leadsGiven.get(x.check) !== runDigest(x)))
       if (dropped) accept.leads.dropped = (accept.leads.dropped ?? 0) + dropped
       for (const r of given) {
         leadsGiven.set(r.check, runDigest(r))
@@ -498,7 +470,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const revised = registry.objects.size ? [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts.map(p => ({ id: p, text: `${registry.block(p)?.text.trim() ?? ""} (${m.kind === "withdraw" ? "withdrawn" : m.kind === "partial" ? "partly revised" : "replaced"} by ${m.by.join(", ")} in round ${round})` }))))) : []
       // Under the round's package the reviewer reads the text in force; the appendix names this round's units (§6c).
       const thisRound = round === 1 ? [] : [...new Set(registry.roundScope(round).flatMap(c => c.entries.map(e => e.block)))].sort((a, b) => registry.block(a)!.start - registry.block(b)!.start)
-      const itemQuestions = itemQs.map(q => itemQuestion(q.id, q.why, itemChecks.get(q.id)!, lastRun.get(q.id) ?? null, (revertGuards.get(q.id) ?? []).flatMap(gid => { const g = guards.find(x => x.id === gid); return g ? [{ id: gid, check: guardCheck(g, library) }] : [] })))
+      const itemQuestions = itemQs.map(q => itemQuestion(q.id, q.why, itemChecks.get(q.id)!, lastRun.get(q.id) ?? null, []))
       const focus: ReviewFocus = { ...(deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }), ...(itemQuestions.length ? { itemQuestions } : {}), ...(deps.lists ? { lists: deps.lists } : {}) }
       const r = await review(current, focus, n2)
       reviews++
@@ -510,26 +482,22 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         // SUPERSEDED lines retire guards; a questioned guard not superseded is a regression from here on.
         const superseded = supersededIn(r.out.text)
         const retire: GuardEvent[] = []
-        // A guard asked about with an item whose repair it reverted twice may pass: it is retired all the same.
-        const conflict = new Set(itemQs.flatMap(q => revertGuards.get(q.id) ?? []))
         for (const s of superseded) {
-          const g = questions.find(x => x.id === s.guard) ?? live().find(x => x.id === s.guard && (conflict.has(x.id) || [...events].reverse().find(e => e.guard === x.id)?.status === "failing"))
+          const g = questions.find(x => x.id === s.guard) ?? live().find(x => x.id === s.guard && [...events].reverse().find(e => e.guard === x.id)?.status === "failing")
           if (!g) continue
           retire.push({ guard: g.id, round, cycle: id, status: "retired", reason: `superseded, by the reviewer: ${s.reason}` })
           accept.guards.retired.push({ id: g.id, reason: s.reason })
           summary.superseded.push(g.id)
         }
         await note([], retire)
-        // The items asked about: superseded (the item ends), its guard superseded (the item goes again), or upheld.
+        // The items asked about: superseded (the item ends; a regression's guard is retired above), or upheld.
         for (const q of itemQs) {
           askedItems.add(q.id)
           const own = superseded.find(s => s.guard === q.id)
-          const gs = revertGuards.get(q.id) ?? []
-          const word = own ? "superseded" as const : gs.some(g => summary.superseded.includes(g)) ? "guard superseded" as const : "upheld" as const
+          const word = own ? "superseded" as const : "upheld" as const
           if (own) itemChecks.delete(q.id)
-          if (word === "guard superseded") revertGuards.delete(q.id)
           sends.ruled(q.id, word === "upheld")
-          accept.repairs!.rulings.push({ id: q.id, why: q.why, cycle: rulingAt.get(q.id)?.cycle ?? id, word, ...(gs.length ? { guards: gs } : {}) })
+          accept.repairs!.rulings.push({ id: q.id, why: q.why, cycle: rulingAt.get(q.id)?.cycle ?? id, word })
         }
         for (const g of questions.filter(x => !summary.superseded.includes(x.id))) {
           const run = (await runGuards([g], library, program, deps.runner, round, registry, deps.facts, timeout))[0].run
@@ -690,9 +658,9 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       cycle.review = ofCycle
     }
     // 6. What goes back to the executor: items the plan sends (regressions, review items, carried items not yet fixed).
-    for (const i of items) if (i.action === "send" || i.action === "hold") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}), ...(i.channel ? { channel: i.channel } : {}), ...(i.ruling ? { ruling: i.ruling } : {}) }, i.outcome === "reverted")
+    for (const i of items) if (i.action === "send" || i.action === "hold") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}), ...(i.channel ? { channel: i.channel } : {}), ...(i.ruling ? { ruling: i.ruling } : {}) })
     for (const i of items) if (i.ruling && !rulingAt.has(i.id)) rulingAt.set(i.id, { why: i.ruling, cycle: id })
-    // How the items of the untouched message sent into this cycle came out (reverted: not judged).
+    // How the items of the untouched message sent into this cycle came out.
     for (const uid of lastUntouched) {
       const o = items.find(i => i.id === uid && i.outcome)?.outcome
       if (o === "fixed" || o === "touched" || o === "untouched") { accept.repairs.after_untouched.judged++; accept.repairs.after_untouched[o]++ }
@@ -707,21 +675,19 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     const held = items.filter(i => i.action === "hold").map(i => i.id)
     if (held.length) cycle.held = held
     record.cycles.push(cycle)
-    if (!cycle.reverted) good = current
+    good = current
     deps.onProgress?.(record)
     // The round ends when nothing goes back: all fixed, or what is left is held (with the reviewer, upheld, untouched
     // after its two sends), or on the cycle limit.
     if (!toSend.length && !toUntouched.length) break
     if (repairs >= limits.repairCycles) { record.status = "cycles_spent"; break }
     repairs++
-    sentInRepair = [...toSend, ...toUntouched].map(t => t.id)
     // The whole reply alone goes as the control group sends it: the reviewer's list as written.
     const whole = wholeReplies.find(w => toSend.length > 0 && toSend.length === w.ids.size && toSend.every(t => w.ids.has(t.id)))
     const list = whole ? whole.text : renderReviewList(toSend)
     evidence = [list, ...(toUntouched.length ? [renderReviewList(toUntouched)] : [])].filter(Boolean).join("\n\n")
-    message = toSend.length ? repairFromReview(list, voidedNote ? [voidedNote] : []) : ""
-    untouchedOut = toUntouched.length ? { ids: toUntouched.map(t => t.id), text: untouchedMessage(toUntouched, toSend.length ? [] : voidedNote ? [voidedNote] : []) } : null
-    voidedNote = ""
+    message = toSend.length ? repairFromReview(list, []) : ""
+    untouchedOut = toUntouched.length ? { ids: toUntouched.map(t => t.id), text: untouchedMessage(toUntouched, []) } : null
     kind = "repair"
   }
   await session.close()
@@ -736,8 +702,10 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     }
   }
   // Items that went to the reviewer and were never asked (no review was left in the round): carried, as open.
-  for (const q of sends.questions()) if (!askedItems.has(q.id) && itemChecks.has(q.id)) accept.repairs.rulings.push({ id: q.id, why: q.why, cycle: rulingAt.get(q.id)?.cycle ?? "", word: "unasked", ...(revertGuards.get(q.id)?.length ? { guards: revertGuards.get(q.id)! } : {}) })
-  // The round ends on the last program that built and passed its trial, with the tree there (a reverted repair already is).
+  for (const q of sends.questions()) if (!askedItems.has(q.id) && itemChecks.has(q.id)) accept.repairs.rulings.push({ id: q.id, why: q.why, cycle: rulingAt.get(q.id)?.cycle ?? "", word: "unasked" })
+  // The reviewer's word on the regressions that persisted (batch 5 A).
+  for (const q of accept.repairs.rulings.filter(x => x.why === "regression_persisted")) { const w = q.word === "superseded" ? "superseded" : q.word === "unasked" ? "unasked" : "upheld"; accept.repairs.regressions!.adjudicated[w]++ }
+  // The round ends on the last program that built and passed its trial, with the tree there.
   const kept = good
   if (kept) {
     record.kept = kept.cycle

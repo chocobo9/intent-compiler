@@ -89,6 +89,40 @@ describe("batch 3a: outcomes by the check's output, and what the round does with
   })
 })
 
+describe("batch 5 A: a regression is an item: one repair with its material, then the reviewer", () => {
+  const cycle = (r: Repairs, id: string, digest: string) => { const p = r.plan(id, digest); r.mark(id, digest, p); return p }
+
+  it("first sighting: the repair list (never the untouched message), whatever the guard went through before", () => {
+    const r = new Repairs(new Map([["G4", "old"]]))
+    r.regressed("G4", "a")
+    assert.equal(r.regressionSent("G4"), false, "not sent yet")
+    assert.deepEqual(cycle(r, "G4", "a"), { action: "send", channel: "repair" })
+    assert.equal(r.regressionSent("G4"), true)
+  })
+
+  it("still failing on the cycle after its send, touched or not: held, to the reviewer; upheld, held for the round", () => {
+    for (const next of ["a", "b"]) {
+      const r = new Repairs()
+      r.regressed("G4", "a")
+      cycle(r, "G4", "a")
+      const p = cycle(r, "G4", next)
+      assert.deepEqual([p.action, p.ruling], ["hold", "regression_persisted"], next)
+      assert.deepEqual(r.questions(), [{ id: "G4", why: "regression_persisted" }])
+      r.ruled("G4", true)
+      assert.match(r.plan("G4", next).why!, /upheld/u)
+    }
+  })
+
+  it("fixed, then broken again: a new regression, sent again first", () => {
+    const r = new Repairs()
+    r.regressed("G4", "a")
+    cycle(r, "G4", "a")
+    assert.equal(r.outcome("G4", "p", true), "fixed")
+    r.regressed("G4", "c")
+    assert.deepEqual(cycle(r, "G4", "c"), { action: "send", channel: "repair" })
+  })
+})
+
 describe("batch 3a: an item carried in untouched opens the next work message marked with the round it has been untouched since", () => {
   const exec = (round: number, sent: string | null, end: string) => ({ round, cycles: [{ id: `C${round}.1`, items: sent === null ? [] : [{ id: "V1", digest: sent, verdict: "wrong", action: "send" }] }], final: [{ id: "V1", digest: end, verdict: "wrong", action: "none" }] }) as unknown as ExecutionRecord
   it("the same output, sent at it, at the end of rounds 2 and 3: since R2; changed since its last send: no mark", () => {

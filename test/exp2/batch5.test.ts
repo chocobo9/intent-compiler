@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { before, describe, it } from "node:test"
 import assert from "node:assert/strict"
 import { renderGuardItem } from "../../src/exp2/accept.js"
+import { renderRepairs } from "../../src/exp2/report.js"
 import type { CheckRecord } from "../../src/exp2/checks.js"
 import type { GuardRecord } from "../../src/exp2/guards.js"
 import type { CheckRun } from "../../src/exp2/verdict.js"
@@ -33,5 +34,12 @@ describe("batch 5 B: a regression's repair item carries its material", () => {
     assert.ok(t.includes(JSON.stringify(reg.block(unit)!.text.trim()).slice(0, 60)), "the requirement's own text")
     assert.match(t, /^Command: \["transform","--input","in\.csv".*\]; input files: in\.csv = "id,v\\n1,2\\n", r\.json = /mu, "the command and every input file")
     assert.match(t, /^What the program did: exit 0; file out\.csv: expected "id,v\\n1,2\\n", got "id,v\\n"/mu, "now against expected")
+  })
+})
+
+describe("batch 5 A: the report's repairs line counts the regressions", () => {
+  it("raised, fixed on the next cycle, still failing then, and the reviewer's word", () => {
+    const line = renderRepairs({ untouched_messages: 0, untouched_items: 0, answers: { done: 0, not_done: 0, disagree: 0, none: 0 }, after_untouched: { judged: 0, fixed: 0, touched: 0, untouched: 0 }, rulings: [{ id: "G41", why: "regression_persisted", cycle: "C3.3", word: "superseded" }], regressions: { raised: 3, fixed_next: 2, persisted: 1, adjudicated: { superseded: 1, upheld: 0, unasked: 0 } } })
+    assert.match(line, /; regressions 3 \(no repair reverted\): fixed on the next cycle 2, still failing then 1, the reviewer's word superseded 1, upheld 0, unasked 0\.$/u)
   })
 })
