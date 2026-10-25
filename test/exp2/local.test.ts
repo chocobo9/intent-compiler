@@ -278,6 +278,19 @@ describe("exp2 local: the configuration file and the entry point", () => {
     assert.equal(config.limits.execution.repairCycles, 3)
   })
 
+  it("acceptance.lists: false turns the review's lists off (the ablation); absent, they stay on; anything else is named", () => {
+    const c = loadLocalConfig(resolve(process.cwd(), "exp2/local-config.example.json"))
+    const tmp = mkdtempSync(join(tmpdir(), "exp2-cfg-lists-"))
+    const at = (acceptance: LocalConfig["acceptance"]) => assembleSerial({
+      ...c, acceptance, state_dir: join(tmp, "state"), checkpoints_dir: join(tmp, "cp"), repo_dir: join(tmp, "app"), builds_dir: join(tmp, "b"),
+      management: { ...c.management, directory: join(tmp, "mgmt") }, coding: { ...c.coding, directory: join(tmp, "app") },
+      recording: { ...c.recording!, cassette: join(tmp, "recording", "cassette.json") },
+    }).config.acceptance
+    assert.equal(at({ ...c.acceptance, lists: false })?.lists, false)
+    assert.equal(at({ ...c.acceptance })?.lists, undefined, "absent: the serial's default, on")
+    assert.ok(localConfigProblems({ ...c, acceptance: { ...c.acceptance, lists: "no" as unknown as boolean } }).includes("acceptance.lists must be true or false"))
+  })
+
   it("names what is wrong with a configuration", () => {
     const good = JSON.parse(readFileSync(resolve(process.cwd(), "exp2/local-config.example.json"), "utf8")) as LocalConfig
     const bad: LocalConfig = { ...good, rounds: 0, checkpoints_dir: `${good.repo_dir}/cp`, management: { ...good.management, server_url: "https://example.com", directory: "relative" }, runner: { kind: "docker", image: "" } }

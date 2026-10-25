@@ -74,6 +74,8 @@ export interface AcceptanceConfig {
    */
   workorderScope?: "delta" | "all"
   reviewScope?: "delta" | "full"
+  /** Batch 4 E4: the review request's lists (open, patrol, units across commands, global units); false for the ablation (default true). */
+  lists?: boolean
 }
 
 export interface SerialConfig {
@@ -394,7 +396,7 @@ export class Serial {
       ...carried.map(c => { const n = since(c); return { id: c.id, kind: "carried" as const, round: roundOfId(c.id), object: c.check?.object ?? null, units: c.check ? c.check.blocks : [], why: n ? `untouched since R${n}` : "still open from an earlier round" } }),
       ...failingEarlier.map(x => checkFact(x.k, x.why)),
     ]
-    const lists = reviewLists(registry, round, openFacts, state.executions)
+    const lists = a.lists === false ? null : reviewLists(registry, round, openFacts, state.executions)
     const carriedText = carried.length ? `${CARRIED_HEADER_REVIEW}\n\n${renderReviewList(carried.map(c => { const n = since(c); return { id: c.id, text: n ? `(untouched since R${n}) ${c.text}` : c.text } }))}\n\n` : ""
     const binary = this.c.binary ?? "app"
     // 4. Execution and acceptance.
@@ -405,7 +407,7 @@ export class Serial {
       copyDir: label => join(this.c.copies ?? join(this.c.checkpoints, "review-copies"), label),
       ...(checkWriting ? { libraryNow: async () => { await checksReady(); const n = store.inspect(); return { library: n.checks, events: n.check_events } } } : {}),
       record: { review: r => store.recordReviewCall(r), formalize: c => store.recordFormalizeCalls(c), guards: (b, e) => store.recordGuards(b, e) },
-      carried, quiet, superseded, lists, time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
+      carried, quiet, superseded, ...(lists ? { lists } : {}), time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
     }, { ...limits.execution, ...(a.reviews !== undefined ? { reviews: a.reviews } : {}), ...(a.trialFixes !== undefined ? { trialFixes: a.trialFixes } : {}), ...(a.premiseBlock ? { premiseBlock: a.premiseBlock } : {}), ...(a.fallback ? { fallback: a.fallback } : {}), ...(a.voidWithoutRuns !== undefined ? { voidWithoutRuns: a.voidWithoutRuns } : {}) })
     await this.timed("waiting for checks", checksReady)
     // 5. The library's verdict on the final program, the guard coverage, the ledger, the report, the checkpoint.
