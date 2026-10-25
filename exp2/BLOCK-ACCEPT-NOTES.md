@@ -1885,3 +1885,23 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - 翻转与回退：R1–R4 都是 0。R5：原文改动 3 次（G6、G9、G14，审查员 SUPERSEDED 退役）、regression 6 次（G5、G7 在工作周期，G64、G65 两次），回退 2 次。R6：regression 6 次（G64、G65、G5、G7），回退 2 次。R5、R6 的二次回退（V4.1.3、V5.2.1 连守卫 G5/G7/G64/G65）都是 unasked。
 
 **成本**：R3–R6 的审查请求字符（62k、22k、38k、38k）和 formalizer 未缓存 token（29k、7k、17k、25k）都明显低于 rep1j（147k–172k；82k–112k），包也小（6k–25k 字符）。R1、R2 与基线相当。conservation 错误全为 0；no_input 只有 R1 1 条。
+
+## 33. R2 审查员回看 R1 命令的由头：rep1j、rep1k、rep1n（零成本）
+
+**做法**：`exp2/evidence/rep1n-2026-10-25/r2-findings-on-r1.mjs` → `r2-findings-on-r1.md`。
+- 条目所在的命令按它的检查所跑的配方 `op` 判，没有配方时按条目文字里的操作名判。不按对象名：rep1j 的归属把所有操作归成了一个 Transformation 对象。
+- 条目引用的单元在 R2 包里以什么身份出现，读的是每轮报告里记录的包：rep1j 记的是整对象视图及其理由，rep1k、rep1n 记的是段及其理由。
+- R2 末 R1 用例残留取自评分提交的 verifier 日志（只读用例名和 requirement_ref）。
+
+**结果**：
+
+| 运行 | R2 发现 | 落在 R1 window/aggregate/join/pivot | 这些发现引用的单元在 R2 包里的身份 | R2 包里的 R1 原文 | R2 末 R1 用例残留 |
+|---|---|---|---|---|---|
+| rep1j | 17 | 5（pivot 3、window 1、aggregate 1） | 本轮对象视图 15 | 整对象视图：本轮 3 个、边 3 个 | 1（derive） |
+| rep1k | 19 | 3（window 3） | 开放项段 13 | 段：开放项 8、修订 1 | 1（derive） |
+| rep1n | 19 | 3（aggregate 2、window 1） | 开放项段 7 | 段：开放项 11 | 16（window 11、join 2、pivot 2、derive 1） |
+
+**读法**：
+- rep1j 的 R2 包按对象交付。R2 修订了 Transformation 对象，它的整个视图（包括全部 R1 操作的原文）以"本轮"身份进了包，审查员在 R2 回头找到了 5 条 R1 操作的问题。
+- rep1k、rep1n 按段交付。R1 操作的原文只在有开放项带着时才进包，落在 R1 命令上的发现引用的也全是开放项段。没有开放项指着的 R1 操作，R2 的审查员看不到它的原文。
+- 这支持"按需交付去掉了审查员回看早轮命令的由头"的推断，但不是全部原因：rep1k 同样按段交付，R2 末残留也只有 1，因为它 R1 末只挂 23 个；rep1n R1 末挂 52 个（window 28、fill 10、aggregate 6……），开放项只覆盖到其中一部分，没覆盖到的就一直留着。
