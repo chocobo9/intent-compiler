@@ -25,6 +25,7 @@ import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { kindOf, readCases } from "./ledger.mjs"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const argv = process.argv.slice(2), dir = argv.shift()
@@ -39,12 +40,7 @@ const lines = f => existsSync(f) ? readFileSync(f, "utf8").trim().split("\n").fi
 const load = d => ({ d, name: short(d), s: JSON.parse(readFileSync(join(d, "state", "exp2-state.json"), "utf8")), scores: lines(join(d, "checkpoints", "scores.jsonl")), measures: lines(join(d, "checkpoints", "measures.jsonl")) })
 const run = load(dir), rounds = [...run.s.executions].sort((a, b) => a.round - b.round)
 const score = (r, n, kind) => r.scores.find(x => x.round === n && (kind ? x.kind === kind : !x.kind))
-const cases = (r, n, kind) => {
-  const sc = score(r, n, kind), log = sc && join(r.d, "official", `round-0${n}`, sc.commit.slice(0, 12), "verifier.log")
-  const out = new Map()
-  if (log && existsSync(log)) for (const m of readFileSync(log, "utf8").matchAll(/CASE_RESULT case_id=(\S+) origin_step=round-0?(\d+) requirement_ref=(\S+)[^\n]*? status=(\S+)/gu)) out.set(m[1], { id: m[1], origin: +m[2], ref: m[3], ok: m[4] === "success" })
-  return out
-}
+const cases = (r, n, kind) => { const sc = score(r, n, kind); return readCases(sc && join(r.d, "official", `round-0${n}`, sc.commit.slice(0, 12), "verifier.log")) }
 const word = ok => ok === null ? "未证明" : ok ? "过" : "不过"
 const pct = (a, b) => b ? `${Math.round(100 * a / b)}%` : "—"
 const out = [`# ${run.name}: the pre-registered table`, ""]
@@ -70,36 +66,14 @@ out.push("## 2. Closure in R1 and R2", "", "| round | first delivery → end / c
 
 // 3. The ledger.
 const costRows = existsSync(COST) ? JSON.parse(readFileSync(COST, "utf8")) : []
-const opOf = ref => ref.split(".").at(-1)
-const mentions = (text, op) => new RegExp(`\\b${op.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}\\b`, "u").test(text) || (op === "rename-drop" && (text.includes("rename") || text.includes("drop")))
-const outcomes = e => {
-  const sentAt = new Map((e.carried_in ?? []).map(c => [c.id, c.digest ?? ""])), last = new Map()
-  for (const c of e.cycles) for (const it of c.items ?? []) {
-    if (it.outcome === "reverted") continue
-    if (sentAt.has(it.id) && it.action !== "blocked" && it.verdict !== "unverified") last.set(it.id, it.verdict === "pass" ? "fixed" : it.digest === sentAt.get(it.id) ? "untouched" : "touched")
-    if (it.verdict === "pass") sentAt.delete(it.id)
-    if (it.action === "send") sentAt.set(it.id, it.digest)
-  }
-  return last
-}
 out.push("## 3. Ledger: cases failing at first delivery and at the round's end", "", "| round | failing first and at the end | (i) op not named | (ii) untouched | (iii) fixed and lost | (iv) touched, not fixed | named, otherwise | largest |", "|---|---|---|---|---|---|---|---|")
 const ledger = {}
 for (const e of rounds) {
   const n = e.round, first = cases(run, n, "first_delivery"), end = cases(run, n)
   const stuck = [...first.values()].filter(c => !c.ok && end.get(c.id) && !end.get(c.id).ok)
-  const items = (e.review_items ?? []).filter(i => i.round === n), text = items.map(i => i.text).join(" ").toLowerCase()
-  const oc = outcomes(e), finalIds = new Set((e.final ?? []).map(f => f.id))
-  const lost = new Set(costRows.filter(r => r.run === run.name && r.round === n).flatMap(r => r.lost))
+  const kind = kindOf(e, n, run.name, costRows)
   const k = { i: 0, ii: 0, iii: 0, iv: 0, other: 0 }
-  for (const c of stuck) {
-    const op = opOf(c.ref)
-    if (!mentions(text, op)) { k.i++; continue }
-    const on = items.filter(i => mentions(i.text.toLowerCase(), op))
-    if (on.some(i => lost.has(i.id) || (i.guard && finalIds.has(i.guard)))) k.iii++
-    else if (on.some(i => oc.get(i.id) === "touched")) k.iv++
-    else if (on.some(i => oc.get(i.id) === "untouched")) k.ii++
-    else k.other++
-  }
+  for (const c of stuck) k[kind(c)]++
   const top = Object.entries({ "(i)": k.i, "(ii)": k.ii, "(iii)": k.iii, "(iv)": k.iv }).sort((a, b) => b[1] - a[1])[0]
   ledger[n] = k
   out.push(`| R${n} | ${stuck.length} | ${k.i} | ${k.ii} | ${k.iii} | ${k.iv} | ${k.other} | ${stuck.length ? `${top[0]} ${top[1]}` : "—"} |`)
