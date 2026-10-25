@@ -1947,5 +1947,5 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
   和 change-unit-cues 的表同量级。差别：作者编号不再算 vN；标题行不再单独算；prev/new 多认了 "now produces" 和 "(not X)"。d10_w4 的范围声明出现在 R2–R7 每一轮，R1 是第一轮，没有。
 - 验收 4（`provenance-r2.md`，另附 R3、R5）：
   - rep1j、rep1k、rep1l、rep1m 的 R2 修订记录重标：7/1/0/1 条，全部是 inferred，cue 类 0 条。R2 在 gold 里没有修订，这 9 条都是误记，没有一条被标成 cue。
-  - R3–R6（rep1j、rep1k、rep1n）：cue 类 14 条，全部在 gold 上（100%）；inferred 类 18 条，其中 11 条在 gold 上。
+  - R3–R6（rep1j、rep1k、rep1n）：cue 类 14 条，全部在 gold 上（100%）；inferred 类 18 条，其中 10 条在 gold 上。
   - "在 gold 上"的判法是新文本在 gold 句子所在段里或包含它（整节的修订包含那一段）。只按段相等比，会把 rep1n R3 那条整节修订误判成不在 gold 上。
