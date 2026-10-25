@@ -18,7 +18,9 @@
 //   8 one word for the run: 未证明 when the code is not one behavioural batch; else 不过 when any of 2, 4, 7 does not
 //     pass; else 真实成立（一次）.
 // Usage (dev worktree): node exp2/evidence/prereg/prereg.mjs <run dir> --base <commit> --code <commit> --lines <set>
-//   [--report <set>] [--rep1j <dir>] [--rep1o <dir>] [--revert-cost <json>]   (writes <run dir>/prereg.md)
+//   [--report <set>] [--pair <run dir>] [--rep1j <dir>] [--rep1o <dir>] [--revert-cost <json>]   (writes <run dir>/prereg.md)
+// --pair: another run of the same code; its numbers (from the data line of its prereg.md) beside this run's, each
+// run's own, no mean.
 import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
@@ -29,7 +31,7 @@ const argv = process.argv.slice(2), dir = argv.shift()
 const opt = k => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : undefined }
 const RUNS = dirname(dir)
 const runDir = name => join(RUNS, (existsSync(RUNS) ? execFileSync("ls", [RUNS], { encoding: "utf8" }) : "").split("\n").find(d => d.includes(`-${name}-`)) ?? name)
-const BASE = opt("base"), CODE = opt("code"), LINES = opt("lines"), REPORT = opt("report")
+const BASE = opt("base"), CODE = opt("code"), LINES = opt("lines"), REPORT = opt("report"), PAIR = opt("pair")
 const J = opt("rep1j") ?? runDir("rep1j"), O = opt("rep1o") ?? runDir("rep1o")
 const COST = opt("revert-cost") ?? join(HERE, "..", "rep1o-2026-10-25", "revert-cost.json")
 const short = d => basename(d).replace(/^exp2-icacc-r\d-luna56-low-/u, "").replace(/-\d{8}$/u, "")
@@ -163,9 +165,27 @@ if (run.name === "rep1p" || rounds.some(e => e.accept?.repairs?.regressions)) {
     ...rounds.map(e => { const r = e.accept?.repairs?.regressions; return `| R${e.round} | ${r?.raised ?? "—"} | ${r?.fixed_next ?? "—"} | ${r?.persisted ?? "—"} | ${r ? `${r.adjudicated.superseded} / ${r.adjudicated.upheld} / ${r.adjudicated.unasked}` : "—"} |` }), "")
 }
 
+// The numbers behind the table, for a later run of the same code to set beside its own (--pair).
+const data = { run: run.name, code: CODE, closure: { 1: c1, 2: c2 }, ledger, late: { 5: s5?.passed ?? null, 6: s6?.passed ?? null }, chars: ch, lines: L7.map(l => ({ line: l.line, value: l.value, word: word(l.ok) })) }
+if (PAIR) {
+  const other = readFileSync(join(PAIR, "prereg.md"), "utf8").match(/<!-- prereg-data (.*) -->/u)
+  if (!other) throw new Error(`${PAIR}/prereg.md has no data line: run prereg.mjs on it first`)
+  const a = JSON.parse(other[1]), b = data
+  const cl = (x, n) => x.closure[n] ? `${x.closure[n].first} → ${x.closure[n].end} (${pct(x.closure[n].end - x.closure[n].first, x.closure[n].total - x.closure[n].first)})` : "—"
+  const lg = (x, n) => { const k = x.ledger[n]; return k ? `${k.i} / ${k.ii} / ${k.iii} / ${k.iv} / ${k.other}` : "—" }
+  out.push(`## Two runs of the same code: ${a.run} and ${b.run}`, "", `Each run's own numbers; no mean. Code: ${a.code ?? "—"} and ${b.code ?? "—"}.`, "", `| | ${a.run} | ${b.run} |`, "|---|---|---|",
+    ...b.lines.map((l, i) => `| ${l.line} | ${a.lines[i] ? `${a.lines[i].value}: ${a.lines[i].word}` : "—"} | ${l.value}: ${l.word} |`),
+    `| R1 closure (≥ 52%) | ${cl(a, 1)} | ${cl(b, 1)} |`, `| R2 closure (≥ 81%) | ${cl(a, 2)} | ${cl(b, 2)} |`,
+    ...[1, 2, 3, 4, 5, 6].map(n => `| R${n} ledger i / ii / iii / iv / other | ${lg(a, n)} | ${lg(b, n)} |`),
+    `| R5 (≥ 656) | ${a.late[5] ?? "—"} | ${b.late[5] ?? "—"} |`, `| R6 (≥ 688) | ${a.late[6] ?? "—"} | ${b.late[6] ?? "—"} |`,
+    `| R3–R6 review request characters (≤ 598,799) | ${a.chars.toLocaleString("en-US")} | ${b.chars.toLocaleString("en-US")} |`, "",
+    `A line both runs pass is 真实成立 for this code; one pass and one not, 未证明; both not, 不过: ${b.lines.map((l, i) => `${l.line.split(" ").slice(0, 3).join(" ")}… ${a.lines[i]?.word === "过" && l.word === "过" ? "真实成立" : a.lines[i]?.word === "不过" && l.word === "不过" ? "不过" : "未证明"}`).join("; ")}.`, "")
+}
+
 // 8. One word.
 const passes = [...L2, ...L4, ...L7.map(l => l.ok)]
 const verdict = behavBatches.length !== 1 ? `未证明（原因：代码含 ${behavBatches.length} 个行为批次${behavBatches.length ? `：${behavBatches.join("、")}` : ""}）` : passes.some(x => x === false) ? "不过（见第 3 项）" : passes.some(x => x === null) ? "未证明（原因：有线未能判定）" : "真实成立（一次）"
 out.push("## 8. The run", "", verdict, "")
+out.push(`<!-- prereg-data ${JSON.stringify(data)} -->`)
 writeFileSync(join(dir, "prereg.md"), out.join("\n") + "\n", "utf8")
 console.log(out.join("\n"))
