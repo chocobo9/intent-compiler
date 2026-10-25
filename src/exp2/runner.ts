@@ -67,9 +67,15 @@ export interface ScriptSandbox {
   run(language: "python" | "node", code: string, files: InputFile[], timeoutMs: number): Promise<ScriptResult>
 }
 
-/** Relative, inside the run directory, no `..`: anything else is refused before a file is written. */
+/**
+ * Relative, inside the run directory, and writable by every runner's file system: no absolute path, no `..` or empty
+ * part, no control character or character Windows refuses in a name (rep1q R6: a check's file named with its content,
+ * "age\n1\n", crashed the round when its reference script's input was written). Anything else is refused before a file
+ * is written.
+ */
 export function safePath(path: string): boolean {
   if (!path || path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:/u.test(path)) return false
+  if (/[\u0000-\u001f<>:"|?*]/u.test(path)) return false
   return !path.split(/[\\/]/u).some(part => part === ".." || part === "")
 }
 

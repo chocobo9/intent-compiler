@@ -218,12 +218,14 @@ export class Exp2Store {
     const facts = codeFacts(registry, round)
     const drafted: Omit<CheckRecord, "id" | "calls">[] = []
     if (outcome.status === "accepted") for (const draft of outcome.draft!.checks) {
-      const b = await methodB(draft, deps.sandbox, timeout)
+      // One check's admission failing (its reference script's run could not be set up) leaves that check unknown only.
+      let b: Awaited<ReturnType<typeof methodB>>, failed: string | null = null
+      try { b = await methodB(draft, deps.sandbox, timeout) } catch (e) { failed = `its admission could not run: ${(e as Error).message.slice(0, 300)}`; b = { assertions: [], unknown: [], input: null, computed_inputs: [] } }
       const record: Omit<CheckRecord, "id" | "calls"> = {
         round, key: draft.key, object: draft.object, blocks: draft.blocks, uses: draft.uses,
         input: b.input ?? draft.input, assertions: b.assertions, unknown: b.unknown, reference_script: draft.reference_script,
         ...(b.computed_inputs.length ? { computed_inputs: b.computed_inputs } : {}),
-        admission: b.assertions.length ? "admitted" : "unknown", admission_reason: b.assertions.length ? null : b.unknown.map(u => `${u.assertion.id}: ${u.reason}`).join("; "),
+        admission: b.assertions.length ? "admitted" : "unknown", admission_reason: failed ?? (b.assertions.length ? null : b.unknown.map(u => `${u.assertion.id}: ${u.reason}`).join("; ")),
         ...(outcome.normalized?.[draft.key]?.length ? { normalized: outcome.normalized[draft.key] } : {}),
         ...(b.unknown.length ? { fed_back: (outcome.fed_back ?? []).includes(draft.key) } : {}),
         strength: null, status: "active",
