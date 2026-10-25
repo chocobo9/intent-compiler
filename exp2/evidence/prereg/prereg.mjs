@@ -152,7 +152,7 @@ const SETS = {
     return [
       { line: "regressions left at a round's end ≤ rep1o's reverts that round (R2 2, R3 3, R4 3, R5 2, R6 3)", value: left.filter(x => x.n >= 2).map(x => `R${x.n} ${x.left}`).join(", "), ok: left.filter(x => x.n >= 2).every(x => x.left <= OREV[x.n]) },
       { line: "regressions fixed on the next cycle / raised ≥ 50%", value: `${fixedNext}/${raised} (${pct(fixedNext, raised)})`, ok: raised ? fixedNext / raised >= 0.5 : null },
-      { line: "R5 ≥ 656 and R6 ≥ 688", value: `${s5?.passed ?? "—"}, ${s6?.passed ?? "—"}`, ok: L4[0] === null || L4[1] === null ? null : L4[0] && L4[1] },
+      { line: "R5 ≥ 656 and R6 ≥ 688", value: `${s5?.passed ?? "—"}, ${s6?.passed ?? "—"}`, ok: L4[0] === false || L4[1] === false ? false : L4[0] === null || L4[1] === null ? null : true },
       { line: "R3–R6 review request characters ≤ 599k", value: ch.toLocaleString("en-US"), ok: L5 },
     ]
   },
