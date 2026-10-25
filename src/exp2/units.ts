@@ -33,7 +33,11 @@ export interface ChangeUnit {
   objects: string[]
   /** cue units: what kind of cue, and its words. */
   cue?: { kind: CueKind; text: string }
-  /** cross_list cues: the unit names every command ("all commands"), so it is listed, never expanded. */
+  /**
+   * cross_list cues ("all commands", "any `dpipe` command"): a global unit. It is never expanded over the commands:
+   * its objects are the one the sentence names (the program: `dpipe` → dpipe CLI) and its owner; the review asks for
+   * the behaviour on two commands at least (the design session's decision, 2026-10-25).
+   */
   all?: boolean
 }
 
@@ -41,7 +45,7 @@ export interface CueHit { kind: CueKind; block: string; text: string; names: str
 
 const CUE: Record<Exclude<CueKind, "cmd_in_revision">, RegExp> = {
   changes_to: /^\s*(?:\*\*|#{1,4}\s*)?changes? to `?([^`*\n]+)`?/imu,
-  cross_list: /\b(?:across|affects?|applies to|for)\s+(?:all|every|each|multiple)\s+(?:commands?|stages?|endpoints?)|\ball (?:existing |deployment-related )?commands\b/iu,
+  cross_list: /\b(?:across|affects?|applies to|for)\s+(?:all|every|each|multiple)\s+(?:commands?|stages?|endpoints?)|\ball (?:existing |deployment-related )?commands\b|\b(?:every|each)\s+(?:`[^`\n]+`\s+)?(?:command|subcommand)\b|\bany\s+`[^`\n]+`\s+(?:command|subcommand)s?\b/iu,
   prev_new: /(?:#{2,3}\s*previous behaviou?r|#{2,3}\s*new behaviou?r|\bpreviously\b[^.\n]{0,120}\b(?:now|corrected|instead)\b|\binstead of\b|\bno longer\b|\brather than\b|\bis now replaced\b|\bnow (?:defaults?|uses|maps|returns|emits|requires|must|produces)\b|\(not [^)]{1,40}\))/iu,
   scope_unchanged: /(?:unchanged behaviou?r|all (?:other |existing )?(?:behaviou?rs?|functionality|commands|endpoints)[^.\n]{0,80}(?:unchanged|as before|continue|remain|still hold)|not mentioned above|continues? to hold|remains? (?:unchanged|the same|as before))/iu,
   author_id: /\b(?:F\d{1,3}|Section \d+(?:\.\d+)?|§\s?\d+)\b/gu,
@@ -121,8 +125,11 @@ export function cueUnits(registry: Registry, round: number): ChangeUnit[] {
   const ids = new Map<string, string[]>()
   for (let r = 1; r <= round; r++) for (const h of cuesIn(registry, r).filter(x => x.kind === "author_id")) ids.set(h.text, [...new Set([...(ids.get(h.text) ?? []), h.block])])
   for (const [id, members] of ids) if (members.length >= 2 && members.some(m => registry.block(m)?.round === round)) add({ name: id, members, objects: objectsOf(registry, members), cue: { kind: "author_id", text: id } })
-  // "All commands": listed, never expanded.
-  for (const h of hits.filter(x => x.kind === "cross_list")) add({ name: "all commands", members: [h.block], objects: objectsOf(registry, [h.block]), cue: { kind: "cross_list", text: h.text }, all: true })
+  // "All commands", "any `X` command": a global unit, never expanded; its objects are what the sentence names and its owner.
+  for (const h of hits.filter(x => x.kind === "cross_list")) {
+    const named = [...(registry.block(h.block)?.text ?? "").matchAll(BACKTICKED)].flatMap(m => objectsNamed(registry, m[1]))
+    add({ name: "all commands", members: [h.block], objects: [...new Set([...named, ...objectsOf(registry, [h.block])])], cue: { kind: "cross_list", text: h.text }, all: true })
+  }
   return units
 }
 

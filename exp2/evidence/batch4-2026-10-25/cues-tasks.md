@@ -11,7 +11,7 @@ Hits are sentences (author ids: each id cited). Units: the cue units code propos
 | 3 | 9436 | 0 | 0 | 1 | 0 | 0 | 4 | 1 | 0 |
 | 4 | 4770 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 5 | 4307 | 0 | 0 | 6 | 0 | 0 | 6 | 1 | 0 |
-| 6 | 3322 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
+| 6 | 3322 | 0 | 1 | 0 | 0 | 0 | 1 | 1 | 0 |
 | 7 | 2188 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 8 | 3292 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 9 | 2900 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
@@ -21,7 +21,7 @@ Hits are sentences (author ids: each id cited). Units: the cue units code propos
 | 13 | 3747 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 14 | 3721 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 15 | 1407 | 0 | 0 | 1 | 0 | 0 | 2 | 1 | 0 |
-| total | — | 0 | 1 | 15 | 1 | 0 | 18 | 7 | 1 (rounds with one: 1/15) |
+| total | — | 0 | 2 | 15 | 1 | 0 | 18 | 8 | 1 (rounds with one: 1/15) |
 
 ## theme_d10_w4_ml_ai_mlops_migration_upgrade
 
@@ -53,7 +53,7 @@ Hits are sentences (author ids: each id cited). Units: the cue units code propos
 
 | round | chars | changes_to | cross_list | prev_new | scope_unchanged | author_id | cmd_in_revision | cue units | scope declarations |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | 5445 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
+| 1 | 5445 | 0 | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
 | 2 | 3725 | 0 | 1 | 3 | 0 | 0 | 1 | 2 | 0 |
 | 3 | 3266 | 5 | 1 | 2 | 0 | 0 | 2 | 7 | 0 |
 | 4 | 2074 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
@@ -64,5 +64,5 @@ Hits are sentences (author ids: each id cited). Units: the cue units code propos
 | 9 | 4637 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
 | 10 | 3172 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0 |
 | 11 | 8282 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 |
-| total | — | 5 | 3 | 10 | 0 | 0 | 4 | 10 | 0 (rounds with one: 0/11) |
+| total | — | 5 | 4 | 10 | 0 | 0 | 4 | 11 | 0 (rounds with one: 0/11) |
 

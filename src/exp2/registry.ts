@@ -228,10 +228,11 @@ export class Registry {
     }
     // The round's change units (batch 4 E1b): code's cue candidates, as the answer confirmed them, and its own. A unit
     // puts its sentences of this round on each command it touches that owns none of them: that command changes too.
+    // A global unit ("any `dpipe` command") touches only what it names, never every command.
     const units = roundUnits(this, round, answer)
     this.answerUnits.push(...units)
     const applied = new Map<string, { from: string; by_object: string; unit: string }[]>()
-    for (const u of units.filter(x => !x.all)) {
+    for (const u of units) {
       const here = u.members.filter(m => this.blocks.get(m)?.round === round)
       const owners = new Set(here.map(m => this.coverOf(m)?.owner).filter((o): o is string => !!o && o !== "none"))
       for (const target of u.objects.filter(o => !owners.has(o) && this.objects.has(o))) for (const m of here) {

@@ -2,11 +2,11 @@
 
 | run | flips | classification changed | rounds with stale-check differences | rounds with scope differences |
 |---|---|---|---|---|
-| rep1j | 8 | 0 | 0 | 1 |
-| rep1k | 8 | 2 | 0 | 1 |
+| rep1j | 8 | 0 | 0 | 0 |
+| rep1k | 8 | 2 | 0 | 0 |
 | rep1l | 0 | 0 | 0 | 0 |
 | rep1m | 0 | 0 | 0 | 0 |
-| rep1n | 15 | 0 | 0 | 1 |
+| rep1n | 15 | 0 | 0 | 2 |
 
 ## Flips
 
@@ -53,6 +53,5 @@
 
 | run | round | in scope now through a unit, not through an edge then | through an edge then, out of scope now |
 |---|---|---|---|
-| rep1j | 6 | — | O1 dpipe CLI |
-| rep1k | 6 | — | O1 dpipe CLI |
 | rep1n | 5 | O2 ingest command (U5.c1) | — |
+| rep1n | 6 | O1 dpipe CLI (U6.c1) | — |

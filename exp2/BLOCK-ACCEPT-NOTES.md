@@ -2007,3 +2007,20 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 **做法**：每轮报告新增 `scope_declarations`，即 units.ts `scopeDeclarations` 找到的本轮"没提到的行为照旧 / 继续成立 / remains unchanged"类句子，记为"本轮全部守卫在力"，渲染成一行 "Scope declarations: …"。按设计会话第 6 点，只进报告，守卫重跑、翻转分类和请求都不受影响。
 
 **数字**：见 §34.1 验收 3。d10_w4 R2–R7 每轮都有（12 句）；d12_w1 R2–R7 每轮各 1 句；dpipe 只有 R12 一句（"remain unchanged"）；d8_w5 没有。测试：units.test 加一条（dpipe R12 一句，R5 没有）。
+
+### 34.4 全局单元（设计会话对 §34.2 遗留点的决定）
+
+**决定**：
+- "every/each command"和"any `X` command"算作 cross_list 线索，形成 all 类单元（全局单元）。
+- 全局单元只把句子点名的对象和句子自己的属主带进范围（R6 的"Any `dpipe` command can accept --audit"→ dpipe CLI），恢复 rep1j、rep1k R6 的行为；不把全部命令拉进任务区，不把各命令的段带进包。
+- 在审查请求里单列为"全局单元"，要求审查员至少在两个不同命令上跑过（E4 里做）；报告记全局单元数和覆盖到的命令数（E5 里做）。
+
+**做法**（units.ts、registry.ts）：
+- cross_list 正则加上 `every|each … command` 和 `any \`X\` command`。不带名字的"any command"不算：R6 里"Null for manifest and any command without an identifiable input"是误命中，已排除。
+- 全局单元的 objects 改为句中反引号名字对到的对象（`dpipe` → dpipe CLI）加上句子属主。
+- registry 不再跳过全局单元。由于它的 objects 只有这些，不会把全部命令带进范围。
+
+**数字**：
+- 重放（`replay-e1b.md` 重跑）：rep1j、rep1k R6 的范围差异消失，dpipe CLI 由 U6.c1 进范围；rep1n R6 同样带进 dpipe CLI；rep1n R5 的 ingest 不变。翻转、检查重新派生的结果不变。
+- 线索计数：dpipe 的 cross_list 1 → 2（多了 R6 一句），d8_w5 3 → 4，cue 单元 dpipe 7 → 8、d8_w5 10 → 11。
+- 测试：units.test 加一条（R6 一个全局单元，objects 只有 dpipe CLI）。

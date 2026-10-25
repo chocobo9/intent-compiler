@@ -5,14 +5,14 @@
    "flips": 8,
    "flipsDiffer": 0,
    "staleDiffs": 0,
-   "scopeDiffs": 1
+   "scopeDiffs": 0
   },
   {
    "run": "rep1k",
    "flips": 8,
    "flipsDiffer": 2,
    "staleDiffs": 0,
-   "scopeDiffs": 1
+   "scopeDiffs": 0
   },
   {
    "run": "rep1l",
@@ -33,7 +33,7 @@
    "flips": 15,
    "flipsDiffer": 0,
    "staleDiffs": 0,
-   "scopeDiffs": 1
+   "scopeDiffs": 2
   }
  ],
  "flips": [
@@ -382,26 +382,18 @@
  "stale": [],
  "scope": [
   {
-   "run": "rep1j",
-   "round": 6,
-   "more": [],
-   "fewer": [
-    "O1 dpipe CLI"
-   ]
-  },
-  {
-   "run": "rep1k",
-   "round": 6,
-   "more": [],
-   "fewer": [
-    "O1 dpipe CLI"
-   ]
-  },
-  {
    "run": "rep1n",
    "round": 5,
    "more": [
     "O2 ingest command (U5.c1)"
+   ],
+   "fewer": []
+  },
+  {
+   "run": "rep1n",
+   "round": 6,
+   "more": [
+    "O1 dpipe CLI (U6.c1)"
    ],
    "fewer": []
   }

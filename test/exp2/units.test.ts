@@ -59,6 +59,16 @@ describe("batch 4 E1a: change units and revision provenance, by code", () => {
     assert.deepEqual(objectsNamed(reg, "ingest"), ["O2"])
   })
 
+  it("R6's \"Any `dpipe` command can accept --audit\": a global unit naming the program's object, never every command", () => {
+    const reg = new Registry()
+    reg.addSource(splitRound(6, roundText(6)))
+    for (const [id, name] of [["O1", "dpipe CLI"], ["O2", "ingest command"], ["O3", "transform command"]]) reg.objects.set(id, { id, name, created_round: 1, version: 1, blocks: [], history: [] })
+    const g = cueUnits(reg, 6).filter(u => u.all)
+    assert.equal(g.length, 1, JSON.stringify(cueUnits(reg, 6).map(u => u.name)))
+    assert.deepEqual(g[0].objects, ["O1"])
+    assert.match(reg.block(g[0].members[0])!.text, /Any `dpipe` command/u)
+  })
+
   it("E2: dpipe R12 declares earlier behaviour unchanged once; R5 does not", () => {
     const reg = new Registry()
     for (const r of [5, 12]) reg.addSource(splitRound(r, roundText(r)))
