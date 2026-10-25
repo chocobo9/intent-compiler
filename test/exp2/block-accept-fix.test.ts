@@ -15,7 +15,8 @@ import { initRepo } from "../../src/exp2/git.js"
 import { ledgerOf } from "../../src/exp2/ledger.js"
 import { programRunsIn, REPAIR_INTRO, replyAsList, REVIEW_INTRO, REVIEW_REPLY, reviewBaseText, reviewEntries, type ProgramRun } from "../../src/exp2/review.js"
 import { renderMeasures, summarizeMeasures } from "../../src/exp2/measures.js"
-import { renderReport, type RoundMeasures } from "../../src/exp2/report.js"
+import { renderRepairs, renderReport, type RoundMeasures } from "../../src/exp2/report.js"
+import { UNTOUCHED_INTRO } from "../../src/exp2/repairs.js"
 import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
 import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store } from "../../src/exp2/store.js"
@@ -317,12 +318,17 @@ describe("fix block B1: an item code reproduced is sent once a round until fixed
     review_items: o.item ? [{ id: "V1.1.1", round: 1, review: "R1.1", item: 1, text: "x", units: ["R1.S3.P24.s1.c3"], premise: null, check, disposition: "sent" }] : [],
   })
 
-  it("the same output at the end of three rounds: not expired (default); expired with expire_reproduced, as before", () => {
+  it("the same output at the end of three rounds (untouched): never expired; an output that changes each round (touched, not fixed) expires with expire_reproduced (batch 3a)", () => {
     const executions = [exec(1, { item: true }), exec(2), exec(3)]
     const state = { ...store.inspect(), executions }
     const e = ledgerOf(state, store.registry()).find(x => x.id === "V1.1.1")!
     assert.deepEqual([e.state, e.end, e.sent], ["open", null, ["C1.1", "R2 work order", "R3 work order"]])
-    assert.deepEqual(ledgerOf(state, store.registry(), { expireReproduced: true }).find(x => x.id === "V1.1.1")!.end?.how, "expired")
+    assert.equal(ledgerOf(state, store.registry(), { expireReproduced: true }).find(x => x.id === "V1.1.1")!.end, null, "untouched is sent again, never listed only")
+    const at = (k: number) => `d${k}`
+    const touched = executions.map((x, k) => ({ ...x, final: x.final!.map(f => ({ ...f, digest: at(k) })), cycles: x.cycles.map(c => ({ ...c, items: c.items?.map(i => ({ ...i, digest: at(k) })) })), ...(x.carried_in ? { carried_in: x.carried_in.map(c => ({ ...c, digest: at(k - 1) })) } : {}) }))
+    const t = { ...store.inspect(), executions: touched }
+    assert.equal(ledgerOf(t, store.registry()).find(x => x.id === "V1.1.1")!.end, null, "reproduced items do not expire by default")
+    assert.match(ledgerOf(t, store.registry(), { expireReproduced: true }).find(x => x.id === "V1.1.1")!.end?.detail ?? "", /touched, not fixed, at the end of rounds 1, 2/u)
   })
 
   it("the text it rests on was withdrawn: not carried, ended as superseded", () => {
@@ -403,3 +409,46 @@ describe("fix block B3, B4: checks written beside the coding; the §12i measures
 function slowChecks(inner: ChecksTransport, ms: number): ChecksTransport {
   return async request => { await new Promise(r => setTimeout(r, ms)); return inner(request) }
 }
+
+describe("batch 3a: an untouched item goes in a message of its own; the executor's answer routes it; the reviewer settles it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-fix-3a-"))
+  const store = new Exp2Store(join(dir, "store"), "fix3a")
+  before(async () => { await store.ingestRound(1, roundText(1), stubTransport()) })
+  const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: FILTER_UNIT }, () => null)
+  const nothing = () => {}
+
+  it("the repair changes nothing: the item goes once more in the untouched message, with its check; still untouched, it is held, never for no progress", async () => {
+    const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }])
+    const { record, executor } = await round(dir, store, [wd => write(wd, files({ filterWrong: true })), nothing, () => "1. not done: ran out of time"], { reviewer, formalize })
+    assert.equal(executor.log.messages.length, 3)
+    const m = executor.log.messages[2].text
+    assert.ok(m.startsWith(UNTOUCHED_INTRO), m.slice(0, 120))
+    assert.match(m, /1\. \(V1\.1\.1\) /u)
+    assert.match(m, /Check: command \["transform",/u)
+    assert.match(m, /The program outputs now: exit 0;/u)
+    assert.deepEqual(record.cycles.map(c => c.message), ["work", "repair", "repair"])
+    assert.deepEqual(record.cycles[2].untouched, { items: ["V1.1.1"], answers: { "V1.1.1": "not done" } })
+    const seen = record.cycles.flatMap(c => (c.items ?? []).filter(i => i.id === "V1.1.1").map(i => [c.id, i.outcome ?? null, i.action, i.channel ?? null]))
+    assert.deepEqual(seen, [["C1.1", null, "send", "repair"], ["C1.2", "untouched", "send", "untouched"], ["C1.3", "untouched", "hold", null]])
+    assert.match(record.cycles[2].items!.find(i => i.id === "V1.1.1")!.why!, /untouched after its resend in the untouched message: carried/u)
+    assert.ok(!record.cycles.flatMap(c => c.items ?? []).some(i => /no progress/u.test(i.why ?? "")))
+    assert.deepEqual(record.accept!.repairs, { untouched_messages: 1, untouched_items: 1, answers: { done: 0, not_done: 1, disagree: 0, none: 0 }, after_untouched: { judged: 1, fixed: 0, touched: 0, untouched: 1 }, rulings: [] })
+    assert.match(renderRepairs(record.accept!.repairs!), /still untouched 1 \(100%; the line is 26%\)/u)
+    assert.deepEqual(record.final!.map(f => f.id), ["V1.1.1"], "open at the end: carried into the next round")
+  })
+
+  it("the executor disagrees: the item goes to the reviewer with its check; SUPERSEDED ends it", async () => {
+    const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }, { text: "SUPERSEDED V1.1.1: the requirement keeps rows equal to the threshold" }])
+    const { record, executor } = await round(dir, store, [wd => write(wd, files({ filterWrong: true })), nothing, () => "1. disagree: rows equal to the threshold are kept"], { reviewer, formalize })
+    assert.equal(executor.log.messages.length, 3, "nothing goes to the executor after the answer")
+    const c3 = record.cycles[2].items!.find(i => i.id === "V1.1.1")!
+    assert.deepEqual([c3.action, c3.ruling], ["hold", "disagree"])
+    assert.equal(reviewer.requests.length, 3, "a review held for the question, though the last one found nothing")
+    assert.match(reviewer.requests[2].request, /# Items the repairs did not settle/u)
+    assert.match(reviewer.requests[2].request, /V1\.1\.1 \(the executor disagrees with the expected output\): /u)
+    assert.deepEqual(record.accept!.repairs!.rulings, [{ id: "V1.1.1", why: "disagree", cycle: "C1.3", word: "superseded" }])
+    assert.deepEqual(record.final, [])
+    const e = ledgerOf({ ...store.inspect(), executions: [record] }, store.registry()).find(x => x.id === "V1.1.1")!
+    assert.deepEqual([e.end?.how, e.state], ["superseded", "closed"])
+  })
+})

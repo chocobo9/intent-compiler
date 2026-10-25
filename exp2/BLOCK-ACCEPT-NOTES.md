@@ -1826,3 +1826,31 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - 按形态：带可执行检查的 295 条，代码口径 untouched 35%（224 条有结局），输出口径 52%（280 条有结局）；只有原话的 15 条里 13 条映射不到命令（没有对象，或对象名不是"X operation/command"这类），只有 2 条能判，这四次运行回答不了"原话条目是不是更容易被回避"。
 - 按命令新旧（只看 R2 及以后；R1 里所有命令都是新的）：本轮新命令 84 条，代码口径 41%、输出口径 43%；早轮命令 140 条，代码口径 37%、输出口径 61%。两种口径不一致：代码口径下差不多，输出口径下早轮命令的条目更多是"输出没变"。
 - 按运行（代码口径，早轮命令）：rep1k 44 条里 28 条 untouched（64%），rep1j 31 条里 1 条，rep1l 11 条里 4 条，rep1m 5 条里 1 条。早轮命令被回避主要集中在 rep1k。
+
+## 31. 批 3（a）：修补结局按输出口径，untouched 不停送（DESIGN-DEEP §4.1、§4.2，d48d248 收口版）
+
+用户放行（2026-10-25，经设计会话）。
+
+**做法**：
+- 新文件 `src/exp2/repairs.ts`：修补回路的决策写成一个纯类 `Repairs`，`accept.ts` 和离线重放都用它；旧的 `Sends` 只剩非审查模式（`executeRound`）在用。
+- 结局：周期上检查通过 → fixed；输出 digest 等于送出时 → untouched；变了但没过 → touched；被回退的周期 → reverted，不算前两者，也不推进 touched 计数和送出次数。结局记在条目记录上（`ItemSighting.outcome`）。
+- untouched 不停送：每周期把这些条目合成一条单独的消息（`untouchedMessage`），和修补清单分开，在同一周期里接在修补清单后面发（只有 untouched 时就单发这一条），所以周期上限不变。每条带检查的命令、输入文件、程序现在的输出和期望（`renderUntouchedItem`），要求执行方按编号逐条答 `done` / `not done: …` / `disagree: …`（`answersIn` 解析）。同一条目一轮内首发之后只单独重发一次（`UNTOUCHED_RESENDS = 1`；按修补清单重发的 touched 条目不占这个名额），仍 untouched 就留到轮末带入下一轮。
+- 作答只用于路由：disagree，或答 done 但检查仍挂 → 停送，连检查送审查员。touched 连续两周期不过 → 停送，连检查送审查员。同一条目第二次被回退 → 停送，把挂掉的守卫和条目一起送审查员；第一次回退照旧重发一次。
+- 审查员问题通道：沿用审查请求附录（accept.ts 原 :402 一带），新增"Items the repairs did not settle"一节（`ReviewFocus.itemQuestions`，每条带检查的命令、输入、期望、实际；二次回退的还带守卫）。审查员写 `SUPERSEDED <条目 id>` → 条目结束，账本记 superseded；写 `SUPERSEDED <守卫 id>` → 守卫退役，条目重新进入修补；都不写 → 维持（本轮不再送，带入下一轮）。`supersededIn` 和 `reviewEntries` 的 SUPERSEDED 行识别扩展到条目 id。有待问的条目时，即使上一次审查没找到新问题，也会再审一次（审查次数和周期上限照旧）；本轮没轮到审查的记为 unasked，带入下一轮。
+- 轮结束：没有要送的就结束（全部 fixed，或剩下的都在审查员处、已维持、或 untouched 已用完重发次数），或者到周期上限。
+- 跨轮：ledger 的 expired 改为"连续 EXPIRE_ROUNDS 轮，每轮末输出都和上一轮末不同且仍挂"（touched、没修好）；输出不变的条目不再过期，而是继续重发。expired 的条目输出再变也不重新打开。照旧只对没复现的条目生效，除非开了 `expire_reproduced`。
+- 带入下一轮：放在工作消息最前面（原来放在工单后面），自上次送出后输出一直没变的标 `(untouched since R{n})`（`untouchedSince`）。
+- 报告每轮加一行（`renderRepairs`）：untouched 消息条数和条目数、作答分布、单独消息后下一周期的结局（仍 untouched 的条数和比例，对照预注册线 26%）、送审查员的条目及审查员的回答。
+
+**离线验收**（`exp2/evidence/batch3a-2026-10-25/replay-repairs.mjs` → `repairs.md` / `repairs.json`）：把新规则逐周期套在四次运行记录下来的条目记录上，和运行当时的决定对照。只是重放决策：输出用的是记录下来的，执行方对新消息会怎么做离线不知道，所以 fixed 只做一致性检查。
+- 运行里因"无进展"停送、且这时是 untouched 的：条目×轮 139 次（设计稿的 124 是 outcome.json 里"轮末 untouched 且被停送"的口径；这里数的是轮内任一周期因无进展停送时为 untouched 的条目），新规则下 139 次全部进入 untouched 单独消息；新规则下因"无进展"停送的为 0。
+- 新规则下 untouched 单独消息共 37 条，含 139 个条目；重发后仍 untouched、带入下一轮的条目记录 235 次（这是周期级的记录次数，不是条目数）。
+- 送审查员：二次回退 11 次（rep1j R1 7、R5 4），touched 连续两周期 3 次（rep1k R1、R5，rep1l R2 各 1）。
+- rep1j R5：V5.1.1 在 C5.4、V5.2.1 在 C5.5 第二次被回退，运行里是停送（"回退后已重发过一次"），新规则下送审查员、带守卫 G57；V5.3.1 只回退过一次，照旧重发。
+- fixed：两边都是 140（一致性检查）。
+
+**测试**：
+- `test/exp2/repairs.test.ts`（8 条）：纯规则逐条测——untouched 的单独重发和名额、touched 两次、回退两次、作答路由、审查员的回答、带入条目和 quiet、作答解析和消息格式、untouched since。
+- `block-accept-fix` 新增两条整轮测试：修补没改动 → 单独消息（带检查）→ 答 not done → 仍 untouched → 停送且不是"无进展"，报告行写"still untouched 1 (100%; the line is 26%)"；答 disagree → 下一次审查带"Items the repairs did not settle"→ 审查员 SUPERSEDED → 条目结束，账本 superseded。
+- 两条旧测试按新规则改了：block-accept-fix 的过期测试改为"输出不变不过期、每轮都变才过期"；block12 的账本测试把 A 的输出改成每轮都变。
+- 全量测试：986 条里 969 过；失败的除已知 10 条环境问题外，block12 的账本测试已按新规则改过并通过，其余（mutation、serial 几条、block10 的探针）逐个文件重跑都通过，原因是主机拦截新构建的程序（spawn UNKNOWN）。replay-baseline（七个 R1）通过，和基线相同。

@@ -383,10 +383,12 @@ export class Serial {
     // control group's text (ablation).
     const body = deltaReview && pkg ? renderPackage(pkg.pkg) : undefined
     const sources = state.sources.map(x => ({ round: x.round, text: x.text }))
-    const carriedText = carried.length ? `\n${CARRIED_HEADER_REVIEW}\n\n${renderReviewList(carried)}\n` : ""
+    // Carried items open the work message (batch 3a); one whose output has not changed since it was sent is marked so.
+    const since = (c: CarriedItem) => c.digest ? untouchedSince(state.executions, c.id, c.digest) : null
+    const carriedText = carried.length ? `${CARRIED_HEADER_REVIEW}\n\n${renderReviewList(carried.map(c => { const n = since(c); return { id: c.id, text: n ? `(untouched since R${n}) ${c.text}` : c.text } }))}\n\n` : ""
     const binary = this.c.binary ?? "app"
     // 4. Execution and acceptance.
-    const execution = await acceptRound(workdir, workorder, renderWorkOrder(workorder) + carriedText, this.c.executor(round), {
+    const execution = await acceptRound(workdir, workorder, carriedText + renderWorkOrder(workorder), this.c.executor(round), {
       registry, library: state.checks, events: state.check_events, facts: codeFacts(registry, round), guards: state.guards, guardEvents: state.guard_events,
       runner: this.c.runner, sandbox: this.c.sandbox, anchors: this.c.anchors, build: this.c.build, ...(this.c.trial ? { trial: this.c.trial } : {}),
       reviewer: this.c.reviewer, formalize: withWatchdog(this.c.formalize, limits.managementTimeoutMs), binary, sources, ...(body ? { body } : {}),
@@ -487,6 +489,23 @@ export function wallTimes(spans: readonly Span[], start: number, end: number): {
 }
 
 /** The section the work order gets for what the ledger still holds open under the review acceptance (DESIGN §12i). */
+/**
+ * The round an item carried in has been untouched since (batch 3a): its output now (`digest`) is the one it was last
+ * sent at in the last round, and the round ends before that in a row show the same output; null when it changed.
+ */
+export function untouchedSince(executions: readonly ExecutionRecord[], id: string, digest: string): number | null {
+  const rounds = [...executions].sort((a, b) => b.round - a.round)
+  const lastSent = (e: ExecutionRecord) => e.cycles.flatMap(c => c.items ?? []).filter(i => i.id === id && i.action === "send").at(-1)?.digest ?? null
+  if (!rounds.length || lastSent(rounds[0]) !== digest) return null
+  let n: number | null = null
+  for (const e of rounds) {
+    const end = e.final?.find(f => f.id === id)?.digest
+    if (end !== digest || (lastSent(e) !== null && lastSent(e) !== digest)) break
+    n = e.round
+  }
+  return n
+}
+
 export const CARRIED_HEADER_REVIEW = "## Still open from earlier rounds\n\nThese were found on the program as it stands and are not fixed yet. Fix them along with this round's work; the requirements are the authority."
 
 /** The error a stopped management step stands for: a spent quota, or an invalid login. */

@@ -45,6 +45,11 @@ export interface ReviewFocus {
   guardFailures: { id: string; args: string[]; files: { path: string; content: string }[]; expected: string; got: string; changed: string[]; was: { id: string; text: string }[]; now: { id: string; text: string }[] }[]
   /** Findings of automatic checks and judgments that are not confirmed: the reviewer verifies them (§12i item 3). */
   leads: { id: string; text: string }[]
+  /**
+   * Batch 3a: items the repair loop could not settle (touched twice, the executor disagrees or says done while the
+   * check fails, a repair reverted twice), each with its check; a revert's guards with theirs.
+   */
+  itemQuestions?: { id: string; why: string; text: string; args: string[]; files: { path: string; content: string }[]; expected: string; got: string; guards: { id: string; args: string[]; files: { path: string; content: string }[]; expected: string }[] }[]
 }
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
@@ -67,6 +72,15 @@ export function reviewAppendix(f: ReviewFocus): string {
       out.push(`Changed this round: ${g.changed.join("; ")}.`)
       if (g.was.length) out.push(`Text it rested on (before): ${g.was.map(x => JSON.stringify(clip(x.text, 300))).join(" ")}`)
       if (g.now.length) out.push(`Text in force now: ${g.now.map(x => JSON.stringify(clip(x.text, 300))).join(" ")}`)
+    }
+  }
+  if (f.itemQuestions?.length) {
+    out.push("", "# Items the repairs did not settle")
+    out.push("Each item below was sent for repair and its check still fails; the code cannot tell from the program alone whether the check or the program is wrong. Decide from the requirements as they stand now: if what the check expects is not what the requirements say, write a line `SUPERSEDED <item id>: <why>` in your reply; if it is, write nothing about it (it stays open). Where a guard is listed with an item, a repair of the item made the guard fail and was reverted: if what the guard expects is no longer required, write `SUPERSEDED <guard id>: <why>`.")
+    for (const q of f.itemQuestions) {
+      out.push("", `${q.id} (${q.why}): ${clip(q.text, 600).replace(/\n/gu, " ")}`)
+      out.push(`Check: command ${JSON.stringify(q.args)}; input files ${q.files.map(x => `${x.path} = ${JSON.stringify(clip(x.content, 300))}`).join(", ") || "none"}; expected ${q.expected}; got ${q.got}.`)
+      for (const g of q.guards) out.push(`Guard ${g.id}: command ${JSON.stringify(g.args)}; input files ${g.files.map(x => `${x.path} = ${JSON.stringify(clip(x.content, 300))}`).join(", ") || "none"}; expects ${g.expected}.`)
     }
   }
   if (f.leads.length) {
@@ -103,9 +117,9 @@ export function isNoIssues(text: string): boolean {
   return /^\s*[*_`]*NO ISSUES[*_`]*\.?\s*$/u.test(text)
 }
 
-/** `SUPERSEDED <guard id>: <why>` lines of a reply (§12i item 6). */
+/** `SUPERSEDED <guard or item id>: <why>` lines of a reply (§12i item 6; item ids since batch 3a). */
 export function supersededIn(text: string): { guard: string; reason: string }[] {
-  return [...text.matchAll(/^\s*[-*]?\s*`?SUPERSEDED\s+(G\d+)`?\s*:\s*(.*)$/gmu)].map(m => ({ guard: m[1], reason: m[2].trim() }))
+  return [...text.matchAll(/^\s*[-*]?\s*`?SUPERSEDED\s+(G\d+|V\d+\.\d+\.\d+)`?\s*:\s*(.*)$/gmu)].map(m => ({ guard: m[1], reason: m[2].trim() }))
 }
 
 const ENTRY_START = /^(?:\d+[.)]|[-*•])\s+\S/u
@@ -123,7 +137,7 @@ export function listEntries(text: string): number {
 export function reviewEntries(text: string): string[] {
   const out: string[][] = []
   for (const line of text.split(/\r?\n/u)) {
-    if (/^\s*[-*]?\s*`?SUPERSEDED\s+G\d+/u.test(line)) continue
+    if (/^\s*[-*]?\s*`?SUPERSEDED\s+(?:G\d+|V\d+\.\d+\.\d+)/u.test(line)) continue
     if (ENTRY_START.test(line)) out.push([line])
     else if (out.length) out.at(-1)!.push(line)
   }
@@ -133,7 +147,7 @@ export function reviewEntries(text: string): string[] {
 
 /** The reply as a repair list in the reviewer's words (the control group's list): SUPERSEDED lines left out. */
 export function replyAsList(text: string): string {
-  return text.split(/\r?\n/u).filter(l => !/^\s*[-*]?\s*`?SUPERSEDED\s+G\d+/u.test(l)).join("\n").trim()
+  return text.split(/\r?\n/u).filter(l => !/^\s*[-*]?\s*`?SUPERSEDED\s+(?:G\d+|V\d+\.\d+\.\d+)/u.test(l)).join("\n").trim()
 }
 
 export interface ProgramRun { command: string; exit_code: number | null }

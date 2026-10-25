@@ -302,17 +302,19 @@ describe("exp2 block 12 E2: the report's open items are the ledger's", () => {
     assert.deepEqual([summary.open.ambiguous, summary.open.program_wrong], [["P1/R1.S3.P9.s2"], []])
   })
 
-  it("no ruling confirmed it: the same output at two round ends, sent in between, and it is listed only; a confirmed one stays open, and a ruling of program right ends it", async () => {
+  it("no ruling confirmed it: a changed output at two round ends in a row, sent in between, still failing (touched, not fixed; batch 3a), and it is listed only; a confirmed one stays open, and a ruling of program right ends it", async () => {
     const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b12x-")), "b12x")
     await store.ingestRound(1, roundText(1), stubTransport())
     const zero = { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 }
     const [A, B, C] = ["P1/R1.S3.P2.s4", "P2/R1.S3.P9.s2", "P3/R1.S3.P9.s3"]
     const round = (r: number) => {
       // C is ruled program right in R1: its kept verdict keeps it from failing again.
-      const items = (r === 1 ? [A, B, C] : [A, B]).map(id => ({ id, digest: "d", verdict: "wrong", action: (r === 1 ? "send" : "hold") as "send" | "hold" }))
+      // A's output changes every round (touched); B's stays the same.
+      const d = (id: string, at: number) => id === A ? `d${at}` : "d"
+      const items = (r === 1 ? [A, B, C] : [A, B]).map(id => ({ id, digest: d(id, r), verdict: "wrong", action: (r === 1 ? "send" : "hold") as "send" | "hold" }))
       const ruled = r === 1 ? [{ id: C, verdict: "ok", reason: "the program follows the text" }] : []
       const c = { id: `C${r}.1`, round: r, session: "s", message: "work" as const, commit: "", build: { ok: true, output: "" }, runs: [], failing: [], contests: [], corrections: [A, B], ambiguous: [], broke: [], items, ...(ruled.length ? { ruled } : {}), anchors: [], note: "", usage: zero }
-      return { round: r, base: "", head: "", status: "done" as const, task: [], sessions: [], cycles: [c], kept: c.id, carried: [], open: [], links: [], usage: zero, ...(r > 1 ? { carried_in: [{ id: A, digest: "d" }, { id: B, digest: "d" }] } : {}), final: [A, B].map(id => ({ id, digest: "d", verdict: "wrong", action: "none" as const })) }
+      return { round: r, base: "", head: "", status: "done" as const, task: [], sessions: [], cycles: [c], kept: c.id, carried: [], open: [], links: [], usage: zero, ...(r > 1 ? { carried_in: [{ id: A, digest: d(A, r - 1) }, { id: B, digest: "d" }] } : {}), final: [A, B].map(id => ({ id, digest: d(id, r), verdict: "wrong", action: "none" as const })) }
     }
     const s = store.inspect()
     const ledger = ledgerOf({ ...s, executions: [1, 2, 3].map(round), judgments: [{ probe: "P2", unit: "R1.S3.P9.s2", verdict: "wrong", round: 1, ruled: true }] }, store.registry(s))

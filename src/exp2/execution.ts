@@ -148,7 +148,14 @@ export interface SweepRecord { cycle: string; checks: number; probes: number; ju
 
 /** An item of the ledger as a cycle saw it (DESIGN §12h E2, E3): its output's digest, the verdict, and what the cycle did. */
 /** blocked: a premise did not hold (DESIGN §12i item 2); discarded: the repair it was sent in broke a guard and was reverted (item 4). */
-export interface ItemSighting { id: string; digest: string; verdict: string; action: "send" | "hold" | "none" | "blocked" | "discarded"; why?: string }
+export interface ItemSighting {
+  id: string; digest: string; verdict: string; action: "send" | "hold" | "none" | "blocked" | "discarded"; why?: string
+  /** Batch 3a (DESIGN-DEEP §4.1): the item's outcome on this cycle, when it was sent before (fixed, touched, untouched, reverted). */
+  outcome?: "fixed" | "touched" | "untouched" | "reverted"
+  /** Batch 3a: the message a send goes in (the repair list, or the message of untouched items), and why it goes to the reviewer. */
+  channel?: "repair" | "untouched"
+  ruling?: "touched_twice" | "reverted_twice" | "disagree" | "done_failing"
+}
 
 export interface CycleRecord {
   id: string
@@ -183,6 +190,8 @@ export interface CycleRecord {
   reverted?: { to: string; guards: string[]; resent?: string[]; discarded?: string[] }
   /** The review held on this cycle's program (§12i item 1). */
   review?: Omit<ReviewSummary, "cycle">
+  /** Batch 3a: the message of untouched items sent into this cycle, and the executor's answer on each (none: no answer). */
+  untouched?: { items: string[]; answers: Record<string, string> }
   /** The target environment's trial (go build and go test) on this cycle's tree. */
   trial?: { ok: boolean; output: string }
   /** The full run on this cycle's program, when the cycle had nothing left to send (DESIGN §12h E4). */
@@ -297,6 +306,16 @@ export interface AcceptRoundRecord {
   trial: { runs: number; failures: number }
   /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind; dropped: past the cap of one review (§6c). */
   leads: { library: number; judgment: number; dropped?: number }
+  /**
+   * Batch 3a (DESIGN-DEEP §4.2): the messages of untouched items (one a cycle at most) and the items in them; the
+   * executor's answers; how those items came out on the next cycle; the items sent to the reviewer, why, and its word.
+   */
+  repairs?: {
+    untouched_messages: number; untouched_items: number
+    answers: { done: number; not_done: number; disagree: number; none: number }
+    after_untouched: { judged: number; fixed: number; touched: number; untouched: number }
+    rulings: { id: string; why: string; cycle: string; word: "superseded" | "guard superseded" | "upheld" | "unasked"; guards?: string[] }[]
+  }
 }
 
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })

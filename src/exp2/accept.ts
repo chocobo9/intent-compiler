@@ -2,12 +2,13 @@ import type { AnchorExtractor } from "./anchors.js"
 import { diffAnchors, touched } from "./anchors.js"
 import { RoleUnavailable, type TokenUsage } from "./attribution.js"
 import { activeChecks, coverage, EMPTY_CHECKS, type CheckEvent, type CheckRecord, type CodeFacts } from "./checks.js"
-import { renderEvidence, SessionBroken, Sends, type AcceptRoundRecord, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor, type ExecutorReply, type ItemSighting, type ReviewItemRecord, type ReviewSummary, type SupersededItem } from "./execution.js"
+import { renderEvidence, SessionBroken, type AcceptRoundRecord, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor, type ExecutorReply, type ItemSighting, type ReviewItemRecord, type ReviewSummary, type SupersededItem } from "./execution.js"
 import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
 import { commitStep, head, resetTo } from "./git.js"
 import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, type GuardEvent, type GuardRecord } from "./guards.js"
 import { sessionInput, type ReviewMaterials } from "./materials.js"
 import type { Registry } from "./registry.js"
+import { answersIn, Repairs, untouchedMessage } from "./repairs.js"
 import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, reviewRequestOn, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import { runChecks, runDigest, type CheckRun } from "./verdict.js"
@@ -123,6 +124,38 @@ export function renderGuardItem(g: GuardRecord, check: CheckRecord, run: CheckRu
   ].join("\n")
 }
 
+/**
+ * An item of the untouched message (batch 3a): what it was sent as, then its check, the command, the input files,
+ * what the program outputs now and what is expected.
+ */
+export function renderUntouchedItem(id: string, text: string, check: CheckRecord | null, run: CheckRun | null): string {
+  if (!check) return text
+  const failed = (run?.assertions ?? []).filter(a => !a.ok)
+  const shown = failed.length ? failed : run?.assertions ?? []
+  const now = shown.map(a => { const x = check.assertions.find(y => y.id === a.id); return `${x ? placeName(x.target) : a.id}: ${JSON.stringify(a.actual)}` })
+  const expected = shown.map(a => { const x = check.assertions.find(y => y.id === a.id); return x ? `${placeName(x.target)}: ${JSON.stringify(x.expect)}` : a.id })
+  return [
+    `(${id}) ${text.trim()}`,
+    `Check: command ${JSON.stringify(check.input.args)}; input files: ${check.input.files.map(f => `${f.path} = ${JSON.stringify(clip(f.content, 600))}`).join(", ") || "none"}.`,
+    `The program outputs now: ${run ? `exit ${run.exit_code}; ${now.join("; ")}` : "(not run)"}${run?.stderr_head.trim() ? `; stderr: ${JSON.stringify(clip(run.stderr_head.trim(), 300))}` : ""}.`,
+    `Expected: ${expected.join("; ") || check.assertions.map(x => `${placeName(x.target)}: ${JSON.stringify(x.expect)}`).join("; ")}.`,
+  ].join("\n")
+}
+
+const RULING_TEXT: Record<string, string> = { touched_twice: "its output changed in two repairs in a row and the check still fails", reverted_twice: "two repairs of it were reverted because they made a guard fail", disagree: "the executor disagrees with the expected output", done_failing: "the executor answered done and the check still fails" }
+
+/** A question for the reviewer about an item the repairs could not settle (batch 3a), with its check and any guards. */
+export function itemQuestion(id: string, why: string, item: { text: string; record: CheckRecord }, run: CheckRun | null, guards: { id: string; check: CheckRecord }[]): NonNullable<ReviewFocus["itemQuestions"]>[number] {
+  const failed = (run?.assertions ?? []).filter(a => !a.ok)
+  const at = (aid: string) => item.record.assertions.find(y => y.id === aid)
+  return {
+    id, why: RULING_TEXT[why] ?? why, text: item.text, args: item.record.input.args, files: item.record.input.files,
+    expected: (failed.length ? failed.map(a => at(a.id)).filter(x => !!x) : item.record.assertions).map(x => `${placeName(x!.target)} = ${JSON.stringify(x!.expect)}`).join(", ") || "(all assertions)",
+    got: run ? (failed.map(a => `${at(a.id) ? placeName(at(a.id)!.target) : a.id} = ${JSON.stringify(a.actual)}`).join(", ") || `exit ${run.exit_code}`) : "(not run)",
+    guards: guards.map(g => ({ id: g.id, args: g.check.input.args, files: g.check.input.files, expected: g.check.assertions.map(a => `${placeName(a.target)} = ${JSON.stringify(a.expect)}`).join(", ") })),
+  }
+}
+
 /** Where a check's expected values come from (verbatim / derived / computed), recorded with each flip (§6b). */
 /** Leads given to one review at most (§6c, review request item 2). */
 export const LEADS_MAX = 20
@@ -166,7 +199,19 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   const carried = new Map((deps.carried ?? []).map(c => [c.id, c]))
   if (carried.size) record.carried_in = [...carried.values()].map(c => ({ id: c.id, digest: c.digest ?? "" }))
   if (deps.superseded?.length) record.superseded_in = [...deps.superseded]
-  const sends = new Sends(new Map([...carried.values()].map(c => [c.id, c.digest ?? ""])), deps.quiet)
+  // The repair loop's decisions (batch 3a, DESIGN-DEEP §4.2): outcome by the check's output, untouched items in a
+  // message of their own, touched twice or a second revert to the reviewer.
+  const sends = new Repairs(new Map([...carried.values()].map(c => [c.id, c.digest ?? ""])), new Set(deps.quiet?.keys() ?? []))
+  accept.repairs = { untouched_messages: 0, untouched_items: 0, answers: { done: 0, not_done: 0, disagree: 0, none: 0 }, after_untouched: { judged: 0, fixed: 0, touched: 0, untouched: 0 }, rulings: [] }
+  // The last failing run of each item (what the untouched message and the reviewer's question show), the guards a
+  // revert of it broke, where it went to the reviewer, and the questions already asked.
+  const lastRun = new Map<string, CheckRun>()
+  const revertGuards = new Map<string, string[]>()
+  const rulingAt = new Map<string, { why: string; cycle: string }>()
+  const askedItems = new Set<string>()
+  // The untouched message to send with the next message, and the items of the one sent into the current cycle.
+  let untouchedOut: { ids: string[]; text: string } | null = null
+  let lastUntouched: string[] = []
   const itemChecks = new Map<string, { text: string; record: CheckRecord; item?: ReviewItemRecord; key?: string }>()
   const keyOf = (r: CheckRecord) => JSON.stringify([[...r.blocks].sort(), r.input])
   for (const c of carried.values()) if (c.check) itemChecks.set(c.id, { text: c.text, record: c.check, key: keyOf(c.check) })
@@ -202,6 +247,13 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     if (plan.action === "send") survivors.push({ id: rec.id, text })
   }
   let items: ItemSighting[] = []
+  // An item seen on a cycle that kept its change: its outcome when it was sent before, and (failing) what to do with it.
+  const sight = (id: string, digest: string, verdict: string, run?: CheckRun): ItemSighting => {
+    const outcome = sends.outcome(id, digest, verdict === "pass") ?? undefined
+    if (run && verdict !== "pass") lastRun.set(id, run)
+    if (verdict === "pass") return { id, digest, verdict, action: "none", ...(outcome ? { outcome } : {}) }
+    return { id, digest, verdict, ...sends.plan(id, digest), ...(outcome ? { outcome } : {}) }
+  }
 
   /** One review on `at`: a fresh copy and session; void when the program never ran, then done again once. */
   const review = async (at: { cycle: string; commit: string; program: ProgramRef }, focus: ReviewFocus, n: number) => {
@@ -238,7 +290,18 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     const before = deps.anchors.extract(workdir)
     let reply: ExecutorReply
     const sentAt = Date.now()
-    try { reply = await withTimeout(session.send(message), limits.callTimeoutMs) } catch (e) {
+    // The untouched message goes after the repair list in the same cycle (or alone); its reply holds the answers.
+    const sentUntouched = untouchedOut
+    untouchedOut = null
+    let answered = ""
+    try {
+      reply = message ? await withTimeout(session.send(message), limits.callTimeoutMs) : { usage: zero(), note: "" }
+      if (sentUntouched) {
+        const u = await withTimeout(session.send(sentUntouched.text), limits.callTimeoutMs)
+        reply = { usage: plus(reply.usage, u.usage), note: [reply.note, u.note].filter(Boolean).join("\n\n") }
+        answered = u.note
+      }
+    } catch (e) {
       deps.time?.(kind === "work" ? "coding" : kind === "trial" ? "trial fix" : "repair", sentAt, Date.now())
       if (!(e instanceof SessionBroken) && !(e instanceof CallTimeout)) throw e
       record.sessions.find(s => s.id === session.id)!.closed = "broken"
@@ -268,6 +331,20 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     lastCommit = commit
     const cycle: CycleRecord = { id, round, session: session.id, message: kind, commit, build: { ok: build.ok, output: build.ok ? "" : clip(build.output, 4000) }, runs: [], failing: [], contests: [], corrections: [], ambiguous: [], broke: [], anchors: changed, note: clip(reply.note, 4000), usage: reply.usage, items: [], ...(trial ? { trial: { ok: trial.ok, output: trial.ok ? "" : clip(trial.output, 4000) } } : {}) }
     items = cycle.items!
+    if (sentUntouched) {
+      const answers = answersIn(answered)
+      const by: Record<string, string> = {}
+      sentUntouched.ids.forEach((uid, k) => {
+        const a = answers.get(k + 1)
+        by[uid] = a ?? "none"
+        if (a) sends.answer(uid, a)
+        accept.repairs!.answers[a === "not done" ? "not_done" : a ?? "none"]++
+      })
+      cycle.untouched = { items: sentUntouched.ids, answers: by }
+      accept.repairs!.untouched_messages++
+      accept.repairs!.untouched_items += sentUntouched.ids.length
+      lastUntouched = sentUntouched.ids
+    }
     if (!ok) {
       record.cycles.push(cycle)
       deps.onProgress?.(record)
@@ -320,8 +397,10 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       for (const sid of sentInRepair) {
         const last = [...seen].reverse().find(x => x.id === sid)
         const d = last?.digest ?? ""
-        const plan = sends.reopen(sid) ? sends.plan(sid, d) : { action: "hold" as const, why: "sent again after an earlier revert already" }
-        items.push({ id: sid, digest: d, verdict: last?.verdict ?? "wrong", ...plan, ...(plan.action === "send" ? { why: `the repair was reverted (it made ${breaking.join(", ")} fail); sent again` } : {}) })
+        // Its outcome is reverted: the first revert sends it once more, the second sends it to the reviewer with the guards.
+        const plan = sends.reverted(sid)
+        if (plan.ruling) revertGuards.set(sid, breaking)
+        items.push({ id: sid, digest: d, verdict: last?.verdict ?? "wrong", outcome: "reverted", ...plan, ...(plan.action === "send" ? { why: `the repair was reverted (it made ${breaking.join(", ")} fail); sent again` } : {}) })
       }
       voidedNote = `Your previous change was reverted by the controller: it made ${breaking.join(", ")} fail, which passed before. The work tree is back at the state before that change. What it was meant to fix is listed above again.`
       cycle.guards = { run: guardRuns.length, passed: guardRuns.filter(r => r.outcome === "pass").length, failed: guardRuns.filter(r => r.outcome === "fail").length, unknown: guardRuns.filter(r => r.outcome === "unknown").length, flipped, born: [] }
@@ -332,7 +411,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const regressions: { g: GuardRecord; run: CheckRun }[] = []
       for (const r of guardRuns) {
         const g = guards.find(x => x.id === r.guard)!
-        if (r.outcome === "pass" && statusBefore.get(g.id) !== "passing") { evs.push({ guard: g.id, round, cycle: id, status: "passing", program: current.program.id }); items.push({ id: g.id, digest: runDigest(r.run), verdict: "pass", action: "none" }); itemChecks.delete(g.id) }
+        if (r.outcome === "pass" && statusBefore.get(g.id) !== "passing") { evs.push({ guard: g.id, round, cycle: id, status: "passing", program: current.program.id }); items.push(sight(g.id, runDigest(r.run), "pass")); itemChecks.delete(g.id) }
         if (r.outcome !== "fail") continue
         if (flipped.includes(g.id)) {
           const f = flips.find(x => x.g.id === g.id)!
@@ -350,9 +429,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       accept.guards.born.push(...born.map(g => g.id))
       cycle.guards = { run: guardRuns.length, passed: guardRuns.filter(r => r.outcome === "pass").length, failed: guardRuns.filter(r => r.outcome === "fail").length, unknown: guardRuns.filter(r => r.outcome === "unknown").length, flipped, born: born.map(g => g.id) }
       for (const { g, run } of regressions) {
-        const d = runDigest(run)
-        const plan = sends.plan(g.id, d)
-        items.push({ id: g.id, digest: d, verdict: "not_landed", ...plan })
+        items.push(sight(g.id, runDigest(run), "not_landed", run))
         itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry, carried.has(g.id)), record: guardCheck(g, library) })
       }
       // 4. Items sent before (this round's review items, items carried in): fixed ones become guards; the rest are seen again.
@@ -363,22 +440,23 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         pending.forEach(([k, p], i) => {
           const run = runs[i]
           if (run.outcome === "pass") {
-            items.push({ id: k, digest: runDigest(run), verdict: "pass", action: "none" })
+            items.push(sight(k, runDigest(run), "pass"))
             const g: GuardRecord = { id: `G${nextGuard++}`, round, source: "review", units: [...p.record.blocks], object: p.record.object === "none" ? null : p.record.object, input: p.record.input, assertions: p.record.assertions, reference_script: p.record.reference_script, origin: { item: k, review: p.item?.review ?? "", text: p.text }, born: { cycle: id, program: current!.program.id } }
             bornNow.push(g)
             evNow.push({ guard: g.id, round, cycle: id, status: "passing", program: current!.program.id })
             if (p.item) p.item.guard = g.id
             itemChecks.delete(k)
           } else if (run.failure?.reason !== "timeout") {
-            const d = runDigest(run)
-            items.push({ id: k, digest: d, verdict: "wrong", ...sends.plan(k, d) })
+            items.push(sight(k, runDigest(run), "wrong", run))
           }
         })
         if (bornNow.length) { await note(bornNow, evNow); accept.guards.born.push(...bornNow.map(g => g.id)); cycle.guards.born.push(...bornNow.map(g => g.id)) }
       }
     }
-    // 5. The review, when one may still lead to a repair and the last one found something (§12i item 1).
-    const canReview = reviews < reviewsMax && lastReviewFound && repairs < limits.repairCycles
+    // 5. The review, when one may still lead to a repair and the last one found something (§12i item 1), or when items
+    // the repairs could not settle wait for the reviewer's word (batch 3a).
+    const itemQs = [...new Map([...sends.questions(), ...items.filter(i => i.ruling).map(i => ({ id: i.id, why: i.ruling! }))].filter(q => !askedItems.has(q.id) && itemChecks.has(q.id)).map(q => [q.id, q] as const)).values()]
+    const canReview = reviews < reviewsMax && (lastReviewFound || itemQs.length > 0) && repairs < limits.repairCycles
     if (canReview) {
       const n2 = reviews + 1
       const program = current.program
@@ -414,7 +492,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const revised = registry.objects.size ? [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts.map(p => ({ id: p, text: `${registry.block(p)?.text.trim() ?? ""} (${m.kind === "withdraw" ? "withdrawn" : m.kind === "partial" ? "partly revised" : "replaced"} by ${m.by.join(", ")} in round ${round})` }))))) : []
       // Under the round's package the reviewer reads the text in force; the appendix names this round's units (§6c).
       const thisRound = round === 1 ? [] : [...new Set(registry.roundScope(round).flatMap(c => c.entries.map(e => e.block)))].sort((a, b) => registry.block(a)!.start - registry.block(b)!.start)
-      const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
+      const itemQuestions = itemQs.map(q => itemQuestion(q.id, q.why, itemChecks.get(q.id)!, lastRun.get(q.id) ?? null, (revertGuards.get(q.id) ?? []).flatMap(gid => { const g = guards.find(x => x.id === gid); return g ? [{ id: gid, check: guardCheck(g, library) }] : [] })))
+      const focus: ReviewFocus = { ...(deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }), ...(itemQuestions.length ? { itemQuestions } : {}) }
       const r = await review(current, focus, n2)
       reviews++
       const summary: ReviewSummary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length, program_runs: r?.out?.runs.length ?? 0, fallback: 0, logged: 0 }
@@ -424,20 +503,31 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         // SUPERSEDED lines retire guards; a questioned guard not superseded is a regression from here on.
         const superseded = supersededIn(r.out.text)
         const retire: GuardEvent[] = []
+        // A guard asked about with an item whose repair it reverted twice may pass: it is retired all the same.
+        const conflict = new Set(itemQs.flatMap(q => revertGuards.get(q.id) ?? []))
         for (const s of superseded) {
-          const g = questions.find(x => x.id === s.guard) ?? live().find(x => x.id === s.guard && [...events].reverse().find(e => e.guard === x.id)?.status === "failing")
+          const g = questions.find(x => x.id === s.guard) ?? live().find(x => x.id === s.guard && (conflict.has(x.id) || [...events].reverse().find(e => e.guard === x.id)?.status === "failing"))
           if (!g) continue
           retire.push({ guard: g.id, round, cycle: id, status: "retired", reason: `superseded, by the reviewer: ${s.reason}` })
           accept.guards.retired.push({ id: g.id, reason: s.reason })
           summary.superseded.push(g.id)
         }
         await note([], retire)
+        // The items asked about: superseded (the item ends), its guard superseded (the item goes again), or upheld.
+        for (const q of itemQs) {
+          askedItems.add(q.id)
+          const own = superseded.find(s => s.guard === q.id)
+          const gs = revertGuards.get(q.id) ?? []
+          const word = own ? "superseded" as const : gs.some(g => summary.superseded.includes(g)) ? "guard superseded" as const : "upheld" as const
+          if (own) itemChecks.delete(q.id)
+          if (word === "guard superseded") revertGuards.delete(q.id)
+          sends.ruled(q.id, word === "upheld")
+          accept.repairs!.rulings.push({ id: q.id, why: q.why, cycle: rulingAt.get(q.id)?.cycle ?? id, word, ...(gs.length ? { guards: gs } : {}) })
+        }
         for (const g of questions.filter(x => !summary.superseded.includes(x.id))) {
           const run = (await runGuards([g], library, program, deps.runner, round, registry, deps.facts, timeout))[0].run
-          const d = runDigest(run)
           await note([], [{ guard: g.id, round, cycle: id, status: "failing", program: program.id, reason: "the reviewer did not call it superseded: a regression" }])
-          const plan = sends.plan(g.id, d)
-          items.push({ id: g.id, digest: d, verdict: "not_landed", ...plan })
+          items.push(sight(g.id, runDigest(run), "not_landed", run))
           itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry), record: guardCheck(g, library) })
         }
         if (!isNoIssues(r.out.text)) {
@@ -518,9 +608,9 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
                     const d = runDigest(rep.run)
                     rec.check = a.check
                     itemChecks.set(vid, { text: quoted(it.item, it.text), record: checkRecord, item: prior?.[1].item ?? rec, key })
-                    const plan = sends.plan(vid, d)
-                    items.push({ id: vid, digest: d, verdict: "wrong", ...plan })
-                    if (plan.action === "send") survivors.push({ id: vid, text: quoted(it.item, it.text) })
+                    const seen = sight(vid, d, "wrong", rep.run)
+                    items.push(seen)
+                    if (seen.action === "send") survivors.push({ id: vid, text: quoted(it.item, it.text) })
                   }
                 }
               } else if (!stop && ownFailure) own.push({ n: it.item, text: quoted(it.item, it.text), units: it.units, failure: ownFailure, rec })
@@ -593,8 +683,18 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       cycle.review = ofCycle
     }
     // 6. What goes back to the executor: items the plan sends (regressions, review items, carried items not yet fixed).
-    for (const i of items) if (i.action === "send" || i.action === "hold") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}) })
-    const toSend = items.filter(i => i.action === "send").map(i => ({ id: i.id, text: itemChecks.get(i.id)?.text ?? freeText.get(i.id)?.text ?? i.id }))
+    for (const i of items) if (i.action === "send" || i.action === "hold") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}), ...(i.channel ? { channel: i.channel } : {}), ...(i.ruling ? { ruling: i.ruling } : {}) }, i.outcome === "reverted")
+    for (const i of items) if (i.ruling && !rulingAt.has(i.id)) rulingAt.set(i.id, { why: i.ruling, cycle: id })
+    // How the items of the untouched message sent into this cycle came out (reverted: not judged).
+    for (const uid of lastUntouched) {
+      const o = items.find(i => i.id === uid && i.outcome)?.outcome
+      if (o === "fixed" || o === "touched" || o === "untouched") { accept.repairs.after_untouched.judged++; accept.repairs.after_untouched[o]++ }
+    }
+    lastUntouched = []
+    // Untouched items go in a message of their own, with their checks; the rest in the repair list.
+    const textOf = (i: ItemSighting) => itemChecks.get(i.id)?.text ?? freeText.get(i.id)?.text ?? i.id
+    const toSend = items.filter(i => i.action === "send" && i.channel !== "untouched").map(i => ({ id: i.id, text: textOf(i) }))
+    const toUntouched = items.filter(i => i.action === "send" && i.channel === "untouched").map(i => ({ id: i.id, text: renderUntouchedItem(i.id, textOf(i), itemChecks.get(i.id)?.record ?? null, lastRun.get(i.id) ?? null) }))
     cycle.failing = items.filter(i => i.verdict === "not_landed").map(i => i.id)
     cycle.corrections = items.filter(i => i.verdict === "wrong").map(i => i.id)
     const held = items.filter(i => i.action === "hold").map(i => i.id)
@@ -602,19 +702,24 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     record.cycles.push(cycle)
     if (!cycle.reverted) good = current
     deps.onProgress?.(record)
-    if (!toSend.length) break
+    // The round ends when nothing goes back: all fixed, or what is left is held (with the reviewer, upheld, untouched
+    // after its two sends), or on the cycle limit.
+    if (!toSend.length && !toUntouched.length) break
     if (repairs >= limits.repairCycles) { record.status = "cycles_spent"; break }
     repairs++
-    sentInRepair = toSend.map(t => t.id)
+    sentInRepair = [...toSend, ...toUntouched].map(t => t.id)
     // The whole reply alone goes as the control group sends it: the reviewer's list as written.
     const whole = wholeReplies.find(w => toSend.length > 0 && toSend.length === w.ids.size && toSend.every(t => w.ids.has(t.id)))
     const list = whole ? whole.text : renderReviewList(toSend)
-    evidence = list
-    message = repairFromReview(list, voidedNote ? [voidedNote] : [])
+    evidence = [list, ...(toUntouched.length ? [renderReviewList(toUntouched)] : [])].filter(Boolean).join("\n\n")
+    message = toSend.length ? repairFromReview(list, voidedNote ? [voidedNote] : []) : ""
+    untouchedOut = toUntouched.length ? { ids: toUntouched.map(t => t.id), text: untouchedMessage(toUntouched, toSend.length ? [] : voidedNote ? [voidedNote] : []) } : null
     voidedNote = ""
     kind = "repair"
   }
   await session.close()
+  // Items that went to the reviewer and were never asked (no review was left in the round): carried, as open.
+  for (const q of sends.questions()) if (!askedItems.has(q.id) && itemChecks.has(q.id)) accept.repairs.rulings.push({ id: q.id, why: q.why, cycle: rulingAt.get(q.id)?.cycle ?? "", word: "unasked", ...(revertGuards.get(q.id)?.length ? { guards: revertGuards.get(q.id)! } : {}) })
   // The round ends on the last program that built and passed its trial, with the tree there (a reverted repair already is).
   const kept = good
   if (kept) {

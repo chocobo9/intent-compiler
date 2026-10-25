@@ -157,6 +157,8 @@ export interface ReviewReport {
   cache: { reviewer: number | null; formalizer: number | null }
   /** Characters of the round's review requests (§12j.7 item 6). */
   request_chars?: number
+  /** Batch 3a: the untouched messages, the executor's answers, how their items came out, the questions to the reviewer. */
+  repairs?: AcceptRoundRecord["repairs"]
 }
 
 export interface AcceptanceSummary {
@@ -334,7 +336,19 @@ function reviewReport(r: NonNullable<ReportInput["review"]>): ReviewReport {
     premise_blocked: a.premise_blocked, premise_logged: a.premise_logged ?? {}, fallback: a.fallback ?? { reviews: 0, whole: 0, items: 0, reasons: {} }, program_runs_zero: a.program_runs_zero ?? 0, guards: a.guards, reverted: a.reverted, trial: a.trial, leads: a.leads, coverage: r.coverage,
     cache: { reviewer: cacheShare(reviewer.tokens), formalizer: cacheShare(formalizer.tokens) },
     request_chars: r.review_calls.reduce((n, c) => n + (c.request_chars ?? 0), 0),
+    ...(a.repairs ? { repairs: a.repairs } : {}),
   }
+}
+
+/**
+ * The repair loop's line (batch 3a): untouched messages and their items, the answers, how those items came out on
+ * the next cycle (still untouched against the pre-registered 26%), and what went to the reviewer and its word.
+ */
+export function renderRepairs(p: NonNullable<AcceptRoundRecord["repairs"]>): string {
+  const a = p.after_untouched, words: Record<string, number> = {}
+  for (const q of p.rulings) words[q.word] = (words[q.word] ?? 0) + 1
+  const share = a.judged ? `${Math.round(100 * a.untouched / a.judged)}%` : "—"
+  return `- Repairs: untouched messages ${p.untouched_messages} (items ${p.untouched_items}); answers done ${p.answers.done}, not done ${p.answers.not_done}, disagree ${p.answers.disagree}, none ${p.answers.none}; after the untouched message ${a.judged} judged: fixed ${a.fixed}, touched ${a.touched}, still untouched ${a.untouched} (${share}; the line is 26%); to the reviewer ${p.rulings.length}${p.rulings.length ? ` (${Object.entries(words).map(([k, v]) => `${k} ${v}`).join(", ")}: ${p.rulings.map(q => `${q.id} ${q.why}${q.guards?.length ? ` with ${q.guards.join(", ")}` : ""}`).join("; ")})` : ""}.`
 }
 
 /** Words that mark a paragraph as revising earlier text (§12j.7 item 12); a cue, not a decision. */
@@ -395,6 +409,7 @@ export function renderReport(r: RoundReport): string {
     `- Check writing: admitted ${r.checks.admitted ?? r.checks.entered}/${r.checks.entered}, unknown never told the model ${r.checks.unknown_not_fed_back ?? 0}; dropped after the repairs ${sum(r.checks.dropped)} (${by(r.checks.dropped ?? {})}); runs refused as an unknown subcommand ${r.checks.refused_calls ?? 0}; units no check rests on ${r.checks.uncovered ?? 0} (reported only).${r.checks.read_as_holds?.length ? ` Checks written as withdrawn in older records, read as stating what the text requires: ${r.checks.read_as_holds.join(", ")}.` : ""}`,
     ...(v ? [`- Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}; flips on changed text ${v.guards.flipped_changed_text.length}${ids(v.guards.flipped_changed_text)}, on unchanged text ${v.guards.flipped_unchanged.length}${ids(v.guards.flipped_unchanged)}; retired as superseded ${v.guards.retired.length}${ids(v.guards.retired.map(x => x.id))}; repairs reverted ${v.reverted}.`] : []),
     ...(v?.guards.flips?.length ? [renderFlips(v.guards.flips)] : []),
+    ...(v?.repairs ? [renderRepairs(v.repairs)] : []),
     ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters${r.zones.package ? ` in ${r.zones.package.segments.length} paragraphs of ${new Set(r.zones.package.segments.map(x => x.object)).size} objects (${segmentCounts(r.zones.package)}), ${r.zones.package.heads.length} object heads; this round's edges to a block ${r.zones.package.edges.to_block}, to an object ${r.zones.package.edges.to_object}; ${r.zones.package.guards} comparisons (guards on revised units)${r.zones.package.overflow ? `; over the budget of ${r.zones.package.overflow.limit} (${r.zones.package.overflow.chars}): dropped ${r.zones.package.overflow.dropped.length} paragraphs${r.zones.package.overflow.still_over ? ", still over" : ""}` : ""}` : ` in ${r.zones.source_blocks} blocks`} (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all} blocks)${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions${v.leads.dropped ? `, ${v.leads.dropped} leads past the cap of 20` : ""}` : ""}.`] : []),
     ...(r.zones.package?.utilization ? [renderUse(r.zones.package.utilization)] : []),
     r.gold ? renderRecall(`Revision recall (gold set ${r.gold.task})`, r.gold.revision) : "- Revision recall: no gold set for this task.",

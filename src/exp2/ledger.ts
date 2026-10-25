@@ -116,9 +116,9 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
     if (how === "blocked") e.reason = "premise_failed"
   }
   // An item that ended comes back when it fails again, unless the text it rested on was replaced, or it was listed
-  // only for no progress and its output is still the same.
-  const reopen = (e: LedgerEntry & { ends: { digest: string }[] }, digest: string) => {
-    if (!e.end || e.end.how === "superseded" || e.end.how === "blocked" || (e.end.how === "expired" && e.ends.at(-1)?.digest === digest)) return
+  // only for being worked on over rounds without a fix (batch 3a: its output changing is what expired it).
+  const reopen = (e: LedgerEntry & { ends: { digest: string }[] }, _digest: string) => {
+    if (!e.end || e.end.how === "superseded" || e.end.how === "blocked" || e.end.how === "expired") return
     e.end = null; e.state = "open"; e.reason = "program_wrong"
   }
   const note = (e: LedgerEntry, round: number, cycle: string | null, verdict: string, by: LedgerEntry["verdicts"][number]["by"]) => {
@@ -185,12 +185,15 @@ export function buildLedger(i: LedgerInput): LedgerEntry[] {
       note(e, r, null, s.verdict, "round end")
       const c = confirmedBy(id, r)
       e.confirmed = c ? { round: e.confirmed?.round ?? c.round } : null
-      // No progress over rounds: the same output at the end of EXPIRE_ROUNDS rounds in a row, sent in between; an item
-      // a ruling confirmed stays, sent once a round, until it is fixed, superseded or ruled otherwise.
+      // Worked on over rounds without a fix (batch 3a, DESIGN-DEEP §4.2): its output changed from each round's end to the
+      // next for EXPIRE_ROUNDS rounds in a row, sent in between, and it still fails. An item whose output stays the same
+      // (untouched) does not expire: it is sent again. An item a ruling confirmed stays, until fixed, superseded or ruled.
       const last = e.ends.slice(-EXPIRE_ROUNDS)
       const reproduced = e.source === "guard" || (e.source === "review" && !!reviewOf.get(e.id)?.check)
-      if (!e.end && !e.confirmed && !(reproduced && !i.expireReproduced) && last.length === EXPIRE_ROUNDS && last.every((y, k) => y.digest && y.digest === last[0].digest && (k === 0 || y.round === last[k - 1].round + 1)) && e.sent.length) close(e, r, "expired", `the same output at the end of rounds ${last.map(y => y.round).join(", ")}`)
+      if (!e.end && !e.confirmed && !(reproduced && !i.expireReproduced) && last.length === EXPIRE_ROUNDS && last.every((y, k) => y.digest && (k === 0 || (y.digest !== last[k - 1].digest && y.round === last[k - 1].round + 1))) && e.sent.length) close(e, r, "expired", `touched, not fixed, at the end of rounds ${last.map(y => y.round).join(", ")}`)
     }
+    // Items the reviewer called superseded when the repairs could not settle them (batch 3a).
+    for (const q of x.accept?.repairs?.rulings ?? []) { if (q.word !== "superseded") continue; const e = entries.get(q.id); if (e && !e.end) close(e, r, "superseded", `the reviewer, asked because ${q.why}`) }
     if (kept) {
       for (const e of entries.values()) if (!e.end && e.source !== "coverage" && e.reason === "program_wrong" && !failingAtEnd.has(e.id) && e.opened.round <= r) close(e, r, "fixed", `no longer failing on ${x.kept}`)
       for (const e of entries.values()) if (!e.end && e.reason === "unverified" && e.opened.round <= r) close(e, r, "unverified", "sent in the reviewer's words; no check tells whether it was fixed")
