@@ -1,0 +1,81 @@
+{
+ "_note": "rep1q R6 (2026-10-26): the check-writer's answer, cassette entry 50, upsert 4 as written: its input file is named with its content. It crashed the serial when methodB wrote the reference script's input.",
+ "step": "checks",
+ "recorded_at": "2026-10-25T16:52:40.709Z",
+ "check": {
+  "assertions": [
+   {
+    "expect_json": "1",
+    "id": "exit",
+    "reading": "A transform referencing a missing imputation column is expected to fail.",
+    "role": "business",
+    "source": {
+     "block": null,
+     "kind": "derived"
+    },
+    "target": {
+     "column": null,
+     "kind": "exit_code",
+     "line": null,
+     "path": null,
+     "pointer": null
+    },
+    "tolerance": null
+   },
+   {
+    "expect_json": "\"ERROR: invalid recipe: column missing not found\"",
+    "id": "stderr",
+    "reading": null,
+    "role": "convention",
+    "source": {
+     "block": "R6.S8.P1",
+     "kind": "verbatim"
+    },
+    "target": {
+     "column": null,
+     "kind": "stderr_line",
+     "line": 1,
+     "path": null,
+     "pointer": null
+    },
+    "tolerance": null
+   }
+  ],
+  "blocks": [
+   "R6.S8.P1"
+  ],
+  "input": {
+   "args": [
+    "transform",
+    "--input",
+    "data.csv",
+    "--recipe",
+    "recipe.json",
+    "--output",
+    "out.csv",
+    "--seed",
+    "1"
+   ],
+   "files": [
+    {
+     "content": "age\n1\n",
+     "path": "age\n1\n"
+    },
+    {
+     "content": "[{\"op\":\"impute\",\"column\":\"missing\",\"method\":\"mean\"}]\n",
+     "path": "recipe.json"
+    }
+   ]
+  },
+  "key": "K61_impute_missing_column",
+  "note": null,
+  "object": "O61",
+  "reference_script": {
+   "code": "import json\nprint(json.dumps({\"exit\":1}))",
+   "language": "python"
+  },
+  "uses": [
+   "O20"
+  ]
+ }
+}

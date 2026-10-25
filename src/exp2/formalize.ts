@@ -228,7 +228,7 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
         else add(`input file ${f.path}: content is null and ${lead ? `lead ${lead.id} has no such file` : `materials.files has no file ${f.path}`}`)
       }
       if (!Array.isArray(i.args) || !i.args.every(x => typeof x === "string") || !Array.isArray(i.files) || !i.files.every(f => f && typeof f.path === "string" && typeof f.content === "string")) add("input must be {args: string[], files: {path, content}[]}")
-      else for (const f of i.files) if (!safePath(f.path)) add(`input path ${f.path} must be relative and inside the run directory`)
+      else for (const f of i.files) if (!safePath(f.path)) add(`input path ${JSON.stringify(f.path)} must be a relative file name inside the run directory, with no line break, control character or any of < > : " | ? *`)
     }
     if (!Array.isArray(it.assertions)) { add("assertions must be a list"); continue }
     if (it.input && !it.assertions.length) add("an item with an input needs at least one assertion")

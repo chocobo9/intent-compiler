@@ -313,7 +313,7 @@ export interface CheckRequest {
 export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
-  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth" | "unavailable" | "unit_unchanged"
+  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth" | "unavailable" | "unit_unchanged" | "admission_failed"
   | "reference_output" | "reference_value_missing" | "methods_disagree" | "computed_missing"
 
 /** `blocks`: for code, the units an `uncovered` issue names. */
@@ -467,7 +467,7 @@ export function checkChecks(registry: Registry, round: number, draft: ChecksDraf
     if (!missing.length && !blocks.some(basis)) add("basis_not_object", `${w}: none of ${blocks.join(", ") || "(no blocks)"} is text of ${k.object} (${name(k.object)})${k.uses.length ? ` or of a convention in its uses (${k.uses.join(", ")})` : ""}; ${[...new Set(blocks.map(b => registry.coverOf(b)?.owner).filter((o): o is string => !!o && o !== "none" && o !== k.object))].map(o => `${o} (${name(o)})`).join(", ") || "they belong to no object"}${blocks.some(b => { const o = registry.coverOf(b)?.owner; return o && o !== "none" && o !== k.object }) ? ": text of another object is a basis only when that object is a shared convention the check lists in uses" : ""}`, k.key)
     // Input: safe relative paths, each once.
     const paths = k.input.files.map(f => f.path)
-    for (const p of paths) if (!safePath(p)) add("input_invalid", `${w}: input path ${p} must be relative and stay inside the run directory`, k.key)
+    for (const p of paths) if (!safePath(p)) add("input_invalid", `${w}: input path ${JSON.stringify(p)} must be a relative file name inside the run directory, with no line break, control character or any of < > : " | ? *`, k.key)
     if (new Set(paths).size !== paths.length) add("input_invalid", `${w}: an input path is given twice`, k.key)
     // Names: command, options and JSON keys must appear in the requirements' code fragments.
     for (const n of namesOf(k)) if (!facts.tokens.has(n.name)) add("name_unknown", `${w}: ${n.what} ${n.name} does not appear in any code fragment of the requirements`, k.key)
@@ -559,7 +559,7 @@ function namesOf(k: CheckDraft): { what: string; name: string }[] {
 export function targetProblems(t: Target): string | null {
   const needsPath = ["file", "file_line", "file_exists", "json", "csv_cell"].includes(t.kind)
   if (needsPath && !t.path) return `${t.kind} needs a path`
-  if (t.path && t.path !== "-" && !safePath(t.path)) return `path ${t.path} must be relative and inside the run directory`
+  if (t.path && t.path !== "-" && !safePath(t.path)) return `path ${JSON.stringify(t.path)} must be a relative file name inside the run directory, with no line break, control character or any of < > : " | ? *`
   if (t.path === "-" && t.kind !== "json") return `path "-" (stdout) is for json only`
   if (["stdout_line", "stderr_line", "file_line", "csv_cell"].includes(t.kind) && !(Number.isSafeInteger(t.line) && t.line! >= 1)) return `${t.kind} needs a line number from 1`
   if (t.kind === "json" && (t.pointer === null || (t.pointer !== "" && !t.pointer.startsWith("/")))) return `json needs a JSON pointer ("" or starting with /)`
@@ -883,7 +883,9 @@ export async function deriveChecks(registry: Registry, round: number, library: r
     issues = [...checkChecks(registry, round, draft, library, events, facts, { unitsOnce: options.unitsOnce }), ...(options.coverageObligation ? coverageIssues(registry, coverage(registry, round, draft, library, events), draft, library, events) : [])]
     // Admission inside the loop (batch C, effect 1): what the reference script gives, for checks with no other problem.
     if (options.admit) for (const k of draft.checks.filter(c => !issues.some(i => i.check === c.key))) {
-      const a = await admit(k)
+      // One check's admission failing (its reference script's run could not be set up) fails that check only.
+      let a: Awaited<ReturnType<AdmitCheck>>
+      try { a = await admit(k) } catch (e) { a = { issues: [{ code: "admission_failed", check: k.key, message: `check ${k.key}: its admission could not run: ${(e as Error).message.slice(0, 300)}` }], notes: [] } }
       if (a.notes.length) normalized[k.key] = [...new Set([...(normalized[k.key] ?? []), ...a.notes])]
       issues.push(...a.issues)
     }
