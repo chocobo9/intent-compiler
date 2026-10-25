@@ -18,6 +18,7 @@ import { gapState } from "./probes.js"
 import { ledgerOf, ledgerSummary, renderLedger } from "./ledger.js"
 import type { PlatformOptions } from "./platform.js"
 import { acceptRound, renderGuardItem, renderReviewList, type CarriedItem } from "./accept.js"
+import { checkFact, reviewLists, type OpenFact } from "./lists.js"
 import { guardCheck, guardCoverage, liveGuards, runGuards } from "./guards.js"
 import { itemCheckRecord, notInForce, type FormalizeTransport, type Premise } from "./formalize.js"
 import { runChecks, type CheckRun } from "./verdict.js"
@@ -385,6 +386,15 @@ export class Serial {
     const sources = state.sources.map(x => ({ round: x.round, text: x.text }))
     // Carried items open the work message (batch 3a); one whose output has not changed since it was sent is marked so.
     const since = (c: CarriedItem) => c.digest ? untouchedSince(state.executions, c.id, c.digest) : null
+    // The review's lists (batch 4 E4): open facts as the round starts (carried items, earlier checks failing on the
+    // baseline), and the patrol of earlier commands.
+    const failingEarlier = start.runs.filter(r => r.outcome === "fail").flatMap(r => { const k = state.checks.find(x => x.id === r.check); return k && k.round < round ? [{ k, why: r.failure ? `fails (${r.failure.class}/${r.failure.reason})` : "fails" }] : [] })
+    const roundOfId = (id: string) => /^V\d/u.test(id) ? Number(id.slice(1).split(".")[0]) : state.guards.find(g => g.id === id)?.round ?? 0
+    const openFacts: OpenFact[] = [
+      ...carried.map(c => { const n = since(c); return { id: c.id, kind: "carried" as const, round: roundOfId(c.id), object: c.check?.object ?? null, units: c.check ? c.check.blocks : [], why: n ? `untouched since R${n}` : "still open from an earlier round" } }),
+      ...failingEarlier.map(x => checkFact(x.k, x.why)),
+    ]
+    const lists = reviewLists(registry, round, openFacts, state.executions)
     const carriedText = carried.length ? `${CARRIED_HEADER_REVIEW}\n\n${renderReviewList(carried.map(c => { const n = since(c); return { id: c.id, text: n ? `(untouched since R${n}) ${c.text}` : c.text } }))}\n\n` : ""
     const binary = this.c.binary ?? "app"
     // 4. Execution and acceptance.
@@ -395,7 +405,7 @@ export class Serial {
       copyDir: label => join(this.c.copies ?? join(this.c.checkpoints, "review-copies"), label),
       ...(checkWriting ? { libraryNow: async () => { await checksReady(); const n = store.inspect(); return { library: n.checks, events: n.check_events } } } : {}),
       record: { review: r => store.recordReviewCall(r), formalize: c => store.recordFormalizeCalls(c), guards: (b, e) => store.recordGuards(b, e) },
-      carried, quiet, superseded, time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
+      carried, quiet, superseded, lists, time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
     }, { ...limits.execution, ...(a.reviews !== undefined ? { reviews: a.reviews } : {}), ...(a.trialFixes !== undefined ? { trialFixes: a.trialFixes } : {}), ...(a.premiseBlock ? { premiseBlock: a.premiseBlock } : {}), ...(a.fallback ? { fallback: a.fallback } : {}), ...(a.voidWithoutRuns !== undefined ? { voidWithoutRuns: a.voidWithoutRuns } : {}) })
     await this.timed("waiting for checks", checksReady)
     // 5. The library's verdict on the final program, the guard coverage, the ledger, the report, the checkpoint.

@@ -316,6 +316,17 @@ export interface AcceptRoundRecord {
     after_untouched: { judged: number; fixed: number; touched: number; untouched: number }
     rulings: { id: string; why: string; cycle: string; word: "superseded" | "guard superseded" | "upheld" | "unasked"; guards?: string[] }[]
   }
+  /**
+   * Batch 4 E4: the review's lists this round (open and patrol commands with their reasons, units across commands,
+   * global units), the characters they added and the patrol text the cap left out; which commands the reviews ran,
+   * what the lists asked that they did not (coverage gaps), and the review items on listed commands.
+   */
+  lists?: {
+    open: { object: string; reasons: string[] }[]; patrol: string[]; cross: { id: string; objects: string[] }[]; global: string[]
+    chars: number; dropped_text: string[]; ran: string[]; gaps: string[]; findings: string[]
+    /** Global units: the flag read from the text (null: undecided), and the commands the reviews used it with. */
+    global_coverage: { id: string; flag: string | null; commands: string[] }[]
+  }
 }
 
 const zero = (): TokenUsage => ({ input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 })

@@ -6,10 +6,11 @@ import { renderEvidence, SessionBroken, type AcceptRoundRecord, type BuildResult
 import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
 import { commitStep, head, resetTo } from "./git.js"
 import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, type GuardEvent, type GuardRecord } from "./guards.js"
-import { sessionInput, type ReviewMaterials } from "./materials.js"
+import { sessionInput, type ReviewMaterials, type SessionFile } from "./materials.js"
 import type { Registry } from "./registry.js"
 import { answersIn, Repairs, untouchedMessage } from "./repairs.js"
-import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, reviewRequestOn, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
+import { coverageGaps, exercised, globalCoverage, objectsOfItem, type ReviewLists } from "./lists.js"
+import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, reviewRequestOn, supersededIn, type ProgramRun, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import { runChecks, runDigest, type CheckRun } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
@@ -86,6 +87,8 @@ export interface AcceptDeps {
   quiet?: ReadonlyMap<string, string>
   /** Open items not carried because this round replaced their text: recorded for the ledger (fix block B1). */
   superseded?: readonly SupersededItem[]
+  /** Batch 4 E4: the review's lists this round, given to every review of the round. */
+  lists?: ReviewLists
   time?: (stage: string, startedAt: number, endedAt: number) => void
   onProgress?: (record: ExecutionRecord) => void
   checkTimeoutMs?: number
@@ -209,6 +212,9 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   const revertGuards = new Map<string, string[]>()
   const rulingAt = new Map<string, { why: string; cycle: string }>()
   const askedItems = new Set<string>()
+  // The commands the round's reviews ran, with their runs and files (batch 4 E4).
+  const ran = new Set<string>()
+  const runsSeen: ProgramRun[] = [], filesSeen: SessionFile[] = []
   // The untouched message to send with the next message, and the items of the one sent into the current cycle.
   let untouchedOut: { ids: string[]; text: string } | null = null
   let lastUntouched: string[] = []
@@ -493,9 +499,10 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       // Under the round's package the reviewer reads the text in force; the appendix names this round's units (§6c).
       const thisRound = round === 1 ? [] : [...new Set(registry.roundScope(round).flatMap(c => c.entries.map(e => e.block)))].sort((a, b) => registry.block(a)!.start - registry.block(b)!.start)
       const itemQuestions = itemQs.map(q => itemQuestion(q.id, q.why, itemChecks.get(q.id)!, lastRun.get(q.id) ?? null, (revertGuards.get(q.id) ?? []).flatMap(gid => { const g = guards.find(x => x.id === gid); return g ? [{ id: gid, check: guardCheck(g, library) }] : [] })))
-      const focus: ReviewFocus = { ...(deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }), ...(itemQuestions.length ? { itemQuestions } : {}) }
+      const focus: ReviewFocus = { ...(deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }), ...(itemQuestions.length ? { itemQuestions } : {}), ...(deps.lists ? { lists: deps.lists } : {}) }
       const r = await review(current, focus, n2)
       reviews++
+      if (r?.out) { for (const o of exercised(registry, r.out.runs, r.out.materials?.files ?? [], deps.binary)) ran.add(o); runsSeen.push(...r.out.runs); filesSeen.push(...(r.out.materials?.files ?? [])) }
       const summary: ReviewSummary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length, program_runs: r?.out?.runs.length ?? 0, fallback: 0, logged: 0 }
       for (const g of questions) asked.add(g.id)
       survivors = []
@@ -718,6 +725,16 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     kind = "repair"
   }
   await session.close()
+  // The lists' coverage (batch 4 E4): what the reviews ran, what they did not, and the items on listed commands.
+  if (deps.lists) {
+    const listed = new Set([...deps.lists.open, ...deps.lists.patrol].map(c => c.object))
+    const global = globalCoverage(registry, deps.lists, runsSeen, filesSeen, deps.binary)
+    accept.lists = {
+      open: deps.lists.open.map(c => ({ object: c.object, reasons: c.reasons })), patrol: deps.lists.patrol.map(c => c.object), cross: deps.lists.cross.map(u => ({ id: u.id, objects: u.objects })), global: deps.lists.global.map(g => g.id),
+      chars: deps.lists.chars, dropped_text: deps.lists.dropped_text, ran: [...ran].sort(), gaps: coverageGaps(deps.lists, ran, global), global_coverage: global,
+      findings: (record.review_items ?? []).filter(i => objectsOfItem(registry, { units: i.units }).some(o => listed.has(o))).map(i => i.id),
+    }
+  }
   // Items that went to the reviewer and were never asked (no review was left in the round): carried, as open.
   for (const q of sends.questions()) if (!askedItems.has(q.id) && itemChecks.has(q.id)) accept.repairs.rulings.push({ id: q.id, why: q.why, cycle: rulingAt.get(q.id)?.cycle ?? "", word: "unasked", ...(revertGuards.get(q.id)?.length ? { guards: revertGuards.get(q.id)! } : {}) })
   // The round ends on the last program that built and passed its trial, with the tree there (a reverted repair already is).

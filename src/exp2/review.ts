@@ -8,6 +8,7 @@ import type { OpenCodeCodingClient } from "./opencode-executor.js"
 import { sessionTokens } from "./opencode-executor.js"
 import { asProviderError, classifyProviderError, withRateLimitRetry, type RateLimitPolicy } from "./provider-errors.js"
 import { sessionMaterials, type ReviewMaterials } from "./materials.js"
+import type { ReviewLists } from "./lists.js"
 
 /**
  * The reviewer (DESIGN §12i item 1): a session with tools, in a copy of the program, that builds it, runs it on
@@ -50,6 +51,8 @@ export interface ReviewFocus {
    * check fails, a repair reverted twice), each with its check; a revert's guards with theirs.
    */
   itemQuestions?: { id: string; why: string; text: string; args: string[]; files: { path: string; content: string }[]; expected: string; got: string; guards: { id: string; args: string[]; files: { path: string; content: string }[]; expected: string }[] }[]
+  /** Batch 4 E4: commands with open problems, commands not reviewed for a while, changes across commands, global changes. */
+  lists?: ReviewLists
 }
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
@@ -82,6 +85,14 @@ export function reviewAppendix(f: ReviewFocus): string {
       out.push(`Check: command ${JSON.stringify(q.args)}; input files ${q.files.map(x => `${x.path} = ${JSON.stringify(clip(x.content, 300))}`).join(", ") || "none"}; expected ${q.expected}; got ${q.got}.`)
       for (const g of q.guards) out.push(`Guard ${g.id}: command ${JSON.stringify(g.args)}; input files ${g.files.map(x => `${x.path} = ${JSON.stringify(clip(x.content, 300))}`).join(", ") || "none"}; expects ${g.expected}.`)
     }
+  }
+  if (f.lists) {
+    const l = f.lists
+    const command = (c: ReviewLists["open"][number]) => [`## ${c.name} (${c.object})`, `Why: ${c.reasons.join("; ")}.`, ...(c.texts.length ? ["Its text in force:", ...c.texts.map(t => t.text.trimEnd())] : [])]
+    if (l.open.length) out.push("", "# Commands with open problems", "Each command below still has a failing check, an item that was not fixed, or an open item. Run the program on each of them at least once, against its text in force, and list what deviates.", ...l.open.flatMap(command))
+    if (l.patrol.length) out.push("", "# Commands not reviewed for a while", "No finding has been made on these commands for a while. Run the program on each of them at least once, against its text in force, and list what deviates.", ...l.patrol.flatMap(command))
+    if (l.cross.length) out.push("", "# Changes across commands", "Each change below touches several commands. Run the program on every command it names at least once.", ...l.cross.map(u => `- ${u.name}: ${u.names.join(", ")}`))
+    if (l.global.length) out.push("", "# Global changes", "Each change below applies to every command. Try it on at least two different commands.", ...l.global.map(g => `- ${clip(g.text, 600).replace(/\n/gu, " ")}${g.flag ? ` (use ${g.flag})` : ""}`))
   }
   if (f.leads.length) {
     out.push("", "# Leads to verify")

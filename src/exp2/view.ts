@@ -46,7 +46,7 @@ export function contextOf(registry: Registry, id: string): SourceBlock {
   return registry.lineage(id).find(b => b.level === "section" || b.level === "paragraph")!
 }
 
-function headingPath(registry: Registry, context: SourceBlock): string[] {
+export function headingPath(registry: Registry, context: SourceBlock): string[] {
   const sections = registry.lineage(context.id).slice(context.level === "section" ? 1 : 0).filter(b => b.level === "section" && b.heading)
   return sections.reverse().map(b => b.heading!.trim())
 }
