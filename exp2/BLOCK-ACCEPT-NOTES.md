@@ -1905,3 +1905,47 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - rep1j 的 R2 包按对象交付。R2 修订了 Transformation 对象，它的整个视图（包括全部 R1 操作的原文）以"本轮"身份进了包，审查员在 R2 回头找到了 5 条 R1 操作的问题。
 - rep1k、rep1n 按段交付。R1 操作的原文只在有开放项带着时才进包，落在 R1 命令上的发现引用的也全是开放项段。没有开放项指着的 R1 操作，R2 的审查员看不到它的原文。
 - 这支持"按需交付去掉了审查员回看早轮命令的由头"的推断，但不是全部原因：rep1k 同样按段交付，R2 末残留也只有 1，因为它 R1 末只挂 23 个；rep1n R1 末挂 52 个（window 28、fill 10、aggregate 6……），开放项只覆盖到其中一部分，没覆盖到的就一直留着。
+
+## 34. 批 4：原文状态层与审查范围（BATCH-4-2026-10-25，DESIGN-DEEP §1–§2）
+
+设计会话 2026-10-25 定的六点：
+1. 翻转分类的 edge 来源改为单元同属（cue、revision 单元；guard 单元不参与）。
+2. 检查重新派生和任务区都改用单元。
+3. 保留单一属主。
+4. guard 单元不做传递合并。
+5. "各至少一条检查"按审查员会话里对每个命令至少跑过一次程序算。
+6. E2 只进报告；名单附的段放审查请求附录，不计入 40k 包预算，单独计字符，软上限 15k，超了先去轮巡命令的段。
+
+### 34.1 E1a：变化单元与修订出处（纯代码，不调模型）
+
+**做法**：新文件 `src/exp2/units.ts`。全部由原文、已接受的归属和检查推出，不另存。
+- `cuesIn`：作者线索，在代码里提取，不进模型提示。规则从 cues-units.py 移植：changes_to、cross_list、prev_new、scope_unchanged、author_id、点名命令的修订句。
+  - 作者编号只认 F12、Section 21、§3。`round-N`、`vN` 不算：d10_w4 原表里的 78 个全是 API 路径里的 v1、v2。
+  - 标题行不算句子，但"Changes to `X`"从小节标题读。
+- `cueUnits`：
+  - 一个 Changes to 小节，它下面的全部句子；
+  - 同一个顶层小节里点名命令的修订句（或 previously/instead/no longer 句），合成一个跨命令单元。命令按反引号里的名字对到对象：先认名字正好是 X、"X command"、"X operation"的对象，没有时才认以 X 开头的；
+  - 同一个作者编号被多处引用，成一个单元；
+  - "all commands"只列出，不展开。
+- `revisionUnits`：每条修订记录，新旧句子一个单元。
+- `guardUnits`：每条检查（和由审查条目出生的守卫）的单元自成一个，不做传递合并。
+- `provenance`：修订的新文本（或它所在小节的标题）带修订线索，就标 cue 并附线索原文，否则 inferred。
+- `scopeDeclarations`：给 E2 用。
+- 测试 `test/exp2/units.test.ts`，5 条。
+
+**数字**：
+- 验收 1 的前一半：dpipe R5 "Behavior Change: verify command checksum algorithm"一节成一个 cue 单元，7 个句子。rep1n 的对象里它覆盖 verify、ingest、transform、manifest 四个命令；rep1j 的对象里是 Manifest、Verification、Ingestion、Transformation 四个。
+- 验收 3（`exp2/evidence/batch4-2026-10-25/cues-tasks.md`，四个任务只读 instruction.md）：
+
+  | 任务 | changes_to | cross | prev/new | 范围声明 | 作者编号 | 点名修订句 | cue 单元 |
+  |---|---|---|---|---|---|---|---|
+  | dpipe | 0 | 1 | 15 | 1 | 0 | 18 | 7 |
+  | d10_w4 | 0 | 0 | 12 | 12 | 0 | 9 | 4 |
+  | d12_w1 | 0 | 0 | 13 | 6 | 121 | 19 | 57 |
+  | d8_w5 | 5 | 3 | 10 | 0 | 0 | 4 | 10 |
+
+  和 change-unit-cues 的表同量级。差别：作者编号不再算 vN；标题行不再单独算；prev/new 多认了 "now produces" 和 "(not X)"。d10_w4 的范围声明出现在 R2–R7 每一轮，R1 是第一轮，没有。
+- 验收 4（`provenance-r2.md`，另附 R3、R5）：
+  - rep1j、rep1k、rep1l、rep1m 的 R2 修订记录重标：7/1/0/1 条，全部是 inferred，cue 类 0 条。R2 在 gold 里没有修订，这 9 条都是误记，没有一条被标成 cue。
+  - R3–R6（rep1j、rep1k、rep1n）：cue 类 14 条，全部在 gold 上（100%）；inferred 类 18 条，其中 11 条在 gold 上。
+  - "在 gold 上"的判法是新文本在 gold 句子所在段里或包含它（整节的修订包含那一段）。只按段相等比，会把 rep1n R3 那条整节修订误判成不在 gold 上。
