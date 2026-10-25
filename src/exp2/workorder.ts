@@ -2,7 +2,7 @@ import type { Anchor } from "./anchors.js"
 import { activeChecks, type CheckEvent, type CheckRecord } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import type { CheckRun, ObjectStatus } from "./verdict.js"
-import { contextOf, fitPackage, packageSizes, renderPackage, roundPackage, type PackageOverflow, type RoundPackage } from "./view.js"
+import { contextOf, fitPackage, packageSizes, renderPackage, roundPackage, type PackageOverflow, type RoundPackage, type PackageUnits } from "./view.js"
 
 /**
  * The round's work order (DESIGN §6): five zones computed by code. Zones other than the source zone cite ids only;
@@ -48,7 +48,7 @@ export interface WorkOrder {
    * What of the requirements the source zone holds (§12j.7 item 9): delta, the round's package (§6a step 3), or all.
    * Characters of the source zone as rendered, and what it would be with every round's text (all), for the report.
    */
-  scope?: { kind: "delta" | "all"; source_chars: number; source_chars_all: number; blocks: number; blocks_all: number; segments?: { object: string; paragraph: string; why: string; via: string[] }[]; heads?: string[]; edges?: { to_block: number; to_object: number }; sizes?: Record<string, number>; guards?: number; overflow?: PackageOverflow | null }
+  scope?: { kind: "delta" | "all"; source_chars: number; source_chars_all: number; blocks: number; blocks_all: number; segments?: { object: string; paragraph: string; why: string; via: string[] }[]; units?: PackageUnits; sizes?: Record<string, number>; guards?: number; overflow?: PackageOverflow | null }
   /** Scope delta (§6c): the round's package, by paragraph, with its comparisons (the source zone); guards are not listed. */
   package?: { pkg: RoundPackage }
 }
@@ -228,7 +228,7 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
   const blocksAll = all.reduce((n, g) => n + g.blocks.length, 0)
   if (pkg) return {
     round, task, protect: [], status: statusZone, source, anchors: anchorZone.filter(a => inTask.has(a.object)), units, package: { pkg: pkg.pkg },
-    scope: { kind: "delta", source_chars: renderPackage(pkg.pkg).length, source_chars_all: chars(all), blocks: pkg.pkg.segments.length, blocks_all: blocksAll, segments: pkg.pkg.segments.map(s => ({ object: s.object, paragraph: s.paragraph, why: s.why, via: s.via })), heads: pkg.pkg.heads.map(h => h.object), edges: pkg.pkg.edges, sizes: packageSizes(pkg.pkg), guards: pkg.pkg.comparisons.length, overflow: pkg.overflow },
+    scope: { kind: "delta", source_chars: renderPackage(pkg.pkg).length, source_chars_all: chars(all), blocks: pkg.pkg.segments.length, blocks_all: blocksAll, segments: pkg.pkg.segments.map(s => ({ object: s.object, paragraph: s.paragraph, why: s.why, via: s.via })), units: pkg.pkg.units, sizes: packageSizes(pkg.pkg), guards: pkg.pkg.comparisons.length, overflow: pkg.overflow },
   }
   return { round, task, protect, status: statusZone, source, anchors: anchorZone, units, scope: { kind: input.scope ?? "all", source_chars: chars(source), source_chars_all: chars(all), blocks: source.reduce((n, g) => n + g.blocks.length, 0), blocks_all: blocksAll } }
 }

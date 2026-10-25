@@ -7,6 +7,7 @@ import { Registry } from "../../src/exp2/registry.js"
 import { splitRound } from "../../src/exp2/source.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { codeUnits, cuesIn, cueUnits, guardUnits, objectsNamed, provenance, revisionUnits, scopeDeclarations } from "../../src/exp2/units.js"
+import { contextOf, roundPackage } from "../../src/exp2/view.js"
 import { roundText } from "./inputs.js"
 import { stubTransport } from "./stubs.js"
 
@@ -87,5 +88,32 @@ describe("batch 4 E1a: change units and revision provenance, by code", () => {
     assert.equal(u.name, "Changes to build")
     assert.equal(u.members.length, 2, "both sentences under the heading")
     assert.ok(cuesIn(reg, 2).some(h => h.kind === "prev_new"))
+  })
+})
+
+describe("batch 4 E3: a change unit brings its earlier sentences' paragraphs into the package", () => {
+  const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-units-pkg-")), "unitspkg")
+  // The stand-in's R2 answer gives a unit of its own: an R2 sentence and the R1 filter sentence change together.
+  const transport = (): ReturnType<typeof stubTransport> => {
+    const inner = stubTransport()
+    return async request => {
+      const reply = await inner(request)
+      if (request.round !== 2 || request.previous_draft.assignments.length) return reply
+      const patch = JSON.parse(reply.text) as { units_add: unknown[] }
+      patch.units_add.push({ candidate: null, name: "filter and R2", members: ["R2.S1.P1", "R1.S3.P2.s4"] })
+      return { ...reply, text: JSON.stringify(patch) }
+    }
+  }
+  before(async () => { const t = transport(); for (const r of [1, 2]) await store.ingestRound(r, roundText(r), t) })
+
+  it("the R1 paragraph comes as a unit paragraph, model-sourced (the first to go over the budget)", () => {
+    const reg = store.registry()
+    assert.ok(reg.units(2).some(u => u.source === "model" && u.members.includes("R1.S3.P2.s4")), JSON.stringify(reg.answerUnits))
+    const pkg = roundPackage(reg, 2)
+    const s = pkg.segments.find(x => x.paragraph === contextOf(reg, "R1.S3.P2.s4").id)!
+    assert.ok(s, JSON.stringify(pkg.segments.map(x => [x.paragraph, x.why])))
+    assert.deepEqual([s.why, s.unit_source], ["unit", "model"])
+    assert.match(s.via.join(" "), /U2\.m1 \(model: filter and R2\)/u)
+    assert.ok(pkg.units.touched >= 1)
   })
 })

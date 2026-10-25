@@ -2052,3 +2052,22 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - 软上限的裁剪顺序；
 - `--audit` 的严格覆盖与"无法判定"；
 - transform 按配方 op 认命令，以及附录的各节。
+
+### 34.6 E3：包的第三类改为按单元
+
+**做法**（view.ts）：
+- 段的理由 "edge" 换成 "unit"。本轮触及的变化单元，即本轮的 cue/model 单元，或早轮单元里有句子本轮被修订的，把它早轮句子所在的段带进包，标"earlier, changing together with this round's text"。
+- 全局单元不展开；guard 单元不算（检查每个周期都跑）；revision 单元的新旧句子本来就是本轮段和修订段，不重复。
+- 对象头（heads）和边计数随边一起去掉，换成 `units`：触及的单元数，以及每个跨两个以上命令的单元涉及哪些命令、包里的文字覆盖到了哪些。覆盖指包里有该命令的段，或某段用反引号点名了它。
+- 预算超限时：先裁只由 model 单元带来的段，再裁开放项段；本轮段、修订段和 cue 单元带来的段不裁。
+- 报告的 Requirements given 一行改报"change units touched / across commands, delivered to x/y"；工单 scope 同样改。
+
+**验收 1、5**（`replay-package.mjs` → `replay-package.md`；rep1j–rep1n 每轮按新代码重建包，带入条目作开放项，不调模型）：
+- dpipe R5 的横切交付：U5.c1 在 rep1j、rep1k、rep1n 都是 4/4。验收 1 至此成立：cue 单元含四个命令的句子（§34.1）；审查请求列出四个命令（§34.5，跨命令单元一节）；交付 4/4。
+- 包字符：R3+ 每一轮都 ≤ 本轮原文 × 2 + 10k。
+- 单元带来的段：dpipe 上五次运行都是 0 字符。dpipe 的 cue 单元都只在同一轮内（作者编号单元为 0），带不来早轮句子；这一类在 d12_w1 这种靠 F 编号的文档上才会有内容。
+- 审查员引用的句子在包内：rep1k、rep1l、rep1m、rep1n 全部 100%。rep1j 有 21 个引用单元不在包内；算上名单附文（E4）后仍有 9 个不在包内也不在名单里：
+  - R2：V2.2.3（R1 derive）、V2.2.7（R1 ingest）、V2.2.8（R1 unpivot）；
+  - R3：V3.2.1（R2.S11.P7）；R4：V4.2.2（R2.S17.P7.s6）；R5：V5.3.3（R4.S3.P2）。
+  - rep1j 的审查员读的是整对象视图，这些正是它靠整视图回看找到的。新包不再给这些段，名单也没把这些命令列上。**验收 5 的"100% 在包内"对 rep1j 不成立**，已报设计会话。
+- 测试：units.test 加一条（R2 的 model 单元把 R1 的 filter 段作为 unit 段带进包，来源 model）；chain.test 的预算用例改为"先 model 单元段，再开放项，cue 单元段不裁"。batch-1 的报告行正则随之改。batch-1 的 stand-in serial 用例一次报 stopped，重跑两次都通过，没能复现。

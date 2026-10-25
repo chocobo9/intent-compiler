@@ -272,7 +272,7 @@ ${annotate(reg.sources.get(1)!)}`))
       assert.ok(d[k].review < a[k].review, `R${k + 1} review requests: delta ${d[k].review}, full ${a[k].review}`)
     }
     // The report says so, in its interface counts.
-    assert.match(renderReport(delta.reports[2]), /- Requirements given: work order source zone delta, \d+ characters in \d+ paragraphs of \d+ objects \(this round \d+ \(\d+ characters\), revised \d+ \(\d+ characters\), edge \d+ \(\d+ characters\), open item \d+ \(\d+ characters\)\), \d+ object heads; this round's edges to a block \d+, to an object \d+; \d+ comparisons \(guards on revised units\).* \(every round's text: \d+ in \d+ blocks\); review requests \d+ characters/u)
+    assert.match(renderReport(delta.reports[2]), /- Requirements given: work order source zone delta, \d+ characters in \d+ paragraphs of \d+ objects \(this round \d+ \(\d+ characters\), revised \d+ \(\d+ characters\), unit \d+ \(\d+ characters\), open item \d+ \(\d+ characters\)\), change units touched \d+; across commands \d+, delivered to \d+\/\d+ of their commands; \d+ comparisons \(guards on revised units\).* \(every round's text: \d+ in \d+ blocks\); review requests \d+ characters/u)
   })
 })
 

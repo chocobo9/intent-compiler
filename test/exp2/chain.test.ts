@@ -141,15 +141,16 @@ describe("the chain block, the round's package and its limit (§6c, round packag
     })
   }
 
-  it("over the budget (40k): the paragraphs edges brought go first, the last first; then those of open items; this round's and the revised ones stay", () => {
-    const pkg = (segments: PackageSegment[]) => ({ segments, heads: [], comparisons: [], edges: { to_block: 0, to_object: 0 } })
+  it("over the budget (40k): the paragraphs only model units brought go first, the last first; then those of open items; this round's, the revised ones and those of cue units stay", () => {
+    const pkg = (segments: PackageSegment[]) => ({ segments, comparisons: [], units: { touched: 0, cross: [] } })
     assert.equal(PACKAGE_BUDGET, 40_000)
-    const segs = [seg("P1", "this round", 12_000), seg("P2", "revised", 5_000), seg("P3", "edge", 8_000), seg("P4", "edge", 8_000), seg("P5", "open item", 6_000), seg("P6", "open item", 6_000)]
+    const unit = (p: string, size: number, source: "cue" | "model") => ({ ...seg(p, "unit", size), unit_source: source })
+    const segs = [seg("P1", "this round", 12_000), seg("P2", "revised", 5_000), unit("P3", 8_000, "model"), unit("P4", 8_000, "model"), seg("P5", "open item", 6_000), seg("P6", "open item", 6_000)]
     const f = fitPackage(pkg(segs))
     assert.deepEqual(f.pkg.segments.map(s => s.paragraph), ["P1", "P2", "P3", "P5", "P6"])
     assert.deepEqual(f.overflow!.dropped, ["P4"])
-    const g = fitPackage(pkg([...segs, seg("P7", "this round", 25_000)]))
-    assert.deepEqual(g.pkg.segments.map(s => s.paragraph), ["P1", "P2", "P7"], "edges, then open items")
+    const g = fitPackage(pkg([...segs, unit("P8", 3_000, "cue"), seg("P7", "this round", 25_000)]))
+    assert.deepEqual(g.pkg.segments.map(s => s.paragraph), ["P1", "P2", "P8", "P7"], "model units, then open items; a cue unit's paragraph stays")
     assert.equal(g.overflow!.still_over, true, "this round's paragraphs are never cut")
     assert.equal(fitPackage(pkg([seg("P1", "this round", 10)])).overflow, null)
   })

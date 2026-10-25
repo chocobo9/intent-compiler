@@ -1,3 +1,4 @@
+import { objectsNamed } from "./units.js"
 import type { BlockState, Modification, Registry } from "./registry.js"
 import { annotateRange, type SourceBlock } from "./source.js"
 
@@ -230,16 +231,22 @@ export function paragraphInForce(registry: Registry, paragraph: string, round: n
   return renderSpan(registry, p, cuts)
 }
 
-export type SegmentWhy = "this round" | "revised" | "edge" | "open item"
-/** A paragraph of the round's package (§6c, the package's revision): whose it is, why it is there, its text in force. */
-export interface PackageSegment { object: string; name: string; paragraph: string; round: number; path: string; why: SegmentWhy; via: string[]; text: string }
-/** An object an edge of this round points at as a whole: named, its text not brought (§6c revision, decision Q2). */
-export interface PackageHead { object: string; name: string; referred_by: string[] }
+export type SegmentWhy = "this round" | "revised" | "unit" | "open item"
+/**
+ * A paragraph of the round's package (§6c, the package's revision): whose it is, why it is there, its text in force.
+ * unit_source: for a paragraph a change unit brought, cue when a cue unit did (it stays within the budget), else model.
+ */
+export interface PackageSegment { object: string; name: string; paragraph: string; round: number; path: string; why: SegmentWhy; via: string[]; text: string; unit_source?: "cue" | "model" }
 /** Behaviour bound to earlier text this round revises (§6c revision item 4): a guard on a revised unit, what it gets now. */
 export interface PackageComparison { guard: string; args: string[]; files: string[]; output: string | null; units: { id: string; earlier: string; now: string[] }[] }
-export interface RoundPackage { segments: PackageSegment[]; heads: PackageHead[]; comparisons: PackageComparison[]; edges: { to_block: number; to_object: number } }
+/**
+ * Batch 4 E3: the change units this round touches, and each across two commands or more with the commands it
+ * involves and those the package's text reaches (a paragraph of theirs, or one that names them).
+ */
+export interface PackageUnits { touched: number; cross: { id: string; name: string; objects: string[]; delivered: string[] }[] }
+export interface RoundPackage { segments: PackageSegment[]; comparisons: PackageComparison[]; units: PackageUnits }
 
-const WHY_RANK: Record<SegmentWhy, number> = { "this round": 0, revised: 1, edge: 2, "open item": 3 }
+const WHY_RANK: Record<SegmentWhy, number> = { "this round": 0, revised: 1, unit: 2, "open item": 3 }
 const paragraphOf = (registry: Registry, id: string) => contextOf(registry, id).id
 
 /**
@@ -247,8 +254,9 @@ const paragraphOf = (registry: Registry, id: string) => contextOf(registry, id).
  * - this round: the paragraphs (or sections) holding the units this round attributed, under their object;
  * - revised: the earlier paragraph holding each unit this round revised or withdrew, as it stands now, with the
  *   earlier text of the unit on a line below;
- * - edge: an edge recorded this round from this round's text to an earlier block brings that block's paragraph; one
- *   to an object as a whole brings a head line only;
+ * - unit (batch 4 E3): each change unit this round touches (a cue or model unit of this round, or an earlier one whose
+ *   text this round revises) brings the paragraphs of its earlier sentences; a global unit is never expanded, and a
+ *   check's units are no unit here (the check runs every cycle);
  * - open item: the paragraph each open item's unit is in.
  * Each paragraph once (the first reason in that order); nothing inferred.
  */
@@ -275,14 +283,26 @@ export function roundPackage(registry: Registry, round: number, open: readonly {
     add(para, o.id, "revised", `${p} ${m.kind === "withdraw" ? "withdrawn" : "revised"} by ${m.by.join(", ")}`)
     earlier.set(para, [...new Set([...(earlier.get(para) ?? []), p])])
   }
-  const heads = new Map<string, PackageHead>()
-  const edges = { to_block: 0, to_object: 0 }
+  // Change units this round touches: their sentences of earlier rounds come in, by paragraph.
+  const revisedNow = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts)))
+  const touched = registry.units(round).filter(u => u.source !== "revision" && !u.all && (u.round === round || u.members.some(m => revisedNow.some(p => overlaps(registry, m, p)))))
+  for (const u of touched) for (const m of u.members.filter(x => (registry.block(x)?.round ?? round) < round)) {
+    const para = paragraphOf(registry, m)
+    add(para, owner(m), "unit", `${u.id} (${u.source}: ${u.name})`)
+    const s = segs.get(para)
+    if (s?.why === "unit") s.unit_source = s.unit_source === "cue" || u.source === "cue" ? "cue" : "model"
+  }
   for (const item of open) for (const u of item.units) if (registry.block(u)) add(paragraphOf(registry, u), owner(u), "open item", item.id)
   const segments = [...segs.values()]
   for (const s of segments) for (const p of earlier.get(s.paragraph) ?? []) s.text = `${s.text.trimEnd() ? `${s.text.trimEnd()}\n` : ""}earlier text of ${p}: ${registry.block(p)!.text.trim()}`
-  // An object with text in the package needs no head line.
-  const withText = new Set(segments.map(s => s.object))
-  return { segments: orderSegments(registry, segments), heads: [...heads.values()].filter(h => !withText.has(h.object)), comparisons: [], edges }
+  return { segments: orderSegments(registry, segments), comparisons: [], units: { touched: touched.length, cross: crossDelivery(registry, touched, segments) } }
+}
+
+/** Each unit across two commands or more: the commands it involves, and those the package reaches (a paragraph of theirs, or one that names them). */
+export function crossDelivery(registry: Registry, units: readonly { id: string; name: string; objects: readonly string[]; all?: boolean }[], segments: readonly PackageSegment[]): PackageUnits["cross"] {
+  const named = new Set(segments.flatMap(s => [...s.text.matchAll(/`([a-z][\w.-]{2,})`/giu)].flatMap(m => objectsNamed(registry, m[1]))))
+  const own = new Set(segments.map(s => s.object))
+  return units.filter(u => !u.all && u.objects.length >= 2).map(u => ({ id: u.id, name: u.name, objects: [...u.objects], delivered: u.objects.filter(o => own.has(o) || named.has(o)) }))
 }
 
 function orderSegments(registry: Registry, segments: PackageSegment[]): PackageSegment[] {
@@ -292,7 +312,7 @@ function orderSegments(registry: Registry, segments: PackageSegment[]): PackageS
   return [...segments].sort((a, b) => (rank.get(a.object)! === 0 ? 0 : 1) - (rank.get(b.object)! === 0 ? 0 : 1) || num(a.object) - num(b.object) || a.round - b.round || registry.block(a.paragraph)!.start - registry.block(b.paragraph)!.start)
 }
 
-const segmentLabel = (s: PackageSegment) => s.why === "this round" ? "this round" : s.why === "revised" ? `earlier text this round revises (${s.via.join("; ")})` : s.why === "edge" ? `earlier, referred to by ${s.via.join("; ")}` : `earlier, open item ${s.via.join(", ")}`
+const segmentLabel = (s: PackageSegment) => s.why === "this round" ? "this round" : s.why === "revised" ? `earlier text this round revises (${s.via.join("; ")})` : s.why === "unit" ? `earlier, changing together with this round's text (${s.via.join("; ")})` : `earlier, open item ${s.via.join(", ")}`
 
 /** The package as the executor, the reviewer and the formalizer read it: by object, each paragraph under its heading path and reason. */
 export function renderPackage(pkg: RoundPackage): string {
@@ -305,7 +325,6 @@ export function renderPackage(pkg: RoundPackage): string {
     if (h !== header) { out.push(h); header = h }
     out.push(s.text.trimEnd())
   }
-  for (const h of pkg.heads) out.push(`### ${h.object} ${h.name} — referred to by ${h.referred_by.join(", ")}, text not brought`)
   if (pkg.comparisons.length) out.push(renderComparisons(pkg.comparisons))
   return out.length ? out.join("\n\n") + "\n" : ""
 }
@@ -322,22 +341,24 @@ export function renderComparisons(cs: readonly PackageComparison[]): string {
 }
 
 /** Characters of the package by zone (§6c revision item 5). */
-export function packageSizes(pkg: RoundPackage): Record<SegmentWhy | "heads" | "comparisons" | "total", number> {
+export function packageSizes(pkg: RoundPackage): Record<SegmentWhy | "comparisons" | "total", number> {
   const by = (w: SegmentWhy) => pkg.segments.filter(s => s.why === w).reduce((n, s) => n + s.text.length, 0)
-  return { "this round": by("this round"), revised: by("revised"), edge: by("edge"), "open item": by("open item"), heads: pkg.heads.length ? pkg.heads.map(h => h.object).join().length : 0, comparisons: pkg.comparisons.length ? renderComparisons(pkg.comparisons).length : 0, total: renderPackage(pkg).length }
+  return { "this round": by("this round"), revised: by("revised"), unit: by("unit"), "open item": by("open item"), comparisons: pkg.comparisons.length ? renderComparisons(pkg.comparisons).length : 0, total: renderPackage(pkg).length }
 }
 
 export interface PackageOverflow { limit: number; chars: number; dropped: string[]; still_over: boolean }
 
 /**
- * The package within its budget (§6c revision item 5): first the paragraphs edges brought go, the last first; then
- * those of the open items. This round's paragraphs and the revised ones stay. Null overflow: it fitted.
+ * The package within its budget (§6c revision item 5; batch 4 E3): first the paragraphs only model units brought go,
+ * the last first; then those of the open items. This round's paragraphs, the revised ones and those a cue unit
+ * brought stay. Null overflow: it fitted.
  */
 export function fitPackage(pkg: RoundPackage, limit = PACKAGE_BUDGET): { pkg: RoundPackage; overflow: PackageOverflow | null } {
   const chars = renderPackage(pkg).length
   if (chars <= limit) return { pkg, overflow: null }
   const segments = [...pkg.segments], dropped: string[] = []
-  for (const why of ["edge", "open item"] as const) for (let i = segments.length - 1; i >= 0 && renderPackage({ ...pkg, segments }).length > limit; i--) if (segments[i].why === why) { dropped.push(segments[i].paragraph); segments.splice(i, 1) }
+  const goes = [(s: PackageSegment) => s.why === "unit" && s.unit_source === "model", (s: PackageSegment) => s.why === "open item"]
+  for (const go of goes) for (let i = segments.length - 1; i >= 0 && renderPackage({ ...pkg, segments }).length > limit; i--) if (go(segments[i])) { dropped.push(segments[i].paragraph); segments.splice(i, 1) }
   const fitted = { ...pkg, segments }
   return { pkg: fitted, overflow: { limit, chars, dropped: dropped.reverse(), still_over: renderPackage(fitted).length > limit } }
 }
