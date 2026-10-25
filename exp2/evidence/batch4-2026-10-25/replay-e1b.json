@@ -1,0 +1,409 @@
+{
+ "summary": [
+  {
+   "run": "rep1j",
+   "flips": 8,
+   "flipsDiffer": 0,
+   "staleDiffs": 0,
+   "scopeDiffs": 1
+  },
+  {
+   "run": "rep1k",
+   "flips": 8,
+   "flipsDiffer": 2,
+   "staleDiffs": 0,
+   "scopeDiffs": 1
+  },
+  {
+   "run": "rep1l",
+   "flips": 0,
+   "flipsDiffer": 0,
+   "staleDiffs": 0,
+   "scopeDiffs": 0
+  },
+  {
+   "run": "rep1m",
+   "flips": 0,
+   "flipsDiffer": 0,
+   "staleDiffs": 0,
+   "scopeDiffs": 0
+  },
+  {
+   "run": "rep1n",
+   "flips": 15,
+   "flipsDiffer": 0,
+   "staleDiffs": 0,
+   "scopeDiffs": 1
+  }
+ ],
+ "flips": [
+  {
+   "run": "rep1j",
+   "round": 1,
+   "guard": "G3",
+   "cycle": "C1.3",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1j",
+   "round": 1,
+   "guard": "G3",
+   "cycle": "C1.4",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1j",
+   "round": 2,
+   "guard": "G3",
+   "cycle": "C2.1",
+   "recorded": "changed_text (object, edge)",
+   "now": "changed_text (object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1j",
+   "round": 5,
+   "guard": "G1",
+   "cycle": "C5.2",
+   "recorded": "changed_text (revision, object)",
+   "now": "changed_text (revision, object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1j",
+   "round": 5,
+   "guard": "G57",
+   "cycle": "C5.3",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1j",
+   "round": 5,
+   "guard": "G57",
+   "cycle": "C5.4",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1j",
+   "round": 5,
+   "guard": "G57",
+   "cycle": "C5.5",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1j",
+   "round": 6,
+   "guard": "G57",
+   "cycle": "C6.1",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1k",
+   "round": 3,
+   "guard": "G40",
+   "cycle": "C3.1",
+   "recorded": "changed_text (revision, object)",
+   "now": "changed_text (revision, object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1k",
+   "round": 5,
+   "guard": "G2",
+   "cycle": "C5.2",
+   "recorded": "changed_text (revision, object)",
+   "now": "changed_text (revision, object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1k",
+   "round": 5,
+   "guard": "G3",
+   "cycle": "C5.2",
+   "recorded": "changed_text (revision, object)",
+   "now": "changed_text (revision, object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1k",
+   "round": 5,
+   "guard": "G4",
+   "cycle": "C5.2",
+   "recorded": "changed_text (object, edge)",
+   "now": "changed_text (object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1k",
+   "round": 5,
+   "guard": "G5",
+   "cycle": "C5.2",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1k",
+   "round": 5,
+   "guard": "G16",
+   "cycle": "C5.2",
+   "recorded": "changed_text (object)",
+   "now": "changed_text (object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1k",
+   "round": 6,
+   "guard": "G87",
+   "cycle": "C6.1",
+   "recorded": "changed_text (edge)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": true,
+   "units": []
+  },
+  {
+   "run": "rep1k",
+   "round": 6,
+   "guard": "G88",
+   "cycle": "C6.1",
+   "recorded": "changed_text (edge)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": true,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G5",
+   "cycle": "C5.2",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G6",
+   "cycle": "C5.2",
+   "recorded": "changed_text (object)",
+   "now": "changed_text (object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G7",
+   "cycle": "C5.2",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G9",
+   "cycle": "C5.2",
+   "recorded": "changed_text (object)",
+   "now": "changed_text (object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G14",
+   "cycle": "C5.2",
+   "recorded": "changed_text (object)",
+   "now": "changed_text (object)",
+   "retired": true,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G64",
+   "cycle": "C5.4",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G65",
+   "cycle": "C5.4",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G64",
+   "cycle": "C5.5",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "guard": "G65",
+   "cycle": "C5.5",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 6,
+   "guard": "G64",
+   "cycle": "C6.1",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 6,
+   "guard": "G65",
+   "cycle": "C6.1",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 6,
+   "guard": "G5",
+   "cycle": "C6.2",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 6,
+   "guard": "G7",
+   "cycle": "C6.2",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 6,
+   "guard": "G5",
+   "cycle": "C6.4",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  },
+  {
+   "run": "rep1n",
+   "round": 6,
+   "guard": "G7",
+   "cycle": "C6.4",
+   "recorded": "regression (none)",
+   "now": "regression (none)",
+   "retired": false,
+   "differs": false,
+   "units": []
+  }
+ ],
+ "stale": [],
+ "scope": [
+  {
+   "run": "rep1j",
+   "round": 6,
+   "more": [],
+   "fewer": [
+    "O1 dpipe CLI"
+   ]
+  },
+  {
+   "run": "rep1k",
+   "round": 6,
+   "more": [],
+   "fewer": [
+    "O1 dpipe CLI"
+   ]
+  },
+  {
+   "run": "rep1n",
+   "round": 5,
+   "more": [
+    "O2 ingest command (U5.c1)"
+   ],
+   "fewer": []
+  }
+ ]
+}

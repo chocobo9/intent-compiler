@@ -1,0 +1,1244 @@
+{
+ "results": [
+  {
+   "job": "rep1j",
+   "round": 5,
+   "status": "accepted",
+   "seconds": 19,
+   "calls": 2,
+   "tokens": [
+    {
+     "id": "M6",
+     "kind": "attribute",
+     "input": 38505,
+     "cache_read": 0,
+     "output": 928,
+     "reasoning": 298,
+     "issues": [
+      "target_not_earlier",
+      "target_not_earlier",
+      "target_not_earlier",
+      "object_choice"
+     ]
+    },
+    {
+     "id": "M7",
+     "kind": "repair",
+     "input": 1363,
+     "cache_read": 38272,
+     "output": 414,
+     "reasoning": 368,
+     "issues": []
+    }
+   ],
+   "candidates": 1,
+   "answer_units": [],
+   "units": [
+    {
+     "id": "U5.c1",
+     "source": "cue",
+     "name": "Behavior Change: verify command checksum algorithm",
+     "members": [
+      "R5.S1.P1.s2",
+      "R5.S1.P2.s1",
+      "R5.S1.P2.s3",
+      "R5.S1.P2.s4",
+      "R5.S1.P3.s2",
+      "R5.S1.P3.s4",
+      "R5.S1.P3.s5"
+     ],
+     "objects": [
+      "Manifest",
+      "Verification",
+      "Ingestion",
+      "Transformation"
+     ],
+     "cue": "cmd_in_revision"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "rep1j",
+   "round": 2,
+   "status": "accepted",
+   "seconds": 10,
+   "calls": 1,
+   "tokens": [
+    {
+     "id": "M2",
+     "kind": "attribute",
+     "input": 23294,
+     "cache_read": 4992,
+     "output": 1141,
+     "reasoning": 645,
+     "issues": []
+    }
+   ],
+   "candidates": 1,
+   "answer_units": [
+    {
+     "candidate": "U2.c1",
+     "name": "Extended transforms",
+     "members": [
+      "R2.S13.P1.s1",
+      "R2.S16.P5.s2"
+     ]
+    }
+   ],
+   "units": [
+    {
+     "id": "U2.c1",
+     "source": "cue",
+     "name": "Extended transforms",
+     "members": [
+      "R2.S13.P1.s1",
+      "R2.S16.P5.s2"
+     ],
+     "objects": [
+      "Transformation",
+      "Detect transform"
+     ],
+     "cue": "cmd_in_revision"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "rep1k",
+   "round": 2,
+   "status": "accepted",
+   "seconds": 11,
+   "calls": 1,
+   "tokens": [
+    {
+     "id": "M3",
+     "kind": "attribute",
+     "input": 23678,
+     "cache_read": 4992,
+     "output": 1230,
+     "reasoning": 591,
+     "issues": []
+    }
+   ],
+   "candidates": 1,
+   "answer_units": [
+    {
+     "candidate": "U2.c1",
+     "name": "Extended transforms",
+     "members": [
+      "R2.S13.P1.s1",
+      "R2.S16.P5.s2"
+     ]
+    }
+   ],
+   "units": [
+    {
+     "id": "U2.c1",
+     "source": "cue",
+     "name": "Extended transforms",
+     "members": [
+      "R2.S13.P1.s1",
+      "R2.S16.P5.s2"
+     ],
+     "objects": [
+      "fill operation",
+      "detect operation"
+     ],
+     "cue": "cmd_in_revision"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "rep1l",
+   "round": 2,
+   "status": "accepted",
+   "seconds": 10,
+   "calls": 1,
+   "tokens": [
+    {
+     "id": "M2",
+     "kind": "attribute",
+     "input": 23876,
+     "cache_read": 4992,
+     "output": 1202,
+     "reasoning": 570,
+     "issues": []
+    }
+   ],
+   "candidates": 1,
+   "answer_units": [],
+   "units": [
+    {
+     "id": "U2.c1",
+     "source": "cue",
+     "name": "Extended transforms",
+     "members": [
+      "R2.S13.P1.s1",
+      "R2.S16.P5.s2"
+     ],
+     "objects": [
+      "fill operation",
+      "detect operation"
+     ],
+     "cue": "cmd_in_revision"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "rep1m",
+   "round": 2,
+   "status": "accepted",
+   "seconds": 11,
+   "calls": 1,
+   "tokens": [
+    {
+     "id": "M2",
+     "kind": "attribute",
+     "input": 23667,
+     "cache_read": 4992,
+     "output": 1152,
+     "reasoning": 797,
+     "issues": []
+    }
+   ],
+   "candidates": 1,
+   "answer_units": [
+    {
+     "candidate": "U2.c1",
+     "name": "Extended transforms",
+     "members": [
+      "R2.S13.P1.s1",
+      "R2.S16.P5.s2"
+     ]
+    }
+   ],
+   "units": [
+    {
+     "id": "U2.c1",
+     "source": "cue",
+     "name": "Extended transforms",
+     "members": [
+      "R2.S13.P1.s1",
+      "R2.S16.P5.s2"
+     ],
+     "objects": [
+      "fill transformation",
+      "detect transformation"
+     ],
+     "cue": "cmd_in_revision"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "d10_w4",
+   "round": 1,
+   "status": "accepted",
+   "seconds": 9,
+   "calls": 2,
+   "tokens": [
+    {
+     "id": "M1",
+     "kind": "attribute",
+     "input": 2810,
+     "cache_read": 4992,
+     "output": 372,
+     "reasoning": 233,
+     "issues": [
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "uncovered"
+     ]
+    },
+    {
+     "id": "M2",
+     "kind": "repair",
+     "input": 944,
+     "cache_read": 7552,
+     "output": 413,
+     "reasoning": 135,
+     "issues": []
+    }
+   ],
+   "candidates": 0,
+   "answer_units": [],
+   "units": [],
+   "unit_scope": []
+  },
+  {
+   "job": "d10_w4",
+   "round": 2,
+   "status": "accepted",
+   "seconds": 11,
+   "calls": 1,
+   "tokens": [
+    {
+     "id": "M3",
+     "kind": "attribute",
+     "input": 9585,
+     "cache_read": 4992,
+     "output": 723,
+     "reasoning": 1023,
+     "issues": []
+    }
+   ],
+   "candidates": 0,
+   "answer_units": [],
+   "units": [],
+   "unit_scope": []
+  },
+  {
+   "job": "d10_w4",
+   "round": 3,
+   "status": "accepted",
+   "seconds": 15,
+   "calls": 2,
+   "tokens": [
+    {
+     "id": "M4",
+     "kind": "attribute",
+     "input": 12844,
+     "cache_read": 4992,
+     "output": 785,
+     "reasoning": 735,
+     "issues": [
+      "target_replaced"
+     ]
+    },
+    {
+     "id": "M5",
+     "kind": "repair",
+     "input": 1169,
+     "cache_read": 17536,
+     "output": 124,
+     "reasoning": 411,
+     "issues": []
+    }
+   ],
+   "candidates": 1,
+   "answer_units": [
+    {
+     "candidate": "U3.c1",
+     "name": "Behavioral Changes (Conflicts)",
+     "members": [
+      "R3.S2.P1.s1",
+      "R3.S3.P1.s1",
+      "R3.S3.P2.s3",
+      "R3.S4.P1.s1",
+      "R3.S4.P2.s2"
+     ]
+    }
+   ],
+   "units": [
+    {
+     "id": "U3.c1",
+     "source": "cue",
+     "name": "Behavioral Changes (Conflicts)",
+     "members": [
+      "R3.S2.P1.s1",
+      "R3.S3.P1.s1",
+      "R3.S3.P2.s3",
+      "R3.S4.P1.s1",
+      "R3.S4.P2.s2"
+     ],
+     "objects": [
+      "Pipeline Engine",
+      "Model Registry",
+      "Experiment Tracker"
+     ],
+     "cue": "cmd_in_revision"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "d12_w1",
+   "round": 1,
+   "status": "accepted",
+   "seconds": 19,
+   "calls": 3,
+   "tokens": [
+    {
+     "id": "M1",
+     "kind": "attribute",
+     "input": 120,
+     "cache_read": 13952,
+     "output": 830,
+     "reasoning": 669,
+     "issues": [
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "uncovered"
+     ]
+    },
+    {
+     "id": "M2",
+     "kind": "repair",
+     "input": 1743,
+     "cache_read": 13824,
+     "output": 626,
+     "reasoning": 132,
+     "issues": [
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block",
+      "unknown_block"
+     ]
+    },
+    {
+     "id": "M3",
+     "kind": "repair",
+     "input": 2293,
+     "cache_read": 13824,
+     "output": 326,
+     "reasoning": 217,
+     "issues": []
+    }
+   ],
+   "candidates": 1,
+   "answer_units": [],
+   "units": [
+    {
+     "id": "U1.c1",
+     "source": "cue",
+     "name": "flowr — workflow orchestrator",
+     "members": [
+      "R1.S4.P2.s5",
+      "R1.S6.P3.s11",
+      "R1.S7.P4.s1",
+      "R1.S9.P2.s10",
+      "R1.S12.P3.s5"
+     ],
+     "objects": [
+      "inspect analysis",
+      "matrix expansion",
+      "run execution",
+      "variable interpolation",
+      "run report"
+     ],
+     "cue": "cmd_in_revision"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "d12_w1",
+   "round": 2,
+   "status": "accepted",
+   "seconds": 18,
+   "calls": 2,
+   "tokens": [
+    {
+     "id": "M4",
+     "kind": "attribute",
+     "input": 15658,
+     "cache_read": 4992,
+     "output": 959,
+     "reasoning": 516,
+     "issues": [
+      "change_shape",
+      "unknown_block",
+      "unknown_block"
+     ]
+    },
+    {
+     "id": "M5",
+     "kind": "repair",
+     "input": 1350,
+     "cache_read": 20352,
+     "output": 443,
+     "reasoning": 1096,
+     "issues": []
+    }
+   ],
+   "candidates": 1,
+   "answer_units": [
+    {
+     "candidate": "U2.c1",
+     "name": "flowr — incremental execution, resource reservations, and pipelines",
+     "members": [
+      "R2.S8.P1.s4",
+      "R2.S8.P1.s5",
+      "R2.S9.P1.s2",
+      "R2.S15.P1.s1"
+     ]
+    }
+   ],
+   "units": [
+    {
+     "id": "U2.c1",
+     "source": "cue",
+     "name": "flowr — incremental execution, resource reservations, and pipelines",
+     "members": [
+      "R2.S8.P1.s4",
+      "R2.S8.P1.s5",
+      "R2.S9.P1.s2",
+      "R2.S15.P1.s1"
+     ],
+     "objects": [
+      "step caching",
+      "run report"
+     ],
+     "cue": "cmd_in_revision"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "d12_w1",
+   "round": 3,
+   "status": "accepted",
+   "seconds": 14,
+   "calls": 1,
+   "tokens": [
+    {
+     "id": "M6",
+     "kind": "attribute",
+     "input": 35040,
+     "cache_read": 0,
+     "output": 2483,
+     "reasoning": 516,
+     "issues": []
+    }
+   ],
+   "candidates": 5,
+   "answer_units": [
+    {
+     "candidate": "U3.c1",
+     "name": "flowr — retry policies, conditional steps, workflow hooks, foreach expansion, structured outputs, and resume",
+     "members": [
+      "R3.S7.P4.s5",
+      "R3.S11.P3.s1",
+      "R3.S15.P1.s1",
+      "R3.S25.P1.s1",
+      "R3.S26.P2.s2",
+      "R3.S27.P6.s1",
+      "R3.S28.P1.s9"
+     ]
+    },
+    {
+     "candidate": "U3.c2",
+     "name": "F16",
+     "members": [
+      "R3.S10.P1.s4",
+      "R3.S27.P6.s5"
+     ]
+    },
+    {
+     "candidate": "U3.c3",
+     "name": "F13",
+     "members": [
+      "R3.S27.P6.s2",
+      "R3.S27.P8.s1"
+     ]
+    },
+    {
+     "candidate": "U3.c4",
+     "name": "F15",
+     "members": [
+      "R3.S27.P6.s4",
+      "R3.S27.P8.s3"
+     ]
+    },
+    {
+     "candidate": "U3.c5",
+     "name": "F17",
+     "members": [
+      "R3.S27.P6.s6",
+      "R3.S27.P8.s2"
+     ]
+    }
+   ],
+   "units": [
+    {
+     "id": "U3.c1",
+     "source": "cue",
+     "name": "flowr — retry policies, conditional steps, workflow hooks, foreach expansion, structured outputs, and resume",
+     "members": [
+      "R3.S7.P4.s5",
+      "R3.S11.P3.s1",
+      "R3.S15.P1.s1",
+      "R3.S25.P1.s1",
+      "R3.S26.P2.s2",
+      "R3.S27.P6.s1",
+      "R3.S28.P1.s9"
+     ],
+     "objects": [
+      "foreach expansion",
+      "workflow hooks",
+      "structured step outputs",
+      "workflow resume",
+      "run execution",
+      "retry observability"
+     ],
+     "cue": "cmd_in_revision"
+    },
+    {
+     "id": "U3.c2",
+     "source": "cue",
+     "name": "F16",
+     "members": [
+      "R3.S10.P1.s4",
+      "R3.S27.P6.s5"
+     ],
+     "objects": [
+      "foreach expansion",
+      "structured step outputs"
+     ],
+     "cue": "author_id"
+    },
+    {
+     "id": "U3.c3",
+     "source": "cue",
+     "name": "F13",
+     "members": [
+      "R3.S27.P6.s2",
+      "R3.S27.P8.s1"
+     ],
+     "objects": [
+      "conditional steps"
+     ],
+     "cue": "author_id"
+    },
+    {
+     "id": "U3.c4",
+     "source": "cue",
+     "name": "F15",
+     "members": [
+      "R3.S27.P6.s4",
+      "R3.S27.P8.s3"
+     ],
+     "objects": [
+      "foreach expansion"
+     ],
+     "cue": "author_id"
+    },
+    {
+     "id": "U3.c5",
+     "source": "cue",
+     "name": "F17",
+     "members": [
+      "R3.S27.P6.s6",
+      "R3.S27.P8.s2"
+     ],
+     "objects": [
+      "workflow resume"
+     ],
+     "cue": "author_id"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "d8_w5",
+   "round": 1,
+   "status": "accepted",
+   "seconds": 7,
+   "calls": 1,
+   "tokens": [
+    {
+     "id": "M1",
+     "kind": "attribute",
+     "input": 2583,
+     "cache_read": 4992,
+     "output": 623,
+     "reasoning": 495,
+     "issues": []
+    }
+   ],
+   "candidates": 0,
+   "answer_units": [],
+   "units": [],
+   "unit_scope": []
+  },
+  {
+   "job": "d8_w5",
+   "round": 2,
+   "status": "accepted",
+   "seconds": 13,
+   "calls": 2,
+   "tokens": [
+    {
+     "id": "M2",
+     "kind": "attribute",
+     "input": 4354,
+     "cache_read": 4992,
+     "output": 657,
+     "reasoning": 611,
+     "issues": [
+      "target_not_earlier",
+      "unit_invalid"
+     ]
+    },
+    {
+     "id": "M3",
+     "kind": "repair",
+     "input": 1013,
+     "cache_read": 9088,
+     "output": 139,
+     "reasoning": 411,
+     "issues": []
+    }
+   ],
+   "candidates": 2,
+   "answer_units": [
+    {
+     "candidate": "U2.c2",
+     "name": "all commands",
+     "members": [
+      "R2.S0.P1.s2"
+     ]
+    },
+    {
+     "candidate": "U2.c1",
+     "name": "revisions in R2.S0",
+     "members": [
+      "R2.S0.P2.s6",
+      "R2.S0.P2.s10",
+      "R2.S0.P6.s1",
+      "R2.S0.P6.s3"
+     ]
+    }
+   ],
+   "units": [
+    {
+     "id": "U2.c1",
+     "source": "cue",
+     "name": "revisions in R2.S0",
+     "members": [
+      "R2.S0.P2.s6",
+      "R2.S0.P2.s10",
+      "R2.S0.P6.s1",
+      "R2.S0.P6.s3"
+     ],
+     "objects": [
+      "deploy command",
+      "promote command"
+     ],
+     "cue": "cmd_in_revision"
+    },
+    {
+     "id": "U2.c2",
+     "source": "cue",
+     "name": "all commands",
+     "members": [
+      "R2.S0.P1.s2"
+     ],
+     "objects": [
+      "deployment event logging"
+     ],
+     "cue": "cross_list"
+    }
+   ],
+   "unit_scope": []
+  },
+  {
+   "job": "d8_w5",
+   "round": 3,
+   "status": "accepted",
+   "seconds": 20,
+   "calls": 2,
+   "tokens": [
+    {
+     "id": "M4",
+     "kind": "attribute",
+     "input": 7752,
+     "cache_read": 4992,
+     "output": 1199,
+     "reasoning": 1292,
+     "issues": [
+      "unit_invalid"
+     ]
+    },
+    {
+     "id": "M5",
+     "kind": "repair",
+     "input": 1485,
+     "cache_read": 12416,
+     "output": 147,
+     "reasoning": 423,
+     "issues": []
+    }
+   ],
+   "candidates": 7,
+   "answer_units": [
+    {
+     "candidate": null,
+     "name": "semantic versioning migration",
+     "members": [
+      "R3.S0.P1.s1",
+      "R3.S0.P1.s2",
+      "R3.S0.P1.s3",
+      "R3.S0.P2.s1",
+      "R3.S0.P3.s1"
+     ]
+    },
+    {
+     "candidate": null,
+     "name": "diff semver comparison",
+     "members": [
+      "R3.S0.P6.s1",
+      "R3.S0.P6.s2",
+      "R3.S0.P6.s3",
+      "R3.S0.P6.s4",
+      "R3.S0.P6.s5",
+      "R3.S0.P7.s1",
+      "R3.S0.P8.s1"
+     ]
+    },
+    {
+     "candidate": null,
+     "name": "promote downgrade handling",
+     "members": [
+      "R3.S0.P9.s1",
+      "R3.S0.P9.s2",
+      "R3.S0.P9.s3",
+      "R3.S0.P10.s1",
+      "R3.S0.P10.s2",
+      "R3.S0.P10.s3",
+      "R3.S0.P10.s4",
+      "R3.S0.P10.s5"
+     ]
+    },
+    {
+     "candidate": null,
+     "name": "bump command",
+     "members": [
+      "R3.S0.P12.s1",
+      "R3.S0.P12.s2",
+      "R3.S0.P13.s1",
+      "R3.S0.P13.s2",
+      "R3.S0.P13.s3",
+      "R3.S0.P13.s4",
+      "R3.S0.P13.s5"
+     ]
+    },
+    {
+     "candidate": null,
+     "name": "validate version requirements",
+     "members": [
+      "R3.S0.P1.s2",
+      "R3.S0.P4.s1"
+     ]
+    },
+    {
+     "candidate": null,
+     "name": "build artifact version migration",
+     "members": [
+      "R3.S0.P3.s1",
+      "R3.S0.P5.s1"
+     ]
+    },
+    {
+     "candidate": null,
+     "name": "history forced promotion events",
+     "members": [
+      "R3.S0.P10.s4",
+      "R3.S0.P11.s1"
+     ]
+    }
+   ],
+   "units": [
+    {
+     "id": "U3.c1",
+     "source": "cue",
+     "name": "Changes to validate",
+     "members": [
+      "R3.S0.P1.s1",
+      "R3.S0.P1.s2",
+      "R3.S0.P1.s3",
+      "R3.S0.P2.s1",
+      "R3.S0.P3.s1",
+      "R3.S0.P4.s1",
+      "R3.S0.P4.s2",
+      "R3.S0.P5.s1",
+      "R3.S0.P5.s2",
+      "R3.S0.P6.s1",
+      "R3.S0.P6.s2",
+      "R3.S0.P6.s3",
+      "R3.S0.P6.s4",
+      "R3.S0.P6.s5",
+      "R3.S0.P7.s1",
+      "R3.S0.P8.s1",
+      "R3.S0.P9.s1",
+      "R3.S0.P9.s2",
+      "R3.S0.P9.s3",
+      "R3.S0.P10.s1",
+      "R3.S0.P10.s2",
+      "R3.S0.P10.s3",
+      "R3.S0.P10.s4",
+      "R3.S0.P10.s5",
+      "R3.S0.P11.s1",
+      "R3.S0.P12.s1",
+      "R3.S0.P12.s2",
+      "R3.S0.P13.s1",
+      "R3.S0.P13.s2",
+      "R3.S0.P13.s3",
+      "R3.S0.P13.s4",
+      "R3.S0.P13.s5"
+     ],
+     "objects": [
+      "validate command"
+     ],
+     "cue": "changes_to"
+    },
+    {
+     "id": "U3.c2",
+     "source": "cue",
+     "name": "Changes to build",
+     "members": [
+      "R3.S0.P1.s1",
+      "R3.S0.P1.s2",
+      "R3.S0.P1.s3",
+      "R3.S0.P2.s1",
+      "R3.S0.P3.s1",
+      "R3.S0.P4.s1",
+      "R3.S0.P4.s2",
+      "R3.S0.P5.s1",
+      "R3.S0.P5.s2",
+      "R3.S0.P6.s1",
+      "R3.S0.P6.s2",
+      "R3.S0.P6.s3",
+      "R3.S0.P6.s4",
+      "R3.S0.P6.s5",
+      "R3.S0.P7.s1",
+      "R3.S0.P8.s1",
+      "R3.S0.P9.s1",
+      "R3.S0.P9.s2",
+      "R3.S0.P9.s3",
+      "R3.S0.P10.s1",
+      "R3.S0.P10.s2",
+      "R3.S0.P10.s3",
+      "R3.S0.P10.s4",
+      "R3.S0.P10.s5",
+      "R3.S0.P11.s1",
+      "R3.S0.P12.s1",
+      "R3.S0.P12.s2",
+      "R3.S0.P13.s1",
+      "R3.S0.P13.s2",
+      "R3.S0.P13.s3",
+      "R3.S0.P13.s4",
+      "R3.S0.P13.s5"
+     ],
+     "objects": [
+      "build command"
+     ],
+     "cue": "changes_to"
+    },
+    {
+     "id": "U3.c3",
+     "source": "cue",
+     "name": "Changes to diff",
+     "members": [
+      "R3.S0.P1.s1",
+      "R3.S0.P1.s2",
+      "R3.S0.P1.s3",
+      "R3.S0.P2.s1",
+      "R3.S0.P3.s1",
+      "R3.S0.P4.s1",
+      "R3.S0.P4.s2",
+      "R3.S0.P5.s1",
+      "R3.S0.P5.s2",
+      "R3.S0.P6.s1",
+      "R3.S0.P6.s2",
+      "R3.S0.P6.s3",
+      "R3.S0.P6.s4",
+      "R3.S0.P6.s5",
+      "R3.S0.P7.s1",
+      "R3.S0.P8.s1",
+      "R3.S0.P9.s1",
+      "R3.S0.P9.s2",
+      "R3.S0.P9.s3",
+      "R3.S0.P10.s1",
+      "R3.S0.P10.s2",
+      "R3.S0.P10.s3",
+      "R3.S0.P10.s4",
+      "R3.S0.P10.s5",
+      "R3.S0.P11.s1",
+      "R3.S0.P12.s1",
+      "R3.S0.P12.s2",
+      "R3.S0.P13.s1",
+      "R3.S0.P13.s2",
+      "R3.S0.P13.s3",
+      "R3.S0.P13.s4",
+      "R3.S0.P13.s5"
+     ],
+     "objects": [
+      "diff command"
+     ],
+     "cue": "changes_to"
+    },
+    {
+     "id": "U3.c4",
+     "source": "cue",
+     "name": "Changes to promote",
+     "members": [
+      "R3.S0.P1.s1",
+      "R3.S0.P1.s2",
+      "R3.S0.P1.s3",
+      "R3.S0.P2.s1",
+      "R3.S0.P3.s1",
+      "R3.S0.P4.s1",
+      "R3.S0.P4.s2",
+      "R3.S0.P5.s1",
+      "R3.S0.P5.s2",
+      "R3.S0.P6.s1",
+      "R3.S0.P6.s2",
+      "R3.S0.P6.s3",
+      "R3.S0.P6.s4",
+      "R3.S0.P6.s5",
+      "R3.S0.P7.s1",
+      "R3.S0.P8.s1",
+      "R3.S0.P9.s1",
+      "R3.S0.P9.s2",
+      "R3.S0.P9.s3",
+      "R3.S0.P10.s1",
+      "R3.S0.P10.s2",
+      "R3.S0.P10.s3",
+      "R3.S0.P10.s4",
+      "R3.S0.P10.s5",
+      "R3.S0.P11.s1",
+      "R3.S0.P12.s1",
+      "R3.S0.P12.s2",
+      "R3.S0.P13.s1",
+      "R3.S0.P13.s2",
+      "R3.S0.P13.s3",
+      "R3.S0.P13.s4",
+      "R3.S0.P13.s5"
+     ],
+     "objects": [
+      "promote command"
+     ],
+     "cue": "changes_to"
+    },
+    {
+     "id": "U3.c5",
+     "source": "cue",
+     "name": "Changes to history",
+     "members": [
+      "R3.S0.P1.s1",
+      "R3.S0.P1.s2",
+      "R3.S0.P1.s3",
+      "R3.S0.P2.s1",
+      "R3.S0.P3.s1",
+      "R3.S0.P4.s1",
+      "R3.S0.P4.s2",
+      "R3.S0.P5.s1",
+      "R3.S0.P5.s2",
+      "R3.S0.P6.s1",
+      "R3.S0.P6.s2",
+      "R3.S0.P6.s3",
+      "R3.S0.P6.s4",
+      "R3.S0.P6.s5",
+      "R3.S0.P7.s1",
+      "R3.S0.P8.s1",
+      "R3.S0.P9.s1",
+      "R3.S0.P9.s2",
+      "R3.S0.P9.s3",
+      "R3.S0.P10.s1",
+      "R3.S0.P10.s2",
+      "R3.S0.P10.s3",
+      "R3.S0.P10.s4",
+      "R3.S0.P10.s5",
+      "R3.S0.P11.s1",
+      "R3.S0.P12.s1",
+      "R3.S0.P12.s2",
+      "R3.S0.P13.s1",
+      "R3.S0.P13.s2",
+      "R3.S0.P13.s3",
+      "R3.S0.P13.s4",
+      "R3.S0.P13.s5"
+     ],
+     "objects": [
+      "history command"
+     ],
+     "cue": "changes_to"
+    },
+    {
+     "id": "U3.c6",
+     "source": "cue",
+     "name": "revisions in R3.S0",
+     "members": [
+      "R3.S0.P1.s2",
+      "R3.S0.P6.s1",
+      "R3.S0.P10.s3"
+     ],
+     "objects": [
+      "diff command",
+      "semantic versioning migration",
+      "promote command"
+     ],
+     "cue": "cmd_in_revision"
+    },
+    {
+     "id": "U3.c7",
+     "source": "cue",
+     "name": "all commands",
+     "members": [
+      "R3.S0.P3.s1"
+     ],
+     "objects": [
+      "semantic versioning migration"
+     ],
+     "cue": "cross_list"
+    },
+    {
+     "id": "U3.m1",
+     "source": "model",
+     "name": "semantic versioning migration",
+     "members": [
+      "R3.S0.P1.s1",
+      "R3.S0.P1.s2",
+      "R3.S0.P1.s3",
+      "R3.S0.P2.s1",
+      "R3.S0.P3.s1"
+     ],
+     "objects": [
+      "semantic versioning migration"
+     ],
+     "cue": null
+    },
+    {
+     "id": "U3.m2",
+     "source": "model",
+     "name": "diff semver comparison",
+     "members": [
+      "R3.S0.P6.s1",
+      "R3.S0.P6.s2",
+      "R3.S0.P6.s3",
+      "R3.S0.P6.s4",
+      "R3.S0.P6.s5",
+      "R3.S0.P7.s1",
+      "R3.S0.P8.s1"
+     ],
+     "objects": [
+      "diff command"
+     ],
+     "cue": null
+    },
+    {
+     "id": "U3.m3",
+     "source": "model",
+     "name": "promote downgrade handling",
+     "members": [
+      "R3.S0.P9.s1",
+      "R3.S0.P9.s2",
+      "R3.S0.P9.s3",
+      "R3.S0.P10.s1",
+      "R3.S0.P10.s2",
+      "R3.S0.P10.s3",
+      "R3.S0.P10.s4",
+      "R3.S0.P10.s5"
+     ],
+     "objects": [
+      "promote command"
+     ],
+     "cue": null
+    },
+    {
+     "id": "U3.m4",
+     "source": "model",
+     "name": "bump command",
+     "members": [
+      "R3.S0.P12.s1",
+      "R3.S0.P12.s2",
+      "R3.S0.P13.s1",
+      "R3.S0.P13.s2",
+      "R3.S0.P13.s3",
+      "R3.S0.P13.s4",
+      "R3.S0.P13.s5"
+     ],
+     "objects": [
+      "bump command"
+     ],
+     "cue": null
+    },
+    {
+     "id": "U3.m5",
+     "source": "model",
+     "name": "validate version requirements",
+     "members": [
+      "R3.S0.P1.s2",
+      "R3.S0.P4.s1"
+     ],
+     "objects": [
+      "semantic versioning migration",
+      "validate command"
+     ],
+     "cue": null
+    },
+    {
+     "id": "U3.m6",
+     "source": "model",
+     "name": "build artifact version migration",
+     "members": [
+      "R3.S0.P3.s1",
+      "R3.S0.P5.s1"
+     ],
+     "objects": [
+      "semantic versioning migration",
+      "build command"
+     ],
+     "cue": null
+    },
+    {
+     "id": "U3.m7",
+     "source": "model",
+     "name": "history forced promotion events",
+     "members": [
+      "R3.S0.P10.s4",
+      "R3.S0.P11.s1"
+     ],
+     "objects": [
+      "promote command",
+      "history command"
+     ],
+     "cue": null
+    }
+   ],
+   "unit_scope": []
+  }
+ ],
+ "total": {
+  "calls": 22,
+  "input": 235126,
+  "cache": 201728,
+  "out": 16916
+ }
+}

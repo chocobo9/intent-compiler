@@ -19,7 +19,7 @@ async function main(argv: string[]): Promise<number> {
   const gold = task ? loadGold(resolve(dir), task) : null
   if (task && !gold) { process.stderr.write(`no gold sets in ${dir}\n`); return 2 }
   const rounds = await attributeOnly({ inputs: resolve(inputs), to, out: resolve(out), transport: attributionTransportOf(config), maxRepairs: config.limits?.attribution_repairs ?? 2, gold })
-  process.stdout.write(`${rounds.map(r => `R${r.round} ${r.status}: ${r.modifications.length} modifications, ${r.edges.length} edges${r.revision ? `; revision ${r.revision.hit}/${r.revision.located}` : ""}${r.relation ? `; relation ${r.relation.hit}/${r.relation.located}` : ""}`).join("\n")}\n`)
+  process.stdout.write(`${rounds.map(r => `R${r.round} ${r.status}: ${r.modifications.length} modifications, ${r.units.length} change units${r.revision ? `; revision ${r.revision.hit}/${r.revision.located}` : ""}${r.relation ? `; relation ${r.relation.hit}/${r.relation.located}` : ""}`).join("\n")}\n`)
   return rounds.every(r => r.status === "accepted") ? 0 : 1
 }
 

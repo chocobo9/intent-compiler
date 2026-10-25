@@ -227,12 +227,10 @@ describe("batch 1, items 6, 9 (§6a step 3): the round's package, not every roun
       for (const s of pkg.segments) {
         if (s.why === "this round") assert.ok(own.has(s.paragraph), s.paragraph)
         else if (s.why === "revised") assert.ok(revised.has(s.paragraph) && /earlier text of /u.test(s.text), s.paragraph)
-        else if (s.why === "edge") assert.ok(reg.references.some(e => e.round === r && !/^O\d+$/u.test(e.to) && para(e.to) === s.paragraph), s.paragraph)
         else assert.deepEqual([s.paragraph, s.via], [para(FILTER_UNIT), ["V1.1.1"]])
       }
       for (const p of own) assert.ok(pkg.segments.some(s => s.paragraph === p), `${p} of this round is there`)
       assert.equal(new Set(pkg.segments.map(s => s.paragraph)).size, pkg.segments.length, "each paragraph once")
-      assert.equal(pkg.edges.to_block + pkg.edges.to_object, reg.references.filter(e => e.round === r).length)
       const delta = buildWorkOrder({ registry: reg, round: r, library: [], events: [], statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [], scope: "delta", confirmed: [{ id: "V1.1.1", object: null, units: [FILTER_UNIT], args: [], files: [] }] })
       assert.ok(delta.scope!.source_chars < delta.scope!.source_chars_all, `R${r}: delta ${delta.scope!.source_chars} vs all ${delta.scope!.source_chars_all}`)
       assert.deepEqual(delta.status, [], "no status zone")

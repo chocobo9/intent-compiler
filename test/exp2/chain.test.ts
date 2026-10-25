@@ -87,32 +87,6 @@ describe("the chain block, the current view (§6c, view)", () => {
   })
 })
 
-describe("an earlier applies_to edge (the design session's decision on O2): its target comes when its source is revised this round, not otherwise", () => {
-  // R1 records an edge from the transform list R1.S3.P24 to the verify object; R5 withdraws a clause of R1.S3.P24.
-  const dir = mkdtempSync(join(tmpdir(), "exp2-chain-applies-"))
-  const store = new Exp2Store(join(dir, "store"), "cha")
-  const edged = () => {
-    const inner = stubTransport()
-    return async (request: Parameters<ReturnType<typeof stubTransport>>[0]) => {
-      const reply = await inner(request)
-      if (request.round !== 1 || request.previous_draft.assignments.length) return reply
-      const patch = JSON.parse(reply.text) as { edges_add: unknown[] }
-      patch.edges_add.push({ from: "R1.S3.P24", to: request.objects.find(o => o.name === "verify")?.id ?? "verify", kind: "applies_to" })
-      return { ...reply, text: JSON.stringify(patch) }
-    }
-  }
-  before(async () => { for (const r of [1, 2, 3, 4, 5]) await store.ingestRound(r, roundText(r), edged()) })
-
-  it("R5 revises R1.S3.P24: the verify object's text comes in, by that edge; in R4 (no revision of it) it does not", () => {
-    const reg = store.registry()
-    const edge = reg.references.find(e => e.round === 1 && e.kind === "applies_to" && e.from === "R1.S3.P24")!
-    assert.ok(edge, JSON.stringify(reg.references.filter(e => e.round === 1)))
-    const target = /^O\d+$/u.test(edge.to) ? edge.to : reg.coverOf(edge.to)!.owner
-    const r5 = roundPackage(reg, 5).segments.filter(s => s.object === target && s.why === "edge")
-    assert.ok(r5.length > 0 && r5.every(s => s.via.some(v => v.startsWith("R1.S3.P24 applies_to") && v.endsWith("(its source revised this round)"))), JSON.stringify(r5.map(s => [s.paragraph, s.via])))
-    assert.ok(!roundPackage(reg, 4).segments.some(s => s.object === target && s.why === "edge"), "R4 does not revise the source")
-  })
-})
 
 describe("the package's comparisons (§6c revision item 4): only guards on units this round revises, what they get now, the earlier and present text", () => {
   const dir = mkdtempSync(join(tmpdir(), "exp2-chain-cmp-"))
@@ -232,7 +206,7 @@ describe("the chain block, attribution against the gold sets (effects 4, 5)", ()
     assert.ok(r3.precision!.recorded >= r3.precision!.on_gold)
     const x2 = relationRecall(reg, 2, gold)
     assert.equal(x2.gold, 5)
-    assert.equal(x2.by_edge! + x2.by_object!, x2.hit)
+    assert.equal(x2.by_unit! + x2.by_object!, x2.hit)
     assert.equal(Object.values(x2.by_kind!).reduce((n, k) => n + k.gold, 0), 5)
   })
 
@@ -241,7 +215,7 @@ describe("the chain block, attribution against the gold sets (effects 4, 5)", ()
     const line = (gold: RoundReport["gold"]) => renderReport({ round: 3, zones: { task: 0, protect: 0, status: 0, source_blocks: 0, anchors: 0 }, checks: { entered: 0 }, ...(gold ? { gold } : {}) } as unknown as RoundReport)
     const with_ = line({ task: gold.task, revision: revisionRecall(reg, 3, gold), relation: relationRecall(reg, 3, gold) })
     assert.match(with_, /- Revision recall \(gold set deterministic-data-pipeline-go\): \d+\/4 of the gold set's located entries recorded/u)
-    assert.match(with_, /- Relation recall \(gold set deterministic-data-pipeline-go\): \d+\/\d+ of the gold set's located entries recorded \(by an edge \d+, by the same object \d+\)/u)
+    assert.match(with_, /- Relation recall \(gold set deterministic-data-pipeline-go\): \d+\/\d+ of the gold set's located entries recorded \(by a change unit \d+, by the same object \d+\)/u)
     assert.match(line(undefined), /- Revision recall: no gold set for this task\.\n- Relation recall: no gold set for this task\./u)
   })
 

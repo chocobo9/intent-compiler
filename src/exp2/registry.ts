@@ -1,4 +1,5 @@
 import { LEVEL_RANK, splitRound, type Level, type RoundSource, type SourceBlock, type SplitOptions } from "./source.js"
+import { cueUnits, objectsNamed, revisionUnits, type ChangeUnit } from "./units.js"
 
 /**
  * Exp2 object registry (DESIGN §4.4, §5). The model decides which object each block belongs to and what kind of
@@ -27,19 +28,22 @@ export interface Assignment {
   note: string | null
 }
 
-/**
- * An edge from a block of this round to what its wording names (DESIGN §4.3). refers_to: the block uses something
- * another block defines (later: checks go stale when that block is revised); the named object gets no change.
- * applies_to: the block's requirement also lands on another object, which gets a change record from this block.
- * `to` is a block id or an object id (DESIGN §12d item 1). The block keeps its one owner either way.
- */
-export interface Reference { from: string; to: string; kind: "refers_to" | "applies_to" }
 export interface Interpretation { blocks: string[]; text: string }
+
+/**
+ * A change unit the attribution gives for its round (batch 4 E1b): a cue candidate code found, confirmed with fewer
+ * members (members [] drops it), or one of its own (candidate null) where no cue gives one. A candidate it does not
+ * name stands as code found it.
+ */
+export interface AnswerUnit { candidate: string | null; name: string; members: string[] }
 
 export interface AttributionAnswer {
   assignments: Assignment[]
-  references: Reference[]
+  /** Batch 4 E1b. Older records have none: every cue candidate of their round stands as code finds it. */
+  units?: AnswerUnit[]
   interpretations: Interpretation[]
+  /** Object edges of records before batch 4: no longer read. */
+  references?: unknown[]
 }
 
 /**
@@ -101,13 +105,16 @@ export interface ChangeRecord {
   object: string
   from_version: number
   to_version: number
-  types: (ChangeType | "applies_to")[]
+  types: (ChangeType | "unit")[]
   /** Blocks of this round given to the object. */
   entries: ChangeEntry[]
   /** Earlier blocks of this object that this round replaced, removed or overrode, whoever owns the new text. */
   received: Modification[]
-  /** Blocks of this round, owned by another object, whose requirement also applies to this one. */
-  applied: { from: string; by_object: string }[]
+  /**
+   * Blocks of this round, owned by another object, that a change unit of this round puts on this one too (batch 4
+   * E1b: what object edges did before).
+   */
+  applied: { from: string; by_object: string; unit: string }[]
 }
 
 export interface RoundAcceptance {
@@ -130,7 +137,8 @@ export class Registry {
   readonly blocks = new Map<string, SourceBlock>()
   readonly objects = new Map<string, ObjectRecord>()
   readonly changes: ChangeRecord[] = []
-  readonly references: (Reference & { round: number })[] = []
+  /** Change units the attribution gave or confirmed, round by round (cue and model units; batch 4 E1b). */
+  readonly answerUnits: ChangeUnit[] = []
   readonly interpretations: (Interpretation & { round: number })[] = []
   /** Every assigned block, to its object id or "none". */
   readonly assigned = new Map<string, string>()
@@ -167,19 +175,11 @@ export class Registry {
   }
 
   /**
-   * The text an edge points at: the block itself, or for an object id the object's text as it stood in the edge's
-   * round (its blocks from that round or earlier). A revision of any of it later is a revision of what is referred to.
+   * The change units of rounds up to `round` that relate text across sentences: the attribution's (cue and model) and
+   * every recorded revision. Guard units come from the checks, apart (units.ts guardUnits).
    */
-  referredText(edge: Reference & { round: number }): string[] {
-    if (!/^O\d+$/u.test(edge.to)) return [edge.to]
-    return (this.objects.get(edge.to)?.blocks ?? []).filter(b => b.round <= edge.round).map(b => b.block)
-  }
-
-  /** The object an applies_to edge lands on: an object id, or the owner of the named block. */
-  appliesTo(to: string): string | undefined {
-    if (/^O\d+$/u.test(to)) return this.objects.has(to) ? to : undefined
-    const owner = this.coverOf(to)?.owner
-    return owner && owner !== "none" ? owner : undefined
+  units(round = Infinity): ChangeUnit[] {
+    return [...this.answerUnits.filter(u => u.round <= round), ...revisionUnits(this).filter(u => u.round <= round)]
   }
 
   objectByName(name: string): ObjectRecord | undefined {
@@ -226,12 +226,18 @@ export class Registry {
       if (!g.parts.includes(target)) g.parts.push(target)
       grouped.set(key, g)
     }
-    const applied = new Map<string, { from: string; by_object: string }[]>()
-    for (const e of answer.references.filter(r => r.kind === "applies_to")) {
-      const target = this.appliesTo(e.to)
-      const by = this.coverOf(e.from)?.owner
-      if (!target || !by || by === "none" || target === by) throw new Error(`applies_to ${e.from} -> ${e.to} does not name another object`)
-      applied.set(target, [...(applied.get(target) ?? []), { from: e.from, by_object: by }])
+    // The round's change units (batch 4 E1b): code's cue candidates, as the answer confirmed them, and its own. A unit
+    // puts its sentences of this round on each command it touches that owns none of them: that command changes too.
+    const units = roundUnits(this, round, answer)
+    this.answerUnits.push(...units)
+    const applied = new Map<string, { from: string; by_object: string; unit: string }[]>()
+    for (const u of units.filter(x => !x.all)) {
+      const here = u.members.filter(m => this.blocks.get(m)?.round === round)
+      const owners = new Set(here.map(m => this.coverOf(m)?.owner).filter((o): o is string => !!o && o !== "none"))
+      for (const target of u.objects.filter(o => !owners.has(o) && this.objects.has(o))) for (const m of here) {
+        const by = this.coverOf(m)?.owner
+        if (by && by !== "none") applied.set(target, [...(applied.get(target) ?? []), { from: m, by_object: by, unit: u.id }])
+      }
     }
     const touched = new Set([...entries.keys(), ...[...grouped.values()].map(g => g.own.object), ...applied.keys()])
     const order = [...touched].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
@@ -252,13 +258,12 @@ export class Registry {
       })
       received.set(object, mods)
       const own = entries.get(object) ?? []
-      const types = [...new Set<ChangeType | "applies_to">([...own.map(e => e.type), ...mods.map(m => m.kind), ...(applied.has(object) ? ["applies_to" as const] : [])])].sort()
+      const types = [...new Set<ChangeType | "unit">([...own.map(e => e.type), ...mods.map(m => m.kind), ...(applied.has(object) ? ["unit" as const] : [])])].sort()
       const from = record.version
       record.version++
       record.history.push({ round, version: record.version, change: id })
       this.changes.push({ id, round, object, from_version: from, to_version: record.version, types, entries: own, received: mods, applied: applied.get(object) ?? [] })
     })
-    for (const r of answer.references) this.references.push({ ...r, round })
     for (const n of answer.interpretations) this.interpretations.push({ ...n, round })
   }
 
@@ -276,6 +281,26 @@ export class Registry {
     }
     return problems
   }
+}
+
+/**
+ * The change units of a round as accepted: each cue candidate code finds (the answer may give it fewer members, or
+ * none to drop it), then the answer's own units. Their commands: those the cue names, else the owners of the members.
+ */
+export function roundUnits(registry: Registry, round: number, answer: Pick<AttributionAnswer, "units">): ChangeUnit[] {
+  const given = new Map((answer.units ?? []).filter(u => u.candidate).map(u => [u.candidate!, u]))
+  const owners = (members: readonly string[]) => [...new Set(members.map(m => registry.coverOf(m)?.owner).filter((o): o is string => !!o && o !== "none"))]
+  const named = (members: readonly string[]) => [...new Set(members.flatMap(m => [...(registry.block(m)?.text ?? "").matchAll(/`([a-z][\w.-]{2,})`/giu)].flatMap(x => objectsNamed(registry, x[1]))))]
+  const out: ChangeUnit[] = []
+  for (const c of cueUnits(registry, round)) {
+    const g = given.get(c.id)
+    if (!g) { out.push(c); continue }
+    const members = g.members.filter(m => c.members.includes(m))
+    if (!members.length) continue
+    out.push({ ...c, name: g.name || c.name, members, objects: members.length === c.members.length ? c.objects : [...new Set([...named(members), ...owners(members)])] })
+  }
+  for (const [k, u] of (answer.units ?? []).filter(x => !x.candidate).entries()) out.push({ id: `U${round}.m${k + 1}`, source: "model", round, name: u.name, members: [...u.members], objects: owners(u.members) })
+  return out
 }
 
 export function nameKey(name: string): string {

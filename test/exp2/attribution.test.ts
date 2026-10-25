@@ -61,7 +61,7 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     assert.deepEqual(variant(a => { a.assignments[3].replaces = ["R2.S3.P5"] }), ["change_shape"], "add that replaces something")
     assert.deepEqual(variant(a => { a.assignments[1].change = "revise"; a.assignments[1].overrides = [] }), ["change_shape"], "revise without targets")
     assert.deepEqual(variant(a => { a.assignments[1].block = `R3.S2#${"0".repeat(8)}` }), ["hash_mismatch", "uncovered"], "a stale hash")
-    assert.deepEqual(variant(a => { a.references.push({ from: "R2.S1", to: "R1.S2", kind: "refers_to" }) }), ["reference_invalid"], "a reference from an older block")
+    assert.deepEqual(variant(a => { a.units = [{ candidate: null, name: "x", members: ["R2.S1", "R1.S2"] }] }), ["unit_invalid"], "a unit of its own with no sentence of this round")
 
     const name = checkAnswer(r3, 3, (() => { const a = structuredClone(good); a.assignments[4] = { ...a.assignments[4], object_id: null, new_object: "Fill" }; return a })()).issues[0]
     assert.match(name.message, /use object_id O\d+/u)
@@ -77,9 +77,26 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     assert.deepEqual(checkAnswer(r3, 3, odd).issues, [])
   })
 
+  it("an outer block that revises earlier text, holding a paragraph split around a sentence of a third owner: one overlap issue, not a crash", async () => {
+    // d12_w1 R2 (batch 4 acceptance, 2026-10-25): the split-off parts of the paragraph were looked up among the
+    // assignments as they stood before the split, and the overlap message threw.
+    const r4 = await registryBefore(4)
+    const fill = r4.objectByName("fill")!.id, sort = r4.objectByName("sort")!.id, drop = r4.objectByName("drop")!.id
+    const sec = r4.sources.get(4)!.blocks.find(b => b.level === "section" && b.parent === null && b.children.some(c => r4.block(c)!.level === "paragraph" && r4.block(c)!.children.length > 1))!
+    const para = r4.block(sec.children.find(c => r4.block(c)!.level === "paragraph" && r4.block(c)!.children.length > 1)!)!
+    const answer: AttributionAnswer = { assignments: r4.sources.get(4)!.blocks.filter(b => b.level === "section" && b.parent === null && b.id !== sec.id).map(b => ({ block: b.id, object_id: fill, new_object: null, change: "add" as const, replaces: [], overrides: [], note: null })), units: [], interpretations: [] }
+    answer.assignments.push(
+      { block: sec.id, object_id: fill, new_object: null, change: "partial", replaces: [], overrides: [{ old: ["R1.S3.P2.s4"], by: [para.children[0]] }], note: null },
+      { block: para.id, object_id: sort, new_object: null, change: "add", replaces: [], overrides: [], note: null },
+      { block: para.children[1], object_id: drop, new_object: null, change: "add", replaces: [], overrides: [], note: null },
+    )
+    const issues = checkAnswer(r4, 4, answer).issues
+    assert.deepEqual(issues.filter(i => i.code === "overlap").length, 1, JSON.stringify(issues))
+  })
+
   it("text already replaced cannot be replaced again; the current text must be cited", async () => {
     const r4 = await registryBefore(4)
-    const answer: AttributionAnswer = { assignments: [], references: [], interpretations: [] }
+    const answer: AttributionAnswer = { assignments: [], units: [], interpretations: [] }
     const fill = r4.objectByName("fill")!.id
     for (const s of r4.sources.get(4)!.blocks.filter(b => b.level === "section" && b.parent === null)) {
       answer.assignments.push({ block: s.id, object_id: fill, new_object: null, change: "add", replaces: [], overrides: [], note: null })
@@ -148,8 +165,8 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     const request = buildRequest(r3, 3)
     for (const o of request.objects) assert.deepEqual(Object.keys(o).filter(k => k !== "modified"), ["id", "name", "version", "blocks"])
     assert.ok(request.sources.startsWith("===== R1 =====\n") && request.sources.includes("===== R3 =====\n⟦R3.S0#"))
-    const fill = request.candidates.find(c => c.name === "fill")!
-    assert.ok(fill.mentioned_in.includes("R3.S2.P1"))
+    // Batch 4: no object mentions for edges; the cue units code found in R3 (fill's linear strategy, normalize).
+    assert.ok(request.unit_candidates.every(c => c.id.startsWith("U3.c") && c.members.every(m => m.startsWith("R3."))), JSON.stringify(request.unit_candidates))
     assert.ok(request.outline.some(l => l.startsWith("R3.S2 ### Fill linear: boundary extrapolation: P1(1) P2(4) P3(2)")))
   })
 
@@ -169,7 +186,7 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     assert.ok(cut(first).length > 20_000)
     assert.equal(cut(repair), cut(first))
     assert.ok(first.indexOf(`"sources":`) < first.indexOf(`"objects":`) && first.indexOf(`"issues":`) < first.indexOf(`"previous_draft":`))
-    assert.ok(first.endsWith(`"issues":[],"previous_draft":{"assignments":[],"interpretations":[],"references":[]}}`))
+    assert.ok(first.endsWith(`"issues":[],"previous_draft":{"assignments":[],"interpretations":[],"units":[]}}`))
 
     // What OpenCode receives: one system prompt and one schema for both calls, and the same opening text.
     const prompts: { system: string; schema: unknown; text: string }[] = []
@@ -192,22 +209,25 @@ describe("exp2 attribution: the code blocks only certain errors and names them",
     assert.equal(cut(prompts[1].text), cut(prompts[0].text))
   })
 
-  it("applies_to must come from an owned block and land on another object", async () => {
+  it("change units (batch 4): a candidate's members can only be fewer; one of its own needs two sentences, one of this round", async () => {
     const r5 = await registryBefore(5)
     const good = scripted(5, r5, 1 - 1)
     const fix = good.assignments.find(a => a.block === "R5.S1.P2.s7")!
     fix.block = "R5.S1.P2.s6"
     assert.deepEqual(checkAnswer(r5, 5, good).issues, [])
-    const ingest = r5.objectByName("ingest")!.id
-    const variant = (edge: { from: string; to: string }) => codes({ ...good, references: [...good.references, { ...edge, kind: "applies_to" }] }, r5, 5)
-    assert.deepEqual(variant({ from: "R5.S0", to: r5.objectByName("transform")!.id }), ["reference_invalid"], "from text that belongs to no object")
-    // An edge from an object's own text to that object says nothing more: it is left out, not an error.
-    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: ingest }), [], "to the block's own object")
-    assert.ok(!checkAnswer(r5, 5, { ...good, references: [...good.references, { from: "R5.S1.P2.s5", to: ingest, kind: "applies_to" }] }).acceptance!.answer.references.some(e => e.to === ingest && e.from === "R5.S1.P2.s5"))
-    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R1.S2.P1" }), [], "to a block of the same object")
-    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "O999" }), ["unknown_object"])
-    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R1.S6.P2" }), [], "to a block of another object")
-    assert.deepEqual(variant({ from: "R5.S1.P2.s5", to: "R5.S2.P1" }), [], "to a block of an object new this round")
+    const cand = buildRequest(r5, 5).unit_candidates.find(c => /Behavior Change/u.test(c.name))!
+    assert.ok(cand && cand.members.length >= 4, JSON.stringify(buildRequest(r5, 5).unit_candidates))
+    const variant = (units: NonNullable<typeof good.units>) => codes({ ...good, units }, r5, 5)
+    assert.deepEqual(variant([{ candidate: cand.id, name: cand.name, members: cand.members.slice(0, 2) }]), [], "fewer members")
+    assert.deepEqual(variant([{ candidate: cand.id, name: cand.name, members: [...cand.members, "R5.S2.P1"] }]), ["unit_invalid"], "a member the candidate does not have")
+    assert.deepEqual(variant([{ candidate: "U5.c99", name: "x", members: [] }]), ["unit_invalid"], "no such candidate")
+    assert.deepEqual(variant([{ candidate: null, name: "lineage and pipeline", members: ["R5.S2.P1"] }]), ["unit_invalid"], "one sentence")
+    assert.deepEqual(variant([{ candidate: null, name: "lineage and pipeline", members: ["R5.S2.P1", "R5.S8.P1"] }]), [], "two sentences of this round")
+    // Accepted: a candidate the answer does not name stands; one given [] is dropped.
+    const kept = checkAnswer(r5, 5, good).acceptance!
+    assert.deepEqual(kept.answer.units, [])
+    const dropped = checkAnswer(r5, 5, { ...good, units: [{ candidate: cand.id, name: cand.name, members: [] }] }).acceptance!
+    assert.deepEqual(dropped.answer.units, [{ candidate: cand.id, name: cand.name, members: [] }])
   })
 })
 

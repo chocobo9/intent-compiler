@@ -14,7 +14,8 @@ export interface AttributeRound {
   status: string
   calls: number
   modifications: { object: string; kind: string; parts: string[]; by: string[] }[]
-  edges: { from: string; to: string; kind: string }[]
+  /** The round's change units (batch 4: in place of object edges). */
+  units: { id: string; source: string; name: string; members: string[]; objects: string[] }[]
   revision?: RecallLine
   relation?: RecallLine
 }
@@ -30,8 +31,8 @@ export async function attributeOnly(o: { inputs: string; to: number; out: string
     if (!record) record = await store.ingestRound(round, readFileSync(file, "utf8"), o.transport, { maxRepairs: o.maxRepairs ?? 2 })
     const registry = store.registry()
     const modifications = [...registry.objects.values()].flatMap(ob => ob.blocks.flatMap(b => b.modifications.filter(m => m.round === round).map(m => ({ object: ob.id, kind: m.kind, parts: m.parts, by: m.by }))))
-    const edges = registry.references.filter(e => e.round === round).map(e => ({ from: e.from, to: e.to, kind: e.kind }))
-    rounds.push({ round, status: record.status, calls: record.calls.length, modifications, edges, ...(o.gold && record.status === "accepted" ? { revision: revisionRecall(registry, round, o.gold), relation: relationRecall(registry, round, o.gold) } : {}) })
+    const units = registry.units(round).filter(u => u.round === round).map(u => ({ id: u.id, source: u.source, name: u.name, members: u.members, objects: u.objects }))
+    rounds.push({ round, status: record.status, calls: record.calls.length, modifications, units, ...(o.gold && record.status === "accepted" ? { revision: revisionRecall(registry, round, o.gold), relation: relationRecall(registry, round, o.gold) } : {}) })
     if (record.status !== "accepted") break
   }
   writeFileSync(join(o.out, "attribute.json"), JSON.stringify({ task: o.gold?.task ?? null, rounds }, null, 1) + "\n")
@@ -52,7 +53,7 @@ export function renderAttribute(rounds: readonly AttributeRound[], task: string 
     if (r.revision) out.push(renderRecall("Revision recall", r.revision))
     if (r.relation) out.push(renderRecall("Relation recall", r.relation))
     out.push(`- Modifications (${r.modifications.length}): ${r.modifications.map(m => `${m.parts.join("+")} ${m.kind} by ${m.by.join("+")} (${m.object})`).join("; ") || "none"}`)
-    out.push(`- Edges (${r.edges.length}): ${r.edges.map(e => `${e.from} ${e.kind} ${e.to}`).join("; ") || "none"}`, "")
+    out.push(`- Change units (${r.units.length}): ${r.units.map(u => `${u.id} ${u.source} ${JSON.stringify(u.name)} (${u.members.join(", ")}; ${u.objects.join(", ")})`).join("; ") || "none"}`, "")
   }
   return out.join("\n")
 }

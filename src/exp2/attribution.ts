@@ -2,7 +2,8 @@ import { createHash } from "node:crypto"
 import { EnvironmentBlocked } from "./platform.js"
 import { requestJson } from "../model/opencode-transport.js"
 import { annotate, parseRef, roundOf, type RoundSource, type SourceBlock } from "./source.js"
-import { isWithin, LIVE_STATES, nameKey, type Assignment, type AttributionAnswer, type Override, type Reference, type Registry, type RoundAcceptance } from "./registry.js"
+import { isWithin, LIVE_STATES, nameKey, type AnswerUnit, type Assignment, type AttributionAnswer, type Override, type Registry, type RoundAcceptance } from "./registry.js"
+import { cueUnits } from "./units.js"
 
 /**
  * Exp2 attribution step (DESIGN §4.2–§4.4): the model reads the full source and gives each block of the new round
@@ -35,8 +36,11 @@ export interface AttributionRequest {
   /** The new round's sections and paragraphs, with unit counts, to cover. */
   outline: string[]
   objects: ObjectBrief[]
-  /** Existing objects whose name the new round's text mentions, and where (found by name only). */
-  candidates: { object: string; name: string; mentioned_in: string[] }[]
+  /**
+   * Change units code found in the new round's text by the author's cues (batch 4 E1): the sentences, the commands the
+   * cue names. The answer may give one fewer members (none drops it); one it does not name stands as given.
+   */
+  unit_candidates: { id: string; name: string; cue: string; members: string[]; commands: string[] }[]
   /** What the code found wrong with the draft; empty on the first call. */
   issues: Issue[]
   /** The answer so far; empty on the first call. */
@@ -51,12 +55,14 @@ export interface AnswerPatch {
   upsert: Assignment[]
   /** Blocks whose assignment is removed. */
   remove: string[]
-  edges_add: Reference[]
-  edges_remove: Reference[]
+  /** Units to add, or to replace the draft's of the same candidate (or, for one of its own, the same name). */
+  units_add?: AnswerUnit[]
+  /** Units of the draft dropped: a candidate id, or the name of one of its own. */
+  units_remove?: string[]
   interpretations_add: AttributionAnswer["interpretations"]
 }
 
-export const EMPTY_DRAFT: AttributionAnswer = { assignments: [], references: [], interpretations: [] }
+export const EMPTY_DRAFT: AttributionAnswer = { assignments: [], units: [], interpretations: [] }
 
 export interface TokenUsage {
   input_tokens: number
@@ -107,7 +113,7 @@ export const TRANSPORT_RETRIES = 2
 export type IssueCode =
   | "unparseable" | "shape" | "unknown_block" | "not_this_round" | "hash_mismatch" | "duplicate" | "overlap" | "uncovered"
   | "object_choice" | "unknown_object" | "name_taken" | "change_shape" | "range_invalid" | "target_unknown"
-  | "target_not_earlier" | "target_unowned" | "target_replaced" | "by_outside_block" | "reference_invalid" | "transport" | "quota" | "auth" | "unavailable"
+  | "target_not_earlier" | "target_unowned" | "target_replaced" | "by_outside_block" | "unit_invalid" | "transport" | "quota" | "auth" | "unavailable"
 
 /** One problem; when one root cause affects several blocks, a single issue names them all in `blocks`. */
 export interface Issue { code: IssueCode; block?: string; blocks?: string[]; message: string }
@@ -162,7 +168,12 @@ export function buildRequest(registry: Registry, round: number, previous: Attrib
   })
   // The model reads an issue's message, which names its blocks; the `blocks` list is for code and is not sent twice.
   const sent = issues.map(({ blocks: _, ...i }) => i)
-  return { round, sources, outline: outline(source), objects, candidates: candidates(registry, source), issues: sent, previous_draft: previous }
+  return { round, sources, outline: outline(source), objects, unit_candidates: unitCandidates(registry, round), issues: sent, previous_draft: previous }
+}
+
+/** The cue units of the new round, for the model to confirm (batch 4 E1): code finds them, the model never invents one. */
+export function unitCandidates(registry: Registry, round: number): AttributionRequest["unit_candidates"] {
+  return cueUnits(registry, round).map(u => ({ id: u.id, name: u.name, cue: u.cue?.text ?? "", members: u.members, commands: u.objects.map(o => registry.objects.get(o)?.name ?? o) }))
 }
 
 function outline(source: RoundSource): string[] {
@@ -172,23 +183,6 @@ function outline(source: RoundSource): string[] {
     const head = s.heading ?? "(text before the first heading)"
     return `${s.id} ${head}${paras.length ? ": " + paras.map(p => `${p.id.slice(s.id.length + 1)}(${p.children.length})`).join(" ") : ""}`
   })
-}
-
-/** Existing objects whose name occurs as a word in a paragraph of the new round. Matching is by name only. */
-export function candidates(registry: Registry, source: RoundSource): AttributionRequest["candidates"] {
-  const paragraphs = source.blocks.filter(b => b.level === "paragraph" || (b.level === "section" && b.heading))
-  return [...registry.objects.values()].flatMap(o => {
-    const pattern = namePattern(o.name)
-    if (!pattern) return []
-    const hits = paragraphs.filter(b => pattern.test(b.level === "section" ? b.heading! : b.text)).map(b => b.id)
-    return hits.length ? [{ object: o.id, name: o.name, mentioned_in: hits }] : []
-  })
-}
-
-function namePattern(name: string): RegExp | null {
-  const words = name.trim().split(/\s+/u).filter(Boolean).map(w => w.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
-  if (!words.length) return null
-  return new RegExp(`(?<![\\p{L}\\p{N}_-])${words.join("[\\s`\"']+")}(?![\\p{L}\\p{N}_])`, "iu")
 }
 
 // ---------------------------------------------------------------- check
@@ -225,7 +219,7 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   }
 
   // A new object has no id until the answer is accepted. An id that does not exist is one root, however many
-  // assignments and edges use it (BLOCK9 §2.7): one message, naming the new objects this answer does create.
+  // assignments use it (BLOCK9 §2.7): one message, naming the new objects this answer does create.
   const created = [...new Map(answer.assignments.filter(a => a.new_object?.trim()).map(a => [nameKey(a.new_object!), `"${a.new_object!.trim()}" (${a.block})`])).values()]
   const unknownUses = new Map<string, string[]>()
   const noSuchObject = (id: string, where: string) => { unknownUses.set(id, [...(unknownUses.get(id) ?? []), where]) }
@@ -315,7 +309,8 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
     if (above) inside.set(above.id, [...(inside.get(above.id) ?? []), id])
   }
   for (const [outer, ids] of inside) {
-    const owner = (id: string) => { const a = byBlock.get(id)!; return a.change === "none" ? "none" : a.object_id ?? a.new_object! }
+    // The assignments as they stand after the most specific one won: a part split off an outer block is not in byBlock.
+    const owner = (id: string) => { const a = assignments.find(x => x.block === id)!; return a.change === "none" ? "none" : a.object_id ?? a.new_object! }
     const owners = [...new Set(ids.map(owner))]
     const rest = partsLeft(outer)
     add("overlap", `${outer} replaces or overrides earlier text, so it cannot be divided around the ${ids.length === 1 ? "block" : `${ids.length} blocks`} inside it given to ${owners.length > 4 ? `${owners.slice(0, 4).join(", ")} and ${owners.length - 4} more` : owners.join(", ")} (${ids.join(", ")}). Either give its targets to the parts that hold them and assign its own parts ${rest.join(", ")} instead of ${outer}, or drop ${ids.length === 1 ? "that block" : "those"} so ${outer} covers ${ids.length === 1 ? "it" : "them"}`, outer)
@@ -338,42 +333,31 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
     issues[issues.length - 1].blocks = ids
   }
 
-  // Edges: both ends exist; the citing end is in this round; applies_to lands on another object.
-  const references: Reference[] = []
-  const ownerNow = (id: string): string | undefined => {
-    if (id.startsWith("new:")) return id
-    if (/^O\d+$/u.test(id)) return registry.objects.has(id) ? id : undefined
-    const here = registry.lineage(id).map(b => assignments.find(x => x.block === b.id)).find(Boolean)
-    if (here) return here.change === "none" ? "none" : here.object_id ?? `new:${nameKey(here.new_object!)}`
-    return registry.appliesTo(id)
-  }
-  for (const [i, r] of answer.references.entries()) {
-    const w = `edge ${i + 1} (${r.kind} ${r.from} -> ${r.to})`
-    if (r.kind !== "refers_to" && r.kind !== "applies_to") { add("reference_invalid", `${w}: kind must be refers_to or applies_to`); continue }
-    // Either kind may point at an object by id (DESIGN §12d item 1): refers_to then means that object's current text.
-    const objectTarget = /^O\d+$/u.test(r.to.trim())
-    if (objectTarget && !registry.objects.has(r.to.trim())) { noSuchObject(r.to.trim(), w); continue }
-    // A new object of this answer is pointed at by its name.
-    const newTarget = !objectTarget && newNames.has(nameKey(r.to)) ? `new:${nameKey(r.to)}` : null
-    const from = resolve(r.from, `${w} from`), to = objectTarget ? [r.to.trim()] : newTarget ? [newTarget] : resolve(r.to, `${w} to`)
-    if (!from || !to) continue
-    if (from.length !== 1 || to.length !== 1) { add("reference_invalid", `${w}: each end names one block`); continue }
-    if (roundOf(from[0]) !== round) { add("reference_invalid", `${w}: ${from[0]} is not in round ${round}; the citing block is this round's`); continue }
-    if (!objectTarget && !newTarget && roundOf(to[0]) > round) { add("reference_invalid", `${w}: ${to[0]} is in a later round`); continue }
-    if (r.kind === "applies_to") {
-      const by = ownerNow(from[0]), target = ownerNow(to[0])
-      if (!by || by === "none") { add("reference_invalid", `${w}: ${from[0]} belongs to no object, so its requirement cannot apply elsewhere`); continue }
-      if (!target || target === "none") { add("reference_invalid", `${w}: ${to[0]} belongs to no object; point applies_to at a block of the object, or at its id`); continue }
-      // The citing block is already that object's own text: the edge says nothing more, and is left out.
-      if (target === by) continue
+  // Units (batch 4 E1b): a candidate code found, with members among its own; or one of the answer's own, two
+  // sentences at least, one of them this round's, none of a later round.
+  const cands = new Map(cueUnits(registry, round).map(c => [c.id, c]))
+  const units: AnswerUnit[] = []
+  for (const [i, u] of (answer.units ?? []).entries()) {
+    const w = `unit ${i + 1} (${u.candidate ?? u.name})`
+    const members = u.members.flatMap(m => resolve(m, `${w} member`) ?? [])
+    if (u.candidate) {
+      const c = cands.get(u.candidate)
+      if (!c) { add("unit_invalid", `${w}: there is no candidate ${u.candidate}; the candidates are ${[...cands.keys()].join(", ") || "none"}`); continue }
+      const outside = members.filter(m => !c.members.includes(m))
+      if (outside.length) { add("unit_invalid", `${w}: ${outside.join(", ")} ${outside.length === 1 ? "is" : "are"} not among the candidate's members (${c.members.join(", ")}); a candidate's members can only be fewer`); continue }
+    } else {
+      if (!u.name.trim()) { add("unit_invalid", `${w}: a unit of your own needs a name`); continue }
+      if (members.length < 2) { add("unit_invalid", `${w}: a unit relates at least two sentences`); continue }
+      if (!members.some(m => roundOf(m) === round)) { add("unit_invalid", `${w}: none of its sentences is of round ${round}`); continue }
+      if (members.some(m => roundOf(m) > round)) { add("unit_invalid", `${w}: a sentence of a later round`); continue }
     }
-    if (!references.some(x => x.from === from[0] && x.to === to[0] && x.kind === r.kind)) references.push({ from: from[0], to: to[0], kind: r.kind })
+    units.push({ candidate: u.candidate ?? null, name: u.name.trim(), members })
   }
   const interpretations = answer.interpretations.map((n, i) => ({ blocks: n.blocks.flatMap(b => resolve(b, `interpretation ${i + 1}`) ?? []), text: n.text }))
   // Ids that do not exist are one root however many places use them (BLOCK9 §2.7): one issue.
   if (unknownUses.size) {
     const ids = [...unknownUses.keys()]
-    add("unknown_object", `${ids.map(id => `${id} is used by ${unknownUses.get(id)!.join(", ")}`).join("; ")}. There ${ids.length === 1 ? `is no object ${ids[0]}` : `are no objects ${ids.join(", ")}`} yet (objects so far: O1–O${registry.allocatedCount}): a new object has no id until this answer is accepted. Wherever you refer to a new object, give its name, as new_object in an assignment or as the \`to\` of an edge${created.length ? `; this answer creates ${created.join(", ")}` : ""}`)
+    add("unknown_object", `${ids.map(id => `${id} is used by ${unknownUses.get(id)!.join(", ")}`).join("; ")}. There ${ids.length === 1 ? `is no object ${ids[0]}` : `are no objects ${ids.join(", ")}`} yet (objects so far: O1–O${registry.allocatedCount}): a new object has no id until this answer is accepted. Wherever you refer to a new object, give its name, as new_object in an assignment${created.length ? `; this answer creates ${created.join(", ")}` : ""}`)
   }
 
   if (issues.length) return { issues: byCause(issues) }
@@ -382,10 +366,8 @@ export function checkAnswer(registry: Registry, round: number, answer: Attributi
   const firsts = [...newNames.entries()].map(([key, name]) => ({ key, name, at: Math.min(...assignments.filter(a => a.new_object && nameKey(a.new_object) === key).map(a => order.indexOf(a.block))) }))
   firsts.sort((a, b) => a.at - b.at)
   const allocated = firsts.map((f, k) => ({ name: f.name, id: `O${registry.allocatedCount + k + 1}` }))
-  // Edges that named a new object now get its id.
-  for (const r of references) if (r.to.startsWith("new:")) r.to = allocated.find(x => nameKey(x.name) === r.to.slice(4))!.id
   assignments.sort((a, b) => order.indexOf(a.block) - order.indexOf(b.block))
-  return { issues, acceptance: { round, answer: { assignments, references, interpretations }, allocated } }
+  return { issues, acceptance: { round, answer: { assignments, units, interpretations }, allocated } }
 }
 
 /**
@@ -396,7 +378,7 @@ export function byCause(issues: Issue[]): Issue[] {
   const out: Issue[] = []
   const groups = new Map<string, { issue: Issue; cause: string; places: string[]; blocks: string[] }>()
   for (const i of issues) {
-    const m = /^((?:assignment|edge|interpretation) \d+(?: \([^)]*\))?(?: [a-z]+(?: \d+)?)*): (.*)$/su.exec(i.message)
+    const m = /^((?:assignment|unit|interpretation) \d+(?: \([^)]*\))?(?: [a-z]+(?: \d+)?)*): (.*)$/su.exec(i.message)
     if (!m) { out.push(i); continue }
     const key = `${i.code}|${m[2]}`
     const g = groups.get(key)
@@ -452,14 +434,16 @@ export function shapeProblems(value: unknown): string[] {
     if (!strs(a.replaces)) problems.push(`${at}.replaces: not a string array`)
     if (!Array.isArray(a.overrides) || !a.overrides.every(o => obj(o) && strs(o.old) && strs(o.by))) problems.push(`${at}.overrides: not an array of {old, by}`)
   }
-  const edges = (v: unknown, at: string) => {
-    if (!Array.isArray(v) || !v.every(r => obj(r) && typeof r.from === "string" && typeof r.to === "string" && typeof r.kind === "string")) problems.push(`${at}: not an array of {from, to, kind}`)
+  // Units are optional (older replies, recorded before batch 4, have object edges instead: left unread).
+  const units = (v: unknown, at: string) => {
+    if (v === undefined) return
+    if (!Array.isArray(v) || !v.every(u => obj(u) && (u.candidate === null || typeof u.candidate === "string") && typeof u.name === "string" && strs(u.members))) problems.push(`${at}: not an array of {candidate, name, members}`)
   }
   if (!obj(value)) return ["answer: not an object"]
   if (!Array.isArray(value.upsert)) problems.push("upsert: not an array"); else value.upsert.forEach((a, i) => assignment(a, `upsert[${i}]`))
   if (!strs(value.remove)) problems.push("remove: not a string array")
-  edges(value.edges_add, "edges_add")
-  edges(value.edges_remove, "edges_remove")
+  units(value.units_add, "units_add")
+  if (value.units_remove !== undefined && !strs(value.units_remove)) problems.push("units_remove: not a string array")
   if (!Array.isArray(value.interpretations_add) || !value.interpretations_add.every(n => obj(n) && strs(n.blocks) && typeof n.text === "string")) problems.push("interpretations_add: not an array of {blocks, text}")
   return problems
 }
@@ -478,9 +462,11 @@ export function applyPatch(previous: AttributionAnswer, patch: AnswerPatch): Att
     assignments.push(a)
   }
   for (const [k, a] of upserts) if (!placed.has(k)) assignments.push(a)
-  const same = (a: Reference, b: Reference) => key(a.from) === key(b.from) && key(a.to) === key(b.to) && a.kind === b.kind
-  const references = [...previous.references.filter(r => !patch.edges_remove.some(x => same(x, r))), ...patch.edges_add]
-  return { assignments, references, interpretations: [...previous.interpretations, ...patch.interpretations_add] }
+  const unitKey = (u: AnswerUnit) => u.candidate ?? `name:${nameKey(u.name)}`
+  const dropped = new Set(patch.units_remove ?? [])
+  const added = new Map((patch.units_add ?? []).map(u => [unitKey(u), u]))
+  const units = [...(previous.units ?? []).filter(u => !added.has(unitKey(u)) && !dropped.has(u.candidate ?? "") && !dropped.has(u.name)), ...added.values()]
+  return { assignments, units, interpretations: [...previous.interpretations, ...patch.interpretations_add] }
 }
 
 // ---------------------------------------------------------------- loop
@@ -590,24 +576,24 @@ const assignmentSchema = {
     note: nullableString,
   },
 }
-const edgeSchema = {
+const unitSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["from", "to", "kind"],
-  description: "Only for an object the block's own wording names; to = a block or an object id. refers_to: this block depends on that text or object, so its checks are derived again when that changes; the object referred to gets no change. applies_to: this block changes that object's behaviour, so that object gets a change record and is worked on this round. The block keeps its one owner.",
-  properties: { from: { type: "string" }, to: { type: "string" }, kind: { type: "string", enum: ["refers_to", "applies_to"] } },
+  required: ["candidate", "name", "members"],
+  description: "A change unit: sentences that change together, across commands. candidate: the id of a unit in `unit_candidates` (members: some of its members; [] drops it), or null for a unit of your own where no candidate gives one (two sentences at least, one of this round).",
+  properties: { candidate: nullableString, name: { type: "string" }, members: stringArray },
 }
 
 /** First answer and repairs alike: a patch on `previous_draft` (empty on the first call). */
 export const ATTRIBUTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["upsert", "remove", "edges_add", "edges_remove", "interpretations_add"],
+  required: ["upsert", "remove", "units_add", "units_remove", "interpretations_add"],
   properties: {
     upsert: { type: "array", items: assignmentSchema, description: "Assignments to add, or to replace the draft's assignment of the same block." },
     remove: { ...stringArray, description: "Blocks whose assignment in the draft is dropped." },
-    edges_add: { type: "array", items: edgeSchema },
-    edges_remove: { type: "array", items: edgeSchema },
+    units_add: { type: "array", items: unitSchema, description: "Units to add, or to replace the draft's unit of the same candidate (or name)." },
+    units_remove: { ...stringArray, description: "Units of the draft dropped: a candidate id, or the name of a unit of your own." },
     interpretations_add: { type: "array", items: { type: "object", additionalProperties: false, required: ["blocks", "text"], properties: { blocks: stringArray, text: { type: "string" } } } },
   },
 }
@@ -616,9 +602,9 @@ export const ATTRIBUTION_SYSTEM_PROMPT = [
   "You register requirement text into objects. The request holds every round of the original requirements so far (`sources`, the new round last); the original text is the only authority, and newer text overrides older text.",
   "Block ids: ⟦R3.S2⟧ marks a section (a heading and everything under it, subsections included), ⟦R3.S2.P1⟧ a paragraph, ‹s2› a unit inside the paragraph (a sentence, a list item, a code block or a table) and ‹s2.c1› a clause of a sentence or list item; the full id of a unit is R3.S2.P1.s2, of a clause R3.S2.P1.s2.c1. Ids may carry the shown suffix (R3.S2.P1#ab12cd34). Units are marked only where a paragraph has more than one, clauses only where a unit has more than one.",
   "An object is a unit of requirement that the text names with a stable name and whose parts are revised together: a command, an operation, a stage of processing, a shared convention. Parameters, fields and options are never objects; a change to them is a change to their object.",
-  "A section's heading line alone, without anything under it, is the unit R3.S2.H (no marker of its own); give it an owner only when the heading itself needs one apart from its content (for example none for a heading over subsections that belong elsewhere). For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round has one owner: a block assigned inside an assigned block takes its own owner, and the outer block keeps the rest of its text (the most specific assignment wins). A new object has no id until the answer is accepted: refer to it by the same new_object name wherever you refer to it, and by that name as the `to` of an edge. Clauses serve to say which part of earlier text a partial revision changes.",
+  "A section's heading line alone, without anything under it, is the unit R3.S2.H (no marker of its own); give it an owner only when the heading itself needs one apart from its content (for example none for a heading over subsections that belong elsewhere). For every block of the new round, choose the coarsest level that belongs to one object (usually a whole section; paragraphs only where a section talks about several objects, units only where a paragraph does) and give it to an existing object (object_id) or a new one (new_object: a name only). Every block of the new round has one owner: a block assigned inside an assigned block takes its own owner, and the outer block keeps the rest of its text (the most specific assignment wins). A new object has no id until the answer is accepted: refer to it by the same new_object name wherever you refer to it. Clauses serve to say which part of earlier text a partial revision changes.",
   "The change field's values are defined by their effect on earlier text, as its description says. Cite ids only; never copy text. Earlier units may belong to another object; cite them anyway. Ranges like R2.S9.P4.s2..s4 are allowed. Cite only text still in force: what a later round replaced is cited through its replacement.",
-  "Edges: when a block's own wording names another object, add an edge. refers_to: this block depends on that text or object (so its checks are derived again when that changes). applies_to: this block changes that object's behaviour (so that object gets a change record and is worked on this round). Either may point at a block or at an object's id. `candidates` lists objects whose name the new text mentions; for each, decide only whether the wording itself names it, not whether it ought to. Never infer edges from patterns across rounds.",
+  "Change units: `unit_candidates` lists sentence groups code found by the author's own cues (a section that revises several commands by name, a Changes to section, an author's id cited in several places). For each, keep it as it is (say nothing), give it fewer members where some do not change together with the rest (units_add with its candidate id), or remove it (members []). Only where no candidate covers sentences of this round that the text says change together across commands, add a unit of your own (candidate null). Cite ids only.",
   "interpretations: only when two blocks of the same round disagree, or the extent of a partial revision is unclear, write a short reading citing the blocks; it is marked as interpretation, not source.",
-  "Answer as a patch on `previous_draft` (empty on the first call): upsert adds or replaces a block's assignment, remove drops one, edges_add/edges_remove and interpretations_add edit the rest. When `issues` is not empty, the code found these problems in the draft: fix exactly these, and do not restate what needs no change.",
+  "Answer as a patch on `previous_draft` (empty on the first call): upsert adds or replaces a block's assignment, remove drops one, units_add/units_remove and interpretations_add edit the rest. When `issues` is not empty, the code found these problems in the draft: fix exactly these, and do not restate what needs no change.",
 ].join("\n")

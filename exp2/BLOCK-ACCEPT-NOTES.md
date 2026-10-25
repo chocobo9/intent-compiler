@@ -1949,3 +1949,55 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
   - rep1j、rep1k、rep1l、rep1m 的 R2 修订记录重标：7/1/0/1 条，全部是 inferred，cue 类 0 条。R2 在 gold 里没有修订，这 9 条都是误记，没有一条被标成 cue。
   - R3–R6（rep1j、rep1k、rep1n）：cue 类 14 条，全部在 gold 上（100%）；inferred 类 18 条，其中 10 条在 gold 上。
   - "在 gold 上"的判法是新文本在 gold 句子所在段里或包含它（整节的修订包含那一段）。只按段相等比，会把 rep1n R3 那条整节修订误判成不在 gold 上。
+
+### 34.2 E1b：归属确认变化单元，对象级边取消，消费者改用单元
+
+**做法**：
+- 归属请求：去掉"新文本提到了哪些对象"（candidates，原来给边用），换成 `unit_candidates`，即代码按作者线索找出的本轮单元：id、名字、线索原文、成员句子、点名的命令。
+- 归属回答：去掉 edges_add/edges_remove，换成 `units_add`/`units_remove`。
+  - 对候选：不提 → 按代码给的原样成立；给更少的成员 → 收窄；成员 [] → 去掉；不能加候选没有的成员。
+  - 自己的单元（candidate null）：至少两句，至少一句是本轮的，不能有后面轮次的句子。
+  - 提示里讲边的那一段换成讲单元的一段。
+  - 旧回复（录制带、测试替身）里的 edges_* 读入时忽略，缺 units_* 当作空。
+- registry：
+  - `references` 不再产生，旧记录里的不读；没有 units 字段的旧回答，本轮的全部 cue 候选按代码原样成立。这样四次旧运行可以不调模型就按新代码重放。
+  - `units()` 给出归属的单元（cue、model）和每条修订（revision）。
+  - 变化记录里原来由 applies_to 带来的 `applied`，改由单元带来：本轮某个单元点名的命令，如果不拥有该单元本轮的任何一句，就把这些句子记到它的变化记录上，它因此进本轮范围和任务区。types 里的 "applies_to" 改名 "unit"。"all commands"类单元只列出，不带范围。
+- 消费者：
+  - 翻转分类（`changedTextBehind`）：edge 来源改为 unit 来源，即与守卫依赖的句子同在一个 cue/revision/model 单元的句子本轮被修订。guard 单元不参与。
+  - 检查重新派生（`staleChecks`）：新增 cause "unit"，同在一个 cue/model 单元的句子本轮被修订。revision 单元就是原有的依据规则本身，不重复算。
+  - 探针（`staleProbes`）同理。
+  - 关系召回（gold.ts）：by_edge 改为 by_unit。
+  - attribute 工具：输出单元。
+  - 工单：原来的"Edges (reference only)"一行，换成"本轮触及任务对象的单元"一行。
+  - 包（view.ts）：去掉边带入的段和对象头。第三类内容在 E3 改由单元带入，E1b 到 E3 之间没有运行。
+  - compare 工具：去掉 applies_to 对照。
+- 顺带修了一个已有的缺陷：checkAnswer 里，"最具体的指派优先"会把外层块拆成几部分，overlap 消息却去拆分前的表里找这些部分的属主，取到 undefined 就抛错。d12_w1 R2 的真实回答第一次触发了它（见下）。已改为在拆分后的指派里找，并加了一条复现测试：改前失败，改后通过。
+- 测试：替身归属里的边全部去掉。按单元重写的有：attribution（单元校验）、batch 1b 的 K8 用例（R1 替身给一个"排序句与 sidecar 句"的 model 单元，R5 撤回 sidecar 句，排序守卫背后来源为 unit）、propagation（单元单独把 transform 带进范围）、rounds、recording、chain。chain 里"applies_to 边带来整个对象"那一条删掉，等 E3。中性检查测试（模型看到的文字不含 dpipe 的名字）抓到提示里的 "drop it"，改成 "remove it"。下面的归属调用是在改这个词之前跑的，只差这一个词。
+
+**离线重放**（`exp2/evidence/batch4-2026-10-25/replay-e1b.mjs` → `replay-e1b.md`；rep1j–rep1n 五次运行，按新代码从各自已接受的回答重建 registry，不调模型）：
+- 翻转：共 31 次，29 次分类与运行记录相同，审查员 superseded 退役的都仍是"背后原文变了"（rep1j R2 G3、R5 G1；rep1k R3 G40、R5 G2/G3/G4/G16；rep1n R5 G6/G9/G14）。原来带 edge 来源的 G3、G4 现在只剩 object 来源，分类不变。
+  - 分歧 2 次：rep1k R6 的 G87、G88（R5 出生的 sidecar 守卫）。运行里靠"R1.S6 refers_to O2/O3；R1.S6 被 R6.S9 取代"判为原文变了，问了审查员；审查员没判 superseded，两条随即作为 regression 送修。现在直接判 regression，结局相同。R1.S6 是 pipeline 一节，和 sidecar 无关。
+- 检查重新派生：五次运行每一轮都和记录相同（0 处差异）。没有哪个 cue 单元把检查依据和本轮修订句连在一起。
+- 范围（经别的对象的文字进入本轮）：
+  - rep1j R6、rep1k R6：dpipe CLI 原来靠"R6.S1 applies_to O1"进范围，现在不进。R6.S1 是新的全局标志 `--audit`（"Any `dpipe` command can accept…"）。"any … command"不在 cross_list 线索里，而且 all 类单元只列出、不带范围。这一点留给设计会话定：要不要把"any/every command"算作线索，以及 all 类单元是否带范围。
+  - rep1n R5：ingest command 由 U5.c1（R5 的行为变更）进范围。运行里没有边带它，它在 R5 也没有自己的句子。这正是横切要的效果。
+
+**归属调用**（模型只调归属一步，5.6 medium，rep1n 的管理服务，用完已停；`attribute-units.json`）：
+
+| 作业 | 轮 | 调用 | 候选 | 模型怎么处理 | 结果单元 |
+|---|---|---|---|---|---|
+| dpipe R5（rep1j 的 R1–R4） | 5 | 2 | 1 | 不提（原样成立） | U5.c1：Manifest、Verification、Ingestion、Transformation |
+| rep1j R2 | 2 | 1 | 1 | 原样列回 | U2.c1 Extended transforms：Transformation、Detect transform |
+| rep1k R2 | 2 | 1 | 1 | 原样列回 | U2.c1：fill、detect |
+| rep1l R2 | 2 | 1 | 1 | 不提 | U2.c1：fill、detect |
+| rep1m R2 | 2 | 1 | 1 | 原样列回 | U2.c1：fill、detect |
+| d10_w4 | 1–3 | 2/1/2 | 0/0/1 | R3 原样列回 | U3.c1 Behavioral Changes (Conflicts)：Pipeline Engine、Model Registry、Experiment Tracker |
+| d12_w1 | 1–3 | 3/2/1 | 1/1/5 | R2、R3 列回 | R1 一个跨 5 个命令的单元；R3 五个 |
+| d8_w5 | 1–3 | 1/2/2 | 0/2/7 | 列回，R3 另加 3 个自己的单元 | R3 Changes to validate/build/diff/promote/history 各一个，另有跨 diff/promote 的一个 |
+
+- 全部 14 个作业都接受了。修补都是原有的归属问题（unknown_block、target_not_earlier、target_replaced 等），没有一条是单元问题。
+- 这些单元落到的命令在本轮都有自己的句子，所以没有一个作业出现"仅由单元带进范围"的对象（rep1n R5 那种情况只在重放旧运行时出现）。
+- token：留下的 22 次调用合计未缓存输入 235,126、缓存读 201,728、输出 16,916。另有 d12_w1 第一次尝试：R1 3 次调用（未缓存输入 13,541、输出 2,744），以及 R2 撞上上面那个缺陷时的调用（崩溃前没写盘，token 未知）。
+
+**测试**：改动涉及的测试文件逐个跑都通过。修缺陷前跑过一次全量：990 条里 978 过，失败的除已知 10 条外只有中性检查那一条，已改。

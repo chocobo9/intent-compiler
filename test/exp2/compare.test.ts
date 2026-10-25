@@ -23,7 +23,7 @@ describe("exp2 attribution comparison (block and clause level)", () => {
     assert.equal(a.failed, null)
     const c = compareAttributions(a.registry, registryOf(texts, stub).registry, [1, 2, 3])
     assert.equal(c.clauses.agree, c.clauses.total)
-    assert.deepEqual([c.ownership, c.modifications, c.applies_to], [[], [], []])
+    assert.deepEqual([c.ownership, c.modifications], [[], []])
   })
 
   it("the stand-in against the Haiku reference: objects matched by shared clauses, disagreements listed by block", async () => {

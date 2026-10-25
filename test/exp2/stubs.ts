@@ -1,5 +1,5 @@
 import type { AnswerPatch, AttributionTransport, ModelRequest } from "../../src/exp2/attribution.js"
-import type { Assignment, AttributionAnswer, Override, Reference } from "../../src/exp2/registry.js"
+import type { Assignment, AttributionAnswer, Override } from "../../src/exp2/registry.js"
 
 /**
  * Fixed offline answers standing in for the attribution model (DEV-GUIDELINES §3). They are written the way a model
@@ -29,15 +29,14 @@ function helpers(request: ModelRequest) {
   }
 }
 
-const answer = (assignments: Assignment[], references: Reference[] = [], interpretations: AttributionAnswer["interpretations"] = []): AttributionAnswer =>
-  ({ assignments, references, interpretations })
-const patch = (p: Partial<AnswerPatch>): AnswerPatch => ({ upsert: [], remove: [], edges_add: [], edges_remove: [], interpretations_add: [], ...p })
-const refers = (from: string, to: string): Reference => ({ from, to, kind: "refers_to" })
-const applies = (from: string, to: string): Reference => ({ from, to, kind: "applies_to" })
+// Batch 4: no object edges; cross-command changes come from the cue units code finds, which the stand-in leaves as found.
+const answer = (assignments: Assignment[], interpretations: AttributionAnswer["interpretations"] = []): AttributionAnswer =>
+  ({ assignments, units: [], interpretations })
+const patch = (p: Partial<AnswerPatch>): AnswerPatch => ({ upsert: [], remove: [], units_add: [], units_remove: [], interpretations_add: [], ...p })
 
 /** The model answers in patch form; a first answer is a patch on the empty draft. */
 export function asPatch(a: AttributionAnswer): AnswerPatch {
-  return patch({ upsert: a.assignments, edges_add: a.references, interpretations_add: a.interpretations })
+  return patch({ upsert: a.assignments, units_add: a.units ?? [], interpretations_add: a.interpretations })
 }
 
 // ------------------------------------------------------------------ R1: long initial requirement, ops split by paragraph
@@ -72,9 +71,6 @@ function r1(request: ModelRequest, complete: boolean): AttributionAnswer {
     fresh("R1.S7", "determinism contract"),
     fresh("R1.S8.P1", "error handling"),
     fresh("R1.S8.P2", "tool"),
-  ], [
-    // "The `having` object uses the same condition operators as `filter`".
-    refers(`${T}.P11.s4`, `${T}.P2.s4`),
   ])
 }
 
@@ -93,11 +89,6 @@ function r2(request: ModelRequest): AttributionAnswer {
     fresh("R2.S19", "compare"),
     fresh("R2.S28", "hash"),
     to("R2.S29", "pipeline"),
-  ], [
-    refers("R2.S18.P3", "R2.S1"),
-    refers("R2.S29.P3", "R2.S19"),
-    // assert: "a boolean expression using the same syntax as derive".
-    refers("R2.S10.P3", "R1.S3.P2.s5"),
   ])
 }
 
@@ -113,11 +104,6 @@ function r3(request: ModelRequest, rangeTypo: boolean): AttributionAnswer {
     fresh("R3.S6", "drift"),
     fresh("R3.S14", "resample"), fresh("R3.S15", "watermark"),
     to("R3.S16", "pipeline"),
-  ], [
-    // "The `profile` command's `stddev` field is unaffected".
-    refers("R3.S3.P4", "R2.S3.P5"),
-    refers("R3.S8.P1", "R2.S2"),
-    refers("R3.S16.P4", "R3.S6"),
   ])
 }
 
@@ -143,12 +129,6 @@ function r5(request: ModelRequest, typo: boolean): AttributionAnswer {
     to(`${P3}.s5`, "transform", "withdraw", { replaces: ["R1.S3.P24.s1.c3"] }),
     fresh("R5.S2", "lineage"),
     to("R5.S8", "pipeline"),
-  ], [
-    // "If `<output>.sha256` exists …, `ingest` and `transform` must remove it": given to ingest, applies to transform.
-    applies(`${P2}.s5`, id("transform")),
-    refers(`${P2}.s3`, `${P2}.s6`),
-    refers("R5.S3.P1", "R1.S6"),
-    refers("R5.S8.P1", "R5.S2"),
   ])
 }
 
@@ -160,7 +140,7 @@ function r7(request: ModelRequest): AttributionAnswer {
     none("R7.S0"),
     to("R7.S1", "lineage", "partial", { overrides: [over(["R5.S4.P3.s5"], ["R7.S1.P3"])] }),
     fresh("R7.S3", "temporal"),
-  ], [refers("R7.S1.P2", "R1.S5.P2")])
+  ])
 }
 
 // ------------------------------------------------------------------ R10: manifest field rename; reconcile reaches pipeline and lineage
@@ -175,11 +155,6 @@ function r10(request: ModelRequest, twice: boolean): AttributionAnswer {
     to("R10.S8", "lineage"),
     // The first answer refers to the new reconcile object by a guessed id (as gpt-5.6-luna-fast does).
     ...(twice ? [{ ...fresh("R10.S3", "reconcile"), new_object: null, object_id: `O${request.objects.length + 1}` }] : []),
-  ], [
-    refers("R10.S2.P2", "R1.S5.P2"),
-    refers("R10.S4.P1.s6", "R10.S1.P2.s1"),
-    refers("R10.S7.P1", "R10.S2"),
-    refers("R10.S8.P1", "R10.S2"),
   ])
 }
 
@@ -204,9 +179,6 @@ function r13(request: ModelRequest, staleHash: boolean): AttributionAnswer {
     to(staleHash ? "R13.S9.P3#00000000" : "R13.S9.P3", "lineage"),
     none("R13.S9.P4"),
     fresh("R13.S10", "clip"),
-  ], [
-    refers("R13.S9.P1", "R13.S2"),
-    refers("R13.S9.P3", "R13.S2"),
   ])
 }
 
@@ -217,7 +189,7 @@ function r15(request: ModelRequest): AttributionAnswer {
     to("R15.S2.P2", "snapshot", "partial", { overrides: [over(["R13.S7.P1.s9"], ["R15.S2.P2.s1"])] }),
     none("R15.S2.P3"),
     fresh("R15.S3", "tag"),
-  ], [refers("R15.S3.P2", "R1.S3.P2.s5")])
+  ])
 }
 
 // ------------------------------------------------------------------ scripts

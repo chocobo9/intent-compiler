@@ -382,7 +382,7 @@ function renderMeasures(m: RoundMeasures): string {
  */
 export function renderFlips(flips: NonNullable<AcceptRoundRecord["guards"]["flips"]>): string {
   const n = (k: string) => flips.filter(f => k === "none" ? !f.sources.length : f.sources.includes(k)).length
-  return `- Flip classification (source: revision record / object change / relation edge / none): revision ${n("revision")}, object ${n("object")}, edge ${n("edge")}, none ${n("none")}; ${flips.map(f => `${f.id} ${f.cycle} ${f.how === "changed_text" ? "changed text" : "regression"} (${f.sources.length ? f.sources.join(", ") : "none"}; expected ${f.expected.join("/") || "none"})`).join(", ")}.`
+  return `- Flip classification (source: revision record / object change / change unit / none): revision ${n("revision")}, object ${n("object")}, unit ${n("unit")}, none ${n("none")}; ${flips.map(f => `${f.id} ${f.cycle} ${f.how === "changed_text" ? "changed text" : "regression"} (${f.sources.length ? f.sources.join(", ") : "none"}; expected ${f.expected.join("/") || "none"})`).join(", ")}.`
 }
 
 /**

@@ -43,7 +43,7 @@ const overlaps = (registry: Registry, a: string, b: string) => registry.lineage(
 /** The paragraph (or section) a unit is in: revisions and edges are compared at that grain. */
 const paragraphOf = (registry: Registry, id: string) => registry.lineage(id).find(b => b.level === "paragraph" || b.level === "section")!.id
 
-export interface RecallLine { gold: number; located: number; hit: number; missed: string[]; unlocated: number; by_edge?: number; by_object?: number; by_kind?: Record<string, { gold: number; hit: number }>; precision?: { recorded: number; on_gold: number } }
+export interface RecallLine { gold: number; located: number; hit: number; missed: string[]; unlocated: number; by_unit?: number; by_object?: number; by_kind?: Record<string, { gold: number; hit: number }>; precision?: { recorded: number; on_gold: number } }
 
 /**
  * Revision recall of round `round`: a gold revision is recorded when a modification of that round has a new unit in
@@ -69,16 +69,16 @@ export function revisionRecall(registry: Registry, round: number, gold: GoldSets
 }
 
 /**
- * Relation recall of round `round`: a gold cross-reference is recorded when an edge of that round joins the gold
- * sentence's paragraph and the earlier quote's paragraph or the object owning it, either way, of any kind (the
- * attribution's edge kinds are fewer than the gold set's; the chain block's decision 1), or when the attribution gave
- * the sentence to the object that owns the quote (an extension of an object is recorded as its ownership). The two
- * are counted apart.
+ * Relation recall of round `round`: a gold cross-reference is recorded when a change unit of that round holds the gold
+ * sentence's paragraph and the earlier quote's paragraph (or touches the object owning it), or when the attribution
+ * gave the sentence to the object that owns the quote (an extension of an object is recorded as its ownership). The
+ * two are counted apart.
  */
 export function relationRecall(registry: Registry, round: number, gold: GoldSets): RecallLine {
-  const edges = registry.references.filter(e => e.round === round)
+  // Batch 4: a change unit of the round (cue, model, revision) relates text in place of object edges.
+  const units = registry.units(round).filter(u => u.round === round)
   const entries = gold.xrefs.filter(e => e.round === round)
-  const out: RecallLine = { gold: entries.length, located: 0, hit: 0, missed: [], unlocated: 0, by_edge: 0, by_object: 0, by_kind: {} }
+  const out: RecallLine = { gold: entries.length, located: 0, hit: 0, missed: [], unlocated: 0, by_unit: 0, by_object: 0, by_kind: {} }
   for (const e of entries) {
     const k = (out.by_kind![e.kind] ??= { gold: 0, hit: 0 })
     k.gold++
@@ -86,8 +86,7 @@ export function relationRecall(registry: Registry, round: number, gold: GoldSets
     if (!s || !q) { out.unlocated++; continue }
     out.located++
     const sp = paragraphOf(registry, s), qp = paragraphOf(registry, q), owner = registry.coverOf(q)?.owner
-    const end = (x: string, target: string) => /^O\d+$/u.test(x) ? x === owner : overlaps(registry, x, target)
-    if (edges.some(g => (end(g.from, sp) && end(g.to, qp)) || (end(g.to, sp) && end(g.from, qp)))) { out.hit++; k.hit++; out.by_edge!++ }
+    if (units.some(u => u.members.some(m => overlaps(registry, m, sp)) && (u.members.some(m => overlaps(registry, m, qp)) || (!!owner && u.objects.includes(owner))))) { out.hit++; k.hit++; out.by_unit!++ }
     else if (owner && owner !== "none" && registry.coverOf(s)?.owner === owner) { out.hit++; k.hit++; out.by_object!++ }
     else out.missed.push(`${s} → ${q}`)
   }
@@ -95,7 +94,7 @@ export function relationRecall(registry: Registry, round: number, gold: GoldSets
 }
 
 export function renderRecall(name: string, r: RecallLine): string {
-  const how = r.by_edge !== undefined ? ` (by an edge ${r.by_edge}, by the same object ${r.by_object})` : ""
+  const how = r.by_unit !== undefined ? ` (by a change unit ${r.by_unit}, by the same object ${r.by_object})` : ""
   const kinds = r.by_kind ? `; by gold kind ${Object.entries(r.by_kind).map(([k, v]) => `${k} ${v.hit}/${v.gold}`).join(", ")}` : ""
   const precision = r.precision ? `; precision ${r.precision.on_gold}/${r.precision.recorded} of the round's modifications on a gold sentence` : ""
   return `- ${name}: ${r.hit}/${r.located} of the gold set's located entries recorded${how} (${r.gold} in the gold set, ${r.unlocated} not located in the text)${kinds}${precision}${r.missed.length ? `; missed ${r.missed.slice(0, 12).join(", ")}${r.missed.length > 12 ? ` and ${r.missed.length - 12} more` : ""}` : ""}.`

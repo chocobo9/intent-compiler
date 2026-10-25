@@ -399,9 +399,9 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
   })
 })
 
-describe("batch 1b (§6b): a flip's text changed when the attribution's records say so; a relation edge counts, the guard's input does not", () => {
-  // The K8 shape: a guard on the sort whose text is related (an edge recorded in R1) to the sidecar clause R5 withdraws.
-  // The sort's own text and object are untouched in R5; only the edge connects the guard to the withdrawal.
+describe("batch 1b (§6b), batch 4: a flip's text changed when the attribution's records say so; a change unit counts, the guard's input does not", () => {
+  // The K8 shape: a guard on the sort whose text shares a change unit (one the attribution gave in R1) with the sidecar
+  // clause R5 withdraws. The sort's own text and object are untouched in R5; only the unit connects the guard to it.
   const dir = mkdtempSync(join(tmpdir(), "exp2-acc-edge-"))
   const withEdge = new Exp2Store(join(dir, "edge"), "acce"), without = new Exp2Store(join(dir, "plain"), "accp")
   const edged = (): AttributionTransport => {
@@ -409,8 +409,8 @@ describe("batch 1b (§6b): a flip's text changed when the attribution's records 
     return async request => {
       const reply = await inner(request)
       if (request.round !== 1 || request.previous_draft.assignments.length) return reply
-      const patch = JSON.parse(reply.text) as { edges_add: unknown[] }
-      patch.edges_add.push({ from: SORT_UNIT, to: SIDECAR_UNIT, kind: "refers_to" })
+      const patch = JSON.parse(reply.text) as { units_add: unknown[] }
+      patch.units_add.push({ candidate: null, name: "sort and the sidecar", members: [SORT_UNIT, SIDECAR_UNIT] })
       return { ...reply, text: JSON.stringify(patch) }
     }
   }
@@ -423,16 +423,16 @@ describe("batch 1b (§6b): a flip's text changed when the attribution's records 
     return { k, guard: { id: "G1", round: 1, source: "library", check: "K1", units: [SORT_UNIT], object: k.object, born: { cycle: "C1.1", program: "p" } } as GuardRecord }
   }
 
-  it("the records: with the edge, R5's withdrawal of the sidecar stands behind the sort guard (source edge); without it, nothing does", () => {
+  it("the records: with the unit, R5's withdrawal of the sidecar stands behind the sort guard (source unit); without it, nothing does", () => {
     const reg = withEdge.registry(), { guard } = sortGuard(reg)
     assert.ok(!reg.roundScope(5).some(c => c.object === guard.object), "R5 does not change the sort")
     const behind = changedTextBehind(reg, guard, 5)
-    assert.ok(behind.length && behind.every(b => b.source === "edge"), JSON.stringify(behind))
-    assert.match(behind.map(b => b.text).join("\n"),/^R1\.S3\.P9\.s2 refers_to R1\.S3\.P24\.s1 \(round 1\); R1\.S3\.P24\.s1\.c3 withdrawn by R5\.S1\.P2\.s4/u)
+    assert.ok(behind.length && behind.every(b => b.source === "unit"), JSON.stringify(behind))
+    assert.match(behind.map(b => b.text).join("\n"), /^U1\.m1 \(model: sort and the sidecar\); R1\.S3\.P24\.s1\.c3 withdrawn by R5\.S1\.P2\.s4/u)
     assert.deepEqual(changedTextBehind(without.registry(), sortGuard(without.registry()).guard, 5), [])
   })
 
-  for (const [name, store, how] of [["with the edge", () => withEdge, "changed_text"], ["without the edge", () => without, "regression"]] as const) {
+  for (const [name, store, how] of [["with the unit", () => withEdge, "changed_text"], ["without the unit", () => without, "regression"]] as const) {
     it(`R5, the sort breaks, ${name}: ${how === "changed_text" ? "a question for the reviewer, nothing sent" : "a regression, sent to the executor"}; the report names the source`, async () => {
       const s = store(), { k, guard } = sortGuard(s.registry())
       // Asked, the reviewer says the sort guard is superseded (the stand-in answers so whenever it is asked).
@@ -442,10 +442,10 @@ describe("batch 1b (§6b): a flip's text changed when the attribution's records 
       })
       assert.equal(/G1: command \["transform"/u.test(reviewer.requests[0].request), how === "changed_text", "the reviewer is asked about G1 only when a record stands behind it")
       const flips = record.accept!.guards.flips!
-      assert.deepEqual(flips.map(f => [f.id, f.how, f.sources]), [["G1", how, how === "changed_text" ? ["edge"] : []]])
+      assert.deepEqual(flips.map(f => [f.id, f.how, f.sources]), [["G1", how, how === "changed_text" ? ["unit"] : []]])
       const sent = record.cycles[0].items!.filter(i => i.id === "G1" && i.action === "send")
       assert.equal(sent.length, how === "changed_text" ? 0 : 1)
-      assert.match(renderFlips(flips), how === "changed_text" ? /edge 1, none 0; G1 C5\.1 changed text \(edge; expected verbatim\)/u : /edge 0, none 1; G1 C5\.1 regression \(none; expected verbatim\)/u)
+      assert.match(renderFlips(flips), how === "changed_text" ? /unit 1, none 0; G1 C5\.1 changed text \(unit; expected verbatim\)/u : /unit 0, none 1; G1 C5\.1 regression \(none; expected verbatim\)/u)
     })
   }
 })

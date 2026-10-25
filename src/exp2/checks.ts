@@ -1,3 +1,4 @@
+import { coMembers } from "./units.js"
 import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
 import { AuthInvalid, QuotaExhausted, ReplayMiss, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
@@ -161,7 +162,7 @@ export interface CheckEvent {
    */
   by: "model" | "code"
   /** What set it off (DESIGN §4.3–4.5): the check's own basis, a block it refers to, a convention it uses, … */
-  cause?: { kind: "basis" | "refers_to" | "convention" | "suspect" | "proposal" | "adjudicated" | "refused"; source: string }
+  cause?: { kind: "basis" | "unit" | "convention" | "suspect" | "proposal" | "adjudicated" | "refused"; source: string }
 }
 
 // ---------------------------------------------------------------- staleness (DESIGN §8, block 2 review item 3)
@@ -220,15 +221,20 @@ const verb = (kind: string) => kind === "partial" ? "partly revised" : kind === 
 
 /**
  * Active checks that code marks stale in `round` (DESIGN §8 review item 3): their own basis was replaced or modified
- * after they entered. Staleness through references, readings and conventions is gone (§12j.5: of 54 such expiries in
- * block 12, 31 should not have happened); a flip of a guard is what says a check is out of date.
+ * after they entered, or text in a cue or model unit with their basis was, this round (batch 4, the design session's
+ * decision 2: what object edges did before; revision units are the basis rule itself, guard units never count).
+ * Staleness through readings and conventions is gone (§12j.5); a flip of a guard is what says a check is out of date.
  */
 export function staleChecks(registry: Registry, library: readonly CheckRecord[], events: readonly CheckEvent[], round: number): CheckEvent[] {
   return activeChecks(library, events).flatMap((c): CheckEvent[] => {
     const own = replacedBasis(registry, basisOf(registry, c), c.round, round)
-    if (!own.length) return []
-    const h = own[0]
-    return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "basis", source: h.unit }, reason: `basis ${h.unit}: ${h.parts.join(", ")} ${verb(h.kind)} in round ${h.round} by ${h.by.join(", ")}` }]
+    if (own.length) { const h = own[0]; return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "basis", source: h.unit }, reason: `basis ${h.unit}: ${h.parts.join(", ")} ${verb(h.kind)} in round ${h.round} by ${h.by.join(", ")}` }] }
+    for (const { unit, members } of coMembers(registry, basisOf(registry, c), round)) {
+      if (unit.source === "revision") continue
+      const h = replacedBasis(registry, members, round - 1, round)[0]
+      if (h) return [{ check: c.id, round, status: "stale", by: "code", cause: { kind: "unit", source: unit.id }, reason: `${h.unit}, in ${unit.id} (${unit.name}) with its basis: ${h.parts.join(", ")} ${verb(h.kind)} in round ${h.round} by ${h.by.join(", ")}` }]
+    }
+    return []
   })
 }
 

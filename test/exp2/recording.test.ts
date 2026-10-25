@@ -46,15 +46,17 @@ describe("exp2 recordings: Haiku batch 2 (requests built at e7c2929) re-keyed by
     assert.ok(calls.every(c => c.usage_unknown === true && c.stub === false && /haiku/u.test(c.model ?? "")), "no usage recorded: unknown, not zero")
   })
 
-  it("R6 (§12d item 1): refers_to an object is accepted; a later revision of that object's text no longer stales checks on the citing block (§12j.5)", () => {
+  it("R6, a recorded answer with object edges (before batch 4): accepted, the edges not read; a later revision of what it mentioned does not stale checks on it", () => {
     const r6 = sourced(before(6), 6)
     const checked = checkAnswer(r6, 6, applyPatch(EMPTY_DRAFT, answer("R6-ans1.json")))
     assert.deepEqual(checked.issues, [])
-    assert.ok(checked.acceptance!.answer.references.some(e => e.kind === "refers_to" && e.from === "R6.S2.P3" && e.to === "O17"))
+    assert.ok(!("references" in checked.acceptance!.answer), "the recorded edges are left unread")
     // An id that does not exist is named as such, with the ids there are.
-    const wrong = applyPatch(EMPTY_DRAFT, { ...answer("R6-ans1.json"), edges_add: [{ from: "R6.S2.P3", to: "O999", kind: "refers_to" }] })
-    assert.match(checkAnswer(r6, 6, wrong).issues[0].message, /There is no object O999 yet \(objects so far: O1–O\d+\)/u)
-    // R7 partly revises lineage (O40), which R6.S2.P3 refers to: staleness through the edge is deleted (§12j.5).
+    const recorded = answer("R6-ans1.json")
+    const at = recorded.upsert.findIndex(a => !!a.object_id)
+    const wrong = applyPatch(EMPTY_DRAFT, { ...recorded, upsert: recorded.upsert.map((a, i) => i === at ? { ...a, object_id: "O999" } : a) })
+    assert.match(checkAnswer(r6, 6, wrong).issues.find(x => x.code === "unknown_object")!.message, /There is no object O999 yet \(objects so far: O1–O\d+\)/u)
+    // R7 partly revises lineage (O40), which R6.S2.P3 mentions: no unit joins them, so nothing goes stale (§12j.5).
     const all = store.registry()
     const check = { id: "K1", round: 6, key: "k", object: all.coverOf("R6.S2.P3")!.owner, blocks: ["R6.S2.P3"], uses: [], input: { args: [], files: [] }, assertions: [], unknown: [], reference_script: null, admission: "admitted", admission_reason: null, strength: null, status: "active", calls: [] } as unknown as CheckRecord
     assert.deepEqual(staleChecks(all, [check], [], 7), [])
@@ -155,12 +157,12 @@ describe("exp2 recordings: record, then replay the same run", () => {
 describe("exp2 issues by root cause (§12d items 3, 4)", () => {
   it("attribution: the same cause at several places is one issue naming every place", () => {
     const merged = byCause([
-      { code: "reference_invalid", message: "edge 2 (refers_to R6.S2.P3 -> O999): there is no object O999 yet" },
-      { code: "reference_invalid", message: "edge 5 (refers_to R6.S4.P1 -> O999): there is no object O999 yet" },
-      { code: "reference_invalid", message: "edge 6 (applies_to R6.S5 -> R1.S9): R1.S9 belongs to no object" },
+      { code: "unit_invalid", message: "unit 2 (U6.c9): there is no candidate U6.c9" },
+      { code: "unit_invalid", message: "unit 5 (U6.c9): there is no candidate U6.c9" },
+      { code: "unit_invalid", message: "unit 6 (x): a unit relates at least two sentences" },
     ])
     assert.equal(merged.length, 2)
-    assert.equal(merged[0].message, "edge 2 (refers_to R6.S2.P3 -> O999); edge 5 (refers_to R6.S4.P1 -> O999): there is no object O999 yet")
+    assert.equal(merged[0].message, "unit 2 (U6.c9); unit 5 (U6.c9): there is no candidate U6.c9")
   })
 
   it("checks: one issue per check and kind, listing the assertions; a value not in the quote points to the derived route", () => {
@@ -236,8 +238,7 @@ describe("exp2 readings the text does not state (§12d item 10), on the real R4 
     assert.match(renderWorkOrder(quiet), /K99 v0\.row expected 2, got 1; the expectation rests on a reading the text does not state: Violation rows count/u)
     // Later text that names the check's basis may state the reading: the check goes stale.
     const later = materialize(store.inspect().sources, store.inspect().rounds.map(x => x.acceptance!))
-    later.references.push({ from: "R5.S1.P1", to: "R4.S3.P1", kind: "refers_to", round: 5 })
-    // A later mention no longer stales it (§12j.5): a flip of a guard is what says a check is out of date.
+    // A later mention does not stale it (§12j.5): a flip of a guard is what says a check is out of date.
     assert.deepEqual(staleChecks(later, [k], [], 5), [])
     assert.deepEqual(staleChecks(later, [record(draft.assertions)], [], 5), [], "a check without a reading is not staled by a mere mention")
   })

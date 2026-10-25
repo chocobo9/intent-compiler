@@ -275,31 +275,8 @@ export function roundPackage(registry: Registry, round: number, open: readonly {
     add(para, o.id, "revised", `${p} ${m.kind === "withdraw" ? "withdrawn" : "revised"} by ${m.by.join(", ")}`)
     earlier.set(para, [...new Set([...(earlier.get(para) ?? []), p])])
   }
-  // Edges this round records from its own text.
   const heads = new Map<string, PackageHead>()
   const edges = { to_block: 0, to_object: 0 }
-  for (const e of registry.references.filter(x => x.round === round)) {
-    if (/^O\d+$/u.test(e.to)) {
-      edges.to_object++
-      const o = registry.objects.get(e.to)
-      if (!o) continue
-      const h = heads.get(o.id) ?? { object: o.id, name: o.name, referred_by: [] }
-      if (!h.referred_by.includes(e.from)) h.referred_by.push(e.from)
-      heads.set(o.id, h)
-    } else {
-      edges.to_block++
-      const b = registry.block(e.to)
-      if (b && b.round < round) add(paragraphOf(registry, e.to), owner(e.to), "edge", `${e.from} ${e.kind} ${e.to}`)
-    }
-  }
-  // An applies_to edge whose source this round revised: the rule changed, so the object it binds comes whole, its
-  // text in force (the design session's decision on O2, 2026-10-25). An edge whose source stands brings nothing.
-  const revisedNow = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts)))
-  for (const e of registry.references.filter(x => x.round < round && x.kind === "applies_to" && revisedNow.some(p => registry.lineage(p).some(b => b.id === x.from) || registry.lineage(x.from).some(b => b.id === p)))) {
-    const target = /^O\d+$/u.test(e.to) ? registry.objects.get(e.to) : registry.objects.get(owner(e.to) ?? "")
-    if (!target) continue
-    for (const own of target.blocks.filter(b => b.round < round && !b.modifications.some(m => m.round <= round && m.parts.includes(b.block)))) add(paragraphOf(registry, own.block), target.id, "edge", `${e.from} applies_to ${e.to} (its source revised this round)`)
-  }
   for (const item of open) for (const u of item.units) if (registry.block(u)) add(paragraphOf(registry, u), owner(u), "open item", item.id)
   const segments = [...segs.values()]
   for (const s of segments) for (const p of earlier.get(s.paragraph) ?? []) s.text = `${s.text.trimEnd() ? `${s.text.trimEnd()}\n` : ""}earlier text of ${p}: ${registry.block(p)!.text.trim()}`

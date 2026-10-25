@@ -14,7 +14,7 @@ function snapshot(registry: Registry) {
   return {
     objects: [...registry.objects.values()].map(o => ({ id: o.id, name: o.name, version: o.version, created: o.created_round, blocks: o.blocks.map(b => ({ block: b.block, state: b.state, mods: b.modifications.length })) })),
     changes: registry.changes.map(c => c.id),
-    references: registry.references.map(r => `${r.from}->${r.to}`),
+    units: registry.answerUnits.map(u => `${u.id}:${u.members.join(",")}`),
   }
 }
 
@@ -57,8 +57,6 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     assert.deepEqual(log.filter(l => l.round === 1).map(l => l.task), ["attribute", "repair"])
     const repair = log.find(l => l.round === 1 && l.task === "repair")!.request
     assert.ok(repair.issues.length === 1 && repair.issues[0].code === "uncovered" && repair.issues[0].block === "R1.S3.P16")
-    // Same-round reference: having uses filter's condition operators.
-    assert.ok(r.references.some(e => e.from === "R1.S3.P11.s4" && e.to === "R1.S3.P2.s4"))
     assert.deepEqual(r.coverageProblems(1), [])
     assert.equal(r.roundScope(1).length, r.objects.size, "every object is new in round 1")
   })
@@ -106,10 +104,12 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     assert.equal(closing.state, "partially_modified", "the closing item keeps its first half, so it is not superseded")
     assert.deepEqual(closing.modifications.map(m => [r.objects.get(m.by_object)!.name, m.kind, m.parts]).sort(),
       [["ingest", "withdraw", ["R1.S3.P24.s1.c3"]], ["transform", "withdraw", ["R1.S3.P24.s1.c3"]]], "only the sidecar clause is withdrawn")
-    // "ingest and transform must remove it" is given to ingest and applies to transform: transform's record names it.
-    assert.deepEqual(change.applied, [{ from: "R5.S1.P2.s5", by_object: byName(r, "ingest").id }])
-    assert.ok(change.types.includes("applies_to"))
-    assert.ok(r.references.some(e => e.kind === "applies_to" && e.from === "R5.S1.P2.s5"))
+    // "ingest and transform must remove it" is given to ingest; R5's behaviour change is one cue unit naming all four
+    // commands (batch 4, in place of the applies_to edge). transform owns a sentence of it, so it changes by its own
+    // text and the unit adds nothing to its record.
+    const unit = r.units(5).find(u => u.source === "cue" && /Behavior Change/u.test(u.name))!
+    for (const name of ["verify", "manifest", "ingest", "transform"]) assert.ok(unit.objects.includes(byName(r, name).id), name)
+    assert.deepEqual(change.applied, [])
     const ingest = byName(r, "ingest")
     const sidecar = ingest.blocks.find(b => b.block === "R1.S2")!
     assert.deepEqual(sidecar.modifications.map(m => [m.kind, m.parts]), [["withdraw", ["R1.S2.P6.s3"]]])
@@ -139,8 +139,6 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
     assert.equal(reconcile.created_round, 10)
     const scope = scopeNames(r, 10)
     for (const name of ["manifest", "reconcile", "pipeline", "lineage"]) assert.ok(scope.includes(name))
-    const edges = r.references.filter(e => e.round === 10).map(e => `${e.from}->${e.to}`)
-    assert.ok(edges.includes("R10.S7.P1->R10.S2") && edges.includes("R10.S8.P1->R10.S2") && edges.includes("R10.S2.P2->R1.S5.P2"))
     // The first answer referred to the new reconcile object by a guessed id; that one root was sent back as one issue.
     assert.deepEqual(byName(r, "lineage").blocks.filter(b => b.round === 10).map(b => b.block), ["R10.S8"])
     const repair = log.find(l => l.round === 10 && l.task === "repair")!.request
@@ -204,7 +202,7 @@ describe("exp2 block 1: R1–R15 fed round by round through the store, with stub
         if (!scope.has(o.id)) assert.deepEqual(now, o, `R${round} ${o.name}: untouched objects stay identical`)
       }
       assert.deepEqual(next.changes.slice(0, prev.changes.length), prev.changes)
-      assert.deepEqual(next.references.slice(0, prev.references.length), prev.references)
+      assert.deepEqual(next.units.slice(0, prev.units.length), prev.units, "the attribution's units of earlier rounds stay as they were")
       assert.ok([...scope].every(id => after.get(round)!.objects.get(id)!.history.at(-1)!.round === round))
     }
   })

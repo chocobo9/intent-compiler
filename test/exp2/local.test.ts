@@ -50,12 +50,12 @@ describe("exp2 local: provider errors", () => {
   it("the management transports raise AuthInvalid and QuotaExhausted; the coding executor too, inside a normal reply", async () => {
     const failing = (text: string) => ({ session: { create: async () => ({ id: "s" }), prompt: async () => { throw new Error(text) } } })
     const transport = (text: string) => createOpenCodeAttributionTransport({ client: failing(text), directory: tmpdir(), providerId: "p", modelId: "m" })
-    const request = { round: 1, sources: "", outline: [], objects: [], candidates: [], issues: [], previous_draft: { assignments: [], references: [], interpretations: [] } }
+    const request = { round: 1, sources: "", outline: [], objects: [], unit_candidates: [], issues: [], previous_draft: { assignments: [], units: [], interpretations: [] } }
     await assert.rejects(transport(AUTH_TEXTS[0])(request), AuthInvalid)
     await assert.rejects(transport(QUOTA_TEXTS[0])(request), QuotaExhausted)
     await assert.rejects(transport(ORDINARY[0])(request), e => !(e instanceof AuthInvalid) && !(e instanceof QuotaExhausted))
     const coding = (prompt: () => Promise<unknown>) => new OpenCodeExecutor({ client: { session: { create: async () => ({ id: "c" }), prompt } }, providerId: "p", modelId: "m" })
-    const context = { round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], edges: [] }, text: "", resume: null }
+    const context = { round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], units: [] }, text: "", resume: null }
     const s1 = await coding(async () => ({ info: { error: { name: "APIError", data: { message: "insufficient_quota" } } }, parts: [] })).open(context)
     await assert.rejects(s1.send("do it"), QuotaExhausted)
     const s2 = await coding(async () => { throw new Error("socket hang up") }).open(context)
@@ -75,7 +75,7 @@ describe("exp2 local: provider errors", () => {
         messages: async () => history,
       },
     }
-    const session = await new OpenCodeExecutor({ client, providerId: "p", modelId: "m" }).open({ round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], edges: [] }, text: "", resume: null } as never)
+    const session = await new OpenCodeExecutor({ client, providerId: "p", modelId: "m" }).open({ round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], units: [] }, text: "", resume: null } as never)
     const first = await session.send("do it"), second = await session.send("fix")
     assert.deepEqual([first.usage.input_tokens, first.usage.output_tokens, first.usage.cache_read_tokens], [350, 21, 3500])
     assert.deepEqual([second.usage.input_tokens, second.usage.output_tokens], [350, 21], "each send counts only what it added")
@@ -93,7 +93,7 @@ describe("exp2 local: provider errors", () => {
     // The coding executor re-sends a rate-limited prompt in the same session.
     let prompts = 0
     const client = { session: { create: async () => ({ id: "c" }), prompt: async () => { if (++prompts === 1) throw new Error(RATE_TEXTS[1]); return { info: {}, parts: [{ type: "text", text: "done" }] } } } }
-    const session = await new OpenCodeExecutor({ client, providerId: "p", modelId: "m", rateLimit: policy }).open({ round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], edges: [] }, text: "", resume: null } as never)
+    const session = await new OpenCodeExecutor({ client, providerId: "p", modelId: "m", rateLimit: policy }).open({ round: 1, workdir: tmpdir(), workorder: { round: 1, task: [], protect: [], status: [], source: [], anchors: [], units: [] }, text: "", resume: null } as never)
     assert.equal((await session.send("do it")).note, "done")
     assert.equal(prompts, 2)
   })

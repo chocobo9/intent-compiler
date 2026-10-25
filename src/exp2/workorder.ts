@@ -42,7 +42,8 @@ export interface WorkOrder {
   source: { object: string | null; name: string; blocks: { id: string; state: string; heading_path: string[]; text: string }[] }[]
   anchors: { object: string; anchors: { id: string; file: string; lines: string }[]; last_steps: { step: string; round: number; status: string; anchors: string[] }[] }[]
   /** Edges of task objects, for reference only (never an order constraint). */
-  edges: { from: string; to: string; kind: string }[]
+  /** This round's change units touching the task (batch 4), for reference. */
+  units: { id: string; name: string; members: string[]; objects: string[] }[]
   /**
    * What of the requirements the source zone holds (§12j.7 item 9): delta, the round's package (§6a step 3), or all.
    * Characters of the source zone as rendered, and what it would be with every round's text (all), for the report.
@@ -221,18 +222,15 @@ export function buildWorkOrder(input: WorkOrderInput): WorkOrder {
     anchors: objectAnchors(registry, input.anchors, input.links, object).map(a => ({ id: a.id, file: a.file, lines: `${a.start_line}-${a.end_line}` })),
     last_steps: input.steps.filter(s => s.objects.some(o => o.object === object)).slice(-3).map(s => ({ step: s.id, round: s.round, status: s.status, anchors: s.anchors })),
   }))
-  const edges = registry.references.filter(e => e.round <= round).filter(e => {
-    const from = registry.coverOf(e.from)?.owner
-    const to = /^O\d+$/u.test(e.to) ? e.to : registry.coverOf(e.to)?.owner
-    return (from && inTask.has(from)) || (to && inTask.has(to))
-  }).map(e => ({ from: e.from, to: e.to, kind: e.kind }))
+  // This round's change units that touch the task (batch 4: in place of object edges), for reference.
+  const units = registry.units(round).filter(u => u.round === round && u.source !== "revision" && u.objects.some(o => inTask.has(o))).map(u => ({ id: u.id, name: u.name, members: u.members, objects: u.objects }))
   const chars = (zone: WorkOrder["source"]) => renderSource(zone).length
   const blocksAll = all.reduce((n, g) => n + g.blocks.length, 0)
   if (pkg) return {
-    round, task, protect: [], status: statusZone, source, anchors: anchorZone.filter(a => inTask.has(a.object)), edges, package: { pkg: pkg.pkg },
+    round, task, protect: [], status: statusZone, source, anchors: anchorZone.filter(a => inTask.has(a.object)), units, package: { pkg: pkg.pkg },
     scope: { kind: "delta", source_chars: renderPackage(pkg.pkg).length, source_chars_all: chars(all), blocks: pkg.pkg.segments.length, blocks_all: blocksAll, segments: pkg.pkg.segments.map(s => ({ object: s.object, paragraph: s.paragraph, why: s.why, via: s.via })), heads: pkg.pkg.heads.map(h => h.object), edges: pkg.pkg.edges, sizes: packageSizes(pkg.pkg), guards: pkg.pkg.comparisons.length, overflow: pkg.overflow },
   }
-  return { round, task, protect, status: statusZone, source, anchors: anchorZone, edges, scope: { kind: input.scope ?? "all", source_chars: chars(source), source_chars_all: chars(all), blocks: source.reduce((n, g) => n + g.blocks.length, 0), blocks_all: blocksAll } }
+  return { round, task, protect, status: statusZone, source, anchors: anchorZone, units, scope: { kind: input.scope ?? "all", source_chars: chars(source), source_chars_all: chars(all), blocks: source.reduce((n, g) => n + g.blocks.length, 0), blocks_all: blocksAll } }
 }
 
 function renderSource(zone: WorkOrder["source"]): string {
@@ -287,7 +285,7 @@ export function renderWorkOrder(w: WorkOrder): string {
   }
   out.push("", "## Anchor zone", "")
   for (const a of w.anchors) out.push(`- ${a.object}: ${a.anchors.map(x => `${x.id} (${x.file}:${x.lines})`).join(", ") || "(no anchors yet)"}${a.last_steps.length ? `; last steps ${a.last_steps.map(s => `${s.step} ${s.status}`).join(", ")}` : ""}`)
-  if (w.edges.length) out.push("", "Edges (reference only): " + w.edges.map(e => `${e.from} ${e.kind} ${e.to}`).join("; "))
+  if (w.units.length) out.push("", "Change units of this round (reference only): " + w.units.map(u => `${u.name} (${u.members.join(", ")}; ${u.objects.join(", ")})`).join("; "))
   out.push("", w.scope?.kind === "delta" && w.round > 1 ? "## Source zone (the requirements this round concerns, earlier text as it stands now; the only authority)" : "## Source zone (the requirements; the only authority)", "")
   out.push(w.package ? renderPackage(w.package.pkg) : renderSource(w.source))
   return out.join("\n") + "\n"

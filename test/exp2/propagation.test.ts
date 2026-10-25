@@ -32,9 +32,9 @@ describe("exp2 block 4: propagation over the real R1–R15 registry", () => {
     registry = store.registry()
   })
 
-  it("refers_to: a revision of the referenced block no longer stales a check on the citing block (deleted, §12j.5); a flip of a guard says so", () => {
-    // R7's lineage correction says "The `manifest` command scans a directory" (refers_to R1.S5.P2); R10 revises R1.S5.P2.
-    assert.ok(registry.references.some(e => e.kind === "refers_to" && e.from === "R7.S1.P2" && e.to === "R1.S5.P2"))
+  it("text a check's basis only mentions, in no change unit with it, does not stale the check when revised (§12j.5); a flip of a guard says so", () => {
+    // R7's lineage correction says "The `manifest` command scans a directory"; R10 revises R1.S5.P2. No unit joins them.
+    assert.ok(!registry.units(10).some(u => u.source !== "revision" && u.members.includes("R7.S1.P2") && u.members.some(m => m.startsWith("R1.S5.P2"))))
     const citing = libraryCheck("K1", 7, id("lineage"), ["R7.S1.P2"])
     const other = libraryCheck("K2", 7, id("lineage"), ["R7.S1.P3"])
     assert.deepEqual(staleChecks(registry, [citing, other], [], 10), [])
@@ -59,8 +59,9 @@ describe("exp2 block 4: propagation over the real R1–R15 registry", () => {
     assert.ok(!w.task.some(t => t.object === det), "re-derivation is no task")
   })
 
-  it("applies_to alone puts the target object in the round's scope and the task zone", async () => {
-    // A variant of the R5 answer where transform has no block of its own: only the applies_to edge reaches it.
+  it("a change unit alone puts the target object in the round's scope and the task zone (batch 4: in place of applies_to)", async () => {
+    // A variant of the R5 answer where transform has no block of its own: only the cue unit of R5's behaviour change,
+    // which names `transform`, reaches it.
     const fixPatch = SCRIPTS[5][1]
     const variant = {
       ...SCRIPTS,
@@ -75,7 +76,7 @@ describe("exp2 block 4: propagation over the real R1–R15 registry", () => {
             if (a.block === "R5.S1.P2.s4") return { ...a, replaces: ["R1.S2.P6.s3"] }
             return a
           })
-          assert.ok(first.references.some(e => e.kind === "applies_to" && e.to === transform))
+          assert.ok(transform)
           return { ...first, assignments }
         },
       ],
@@ -86,8 +87,11 @@ describe("exp2 block 4: propagation over the real R1–R15 registry", () => {
     const r = store.registry()
     const transform = r.objectByName("transform")!.id
     const change = r.roundScope(5).find(c => c.object === transform)!
-    assert.deepEqual([change.entries.length, change.received.length, change.types], [0, 0, ["applies_to"]])
-    assert.deepEqual(change.applied, [{ from: "R5.S1.P2.s5", by_object: r.objectByName("ingest")!.id }])
+    assert.deepEqual([change.entries.length, change.received.length, change.types], [0, 0, ["unit"]])
+    const unit = r.units(5).find(u => u.source === "cue" && u.objects.includes(transform))!
+    assert.ok(unit && /Behavior Change/u.test(unit.name), JSON.stringify(r.units(5).map(u => u.name)))
+    assert.ok(change.applied.length && change.applied.every(a => a.unit === unit.id && unit.members.includes(a.from)), JSON.stringify(change.applied))
+    assert.ok(change.applied.some(a => a.from === "R5.S1.P3.s5" && a.by_object === r.objectByName("ingest")!.id))
     const w = buildWorkOrder({ registry: r, round: 5, library: [], events: [], statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [] })
     assert.deepEqual(w.task.find(x => x.object === transform)!.why, ["changed"])
   })

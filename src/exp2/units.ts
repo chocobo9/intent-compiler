@@ -163,6 +163,20 @@ export function provenance(registry: Registry, m: Pick<Modification, "by">): { k
   return { kind: "inferred" }
 }
 
+const overlapping = (registry: Registry, a: string, b: string) => registry.lineage(a).some(x => x.id === b) || registry.lineage(b).some(x => x.id === a)
+
+/**
+ * The sentences that share a change unit with any of `units` (a cue, revision or model unit up to `round`; guard
+ * units never: a check's own units would vouch for themselves), with the unit, members overlapping `units` left out.
+ */
+export function coMembers(registry: Registry, units: readonly string[], round: number): { unit: ChangeUnit; members: string[] }[] {
+  return registry.units(round).flatMap(u => {
+    if (!u.members.some(m => units.some(x => overlapping(registry, m, x)))) return []
+    const others = u.members.filter(m => !units.some(x => overlapping(registry, m, x)))
+    return others.length ? [{ unit: u, members: others }] : []
+  })
+}
+
 /** The sentences of a round that declare earlier behaviour unchanged (E2): "remains unchanged", "continues to hold". */
 export function scopeDeclarations(registry: Registry, round: number): { block: string; text: string }[] {
   return cuesIn(registry, round).filter(h => h.kind === "scope_unchanged").map(h => ({ block: h.block, text: h.text }))

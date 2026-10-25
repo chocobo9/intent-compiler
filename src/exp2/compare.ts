@@ -5,7 +5,7 @@ import { contentHash } from "./source.js"
 /**
  * Comparison of two attributions of the same rounds (DESIGN §12b item 11): the system's and an independent one.
  * Objects are matched by the clauses they share; then ownership is compared clause by clause and block by block,
- * and so are partial revisions and applies_to edges. The tool lists the disagreements; deciding them is the
+ * and so are partial revisions. The tool lists the disagreements; deciding them is the
  * design session's work.
  */
 
@@ -44,8 +44,6 @@ export interface Comparison {
   ownership: { block: string; a: Side; b: Side }[]
   /** Units one side marks as revised (partly, wholly or withdrawn) and the other does not, or differently. */
   modifications: { block: string; a: string | null; b: string | null }[]
-  /** applies_to edges (citing clause → object) on one side only, with B's object mapped to A's. */
-  applies_to: { clause: string; a: Side | null; b: Side | null }[]
 }
 
 /** Finest units of the given rounds: blocks with no children. */
@@ -125,28 +123,7 @@ export function compareAttributions(a: Registry, b: Registry, rounds: readonly n
   const modA = modifiedKind(a), modB = modifiedKind(b)
   const modifications = group(u => (modA.get(u) ?? null) !== (modB.get(u) ?? null), u => `${modA.get(u)}|${modB.get(u)}`).map(g => ({ block: g.block, a: modA.get(g.first) ?? null, b: modB.get(g.first) ?? null }))
 
-  // applies_to: citing clause → object, B mapped to A's ids.
-  const edges = (r: Registry, map: (id: string) => string | undefined) => {
-    const out = new Map<string, Set<string>>()
-    for (const e of r.references.filter(x => x.kind === "applies_to")) {
-      const target = r.appliesTo(e.to)
-      if (!target) continue
-      for (const l of leavesUnder(r, e.from)) {
-        const s = out.get(l) ?? new Set<string>()
-        s.add(map(target) ?? `B:${target}`)
-        out.set(l, s)
-      }
-    }
-    return out
-  }
-  const eA = edges(a, x => x), eB = edges(b, y => toA.get(y))
-  const applies_to: Comparison["applies_to"] = []
-  for (const u of units) {
-    const x = eA.get(u) ?? new Set<string>(), y = eB.get(u) ?? new Set<string>()
-    for (const t of x) if (!y.has(t)) applies_to.push({ clause: u, a: side(a, t), b: null })
-    for (const t of y) if (!x.has(t)) applies_to.push({ clause: u, a: null, b: t.startsWith("B:") ? side(b, t.slice(2)) : side(b, toB.get(t)) })
-  }
-  return { rounds: [...rounds], matching, clauses: { total: units.length, agree: units.length - differing.length }, blocks: { total: blockUnits.length, agree: blocksAgree }, ownership, modifications, applies_to }
+  return { rounds: [...rounds], matching, clauses: { total: units.length, agree: units.length - differing.length }, blocks: { total: blockUnits.length, agree: blocksAgree }, ownership, modifications }
 }
 
 export function renderComparison(c: Comparison, labels: { a: string; b: string }): string {
@@ -162,8 +139,6 @@ export function renderComparison(c: Comparison, labels: { a: string; b: string }
     ...c.ownership.map(o => `| ${o.block} | ${s(o.a)} | ${s(o.b)} |`),
     "", `## Revision disagreements (${c.modifications.length})`, "", "| block | A | B |", "|---|---|---|",
     ...c.modifications.map(m => `| ${m.block} | ${m.a ?? "—"} | ${m.b ?? "—"} |`),
-    "", `## applies_to disagreements (${c.applies_to.length})`, "", "| clause | A | B |", "|---|---|---|",
-    ...c.applies_to.map(e => `| ${e.clause} | ${s(e.a)} | ${s(e.b)} |`),
     "",
   ].join("\n")
 }
