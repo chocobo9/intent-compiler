@@ -19,7 +19,7 @@ import type { SourceBlock } from "./source.js"
  */
 
 export type UnitSource = "cue" | "revision" | "guard" | "model"
-export type CueKind = "changes_to" | "cmd_in_revision" | "prev_new" | "author_id" | "cross_list" | "scope_unchanged"
+export type CueKind = "changes_to" | "cmd_in_revision" | "prev_new" | "author_id" | "cross_list" | "scope_unchanged" | "same_as"
 
 export interface ChangeUnit {
   id: string
@@ -43,7 +43,7 @@ export interface ChangeUnit {
 
 export interface CueHit { kind: CueKind; block: string; text: string; names: string[] }
 
-const CUE: Record<Exclude<CueKind, "cmd_in_revision">, RegExp> = {
+const CUE: Record<Exclude<CueKind, "cmd_in_revision" | "same_as">, RegExp> = {
   changes_to: /^\s*(?:\*\*|#{1,4}\s*)?changes? to `?([^`*\n]+)`?/imu,
   cross_list: /\b(?:across|affects?|applies to|for)\s+(?:all|every|each|multiple)\s+(?:commands?|stages?|endpoints?)|\ball (?:existing |deployment-related )?commands\b|\b(?:every|each)\s+(?:`[^`\n]+`\s+)?(?:command|subcommand)\b|\bany\s+`[^`\n]+`\s+(?:command|subcommand)s?\b/iu,
   prev_new: /(?:#{2,3}\s*previous behaviou?r|#{2,3}\s*new behaviou?r|\bpreviously\b[^.\n]{0,120}\b(?:now|corrected|instead)\b|\binstead of\b|\bno longer\b|\brather than\b|\bis now replaced\b|\bnow (?:defaults?|uses|maps|returns|emits|requires|must|produces)\b|\(not [^)]{1,40}\))/iu,
@@ -53,6 +53,11 @@ const CUE: Record<Exclude<CueKind, "cmd_in_revision">, RegExp> = {
 /** A command named in backticks in a sentence that revises it ("`X` … now / no longer / instead / still", or after). */
 const CMD_IN_REVISION = /(?:`([a-z][\w.-]{2,})`[^.\n]{0,80}\b(?:now|no longer|instead|unchanged|still)\b)|(?:\b(?:now|no longer|instead)\b[^.\n]{0,80}`([a-z][\w.-]{2,})`)/giu
 const BACKTICKED = /`([a-z][\w.-]{2,})`/giu
+/**
+ * A sentence that says it behaves as another command does (batch 5 C): "the same … as (the) `X`", "identical … as
+ * `X`", "reuses (the) `X`", "as `X` does". Code only; a unit when `X` names a command other than the sentence's own.
+ */
+const SAME_AS = /\b(?:same|identical)\b[^.\n]{0,160}?\bas\s+(?:the\s+)?`([a-z][\w.-]{2,})`|\breuses?\s+(?:the\s+)?`([a-z][\w.-]{2,})`|\bas\s+`([a-z][\w.-]{2,})`\s+does\b/giu
 
 /** The leaves of a round: sentences, and paragraphs that have none; heading lines are not (their section is read apart). */
 export function leaves(registry: Registry, round: number): SourceBlock[] {
@@ -87,6 +92,8 @@ export function cuesIn(registry: Registry, round: number): CueHit[] {
     const named = [...new Set([...t.matchAll(CMD_IN_REVISION)].map(m => (m[1] ?? m[2]).toLowerCase()))]
     if (named.length) out.push({ kind: "cmd_in_revision", block: b.id, text: t.trim().slice(0, 200), names: [...new Set([...named, ...[...t.matchAll(BACKTICKED)].map(m => m[1].toLowerCase())])] })
     for (const m of t.matchAll(CUE.author_id)) out.push({ kind: "author_id", block: b.id, text: m[0], names: [] })
+    const same = [...t.matchAll(SAME_AS)]
+    if (same.length) out.push({ kind: "same_as", block: b.id, text: same[0][0].trim(), names: [...new Set(same.map(m => (m[1] ?? m[2] ?? m[3]).toLowerCase()))] })
   }
   // A heading line: "Changes to `X`" and Previous/New headings are on the section's own text.
   for (const s of (registry.sources.get(round)?.blocks ?? []).filter(x => x.level === "section" && x.heading)) {
@@ -125,6 +132,13 @@ export function cueUnits(registry: Registry, round: number): ChangeUnit[] {
   const ids = new Map<string, string[]>()
   for (let r = 1; r <= round; r++) for (const h of cuesIn(registry, r).filter(x => x.kind === "author_id")) ids.set(h.text, [...new Set([...(ids.get(h.text) ?? []), h.block])])
   for (const [id, members] of ids) if (members.length >= 2 && members.some(m => registry.block(m)?.round === round)) add({ name: id, members, objects: objectsOf(registry, members), cue: { kind: "author_id", text: id } })
+  // "The same … as `X`", "reuses `X`": one unit of the sentence across its own command and X (batch 5 C).
+  for (const h of hits.filter(x => x.kind === "same_as")) {
+    const named = h.names.flatMap(n => objectsNamed(registry, n))
+    const objects = [...new Set([...objectsOf(registry, [h.block]), ...named])]
+    if (!named.length || objects.length < 2) continue
+    add({ name: `same as ${h.names.join(", ")}`, members: [h.block], objects, cue: { kind: "same_as", text: h.text } })
+  }
   // "All commands", "any `X` command": a global unit, never expanded; its objects are what the sentence names and its owner.
   for (const h of hits.filter(x => x.kind === "cross_list")) {
     const named = [...(registry.block(h.block)?.text ?? "").matchAll(BACKTICKED)].flatMap(m => objectsNamed(registry, m[1]))

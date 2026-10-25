@@ -70,6 +70,23 @@ describe("batch 4 E1a: change units and revision provenance, by code", () => {
     assert.match(reg.block(g[0].members[0])!.text, /Any `dpipe` command/u)
   })
 
+  it("batch 5 C: \"the same … as the `profile` command\" is a cue unit across the drift sentence's command and profile; a name that is no other command makes none", () => {
+    const reg = store.registry()
+    const hits = cuesIn(reg, 3).filter(h => h.kind === "same_as")
+    const drift = hits.find(h => reg.block(h.block)!.text.includes("same type inference rules and numeric statistics as the `profile` command"))!
+    assert.ok(drift, JSON.stringify(hits))
+    assert.deepEqual(drift.names, ["profile"])
+    const p25 = hits.find(h => h.names.includes("p25"))!
+    assert.ok(p25, "a field name is a hit")
+    const units = cueUnits(reg, 3).filter(u => u.cue?.kind === "same_as")
+    const profile = objectsNamed(reg, "profile"), owner = reg.coverOf(drift.block)!.owner
+    assert.equal(profile.length, 1)
+    assert.notEqual(owner, profile[0])
+    const u = units.find(x => x.members.includes(drift.block))!
+    assert.deepEqual([u.members, [...u.objects].sort(), u.all], [[drift.block], [owner, profile[0]].sort(), undefined])
+    assert.ok(!units.some(x => x.members.includes(p25.block)), "no unit for a field name")
+  })
+
   it("E2: dpipe R12 declares earlier behaviour unchanged once; R5 does not", () => {
     const reg = new Registry()
     for (const r of [5, 12]) reg.addSource(splitRound(r, roundText(r)))

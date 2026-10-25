@@ -2204,3 +2204,54 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - 保留的 10 个周期上，在该构建上已修好、在回退目标上仍失败的条目共 80 个，全部留下。131 个"修好又丢掉"里，另外 51 个出在那 13 个不存在的周期上，要真实运行才知道。
 - rep1o 6 轮各自第一个被回退周期之后的下一条修补消息已渲染：回归 16 个，四项俱全 16/16；仍失败的条目 1、16、26、26、34、31 个照常再发；在保留构建上已修好的条目没有一个出现在消息里。
 - 离线做不到的：新规则下，那个被保留的周期上本应跑一次审查，它会带来新条目，这次重放里没有；执行方拿到材料后修没修回、持续回归有多少，也只能等真实运行。
+
+### 36.3 C：same-as 线索
+
+**做法**（units.ts，代码侧，不进模型）：
+- 新的线索类 `same_as`，匹配三种句式：
+  - "(same|identical) … as (the) `X`"，中间不超过 160 字，不跨句；
+  - "reuses (the) `X`"；
+  - "as `X` does"。
+- 句子里所有这样点名的 X 都记下。
+- 成单元的条件：X 能解析成对象（`objectsNamed`），而且不是这句话自己所属的对象。
+- 单元成员只有这句话本身，对象是句子所属对象加 X。它是跨命令单元，所以：
+  - 进审查名单的"Changes across commands"一节；
+  - 进包的跨命令交付计数；
+  - 进工单的 units 行。
+- 不是全局单元。原有六类线索的规则不变。
+- 全量测试：1009 条，998 通过，10 条失败即已知 10 条，A 和 C 都在内，没有新失败。
+- 测试：units.test 加一条。dpipe R3 的 drift 句是命中，形成 drift 所属对象 + profile 的单元，成员只有这一句；`p25` 是命中，但不成单元。
+
+**验收**（`exp2/evidence/batch5-2026-10-26/cues-same-as.mjs` → `cues-same-as.md`；不调模型）：
+- 四任务线索计数，用各轮 instruction，不读测试。原有六类的总数与批 4（`cues-tasks.md`）逐项相同：
+  - d5_w9：0/2/15/1/0/18；
+  - d10_w4：0/0/12/12/0/9；
+  - d12_w1：0/0/13/6/121/19；
+  - d8_w5：5/4/10/0/0/4。
+- 新增 same_as 命中 16 条：d5_w9（dpipe）12 条，d12_w1 4 条，d10_w4、d8_w5 为 0。16 条我全部人工看过：
+  - 真引用另一个命令或操作的 8 条：
+    - having 用 `filter` 的条件操作符；
+    - rollup 的 aggregations 同 `aggregate` 语义；
+    - assert 的 expression 同 `derive` 的表达式求值；
+    - detect 的 iqr 同 `profile` 的分位数方法；
+    - bin 的分位边界同 `profile`；
+    - drift 同 `profile` 的类型推断和统计；
+    - lineage 的 `--config` 同 `pipeline` 格式；
+    - d12 的 `steps` 与 `inspect.steps` 同序。
+  - 指向字段、取值或同一操作内另一选项的 8 条：
+    - `lead` 同 `lag`；
+    - `max` 同 `min`；
+    - bin 的两条同 `width`；
+    - `p25`；
+    - d12 的 `cmd`、`skipped`、`budget_exceeded`。
+  - 这 8 条在有归属时不会成单元，因为 X 不是命令对象。
+- rep1o（dpipe，用它记录的归属）：12 条命中形成 5 个单元，5 个都是真引用：
+  - U2.c2 rollup + aggregate；
+  - U2.c3 detect + profile；
+  - U2.c4 bin + profile；
+  - U3.c2 drift + profile；
+  - U5.c2 lineage + pipeline。
+- 漏掉的真引用 2 条：filter、derive。rep1o 的归属里没有这两个命令对象，它们都在 O4 transformation operation dispatch 下。
+- rep1o R3：
+  - drift–profile 单元 U3.c2（O28 drift command + O17 profile command）在包的跨命令交付里，交付 2/2；
+  - 在审查名单的 Changes across commands 一节："U3.c2 same as profile: drift command, profile command"。
