@@ -7,6 +7,7 @@
 - 包改造 P1–P3 + paragraphInForce 修复：包按段交付，R4–R6 包 6–9k 字符。
 - 批 2：前提 input_claim_false 降为记录，formalizer 不再写输入声称，strict 列删。
 - 批 3：(c) 布尔期望"已陈述"按文件名；(b) 检查取反方向删（G57 类）；(a) 修补结局 fixed/touched/untouched 按输出，untouched 单独消息逐条作答，touched 两周期送裁决，reverted 不计，跨轮过期按 touched。
+- 批 5（已交付 8f13def，离线验收全过）：修补周期不再整周期回退，回归 = 带材料修补条目，持续回归送裁决；same-as 线索。
 - 批 4（已交付 23ef517，六条离线验收全过）：变化单元与修订出处、范围声明、按单元进包、两张名单定审查范围、报告。正文 exp2/BATCH-4-2026-10-25.md。
 
 ## 真实运行（dpipe，6 轮，低档；分数 R1–R6）
