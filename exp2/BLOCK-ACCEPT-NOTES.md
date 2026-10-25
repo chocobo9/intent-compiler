@@ -2143,3 +2143,12 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - 附录字符：R1 88、R2 9,486、R3 14,428、R4 14,921、R5 14,960、R6 14,813；R3–R6 都在 15k 软上限上，裁掉了 13、44、35、7 段。
 - 全局单元覆盖：R1 U1.c2 认不出标志，记无法判定；R6 U6.c1 `--audit` 覆盖 6 个命令。
 - conservation 错误全为 0；no_input R4 5 条、R6 2 条。
+
+**no_input 的原因**（零成本，读每个条目的 premise 记录和 formalizer 的回答）：R4 有 6 个 fallback 条目，其中 no_input 5、no_assertion 1；R6 有 2 个，都是 no_input。
+- 审查员没跑程序，凭读代码写的发现：4 条，V4.1.3（validate min/max 只适用于数值类型）、V4.1.4（pattern 只适用于字符串）、V4.1.11（rollup 只用第一个聚合）、V4.1.13（drift 漏了 null-rate/range/unique 检查）。这 4 条都在 R4.1 的审查里，不引用命令也不点名 lead，没有调用可重建。no_input 是对的。
+- 输入是整个目录：V4.3.15，`manifest --dir . --output review-manifest.json`。重建需要整个工作目录的内容，材料里只有 37 个会话文件，formalizer 判为无法完整重建。code 那一侧也没认出这条里的命令：引用的命令没有 `dpipe` 前缀，也不在会话命令里。即使认出来，`--dir .` 也一样重建不了。
+- 审查员误读的 drift 发现：3 条，V4.2.7、V6.1.3、V6.2.3。审查员先用 `profile` 生成 JSON，再把它当作 drift 的 `--baseline`/`--current`，程序报 `ERROR: cannot parse CSV`，审查员据此报"drift 不能读 profile 输出"。
+  - R3 原文写的是 `--baseline: path to the baseline CSV data file`，drift 在内部为两个 CSV 计算统计 profile。所以这三条的主张本身是错的，程序的行为符合原文。
+  - V6.1.3、V6.2.3 是 no_input：它们的输入是程序在会话里生成的文件，不在材料里。V4.2.7 输入找到了，但 formalizer 没写断言，记为 no_assertion。
+  - 三条都停在 fallback，没有变成检查，也没有送修。
+- 读法：8 条里，4 条是凭读代码的发现，1 条是整目录输入，3 条是对原文的误读。没有一条是 code 漏掉了材料里本有的调用。
