@@ -1854,3 +1854,34 @@ rep1g 的核实数与真实运行相同（22）。来自材料的输入只有 1�
 - `block-accept-fix` 新增两条整轮测试：修补没改动 → 单独消息（带检查）→ 答 not done → 仍 untouched → 停送且不是"无进展"，报告行写"still untouched 1 (100%; the line is 26%)"；答 disagree → 下一次审查带"Items the repairs did not settle"→ 审查员 SUPERSEDED → 条目结束，账本 superseded。
 - 两条旧测试按新规则改了：block-accept-fix 的过期测试改为"输出不变不过期、每轮都变才过期"；block12 的账本测试把 A 的输出改成每轮都变。
 - 全量测试：986 条里 969 过；失败的除已知 10 条环境问题外，block12 的账本测试已按新规则改过并通过，其余（mutation、serial 几条、block10 的探针）逐个文件重跑都通过，原因是主机拦截新构建的程序（spawn UNKNOWN）。replay-baseline（七个 R1）通过，和基线相同。
+
+## 32. rep1n：批 3 之后的一次 6 轮真实运行
+
+用户决定（2026-10-25，经设计会话）。代码 aac0f01（批 3 的 c、b、a），配置从 rep1m 复制，只改运行编号、端口（46017/46018）、缓存键、label；delta，执行方 low，rounds 6，--to 6。全程 0 次续跑，没有崩溃或环境错误。表：`exp2/evidence/rep1n-2026-10-25/table.md`（脚本 `table.mjs`），R1、R3、R4 的失败分布在 `failures-r1-r3-r4.md`。
+
+**官方分**（括号里是首次交付）：
+
+| 轮 | rep1n | rep1j | rep1k |
+|---|---|---|---|
+| R1 | 167 (52) | 177 (108) | 196 (100) |
+| R2 | 465 (287) | 480 (395) | 474 (410) |
+| R3 | 519 (517) | 534 (534) | 534 (521) |
+| R4 | 623 (623) | 638 (630) | 630 (623) |
+| R5 | 659 (659) | 673 (673) | 666 (666) |
+| R6 | 692 (691) | 710 (699) | 698 (696) |
+
+每一轮都低于两个基线。
+
+**差在哪**：R1 的残留。rep1n R1 末挂 52 个（window 28、fill 10、aggregate 6……）。R2 末起一直挂着同样 16 个 R1 用例，到 R6 都没修好：window 11、join 2、pivot 2、derive 1。rep1j 在 R2 末只剩 derive 1。审查员报过的 4 条 window 条目（V1.2.6、V1.2.7、V1.3.4、V2.3.1）按各自的检查都在 R2 修好了；剩下的 11 个 window 用例测的是这些检查没覆盖到的情形，R2 之后也没有审查员再报 window。所以这 16 个是"看见"（审查与检查覆盖）的缺口，不是修补回路扣着条目不送。R5、R6 新增的是 manifest 5、determinism 2、ingest 1，和 rep1j、rep1k 同类。
+
+**修补回路（批 3a 的新度量）**：
+- untouched 单独消息：R1 2 条（7 个条目），R2 3（10），R3 1（4），R4 1（1），R5 1（3），R6 2（4）。
+- 作答：done 24、not done 0、disagree 5、none 0。执行方几乎总是答 done。
+- 单独消息后仍 untouched：R1 0/7、R2 4/10（40%）、R3 4/4（100%）、R4 0/1；R5、R6 单独消息之后的那个周期被回退或已到周期上限，没有可判的。合计 8/22（36%），高于预注册线 26%。
+- 送审查员 22 次。
+  - 真正问到的只有两轮：R2 维持 2 条（V1.2.6 window、V1.3.2 sample，之后 V1.2.6 在 C2.4 修好）；R3 SUPERSEDED 4 条（V1.3.2 sample fraction、V2.1.2 profile 统计、V2.1.8 bin 未实现、V2.2.1 detect mad）。
+  - 其余 16 次是 unasked：送审发生在本轮最后一个周期，后面没有审查了。
+  - R3 被 SUPERSEDED 的 4 条，对应的官方用例在 R3 末都不在失败里（R3 末的 16 个失败全是 R1 的 window/join/pivot/derive），所以这 4 次裁决没有造成官方失分。
+- 翻转与回退：R1–R4 都是 0。R5：原文改动 3 次（G6、G9、G14，审查员 SUPERSEDED 退役）、regression 6 次（G5、G7 在工作周期，G64、G65 两次），回退 2 次。R6：regression 6 次（G64、G65、G5、G7），回退 2 次。R5、R6 的二次回退（V4.1.3、V5.2.1 连守卫 G5/G7/G64/G65）都是 unasked。
+
+**成本**：R3–R6 的审查请求字符（62k、22k、38k、38k）和 formalizer 未缓存 token（29k、7k、17k、25k）都明显低于 rep1j（147k–172k；82k–112k），包也小（6k–25k 字符）。R1、R2 与基线相当。conservation 错误全为 0；no_input 只有 R1 1 条。
