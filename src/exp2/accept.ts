@@ -12,6 +12,7 @@ import { notBehaviourIn } from "./review.js"
 import { bindCovered, reviewerRuns, uncoveredScope, type CoveredRecord } from "./covered.js"
 import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, reviewRequestOn, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { DeliveryLedger } from "./delivery.js"
+import { renderUnits } from "./view.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import { runChecks, runDigest, type CheckRun } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
@@ -223,6 +224,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   let good: { cycle: string; commit: string; program: ProgramRef } | null = null
   // The guards that regressed on the cycle before (batch 1, 5A): counted fixed or still failing on this one.
   let raisedBefore: string[] = []
+  // The units the last repair's items rest on (batch 1, §12).
+  let repairUnits: string[] = []
   accept.regressions = { raised: 0, fixed_next: 0, persisted: 0 }
   // The executor's quotes of the text an item rests on (§0a): through the ledger when there is one.
   const quote: Quote | undefined = deps.delivery ? units => deps.delivery!.quote("executor", units) : undefined
@@ -252,7 +255,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   let items: ItemSighting[] = []
 
   /** One review on `at`: a fresh copy and session; void when the program never ran, then done again once. */
-  const review = async (at: { cycle: string; commit: string; program: ProgramRef }, focus: ReviewFocus, n: number) => {
+  const review = async (at: { cycle: string; commit: string; program: ProgramRef }, focus: ReviewFocus, n: number, body = deps.body) => {
     let attempts = 0
     for (;;) {
       if (reviewSessions >= reviewsMax * 2) return null
@@ -260,7 +263,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       reviewSessions++
       const label = `R${round}-review${n}-${attempts}`
       const dir = copyProgram(workdir, at.commit, deps.copyDir(label))
-      const request = deps.body ? reviewRequestOn(deps.body, focus) : reviewRequest(deps.sources.filter(s => s.round <= round), focus)
+      const request = body ? reviewRequestOn(body, focus) : reviewRequest(deps.sources.filter(s => s.round <= round), focus)
       let out: Awaited<ReturnType<Reviewer["review"]>> | null = null, error: string | undefined
       try { out = await timed("review", () => withTimeout(deps.reviewer.review(dir, request, label), limits.callTimeoutMs)) } catch (e) {
         if (!(e instanceof SessionBroken) && !(e instanceof CallTimeout)) { discardCopy(dir); throw e }
@@ -445,7 +448,12 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       // Under the round's package the reviewer reads the text in force; the appendix names this round's units (§6c).
       const thisRound = round === 1 ? [] : [...new Set(registry.roundScope(round).flatMap(c => c.entries.map(e => e.block)))].sort((a, b) => registry.block(a)!.start - registry.block(b)!.start)
       const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads, ...(deps.reviewItems?.length ? { items: deps.reviewItems } : {}), ...(deps.delivery ? { declare: true } : {}), ...(deps.scope ? { coverage: owed() } : {}) } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads, ...(deps.scope ? { coverage: owed() } : {}) }
-      const r = await review(current, focus, n2)
+      // A later review of the round (batch 1, DESIGN-OPUS §12): not this round's text again, only the scope sentences
+      // still owed and the sentences the items of the last repair rest on.
+      const later = !!deps.scope && !!deps.body && reviews > 0
+      const laterUnits = later ? [...new Set([...owed(), ...repairUnits])] : []
+      if (later) { focus.partial = true; for (const u of laterUnits) if (deps.delivery && !deps.delivery.has("reviewer", u)) deps.delivery.give("reviewer", "C", u, registry.block(u)?.text.trim().length ?? 0) }
+      const r = await review(current, focus, n2, later ? renderUnits(registry, laterUnits) : deps.body)
       reviews++
       const summary: ReviewSummary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length, program_runs: r?.out?.runs.length ?? 0, fallback: 0, logged: 0 }
       for (const g of questions) asked.add(g.id)
@@ -657,6 +665,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     if (!toSend.length) break
     if (repairs >= limits.repairCycles) { record.status = "cycles_spent"; break }
     repairs++
+    // What this repair touches: the units its items rest on (a later review reads them, §12).
+    repairUnits = toSend.flatMap(t => itemChecks.get(t.id)?.record.blocks ?? record.review_items!.find(x => x.id === t.id)?.units ?? guards.find(g => g.id === t.id)?.units ?? []).map(u => u.split("#")[0])
     // The whole reply alone goes as the control group sends it: the reviewer's list as written.
     const whole = wholeReplies.find(w => toSend.length > 0 && toSend.length === w.ids.size && toSend.every(t => w.ids.has(t.id)))
     const list = whole ? whole.text : renderReviewList(toSend)

@@ -393,3 +393,19 @@ export function packageComparisons(registry: Registry, round: number, guards: re
 
 /** The package's budget in characters (§6c revision item 5). */
 export const PACKAGE_BUDGET = 40_000
+
+/**
+ * Units as a later review of the round gets them (batch 1, DESIGN-OPUS §12): each under its paragraph's heading path,
+ * by its id, the units of one paragraph together, in round and document order. A unit no longer in force is left out.
+ */
+export function renderUnits(registry: Registry, ids: readonly string[]): string {
+  const blocks = [...new Set(ids)].map(id => registry.block(id)).filter((b): b is SourceBlock => !!b).sort((a, b) => a.round - b.round || a.start - b.start)
+  const out: string[] = []
+  let path = ""
+  for (const b of blocks) {
+    const p = [`R${b.round}`, ...headingPath(registry, contextOf(registry, b.id)).map(h => h.replace(/^#+\s*/u, ""))].join(" › ")
+    if (p !== path) { out.push(`## ${p}`); path = p }
+    out.push(`⟦${b.id}⟧ ${b.text.trim()}`)
+  }
+  return out.length ? out.join("\n\n") + "\n" : ""
+}

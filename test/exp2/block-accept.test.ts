@@ -18,6 +18,7 @@ import { invokesProgram, isNoIssues, programRunsIn, REPAIR_INTRO, REVIEW_INTRO, 
 import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
 import { Serial } from "../../src/exp2/serial.js"
 import { Exp2Store } from "../../src/exp2/store.js"
+import { renderPackage, roundPackage } from "../../src/exp2/view.js"
 import { buildWorkOrder, renderWorkOrder } from "../../src/exp2/workorder.js"
 import { checkStubTransport } from "./check-stubs.js"
 import { DROP, FILTER, GO_MOD, MAIN, RENAME, SORT, TRANSFORM, VERIFY } from "./go-fixtures.js"
@@ -64,7 +65,7 @@ const sidecarCheck = (id: string, object: string): CheckRecord => ({
 const noop = { review: async () => {}, formalize: async () => {}, guards: async () => {} }
 
 /** Runs one round with the review acceptance on a fresh work tree; the stand-ins and guards as given. */
-async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: string) => void)[], o: { library?: CheckRecord[]; guards?: GuardRecord[]; guardEvents?: GuardEvent[]; reviewer: AcceptDeps["reviewer"]; formalize: AcceptDeps["formalize"]; leads?: AcceptDeps["leads"]; reviews?: number; record?: AcceptDeps["record"]; carried?: AcceptDeps["carried"]; voidWithoutRuns?: boolean; scope?: readonly string[] }) {
+async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: string) => void)[], o: { library?: CheckRecord[]; guards?: GuardRecord[]; guardEvents?: GuardEvent[]; reviewer: AcceptDeps["reviewer"]; formalize: AcceptDeps["formalize"]; leads?: AcceptDeps["leads"]; reviews?: number; record?: AcceptDeps["record"]; carried?: AcceptDeps["carried"]; voidWithoutRuns?: boolean; scope?: readonly string[]; body?: string }) {
   const workdir = join(dir, `work-${r}-${Math.random().toString(36).slice(2, 6)}`)
   mkdirSync(workdir, { recursive: true })
   initRepo(workdir)
@@ -75,7 +76,7 @@ async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: s
     registry, library: o.library ?? [], events: [], facts: codeFacts(registry, r), guards: o.guards ?? [], guardEvents: o.guardEvents ?? [],
     runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), anchors, build: goBuilder(join(dir, "builds"), {}, "dpipe"),
     reviewer: o.reviewer, formalize: o.formalize, binary: "dpipe", sources: store.inspect().sources.map(s => ({ round: s.round, text: s.text })),
-    copyDir: label => join(dir, "copies", label), ...(o.leads ? { leads: o.leads } : {}), record: o.record ?? noop, ...(o.carried ? { carried: o.carried } : {}), ...(o.scope ? { scope: o.scope } : {}), checkTimeoutMs: 10_000,
+    copyDir: label => join(dir, "copies", label), ...(o.leads ? { leads: o.leads } : {}), record: o.record ?? noop, ...(o.carried ? { carried: o.carried } : {}), ...(o.scope ? { scope: o.scope } : {}), ...(o.body ? { body: o.body } : {}), checkTimeoutMs: 10_000,
   }, { ...DEFAULT_LIMITS, repairCycles: 3, ...(o.reviews !== undefined ? { reviews: o.reviews } : {}), ...(o.voidWithoutRuns ? { voidWithoutRuns: true } : {}) })
   return { record, executor, workdir, registry }
 }
@@ -490,5 +491,23 @@ describe("[behav] batch 1, effect 8 and §11 item 1: reviews go on while scope s
     assert.equal(a.guards.born.length, 2)
     assert.match(reviewer.requests[1].request, /# Sentences to show by a run\n[^]*\nR1\.S3\.P2: s4\n/u)
     assert.ok(!/R1\.S3\.P9: s2/u.test(reviewer.requests[1].request), "the sort sentence is held: not asked again")
+  })
+
+  it("a later review of the round reads only the scope sentences owed and those the last repair's items rest on (DESIGN-OPUS §12)", async () => {
+    const reg = store.registry()
+    const body = renderPackage(roundPackage(reg, 1, [], { delivery: true }))
+    const materials = { files: SORT_INPUT.files, commands: [{ command: command(SORT_INPUT), output: "" }] }
+    const reviewer = scriptedReviewer([{ text: `COVERED ${SORT_UNIT} BY RUN 1
+NO ISSUES`, materials }, { text: "NO ISSUES" }])
+    const { record } = await round(dir, store, 1, [wd => write(wd, files())], { reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), scope: [FILTER_UNIT, SORT_UNIT], body })
+    assert.equal(record.accept!.reviews.length, 3)
+    const [first, second] = reviewer.requests.map(r => r.request)
+    const text = (id: string) => reg.block(id)!.text.trim()
+    // The package is annotated: its paragraphs by id (⟦R1.S8.P1⟧); a later review's units by their full ids.
+    assert.ok(first.includes("⟦R1.S8.P1⟧") && first.includes("⟦R1.S3.P9⟧"), "the first review reads the round's text")
+    assert.ok(second.includes(`⟦${FILTER_UNIT}⟧ ${text(FILTER_UNIT)}`), "the owed sentence, by its id")
+    assert.ok(!second.includes("⟦R1.S3.P9") && !second.includes("R1.S3.P9.s2") && !second.includes(text(SORT_UNIT)), "the covered sentence is not given again")
+    assert.ok(!second.includes("⟦R1.S8.P1"), "nor the rest of the round's text")
+    assert.match(second, /An earlier review of round 1 read this round's requirements\./u)
   })
 })

@@ -51,6 +51,8 @@ export interface ReviewFocus {
   declare?: boolean
   /** Batch 1 (§11 item 1): the scope sentences no passing check holds yet, which this review is to show by runs (COVERED lines). */
   coverage?: readonly string[]
+  /** Batch 1 (§12): a later review of the round; the requirements above are only what is still owed and what the last repair touched. */
+  partial?: boolean
 }
 
 /** Sentence ids by paragraph, one line a paragraph: "R1.S8.P1: s1, s2, s4". */
@@ -63,10 +65,14 @@ export function idsByParagraph(ids: readonly string[]): string[] {
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
 const quote = (t: string) => t.trim().split(/\r?\n/u).map(l => `> ${l}`).join("\n")
 
+const partialNote = (round: number) => `An earlier review of round ${round} read this round's requirements. The requirements above are only the sentences still to show by a run and those the last repair's items rest on, each under its id and heading; check them with particular care. A deviation found anywhere is still a deviation.`
+
 export function reviewAppendix(f: ReviewFocus): string {
   const out: string[] = []
   out.push("# Focus of this review")
-  if (f.round === 1) out.push(`Round ${f.round} is the first round: all of the requirements are new.`)
+  // A later review of the round (batch 1, §12) reads only what is owed and what the last repair touched.
+  if (f.partial) out.push(partialNote(f.round))
+  else if (f.round === 1) out.push(`Round ${f.round} is the first round: all of the requirements are new.`)
   else {
     if (f.unit_ids) out.push(`The requirements above are each object's text as it stands after round ${f.round}. Units round ${f.round} added or revised, to check with particular care: ${f.unit_ids.join(", ") || "none"}. The rest was reviewed when it arrived and is context here; a deviation found anywhere is still a deviation.`)
     else out.push(`The text under \`${roundHeading(f.round)}\` is what this round added or revised; check it with particular care. The text of earlier rounds was reviewed when it arrived and is context here; a deviation found anywhere is still a deviation.`)
