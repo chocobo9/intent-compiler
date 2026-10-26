@@ -162,3 +162,20 @@ export function renderVerification(v: VerificationSummary): string {
   const rules = Object.entries(v.not_behaviour.by_rule).map(([k, c]) => `${k} ${c}`).join(", ") || "none"
   return `- Verification state: ${v.sentences} sentences in force; held ${v.held}, failing ${v.failing} (never passed ${v.never_passed}), unverified ${v.unverified}; open items on ${v.open}; not behaviour by rule ${rules}, declared ${v.not_behaviour.declared}. Coverage of the ${v.coverage.behaviour} behaviour sentences: nominal ${v.coverage.nominal} (${pct(v.coverage.nominal, v.coverage.behaviour)}), passing ${v.coverage.passing} (${pct(v.coverage.passing, v.coverage.behaviour)}). Debt ${v.debt.sentences} sentences in ${v.debt.paragraphs} paragraphs, ${v.debt.chars} characters${v.delta ? `; this round entered ${v.delta.entered}, cleared ${v.delta.cleared}` : ""}.`
 }
+
+/**
+ * The reviewer's NOT BEHAVIOUR declarations in force (batch 1, G2): each declared sentence once; a declaration ends
+ * when a later review item rests on the sentence (a finding names it, so it states behaviour after all). A sentence
+ * no longer in force drops out with it.
+ */
+export function declarations(registry: Registry, executions: readonly { round: number; accept?: { declared?: readonly { id: string; reason: string }[] }; review_items?: readonly { round: number; units: readonly string[] }[] }[]): Map<string, string> {
+  const out = new Map<string, string>()
+  const items = executions.flatMap(e => e.review_items ?? [])
+  for (const e of [...executions].sort((a, b) => a.round - b.round)) for (const d of e.accept?.declared ?? []) {
+    if (out.has(d.id)) continue
+    // Cited by an item of the same or a later round: behaviour after all.
+    if (items.some(i => i.round >= e.round && i.units.some(u => coversSentence(registry, u.split("#")[0], d.id)))) continue
+    out.set(d.id, d.reason)
+  }
+  return out
+}

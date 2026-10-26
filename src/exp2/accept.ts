@@ -3,11 +3,12 @@ import { diffAnchors, touched } from "./anchors.js"
 import { RoleUnavailable, type TokenUsage } from "./attribution.js"
 import { activeChecks, coverage, EMPTY_CHECKS, type CheckEvent, type CheckRecord, type CodeFacts } from "./checks.js"
 import { renderEvidence, SessionBroken, Sends, type AcceptRoundRecord, type BuildResult, type CycleRecord, type ExecutionLimits, type ExecutionRecord, type Executor, type ExecutorReply, type ItemSighting, type ReviewItemRecord, type ReviewSummary, type SupersededItem } from "./execution.js"
-import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, OWN_FAILURES, reproduces, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
+import { assessPremises, DEFAULT_PREMISE_BLOCK, formalizeReview, itemCheckRecord, notInForce, OWN_FAILURES, reproduces, type FormalizeCallRecord, type FormalizeTransport, type Premise } from "./formalize.js"
 import { commitStep, head, resetTo } from "./git.js"
 import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, type GuardEvent, type GuardRecord } from "./guards.js"
 import { sessionInput, type ReviewMaterials } from "./materials.js"
 import type { Registry } from "./registry.js"
+import { notBehaviourIn } from "./review.js"
 import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, reviewRequestOn, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { DeliveryLedger } from "./delivery.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
@@ -433,7 +434,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const revised = registry.objects.size ? [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts.map(p => ({ id: p, text: `${registry.block(p)?.text.trim() ?? ""} (${m.kind === "withdraw" ? "withdrawn" : m.kind === "partial" ? "partly revised" : "replaced"} by ${m.by.join(", ")} in round ${round})` }))))) : []
       // Under the round's package the reviewer reads the text in force; the appendix names this round's units (§6c).
       const thisRound = round === 1 ? [] : [...new Set(registry.roundScope(round).flatMap(c => c.entries.map(e => e.block)))].sort((a, b) => registry.block(a)!.start - registry.block(b)!.start)
-      const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads, ...(deps.reviewItems?.length ? { items: deps.reviewItems } : {}) } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
+      const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads, ...(deps.reviewItems?.length ? { items: deps.reviewItems } : {}), ...(deps.delivery ? { declare: true } : {}) } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
       const r = await review(current, focus, n2)
       reviews++
       const summary: ReviewSummary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length, program_runs: r?.out?.runs.length ?? 0, fallback: 0, logged: 0 }
@@ -441,6 +442,13 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       survivors = []
       if (r?.out) {
         // SUPERSEDED lines retire guards; a questioned guard not superseded is a regression from here on.
+        // NOT BEHAVIOUR lines (batch 1, G2): a sentence (a clause stands for its sentence) in force is recorded once.
+        if (deps.delivery) for (const d of notBehaviourIn(r.out.text)) {
+          const b = registry.block(d.id)
+          const id = b?.level === "clause" ? b.parent! : d.id
+          if (registry.block(id)?.level !== "sentence" || notInForce(registry, round, id) || accept.declared?.some(x => x.id === id)) continue
+          accept.declared = [...(accept.declared ?? []), { id, reason: d.reason, review: `R${round}.${n2}` }]
+        }
         const superseded = supersededIn(r.out.text)
         const retire: GuardEvent[] = []
         for (const s of superseded) {

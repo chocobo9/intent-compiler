@@ -12,6 +12,7 @@ import { relationRecall, renderRecall, revisionRecall as goldRevisionRecall, typ
 import type { PackageOverflow } from "./view.js"
 import { renderVerification, type VerificationSummary } from "./verification.js"
 import { renderDelivery, type DeliverySummary } from "./delivery.js"
+import { renderSlice, type SliceRecord } from "./slice.js"
 
 /**
  * The round report (DESIGN §14), built by code from the round's records: official score (filled in locally only,
@@ -108,6 +109,8 @@ export interface RoundReport {
   verification?: VerificationSummary
   /** Batch 1 (DESIGN-OPUS §0a): the original text each recipient got this round, by class, against the line. */
   delivery?: DeliverySummary
+  /** Batch 1 (DESIGN-OPUS §3, §11 item 3): the debt slice the reviewer got. */
+  slice?: SliceRecord
 }
 
 /** Tokens of one role: uncached input, cache reads, output (cache writes, when a provider reports them, apart). */
@@ -300,6 +303,7 @@ function reportOf(i: ReportInput): RoundReport {
     ...(i.wall ? { wall: i.wall } : {}),
     ...(i.verification ? { verification: i.verification } : {}),
     ...(i.delivery ? { delivery: i.delivery } : {}),
+    ...(e.slice ? { slice: e.slice } : {}),
     ...(i.summary ? { acceptance: i.summary } : {}),
     ...(i.ledger ? { ledger: i.ledger } : {}),
     ...(i.review ? { review: reviewReport(i.review) } : {}),
@@ -412,6 +416,7 @@ export function renderReport(r: RoundReport): string {
     ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters${r.zones.package ? ` in ${r.zones.package.segments.length} paragraphs of ${new Set(r.zones.package.segments.map(x => x.object)).size} objects (${segmentCounts(r.zones.package)}), ${r.zones.package.heads.length} object heads; this round's edges to a block ${r.zones.package.edges.to_block}, to an object ${r.zones.package.edges.to_object}; ${r.zones.package.guards} comparisons (guards on revised units)${r.zones.package.overflow ? `; over the budget of ${r.zones.package.overflow.limit} (${r.zones.package.overflow.chars}): dropped ${r.zones.package.overflow.dropped.length} paragraphs${r.zones.package.overflow.still_over ? ", still over" : ""}` : ""}` : ` in ${r.zones.source_blocks} blocks`} (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all} blocks)${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions${v.leads.dropped ? `, ${v.leads.dropped} leads past the cap of 20` : ""}` : ""}.`] : []),
     ...(r.zones.package?.utilization ? [renderUse(r.zones.package.utilization)] : []),
     ...(r.delivery ? [renderDelivery(r.delivery)] : []),
+    ...(r.slice ? [renderSlice(r.slice)] : []),
     ...(r.verification ? [renderVerification(r.verification)] : []),
     ...(r.wall ? [renderRoleTime(r.wall)] : []),
     r.gold ? renderRecall(`Revision recall (gold set ${r.gold.task})`, r.gold.revision) : "- Revision recall: no gold set for this task.",

@@ -23,10 +23,11 @@ import { DeliveryLedger, deliveryLine, type DeliveryClass } from "./delivery.js"
 import { guardCheck, guardCoverage, liveGuards, runGuards } from "./guards.js"
 import { itemCheckRecord, notInForce, type FormalizeTransport, type Premise } from "./formalize.js"
 import { runChecks, type CheckRun } from "./verdict.js"
-import { fitPackage, packageComparisons, renderPackage, roundPackage } from "./view.js"
+import { fitPackage, packageComparisons, paragraphInForce, renderPackage, roundPackage, type PackageSegment } from "./view.js"
 import type { GoldSets } from "./gold.js"
 import type { Reviewer } from "./review.js"
-import { summarizeVerification, verificationStates } from "./verification.js"
+import { declarations, summarizeVerification, verificationStates } from "./verification.js"
+import { chooseSlice } from "./slice.js"
 
 /**
  * The end-to-end serial (DESIGN §9, §14). Each round, from the previous round's checkpoint:
@@ -355,7 +356,7 @@ export class Serial {
     }
     // The verification state as the round starts (batch 1, DESIGN-OPUS §2): the earlier rounds' sentences, against
     // the guards and checks so far; the open items are the ones carried in.
-    const verifiedAtStart = verificationStates(registryStart, round - 1, { guards: atStart.guards, guardEvents: atStart.guard_events, library: atStart.checks, checkEvents: atStart.check_events, open: carried.map(c => ({ id: c.id, units: c.check ? [...c.check.blocks] : [] })) })
+    const verifiedAtStart = verificationStates(registryStart, round - 1, { guards: atStart.guards, guardEvents: atStart.guard_events, library: atStart.checks, checkEvents: atStart.check_events, open: carried.map(c => ({ id: c.id, units: c.check ? [...c.check.blocks] : [] })), declared: declarations(registryStart, atStart.executions) })
     // 3. The work order, as before.
     let state = store.inspect()
     const registry = store.registry(state)
@@ -390,6 +391,15 @@ export class Serial {
         if (deltaReview) { delivery.give("reviewer", cls, id, n); delivery.give("formalizer", "F", id, n) }
       }
     }
+    // The debt slice (batch 1, §3, §11 item 3): earlier paragraphs in debt, for the reviewer only, within its line
+    // less A and B and at most 8 paragraphs; the formalizer reads them too.
+    const lastExecution = [...state.executions].sort((x, y) => y.round - x.round)[0]
+    const slice = deltaReview && pkg ? chooseSlice(registry, round, verifiedAtStart, { ...(lastExecution?.slice ? { last: lastExecution.slice } : {}) }, { chars: delivery.room("reviewer") }) : null
+    const debtSegments: PackageSegment[] = (slice?.sent ?? []).map(x => {
+      const b = registry.block(x.paragraph)!
+      return { object: x.object, name: registry.objects.get(x.object)?.name ?? x.object, paragraph: x.paragraph, round: b.round, path: [`R${b.round}`, ...registry.lineage(x.paragraph).filter(s => s.level === "section" && s.heading).reverse().map(s => s.heading!.trim().replace(/^#+s*/u, ""))].join(" › "), why: "debt" as const, via: x.sentences, text: paragraphInForce(registry, x.paragraph, round) }
+    })
+    for (const s of debtSegments) { delivery.give("reviewer", "D", s.paragraph, s.text.length); delivery.give("formalizer", "F", s.paragraph, s.text.length) }
     const byAge = [...carried].sort((x, y) => (x.material?.round ?? 0) - (y.material?.round ?? 0))
     const owed = (c: CarriedItem) => [...new Set(c.material?.units ?? [])].filter(u => !delivery.has("executor", u)).reduce((n, u) => n + (registry.block(u)?.text.trim().length ?? 0), 0)
     let over = delivery.chars("executor") + byAge.reduce((n, c) => n + owed(c), 0) - delivery.line
@@ -413,7 +423,7 @@ export class Serial {
     })
     // The reviewer reads the package's views, without the guards (§6c); the formalizer the same text. Full is the
     // control group's text (ablation).
-    const body = deltaReview && pkg ? renderPackage(pkg.pkg) : undefined
+    const body = deltaReview && pkg ? renderPackage({ ...pkg.pkg, segments: [...pkg.pkg.segments, ...debtSegments] }) : undefined
     const sources = state.sources.map(x => ({ round: x.round, text: x.text }))
     const carriedText = carried.length ? `\n${CARRIED_HEADER_REVIEW}\n\n${renderReviewList(carried)}\n` : ""
     const binary = this.c.binary ?? "app"
@@ -445,7 +455,8 @@ export class Serial {
     const sourcesRead = (calls: readonly { round: number; request: unknown }[]) => calls.filter(c => c.round === round).reduce((n, c) => n + String((c.request as { sources?: unknown }).sources ?? "").length, 0)
     delivery.read("attribution", sourcesRead(state.calls))
     delivery.read("check writing", sourcesRead(state.check_calls))
-    const verification = summarizeVerification(registry, round, verificationStates(registry, round, { guards: state.guards, guardEvents: state.guard_events, library: state.checks, checkEvents: state.check_events, open: openUnits }), verifiedAtStart)
+    if (slice) execution.slice = slice
+    const verification = summarizeVerification(registry, round, verificationStates(registry, round, { guards: state.guards, guardEvents: state.guard_events, library: state.checks, checkEvents: state.check_events, open: openUnits, declared: declarations(registry, [...state.executions, execution]) }), verifiedAtStart)
     const report = buildReport({
       round, registry, workorder, execution, summary, verification, delivery: delivery.summary(), ...(this.c.gold ? { gold: this.c.gold } : {}), ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: verdict.statuses,
       understand: state.calls.filter(c => c.round === round), acceptance: state.check_calls.filter(c => c.round === round),

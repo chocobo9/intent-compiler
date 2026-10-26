@@ -47,6 +47,8 @@ export interface ReviewFocus {
   leads: { id: string; text: string }[]
   /** Batch 1 (decision 3): items still open, as check material and the units they rest on, no original text. */
   items?: readonly { id: string; text: string }[]
+  /** Batch 1 (DESIGN-OPUS §10.2 G2): the reviewer may say which sentences state no behaviour (NOT BEHAVIOUR lines). */
+  declare?: boolean
 }
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
@@ -72,6 +74,10 @@ export function reviewAppendix(f: ReviewFocus): string {
       if (g.was.length) out.push(`Text it rested on (before): ${g.was.map(said).join(" ")}`)
       if (g.now.length) out.push(`Text in force now: ${g.now.map(said).join(" ")}`)
     }
+  }
+  if (f.declare) {
+    out.push("", "# Sentences that state no behaviour")
+    out.push("Some sentences of the requirements above state nothing a run of the program could show (background, a definition, a note on the document). For each such sentence you notice, you may write a line `NOT BEHAVIOUR <sentence id>: <why>` in your reply, the id as the annotations show it. These lines are not deviations.")
   }
   if (f.items?.length) {
     out.push("", "# Items still open from earlier rounds")
@@ -107,9 +113,24 @@ export function repairFromReview(list: string, notes: string[] = []): string {
   return [REPAIR_INTRO, list, ...notes].join("\n\n")
 }
 
-/** exactly NO ISSUES (markdown emphasis or a final period tolerated). */
+/**
+ * The lines of a reply that speak to code, not deviations: SUPERSEDED (a guard the text no longer requires) and, in
+ * batch 1, NOT BEHAVIOUR (a sentence that states no behaviour a run could show). They are no entries of the list.
+ */
+export const CONTROL_LINE = /^\s*[-*]?\s*`?(?:SUPERSEDED\s+G\d+|NOT BEHAVIOU?R\s+R\d)/u
+const content = (text: string) => text.split(/\r?\n/u).filter(l => !CONTROL_LINE.test(l)).join("\n")
+
+/** exactly NO ISSUES (markdown emphasis or a final period tolerated), the control lines aside. */
 export function isNoIssues(text: string): boolean {
-  return /^\s*[*_`]*NO ISSUES[*_`]*\.?\s*$/u.test(text)
+  return /^\s*[*_`]*NO ISSUES[*_`]*\.?\s*$/u.test(content(text))
+}
+
+/**
+ * `NOT BEHAVIOUR <sentence id>: <why>` lines of a reply (batch 1, DESIGN-OPUS §10.2 G2): the reviewer's word that a
+ * sentence states no behaviour a run could show. Ids as the annotations show them (hash dropped).
+ */
+export function notBehaviourIn(text: string): { id: string; reason: string }[] {
+  return [...text.matchAll(/^\s*[-*]?\s*`?NOT BEHAVIOU?R\s+(R\d+(?:\.[A-Za-z]*\d+|\.H)+)(?:#[0-9a-f]+)?`?\s*:\s*(.*)$/gmu)].map(m => ({ id: m[1], reason: m[2].trim() }))
 }
 
 /** `SUPERSEDED <guard id>: <why>` lines of a reply (§12i item 6). */
@@ -132,7 +153,7 @@ export function listEntries(text: string): number {
 export function reviewEntries(text: string): string[] {
   const out: string[][] = []
   for (const line of text.split(/\r?\n/u)) {
-    if (/^\s*[-*]?\s*`?SUPERSEDED\s+G\d+/u.test(line)) continue
+    if (CONTROL_LINE.test(line)) continue
     if (ENTRY_START.test(line)) out.push([line])
     else if (out.length) out.at(-1)!.push(line)
   }
@@ -142,7 +163,7 @@ export function reviewEntries(text: string): string[] {
 
 /** The reply as a repair list in the reviewer's words (the control group's list): SUPERSEDED lines left out. */
 export function replyAsList(text: string): string {
-  return text.split(/\r?\n/u).filter(l => !/^\s*[-*]?\s*`?SUPERSEDED\s+G\d+/u.test(l)).join("\n").trim()
+  return content(text).trim()
 }
 
 export interface ProgramRun { command: string; exit_code: number | null }

@@ -196,6 +196,8 @@ export interface CycleRecord {
 
 export interface ExecutionRecord {
   round: number
+  /** Batch 1 (DESIGN-OPUS §3, §11 item 3): the debt slice the reviewer got this round. */
+  slice?: import("./slice.js").SliceRecord
   base: string
   head: string
   status: "done" | "cycles_spent" | "sessions_spent" | "trial_spent"
@@ -299,6 +301,8 @@ export interface AcceptRoundRecord {
    * fixed or still failing. No repair is reverted: a regression stays an item, carried as long as it fails.
    */
   regressions?: { raised: number; fixed_next: number; persisted: number }
+  /** Batch 1 (DESIGN-OPUS §10.2 G2): sentences the reviewer declared not behaviour (NOT BEHAVIOUR lines), in force, by review. */
+  declared?: { id: string; reason: string; review: string }[]
   trial: { runs: number; failures: number }
   /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind; dropped: past the cap of one review (§6c). */
   leads: { library: number; judgment: number; dropped?: number }
