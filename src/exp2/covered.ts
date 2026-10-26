@@ -9,7 +9,7 @@ import { coversSentence } from "./verification.js"
  * What the reviewer verified (DESIGN-OPUS-2026-10-26 §11 item 1): the facts of what happened come from the session —
  * code numbers the reviewer's runs of the program in the order it made them, with their input files and output; the
  * reviewer makes one judgment, a line `COVERED <sentence ids> BY RUN <n>`: run n shows these sentences hold. Code runs
- * that run again on the program reviewed; the same output makes it a guard (asserting the exit code, stdout and the
+ * that run again twice on the program reviewed; the two alike make it a guard (asserting the exit code, stdout and the
  * files the run wrote) resting on those sentences, which leaves their debt. The formalizer is not involved.
  *
  * A line binds only scope sentences (this round's text and the slice's debt) that no passing guard holds; a paragraph
@@ -44,6 +44,9 @@ export function sameOutput(session: string, run: RunOutput): boolean {
   return [`${run.stdout}${run.stderr}`, `${run.stderr}${run.stdout}`, `${run.stdout}\n${run.stderr}`, `${run.stderr}\n${run.stdout}`, run.stdout, run.stderr].some(x => norm(x) === s && (s !== "" || (run.stdout === "" && run.stderr === "")))
 }
 
+/** Two runs again alike (rule A): exit code, stdout, stderr and every file of the run directory the same. */
+export const alike = (a: RunOutput, b: RunOutput) => !b.timed_out && !b.limit && a.exit_code === b.exit_code && a.stdout === b.stdout && a.stderr === b.stderr && JSON.stringify(Object.entries(a.files).sort()) === JSON.stringify(Object.entries(b.files).sort())
+
 /** The snapshot's assertions: the exit code, the whole stdout, each file the run wrote that was not an input. */
 export function snapshotAssertions(run: RunOutput, input: CheckInput): Assertion[] {
   const src = { kind: "derived" as const, block: null }
@@ -56,7 +59,7 @@ export function snapshotAssertions(run: RunOutput, input: CheckInput): Assertion
   ] as Assertion[]
 }
 
-export type CoveredOutcome = "guard" | "not_reproduced" | "no_such_run" | "no_scope_sentence"
+export type CoveredOutcome = "guard" | "not_reproduced" | "unstable" | "conflict" | "no_such_run" | "no_scope_sentence"
 
 export interface CoveredRecord {
   review: string
@@ -80,10 +83,17 @@ export interface CoveredDeps {
   /** Scope sentences not yet held when the review began. */
   open: ReadonlySet<string>
   nextGuard: () => string
+  /** The reply's deviations, as the reviewer wrote them: a run one of them quotes is no proof that sentences hold. */
+  findings?: readonly string[]
 }
 
+/** The program's arguments of the commands a text quotes (in backquotes). */
+const quotedRuns = (text: string, binary: string) => [...text.matchAll(/`([^`]+)`/gu)].map(m => programArgs(m[1], binary)).filter((a): a is string[] => !!a && a.length > 0)
+const sameArgs = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x.replace(/^\.\//u, "") === b[i].replace(/^\.\//u, ""))
+
 /** The reply's COVERED lines bound, run again and made guards; one record a line. */
-export async function bindCovered(text: string, runs: readonly ReviewerRun[], d: CoveredDeps): Promise<{ records: CoveredRecord[]; guards: GuardRecord[] }> {
+export async function bindCovered(text: string, runs: readonly ReviewerRun[], d: CoveredDeps, binary = "dpipe"): Promise<{ records: CoveredRecord[]; guards: GuardRecord[] }> {
+  const quoted = (d.findings ?? []).flatMap(f => quotedRuns(f, binary))
   const records: CoveredRecord[] = [], guards: GuardRecord[] = []
   const taken = new Set<string>()
   for (const c of coveredIn(text)) {
@@ -101,8 +111,14 @@ export async function bindCovered(text: string, runs: readonly ReviewerRun[], d:
     const run = runs.find(r => r.n === c.run)
     if (!bound.length) { records.push({ ...base, outcome: "no_scope_sentence" }); continue }
     if (!run) { records.push({ ...base, outcome: "no_such_run" }); continue }
+    // The same run both covered and reported as a deviation (Opus's rule 2): neither side counts it.
+    if (quoted.some(a => sameArgs(a, run.args))) { records.push({ ...base, outcome: "conflict" }); continue }
+    // Run again twice (Opus's rule 1, rule A): the two alike make the snapshot; a snapshot of an output that changes from
+    // run to run guards nothing. The session's own output is not compared: it is the shell command's, wrappers and all
+    // (three runs' sessions: 0–1% alike, against 94–98% for two runs again).
     const again = await d.runner.run(d.program, run.input, d.timeoutMs)
-    if (again.timed_out || again.limit || !sameOutput(run.output, again)) { records.push({ ...base, outcome: "not_reproduced" }); continue }
+    if (again.timed_out || again.limit) { records.push({ ...base, outcome: "not_reproduced" }); continue }
+    if (!alike(again, await d.runner.run(d.program, run.input, d.timeoutMs))) { records.push({ ...base, outcome: "unstable" }); continue }
     const owner = d.registry.coverOf(bound[0])?.owner
     const g: GuardRecord = {
       id: d.nextGuard(), round: d.round, source: "review", units: bound, object: owner && owner !== "none" ? owner : null,
@@ -123,7 +139,7 @@ export function uncoveredScope(registry: Registry, scope: readonly string[], gua
   return scope.filter(s => !held(s) && !inItem(s))
 }
 
-export interface CoveredSummary { lines: number; bound: number; guards: number; not_reproduced: number; no_such_run: number; no_scope_sentence: number; ignored: Record<string, number>; per_line: number | null }
+export interface CoveredSummary { lines: number; bound: number; guards: number; not_reproduced: number; unstable: number; conflicts: number; no_such_run: number; no_scope_sentence: number; ignored: Record<string, number>; per_line: number | null }
 
 export function summarizeCovered(records: readonly CoveredRecord[]): CoveredSummary {
   const ignored: Record<string, number> = {}
@@ -131,13 +147,13 @@ export function summarizeCovered(records: readonly CoveredRecord[]): CoveredSumm
   const g = records.filter(r => r.outcome === "guard")
   return {
     lines: records.length, bound: g.reduce((n, r) => n + r.bound.length, 0), guards: g.length,
-    not_reproduced: records.filter(r => r.outcome === "not_reproduced").length, no_such_run: records.filter(r => r.outcome === "no_such_run").length, no_scope_sentence: records.filter(r => r.outcome === "no_scope_sentence").length,
+    not_reproduced: records.filter(r => r.outcome === "not_reproduced").length, unstable: records.filter(r => r.outcome === "unstable").length, conflicts: records.filter(r => r.outcome === "conflict").length, no_such_run: records.filter(r => r.outcome === "no_such_run").length, no_scope_sentence: records.filter(r => r.outcome === "no_scope_sentence").length,
     ignored, per_line: g.length ? Math.round(g.reduce((n, r) => n + r.bound.length, 0) / g.length * 10) / 10 : null,
   }
 }
 
 export function renderCovered(s: CoveredSummary, flips: number, gaps: number): string {
   const ign = Object.entries(s.ignored).map(([k, n]) => `${k} ${n}`).join(", ") || "none"
-  return `- COVERED lines: ${s.lines}; snapshot guards born ${s.guards}, binding ${s.bound} sentences (${s.per_line ?? "—"} a line); not reproduced ${s.not_reproduced}, no such run ${s.no_such_run}, no scope sentence ${s.no_scope_sentence}; ids set aside: ${ign}. Snapshot guard flips ${flips}; scope sentences left uncovered at the end ${gaps}.`
+  return `- COVERED lines: ${s.lines}; snapshot guards born ${s.guards}, binding ${s.bound} sentences (${s.per_line ?? "—"} a line); not reproduced ${s.not_reproduced}, no such run ${s.no_such_run}, no scope sentence ${s.no_scope_sentence}; rerun unstable ${s.unstable}, conflicts with a deviation ${s.conflicts}; ids set aside: ${ign}. Snapshot guard flips ${flips}; scope sentences left uncovered at the end ${gaps}.`
 }
 

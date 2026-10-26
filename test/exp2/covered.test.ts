@@ -71,14 +71,17 @@ describe("[behav] batch 1: COVERED lines become snapshot guards", () => {
     assert.deepEqual(guardCheck(g, []).assertions.map(a => [a.target.kind, a.expect]), [["exit_code", 1], ["stdout", ""]])
     const s = summarizeCovered(records)
     assert.deepEqual([s.lines, s.guards, s.bound, s.no_such_run, s.no_scope_sentence, s.per_line], [3, 1, 1, 1, 1, 1])
-    assert.match(renderCovered(s, 0, 4), /^- COVERED lines: 3; snapshot guards born 1, binding 1 sentences \(1 a line\); not reproduced 0, no such run 1, no scope sentence 1; ids set aside: coarser than a sentence 1, (?:not in scope|unknown) 1\. Snapshot guard flips 0; scope sentences left uncovered at the end 4\.$/u)
+    assert.match(renderCovered(s, 0, 4), /^- COVERED lines: 3; snapshot guards born 1, binding 1 sentences \(1 a line\); not reproduced 0, no such run 1, no scope sentence 1; rerun unstable 0, conflicts with a deviation 0; ids set aside: coarser than a sentence 1, (?:not in scope|unknown) 1\. Snapshot guard flips 0; scope sentences left uncovered at the end 4\.$/u)
   })
 
-  it("output that differs on the run again: not reproduced, no guard; the files a run writes are asserted, its inputs not", async () => {
+  it("rule A (Opus, after the session statistics): the session's output is not compared; two runs again alike make the guard, its snapshot theirs; the files a run writes are asserted, its inputs not", async () => {
     const reg = store.registry()
-    const runs = reviewerRuns(materials, "dpipe")
-    const { records, guards } = await bindCovered("COVERED R1.S8.P1.s1 BY RUN 1", runs, { registry: reg, round: 1, review: "R1.1", cycle: "C1.2", program, runner: runner(out({ exit_code: 0, stdout: "ok" })), timeoutMs: 1000, open: new Set(["R1.S8.P1.s1"]), nextGuard: () => "G1" })
-    assert.deepEqual([records[0].outcome, guards.length], ["not_reproduced", 0])
+    // The session recorded the wrapper's output ("EXIT:"), not the program's: the guard still stands on two alike runs again.
+    const wrapped = reviewerRuns({ files: materials.files, commands: [{ command: ".\dpipe ingest --input missing.csv; Write-Output \"EXIT:$LASTEXITCODE\"", output: "EXIT:\r\n" }] }, "dpipe")
+    const r = runner(out({ exit_code: 1, stderr: "ERROR: file not found: missing.csv\n" }))
+    const { records, guards } = await bindCovered("COVERED R1.S8.P1.s1 BY RUN 1", wrapped, { registry: reg, round: 1, review: "R1.1", cycle: "C1.2", program, runner: r, timeoutMs: 1000, open: new Set(["R1.S8.P1.s1"]), nextGuard: () => "G1" })
+    assert.deepEqual([records[0].outcome, guards.length, r.calls], ["guard", 1, 2])
+    assert.deepEqual(guardCheck(guards[0], []).assertions.map(a => [a.target.kind, a.expect]), [["exit_code", 1], ["stdout", ""]])
     const a = snapshotAssertions(out({ files: { "in.csv": "id,v\n", "out.csv": "id\n1\n" } }), { args: [], files: [{ path: "in.csv", content: "id,v\n" }] })
     assert.deepEqual(a.map(x => [x.target.kind, x.target.path]), [["exit_code", null], ["stdout", null], ["file", "out.csv"]])
   })
@@ -89,5 +92,29 @@ describe("[behav] batch 1: COVERED lines become snapshot guards", () => {
     const scope = ["R1.S8.P1.s1", "R1.S8.P1.s2", "R1.S8.P1.s3"]
     assert.deepEqual(uncoveredScope(reg, scope, [g], new Map([["G1", "passing"]]), ["R1.S8.P1.s3"]), ["R1.S8.P1.s2"])
     assert.deepEqual(uncoveredScope(reg, scope, [g], new Map([["G1", "failing"]]), []), scope)
+  })
+
+  it("a run run again twice: two outputs unlike each other are unstable, no guard (batch 1, Opus's rule 1 under rule A)", async () => {
+    const reg = store.registry()
+    const runs = reviewerRuns(materials, "dpipe")
+    const seq = [out({ exit_code: 1, stderr: "ERROR: file not found: missing.csv\n" }), out({ exit_code: 1, stderr: "ERROR: file not found: missing.csv (again)\n" })]
+    let i = 0
+    const flaky = { run: async () => seq[Math.min(i++, seq.length - 1)], literals: () => [] } as unknown as CheckRunner
+    const { records, guards } = await bindCovered("COVERED R1.S8.P1.s1 BY RUN 1", runs, { registry: reg, round: 1, review: "R1.1", cycle: "C1.2", program, runner: flaky, timeoutMs: 1000, open: new Set(["R1.S8.P1.s1"]), nextGuard: () => "G1" })
+    assert.deepEqual([records[0].outcome, guards.length, i], ["unstable", 0, 2])
+    const stable = runner(out({ exit_code: 1, stderr: "ERROR: file not found: missing.csv\n" }))
+    const ok = await bindCovered("COVERED R1.S8.P1.s1 BY RUN 1", runs, { registry: reg, round: 1, review: "R1.1", cycle: "C1.2", program, runner: stable, timeoutMs: 1000, open: new Set(["R1.S8.P1.s1"]), nextGuard: () => "G1" })
+    assert.deepEqual([ok.records[0].outcome, stable.calls], ["guard", 2], "two runs again, both the same")
+  })
+
+  it("a run the reply both COVERS and quotes in a deviation: a conflict, no guard (batch 1, Opus's rule 2)", async () => {
+    const reg = store.registry()
+    const runs = reviewerRuns(materials, "dpipe")
+    const findings = ["1. `./dpipe ingest --input missing.csv` exits with the wrong message"]
+    const { records, guards } = await bindCovered("COVERED R1.S8.P1.s1 BY RUN 1", runs, { registry: reg, round: 1, review: "R1.1", cycle: "C1.2", program, runner: runner(out({ exit_code: 1, stderr: "ERROR: file not found: missing.csv\n" })), timeoutMs: 1000, open: new Set(["R1.S8.P1.s1"]), nextGuard: () => "G1", findings })
+    assert.deepEqual([records[0].outcome, guards.length], ["conflict", 0])
+    const s = summarizeCovered([...records, { review: "R1.1", line: "x", run: 2, bound: ["R1.S8.P1.s2"], ignored: [], outcome: "unstable" }])
+    assert.deepEqual([s.conflicts, s.unstable], [1, 1])
+    assert.match(renderCovered(s, 0, 0), /; rerun unstable 1, conflicts with a deviation 1;/u)
   })
 })

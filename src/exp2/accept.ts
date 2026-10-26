@@ -463,7 +463,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
         // the same output is a guard on the scope sentences named.
         if (deps.scope) {
           const runs = reviewerRuns({ files: r.out.materials?.files ?? [], commands: r.out.materials?.commands ?? [] }, deps.binary)
-          const b = await timed("guard rerun", () => bindCovered(r.out!.text, runs, { registry, round, review: `R${round}.${n2}`, cycle: id, program, runner: deps.runner, timeoutMs: timeout, open: new Set(owed()), nextGuard: () => `G${nextGuard++}` }))
+          const b = await timed("guard rerun", () => bindCovered(r.out!.text, runs, { registry, round, review: `R${round}.${n2}`, cycle: id, program, runner: deps.runner, timeoutMs: timeout, open: new Set(owed()), nextGuard: () => `G${nextGuard++}`, findings: reviewEntries(r.out!.text) }, deps.binary))
           accept.covered = [...(accept.covered ?? []), ...b.records]
           if (b.guards.length) {
             await note(b.guards, b.guards.map(g => ({ guard: g.id, round, cycle: id, status: "passing" as const, program: program.id })))

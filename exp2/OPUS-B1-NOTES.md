@@ -245,3 +245,33 @@
 离线成立：同一轮后来的审查只拿到欠着的句和上次修补碰过的句，已覆盖的句和本轮其余原文不再给（测试先按基线行为失败，实现后通过）。
 离线做不到的：审查员只读这些句时，能否在不看整段上下文的情况下写出 COVERED 或发现；后来审查的 token 降多少。
 真实运行要看的线：每轮第 2、3 次审查的请求字符（报告里 review request_chars 按次）、审查员 token；COVERED 绑定句数在第 2、3 次审查里是否仍有增长；非执行 token ≤ 3.90M。
+
+## 8. [behav] COVERED：两次重跑彼此一致才成守卫（规则 A）、与发现冲突不成守卫、导出会话统计、两项计数
+
+验收清单先交，Opus 审过内容。规则 A 由 Opus 在看到导出会话统计后定。
+
+做法（covered.ts、accept.ts）：
+- 重跑：COVERED 绑定的那次运行，代码在被审的程序上重跑两次。两次的退出码、stdout、stderr 和运行目录里的每个文件都相同（`alike`），才成守卫，快照取这两次的结果；不同记为 unstable，超时或被资源上限停下记为 not_reproduced。不再和会话里记下的输出比（原因见下面的统计）。RUN 序号由代码编号，序号写错的风险只度量（快照守卫翻转数，运行后抽查 20 条）。
+- 冲突（Opus 的第 2 条）：同一次运行既被 COVERED 引用、又出现在本次回复的某条偏差里（偏差文本用反引号引用的程序调用参数与该运行相同），不成守卫，记为 conflict。
+- 写段或节编号的 COVERED（Opus 的第 3 条）：沿用 B，只计数（ids set aside: coarser than a sentence）。
+- 报告 COVERED 一行加 "rerun unstable N, conflicts with a deviation N"。
+
+依据（导出会话统计 evidence/opus-b1-2026-10-26/session-runs.md）：审查员会话从 OpenCode 本地库只读取出，代码按 reviewerRuns 提取程序运行，在被审构建上用该运行的 docker 镜像重跑。
+
+| 运行 | 会话 | 提取的运行 | 与会话输出一致 | 复合命令 | 两次重跑彼此一致 |
+|---|---|---|---|---|---|
+| rep1j3 | 14 | 180 | 2（1%） | 180 | 171（95%） |
+| rep1n | 16 | 200 | 2（1%） | 200 | 187（94%） |
+| rep1p | 18 | 453 | 0（0%） | 453 | 443（98%） |
+
+审查员在 PowerShell 里几乎每条都用复合命令（例如 `.\dpipe … ; Write-Output "EXIT:$LASTEXITCODE"`），会话里记下的是包装命令的输出，所以"与会话一致"几乎从不成立。rep1e 的会话 id 在 harbor_runs 下的 icacc 目录里找不到，没跑。
+
+测试（先红后绿）：
+- covered.test "rule A …"：会话只记了 "EXIT:"，两次重跑相同，成守卫，断言退出码 1、stdout 空。在会话比较的实现上失败（not_reproduced），改后通过。
+- covered.test "two outputs unlike each other are unstable"：第二次重跑不同，unstable，没有守卫，重跑 2 次。
+- covered.test "a conflict"：conflict，没有守卫；计数 conflicts 1、unstable 1；报告行含两项计数。在 a7badb5 上编译不过（没有这两种结局）。
+- covered 8/8，block-accept 21/21，serial 6/6（均无主机拦截）。
+
+离线成立：两次重跑一致才成守卫，会话里记下的包装输出不影响；第二次不一致不成守卫；同一次运行既 COVERED 又是偏差时不成守卫并计冲突；两项计数进报告行（以上测试都是先红后绿）。导出会话上，两次重跑彼此一致的比例为 94–98%。
+离线做不到的：旧会话没有 COVERED 行，"绑定到哪几句"、序号写错的比例、冲突的实际次数都验不了；快照守卫被无关改动成批翻转的风险。
+真实运行要看的线：每轮 COVERED 行数、绑定句数、每行平均句数、unstable 与 conflict 次数、快照守卫翻转数；运行后抽查 20 条 COVERED 的序号是否对应所述的句；可执行 A 句被 COVERED 的比例。第 13 节的线不变。
