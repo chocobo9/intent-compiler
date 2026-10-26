@@ -67,7 +67,7 @@ describe("[mech] batch 1: a unit id with its paragraph's hash inside reads as th
     const k: CheckDraft = { key: "k", object, blocks: [`R1.S8.P1#${hash}.s1`, `R1.S8.P1#${hash}.s2`], uses: [], note: null, reference_script: null, input: { args: ["ingest", "--input", "missing.csv"], files: [] }, assertions: [] }
     const notes = normalizeDraft(k, "dpipe")
     assert.deepEqual(k.blocks, ["R1.S8.P1.s1", "R1.S8.P1.s2"])
-    assert.ok(notes.some(n => /blocks read without the hash/u.test(n)), JSON.stringify(notes))
+    assert.ok(notes.some(n => /blocks read as the units their ids name/u.test(n)), JSON.stringify(notes))
     assert.deepEqual(coarseHints(reg, { checks: [k], retire: [] }), [])
   })
 })

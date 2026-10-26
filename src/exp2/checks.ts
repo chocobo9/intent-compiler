@@ -780,7 +780,7 @@ export function normalizeDraft(k: CheckDraft, binary: string | null): string[] {
   }
   // A unit id written with its paragraph's hash inside (R1.S3.P22#efa62a05.s1) is the unit it names (batch 1, opusb1 R1).
   const blocks = (k.blocks ?? []).map(b => typeof b === "string" ? canonicalUnit(b) : b)
-  if (blocks.some((b, i) => b !== k.blocks[i])) { k.blocks = blocks; notes.push("blocks read without the hash inside their ids") }
+  if (blocks.some((b, i) => b !== k.blocks[i])) { k.blocks = blocks; notes.push("blocks read as the units their ids name") }
   const first = k.input?.args?.[0]
   if (binary && typeof first === "string" && first.replace(/^\.?[\\/]/u, "").replace(/\.exe$/iu, "") === binary && k.input.args.length > 1) { k.input.args = k.input.args.slice(1); notes.push(`args: the leading program name ${JSON.stringify(first)} dropped (args come after the program name)`) }
   return notes
