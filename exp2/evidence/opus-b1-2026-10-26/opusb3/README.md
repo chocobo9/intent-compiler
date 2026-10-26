@@ -77,3 +77,35 @@ R3 12 例（deduplicate、normalize、rename-drop、encode），R4 12 例（wind
 ## 运行后补跑的闸门
 
 block-accept 22/22、serial 6/6，均一次通过。全量逐文件跑（npm test 一次性跑时，测试进程内存耗尽崩溃）：1015 条，失败 10 条，全部在 529d983 的失败名单里，没有新失败。结论不按污染规则重评。
+
+## 零成本分账（运行后，设计会话议题 2、4）
+
+### 2. R2 首次交付 233：是否被带入项挤占（r2-account.md）
+
+R2 首次交付的损失主要在 R2 新文本上：R2 新增用例在首次交付通过 58/262（rep1j 197、rep1j3 203）。R1 已通过、R2 首次被改坏的有 18 例（join 9、pivot 8、window 1）；rep1j 为 0，rep1j3 为 1。
+
+R2 工作单与另两次的差别：
+- "仍开着"一节 27.3k 字符、23 项，rep1j 为 3.4k、11 项，rep1j3 为 1.0k、3 项。
+- 任务区带入的对象 18 个，带失败证据的行 23 条，rep1j 为 3/11，rep1j3 为 1/3。
+- 来源区 31.4k，rep1j 48.9k、rep1j3 41.3k。这是交付包按类裁掉了早轮文本，R2 本轮文本是全的：deduplicate、split、normalize、encode、rollup、detect、bin、compare、hash 各节都在。
+
+执行方 C2.1：
+- 输出 token 6.2k，rep1j 7.9k、rep1j3 6.6k，量相当。
+- 加了 1,439 行，rep1j 625、rep1j3 641。但 diff 里没有 deduplicate、normalize、encode、rollup、detect、hash、compare 的代码。
+- 它的说明是做了 R1 带入的 derive、filter、sort、numeric sort、NaN、fill、aggregate、window、pivot 和 profile，把这些新命令留作 remaining work。
+
+23 项里有快照守卫要求恢复错误输出或旧时间戳：G14、G15、G16、G17、G27。另有 G20、G22 显示 derive 不加列（"2,11"），而 R1 末官方 derive 47/49。这两条守卫的失败官方测试看不到，原因未查。
+
+结论（一次运行，相关不是因果）：R2 的损失和"带入项占满执行方这一轮"一致，执行方的精力花在了带入清单上。挤占由带入项的数量和长度造成，其中有一部分是错的快照。未证实的是：带入少时，同一执行方会不会做新命令。
+
+### 4. (i) 类 65 例（R3 12、R4 12、R5 16、R6 25）与切片（i-slice.md）
+
+按 (i) 用例所在 op 的对象，看本轮开始时这些对象的句：
+- 44 例（三分之二）落在几乎全被"held"的对象上：通过的守卫覆盖了这些句，官方测试却失败。window 每轮 7 例，17 句全 held；profile R6 7 例，70 句里 69 句 held；另有 encode、deduplicate（R5/R6）、rename-drop、determinism。切片按设计不碰 held 的句，所以这部分不是切片容量的问题，是守卫/检查没测到官方测的行为（假覆盖）。
+- 21 例（三分之一）落在欠债的对象上：compare 36 句里 21 句未验证，normalize 16 句里 11–12 句，R3 的 encode、normalize、deduplicate。这些对象的段，每轮切片只碰到 0–3 个。
+
+切片：
+- R2–R4 的 8 个名额全是"gap"（上轮审查结束时还欠着的段），多为一句话的概述段。
+- R3、R4 只用了字符预算的 8%、10%（1.3k / 16.8k、1.3k / 13.8k）。
+- R5 才出现 never passed 和轮转，R6 全是轮转，8 段都来自 R2。
+- 所以对这 21 例，名额被 gap 占满、轮转到得晚，是成立的；对另外 44 例不是。
