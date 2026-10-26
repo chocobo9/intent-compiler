@@ -9,6 +9,7 @@ import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, 
 import { sessionInput, type ReviewMaterials } from "./materials.js"
 import type { Registry } from "./registry.js"
 import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, reviewRequestOn, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
+import type { DeliveryLedger } from "./delivery.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
 import { runChecks, runDigest, type CheckRun } from "./verdict.js"
 import type { WorkOrder } from "./workorder.js"
@@ -28,7 +29,11 @@ import type { WorkOrder } from "./workorder.js"
 export interface Lead { id: string; text: string; digest: string }
 
 /** An item carried in from an earlier round: a guard still failing, or a review item not yet fixed, with the check that shows it. */
-export interface CarriedItem { id: string; text: string; check: CheckRecord | null; /** Its output's digest on the baseline: the work order's send is this round's one send while it stays. */ digest?: string }
+export interface CarriedItem {
+  id: string; text: string; check: CheckRecord | null; /** Its output's digest on the baseline: the work order's send is this round's one send while it stays. */ digest?: string
+  /** Batch 1 (§0a class C): what the item's text is rendered from, once the round's delivery ledger stands. */
+  material?: { round: number; units: string[]; run: CheckRun; guard?: GuardRecord; words?: string }
+}
 
 export interface AcceptLimits extends ExecutionLimits {
   /** Reviews a round at most (default 3, the control group's). */
@@ -87,6 +92,10 @@ export interface AcceptDeps {
   /** Open items not carried because this round replaced their text: recorded for the ledger (fix block B1). */
   superseded?: readonly SupersededItem[]
   time?: (stage: string, startedAt: number, endedAt: number) => void
+  /** Batch 1 (§0a): the round's delivery ledger; original text in the repair messages and review requests goes through it. */
+  delivery?: DeliveryLedger
+  /** Batch 1 (decision 3): the open items the reviewer is given, as check material without original text. */
+  reviewItems?: readonly { id: string; text: string }[]
   onProgress?: (record: ExecutionRecord) => void
   checkTimeoutMs?: number
 }
@@ -112,16 +121,40 @@ export function trialMessage(build: BuildResult, trial: { ok: boolean; output: s
   return `The program was built and its tests run in the target environment with \`go build -o ${binary} ./... && go test ./...\` in /app (a Linux container without network). It failed:\n\`\`\`\n${clip(output.trimEnd(), 20_000)}\n\`\`\`\nFix the code so that this passes there.`
 }
 
-/** A guard's failure as an item of the list the executor gets: the requirement, the command and input, what the program did. */
-export function renderGuardItem(g: GuardRecord, check: CheckRecord, run: CheckRun, registry: Registry, carried = false): string {
-  const units = g.units.map(u => registry.block(u)?.text.trim()).filter((t): t is string => !!t)
+/**
+ * The original text an item rests on, as one line's parts: each unit's text, or (with the delivery ledger, §0a) what
+ * the ledger gives for it — the text once a round, an id after that or past the line.
+ */
+export type Quote = (units: readonly string[]) => string[]
+const quoteAll = (registry: Registry): Quote => units => units.map(u => registry.block(u)?.text.trim()).filter((t): t is string => !!t).map(t => JSON.stringify(clip(t, 400)))
+
+/** An item's check material (§0a class C): the command and its files, and what the program did against what is expected. */
+export function renderMaterial(check: CheckRecord, run: CheckRun): string[] {
   const failed = run.assertions.filter(a => !a.ok).map(a => { const x = check.assertions.find(y => y.id === a.id)!; return `${placeName(x.target)}: expected ${JSON.stringify(x.expect)}, got ${JSON.stringify(a.actual)}` })
   return [
-    `A check that passed on ${carried ? "an earlier" : "the previous"} version of the program fails now (${g.id}).`,
-    `Requirement: ${units.map(t => JSON.stringify(clip(t, 400))).join(" ")}`,
     `Command: ${JSON.stringify(check.input.args)}; input files: ${check.input.files.map(f => `${f.path} = ${JSON.stringify(clip(f.content, 600))}`).join(", ") || "none"}.`,
     `What the program did: exit ${run.exit_code}; ${failed.join("; ")}${run.stderr_head.trim() ? `; stderr: ${JSON.stringify(clip(run.stderr_head.trim(), 300))}` : ""}.`,
+  ]
+}
+
+/** A guard's failure as an item of the list the executor gets: the requirement, the command and input, what the program did. */
+export function renderGuardItem(g: GuardRecord, check: CheckRecord, run: CheckRun, registry: Registry, carried = false, quote: Quote = quoteAll(registry)): string {
+  return [
+    `A check that passed on ${carried ? "an earlier" : "the previous"} version of the program fails now (${g.id}).`,
+    `Requirement: ${quote(g.units).join(" ")}`,
+    ...renderMaterial(check, run),
   ].join("\n")
+}
+
+/** An open review item as the executor gets it (§0a class C, decision 3): the reviewer's words, the text it rests on, its check material. */
+export function renderOpenItem(text: string, check: CheckRecord, run: CheckRun, units: readonly string[], quote: Quote): string {
+  const q = quote(units)
+  return [text.trim(), ...(q.length ? [`Requirement: ${q.join(" ")}`] : []), ...renderMaterial(check, run)].join("\n")
+}
+
+/** An open item as the reviewer gets it (decision 3): its check material and the units it rests on, no original text. */
+export function renderItemForReview(id: string, check: CheckRecord, run: CheckRun, units: readonly string[]): string {
+  return [`${id}, resting on ${units.join(", ") || "no unit"}:`, ...renderMaterial(check, run)].join("\n")
 }
 
 /** Where a check's expected values come from (verbatim / derived / computed), recorded with each flip (§6b). */
@@ -184,6 +217,10 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   // The guards that regressed on the cycle before (batch 1, 5A): counted fixed or still failing on this one.
   let raisedBefore: string[] = []
   accept.regressions = { raised: 0, fixed_next: 0, persisted: 0 }
+  // The executor's quotes of the text an item rests on (§0a): through the ledger when there is one.
+  const quote: Quote | undefined = deps.delivery ? units => deps.delivery!.quote("executor", units) : undefined
+  // A question's quotes for the reviewer: a text given already is named by its id (an empty text), any other is counted.
+  const forReviewer = (list: { id: string; text: string }[], cls: "A" | "B") => list.map(x => { if (!deps.delivery) return x; if (deps.delivery.has("reviewer", x.id)) return { id: x.id, text: "" }; deps.delivery.give("reviewer", cls, x.id, x.text.length); return x })
   const timed = async <T>(stage: string, f: () => Promise<T>): Promise<T> => { const a = Date.now(); try { return await f() } finally { deps.time?.(stage, a, Date.now()) } }
   const block = new Set<Premise>(limits.premiseBlock ?? DEFAULT_PREMISE_BLOCK)
   const fallbackMode = limits.fallback ?? "items"
@@ -336,7 +373,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const d = runDigest(run)
       const plan = sends.plan(g.id, d)
       items.push({ id: g.id, digest: d, verdict: "not_landed", ...plan })
-      itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry, carried.has(g.id)), record: guardCheck(g, library) })
+      itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry, carried.has(g.id), quote), record: guardCheck(g, library) })
     }
     // 4. Items sent before (this round's review items, items carried in): fixed ones become guards; the rest are seen again.
     const pending = [...itemChecks.entries()].filter(([k]) => !k.startsWith("G"))
@@ -390,13 +427,13 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
           const check = guardCheck(g, library), run = runs[i].run
           const failed = run.assertions.filter(a => !a.ok)
           const q = changeQuotes(registry, g, round)
-          guardFailures.push({ id: g.id, args: check.input.args, files: check.input.files, expected: failed.map(a => { const x = check.assertions.find(y => y.id === a.id)!; return `${placeName(x.target)} = ${JSON.stringify(x.expect)}` }).join(", ") || "(all assertions)", got: failed.map(a => JSON.stringify(a.actual)).join(", ") || `exit ${run.exit_code}`, changed: [...events].reverse().find(e => e.guard === g.id)!.changed_text ?? [], was: q.old, now: q.now })
+          guardFailures.push({ id: g.id, args: check.input.args, files: check.input.files, expected: failed.map(a => { const x = check.assertions.find(y => y.id === a.id)!; return `${placeName(x.target)} = ${JSON.stringify(x.expect)}` }).join(", ") || "(all assertions)", got: failed.map(a => JSON.stringify(a.actual)).join(", ") || `exit ${run.exit_code}`, changed: [...events].reverse().find(e => e.guard === g.id)!.changed_text ?? [], was: forReviewer(q.old, "B"), now: forReviewer(q.now, "A") })
         })
       }
       const revised = registry.objects.size ? [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts.map(p => ({ id: p, text: `${registry.block(p)?.text.trim() ?? ""} (${m.kind === "withdraw" ? "withdrawn" : m.kind === "partial" ? "partly revised" : "replaced"} by ${m.by.join(", ")} in round ${round})` }))))) : []
       // Under the round's package the reviewer reads the text in force; the appendix names this round's units (§6c).
       const thisRound = round === 1 ? [] : [...new Set(registry.roundScope(round).flatMap(c => c.entries.map(e => e.block)))].sort((a, b) => registry.block(a)!.start - registry.block(b)!.start)
-      const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
+      const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads, ...(deps.reviewItems?.length ? { items: deps.reviewItems } : {}) } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
       const r = await review(current, focus, n2)
       reviews++
       const summary: ReviewSummary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length, program_runs: r?.out?.runs.length ?? 0, fallback: 0, logged: 0 }
@@ -420,7 +457,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
           await note([], [{ guard: g.id, round, cycle: id, status: "failing", program: program.id, reason: "the reviewer did not call it superseded: a regression" }])
           const plan = sends.plan(g.id, d)
           items.push({ id: g.id, digest: d, verdict: "not_landed", ...plan })
-          itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry), record: guardCheck(g, library) })
+          itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry, false, quote), record: guardCheck(g, library) })
         }
         if (!isNoIssues(r.out.text)) {
           // The list as checks (one model call), then the premises and the reproduction, by code. What code cannot

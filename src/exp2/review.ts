@@ -45,6 +45,8 @@ export interface ReviewFocus {
   guardFailures: { id: string; args: string[]; files: { path: string; content: string }[]; expected: string; got: string; changed: string[]; was: { id: string; text: string }[]; now: { id: string; text: string }[] }[]
   /** Findings of automatic checks and judgments that are not confirmed: the reviewer verifies them (§12i item 3). */
   leads: { id: string; text: string }[]
+  /** Batch 1 (decision 3): items still open, as check material and the units they rest on, no original text. */
+  items?: readonly { id: string; text: string }[]
 }
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
@@ -65,9 +67,16 @@ export function reviewAppendix(f: ReviewFocus): string {
     for (const g of f.guardFailures) {
       out.push("", `${g.id}: command ${JSON.stringify(g.args)}; input files ${g.files.map(x => `${x.path} = ${JSON.stringify(clip(x.content, 300))}`).join(", ") || "none"}; expected ${g.expected}; got ${g.got}.`)
       out.push(`Changed this round: ${g.changed.join("; ")}.`)
-      if (g.was.length) out.push(`Text it rested on (before): ${g.was.map(x => JSON.stringify(clip(x.text, 300))).join(" ")}`)
-      if (g.now.length) out.push(`Text in force now: ${g.now.map(x => JSON.stringify(clip(x.text, 300))).join(" ")}`)
+      // A text the request gives already is named by its id (batch 1, §0a): an empty text.
+      const said = (x: { id: string; text: string }) => x.text ? JSON.stringify(clip(x.text, 300)) : `${x.id} (above)`
+      if (g.was.length) out.push(`Text it rested on (before): ${g.was.map(said).join(" ")}`)
+      if (g.now.length) out.push(`Text in force now: ${g.now.map(said).join(" ")}`)
     }
+  }
+  if (f.items?.length) {
+    out.push("", "# Items still open from earlier rounds")
+    out.push("Each was found on an earlier version of the program and still fails on the version the round started from; the executor has it. A deviation you find among them is still a deviation; the requirements above are the authority.")
+    for (const it of f.items) out.push("", it.text)
   }
   if (f.leads.length) {
     out.push("", "# Leads to verify")

@@ -230,16 +230,16 @@ export function paragraphInForce(registry: Registry, paragraph: string, round: n
   return renderSpan(registry, p, cuts)
 }
 
-export type SegmentWhy = "this round" | "revised" | "edge" | "open item"
+export type SegmentWhy = "this round" | "revised" | "edge" | "open item" | "debt"
 /** A paragraph of the round's package (§6c, the package's revision): whose it is, why it is there, its text in force. */
-export interface PackageSegment { object: string; name: string; paragraph: string; round: number; path: string; why: SegmentWhy; via: string[]; text: string }
+export interface PackageSegment { object: string; name: string; paragraph: string; round: number; path: string; why: SegmentWhy; via: string[]; text: string; /** Batch 1 (§0a class B): the earlier units a revised segment gives, alone. */ parts?: string[] }
 /** An object an edge of this round points at as a whole: named, its text not brought (§6c revision, decision Q2). */
 export interface PackageHead { object: string; name: string; referred_by: string[] }
 /** Behaviour bound to earlier text this round revises (§6c revision item 4): a guard on a revised unit, what it gets now. */
-export interface PackageComparison { guard: string; args: string[]; files: string[]; output: string | null; units: { id: string; earlier: string; now: string[] }[] }
+export interface PackageComparison { guard: string; args: string[]; files: string[]; output: string | null; units: { id: string; earlier: string; now: string[]; now_ids?: string[] }[] }
 export interface RoundPackage { segments: PackageSegment[]; heads: PackageHead[]; comparisons: PackageComparison[]; edges: { to_block: number; to_object: number } }
 
-const WHY_RANK: Record<SegmentWhy, number> = { "this round": 0, revised: 1, edge: 2, "open item": 3 }
+const WHY_RANK: Record<SegmentWhy, number> = { "this round": 0, revised: 1, edge: 2, "open item": 3, debt: 4 }
 const paragraphOf = (registry: Registry, id: string) => contextOf(registry, id).id
 
 /**
@@ -251,8 +251,12 @@ const paragraphOf = (registry: Registry, id: string) => contextOf(registry, id).
  *   to an object as a whole brings a head line only;
  * - open item: the paragraph each open item's unit is in.
  * Each paragraph once (the first reason in that order); nothing inferred.
+ *
+ * Batch 1 of DESIGN-OPUS (§0a), `options.delivery`: no paragraph an edge brings (decision 3); a revised earlier unit
+ * comes as its earlier text alone, under its heading path, not with the rest of its paragraph (class B); open items are
+ * not given as paragraphs (pass none).
  */
-export function roundPackage(registry: Registry, round: number, open: readonly { id: string; units: readonly string[] }[] = []): RoundPackage {
+export function roundPackage(registry: Registry, round: number, open: readonly { id: string; units: readonly string[] }[] = [], options: { delivery?: boolean } = {}): RoundPackage {
   const owner = (id: string) => { const o = registry.coverOf(id)?.owner; return o && o !== "none" && registry.objects.has(o) ? o : null }
   const segs = new Map<string, PackageSegment>()
   const earlier = new Map<string, string[]>()
@@ -261,7 +265,7 @@ export function roundPackage(registry: Registry, round: number, open: readonly {
     const b = registry.block(paragraph)!
     const at = segs.get(paragraph)
     if (at && WHY_RANK[at.why] <= WHY_RANK[why]) { if (via && !at.via.includes(via)) at.via.push(via); return }
-    const text = b.round === round ? renderSpan(registry, b, []) : paragraphInForce(registry, paragraph, round)
+    const text = b.round === round ? renderSpan(registry, b, []) : options.delivery && why === "revised" ? "" : paragraphInForce(registry, paragraph, round)
     // A paragraph nothing of which is in force comes only as the earlier text of what this round revised.
     if (!text && why !== "revised") return
     const path = [`R${b.round}`, ...headingPath(registry, contextOf(registry, paragraph)).map(h => h.replace(/^#+\s*/u, ""))].join(" › ")
@@ -279,6 +283,7 @@ export function roundPackage(registry: Registry, round: number, open: readonly {
   const heads = new Map<string, PackageHead>()
   const edges = { to_block: 0, to_object: 0 }
   for (const e of registry.references.filter(x => x.round === round)) {
+    if (options.delivery && !/^O\d+$/u.test(e.to)) { edges.to_block++; continue }
     if (/^O\d+$/u.test(e.to)) {
       edges.to_object++
       const o = registry.objects.get(e.to)
@@ -295,7 +300,7 @@ export function roundPackage(registry: Registry, round: number, open: readonly {
   // An applies_to edge whose source this round revised: the rule changed, so the object it binds comes whole, its
   // text in force (the design session's decision on O2, 2026-10-25). An edge whose source stands brings nothing.
   const revisedNow = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts)))
-  for (const e of registry.references.filter(x => x.round < round && x.kind === "applies_to" && revisedNow.some(p => registry.lineage(p).some(b => b.id === x.from) || registry.lineage(x.from).some(b => b.id === p)))) {
+  for (const e of registry.references.filter(x => !options.delivery && x.round < round && x.kind === "applies_to" && revisedNow.some(p => registry.lineage(p).some(b => b.id === x.from) || registry.lineage(x.from).some(b => b.id === p)))) {
     const target = /^O\d+$/u.test(e.to) ? registry.objects.get(e.to) : registry.objects.get(owner(e.to) ?? "")
     if (!target) continue
     for (const own of target.blocks.filter(b => b.round < round && !b.modifications.some(m => m.round <= round && m.parts.includes(b.block)))) add(paragraphOf(registry, own.block), target.id, "edge", `${e.from} applies_to ${e.to} (its source revised this round)`)
@@ -303,6 +308,8 @@ export function roundPackage(registry: Registry, round: number, open: readonly {
   for (const item of open) for (const u of item.units) if (registry.block(u)) add(paragraphOf(registry, u), owner(u), "open item", item.id)
   const segments = [...segs.values()]
   for (const s of segments) for (const p of earlier.get(s.paragraph) ?? []) s.text = `${s.text.trimEnd() ? `${s.text.trimEnd()}\n` : ""}earlier text of ${p}: ${registry.block(p)!.text.trim()}`
+  // Class B (§0a): a revised segment gives its earlier units' text alone; what is in force now is this round's text.
+  if (options.delivery) for (const s of segments) if (s.why === "revised") s.parts = earlier.get(s.paragraph) ?? []
   // An object with text in the package needs no head line.
   const withText = new Set(segments.map(s => s.object))
   return { segments: orderSegments(registry, segments), heads: [...heads.values()].filter(h => !withText.has(h.object)), comparisons: [], edges }
@@ -315,7 +322,7 @@ function orderSegments(registry: Registry, segments: PackageSegment[]): PackageS
   return [...segments].sort((a, b) => (rank.get(a.object)! === 0 ? 0 : 1) - (rank.get(b.object)! === 0 ? 0 : 1) || num(a.object) - num(b.object) || a.round - b.round || registry.block(a.paragraph)!.start - registry.block(b.paragraph)!.start)
 }
 
-const segmentLabel = (s: PackageSegment) => s.why === "this round" ? "this round" : s.why === "revised" ? `earlier text this round revises (${s.via.join("; ")})` : s.why === "edge" ? `earlier, referred to by ${s.via.join("; ")}` : `earlier, open item ${s.via.join(", ")}`
+const segmentLabel = (s: PackageSegment) => s.why === "this round" ? "this round" : s.why === "revised" ? `earlier text this round revises (${s.via.join("; ")})` : s.why === "edge" ? `earlier, referred to by ${s.via.join("; ")}` : s.why === "debt" ? "earlier, no passing check rests on it yet" : `earlier, open item ${s.via.join(", ")}`
 
 /** The package as the executor, the reviewer and the formalizer read it: by object, each paragraph under its heading path and reason. */
 export function renderPackage(pkg: RoundPackage): string {
@@ -339,7 +346,8 @@ export function renderComparisons(cs: readonly PackageComparison[]): string {
     out.push(`- ${c.guard}: command ${JSON.stringify(c.args)}; input files ${c.files.join(", ") || "none"}${c.output !== null ? `; now: ${c.output}` : ""}`)
     // A whole paragraph or section on either side is quoted to its first 400 characters; the package has the rest.
     const clip = (t: string) => { const one = t.replace(/\s+/gu, " "); return one.length > 400 ? `${one.slice(0, 400)}…` : one }
-    for (const u of c.units) out.push(`  - earlier text of ${u.id}: ${clip(u.earlier)}${u.now.length ? `; now: ${clip(u.now.join(" "))}` : "; withdrawn"}`)
+    // Batch 1 (§0a class E): no original text; the units by id, their texts being in the package's revised and this round's parts.
+    for (const u of c.units) out.push(u.now_ids ? `  - rests on ${u.id} (its earlier text is above)${u.now_ids.length ? `; now ${u.now_ids.join(", ")}` : "; withdrawn"}` : `  - earlier text of ${u.id}: ${clip(u.earlier)}${u.now.length ? `; now: ${clip(u.now.join(" "))}` : "; withdrawn"}`)
   }
   return out.join("\n")
 }
@@ -347,7 +355,7 @@ export function renderComparisons(cs: readonly PackageComparison[]): string {
 /** Characters of the package by zone (§6c revision item 5). */
 export function packageSizes(pkg: RoundPackage): Record<SegmentWhy | "heads" | "comparisons" | "total", number> {
   const by = (w: SegmentWhy) => pkg.segments.filter(s => s.why === w).reduce((n, s) => n + s.text.length, 0)
-  return { "this round": by("this round"), revised: by("revised"), edge: by("edge"), "open item": by("open item"), heads: pkg.heads.length ? pkg.heads.map(h => h.object).join().length : 0, comparisons: pkg.comparisons.length ? renderComparisons(pkg.comparisons).length : 0, total: renderPackage(pkg).length }
+  return { "this round": by("this round"), revised: by("revised"), edge: by("edge"), "open item": by("open item"), debt: by("debt"), heads: pkg.heads.length ? pkg.heads.map(h => h.object).join().length : 0, comparisons: pkg.comparisons.length ? renderComparisons(pkg.comparisons).length : 0, total: renderPackage(pkg).length }
 }
 
 export interface PackageOverflow { limit: number; chars: number; dropped: string[]; still_over: boolean }
@@ -370,7 +378,7 @@ export function fitPackage(pkg: RoundPackage, limit = PACKAGE_BUDGET): { pkg: Ro
  * withdrew, each with what it runs, what it gets on the baseline now (`outputs`, by guard; null when not run) and the
  * unit's earlier and present text. Holding the other guards is code's: none of them is delivered.
  */
-export function packageComparisons(registry: Registry, round: number, guards: readonly { id: string; units: readonly string[]; input?: { args: string[]; files: { path: string }[] }; check?: string }[], library: readonly { id: string; input: { args: string[]; files: { path: string }[] } }[], outputs: ReadonlyMap<string, string>): PackageComparison[] {
+export function packageComparisons(registry: Registry, round: number, guards: readonly { id: string; units: readonly string[]; input?: { args: string[]; files: { path: string }[] }; check?: string }[], library: readonly { id: string; input: { args: string[]; files: { path: string }[] } }[], outputs: ReadonlyMap<string, string>, options: { delivery?: boolean } = {}): PackageComparison[] {
   const revised = [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts.map(p => ({ id: p, by: m.by })))))
   const out: PackageComparison[] = []
   for (const g of guards) {
@@ -378,7 +386,7 @@ export function packageComparisons(registry: Registry, round: number, guards: re
     if (!units.length) continue
     const input = g.input ?? library.find(k => k.id === g.check)?.input
     if (!input) continue
-    out.push({ guard: g.id, args: input.args, files: input.files.map(f => f.path), output: outputs.get(g.id) ?? null, units: [...new Map(units.map(u => [u.id, u])).values()].map(u => ({ id: u.id, earlier: registry.block(u.id)!.text.trim(), now: u.by.map(b => registry.block(b)!.text.trim()) })) })
+    out.push({ guard: g.id, args: input.args, files: input.files.map(f => f.path), output: outputs.get(g.id) ?? null, units: [...new Map(units.map(u => [u.id, u])).values()].map(u => ({ id: u.id, earlier: registry.block(u.id)!.text.trim(), now: u.by.map(b => registry.block(b)!.text.trim()), ...(options.delivery ? { now_ids: [...u.by] } : {}) })) })
   }
   return out
 }

@@ -365,6 +365,10 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       assert.match(text, /- Check writing: admitted \d+\/\d+, unknown never told the model 0; dropped after the repairs \d+ .*; runs refused as an unknown subcommand \d+; units coarser than a sentence \d+ in \d+ checks \(admitted, they cover no sentence\); units no check rests on \d+ \(reported only\)\./u)
       assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+; regressions raised \d+, fixed on the next cycle \d+, still failing then \d+ \(no repair is reverted\)\./u)
       assert.match(text, /- Requirements given: work order source zone delta, \d+ characters/u)
+      // Batch 1 (DESIGN-OPUS §0a, §2, G12): the delivery by recipient against the line, the verification state, the roles' time.
+      assert.ok(r.delivery && r.delivery.line === 2 * roundText(r.round).length + 10_000 && r.delivery.recipients.executor.chars.A > 0 && r.delivery.recipients.reviewer.chars.A > 0, JSON.stringify(r.delivery?.recipients))
+      assert.ok(r.delivery.outside["check writing"]!.chars > 0, "the check writing's reading is recorded")
+      assert.match(text, /- Original text delivered: line [\d.]+k?; executor [^\n]*; reviewer [^\n]*; formalizer [^\n]*\(outside the line\)[^\n]*\.\n- Verification state: \d+ sentences in force; [^\n]*\n- Wall time: round [\d.]+ min; executor [\d.]+ min, reviewer [\d.]+ min/u)
       assert.match(text, /- Revision recall: no gold set for this task\.\n- Relation recall: no gold set for this task\./u)
       assert.ok(!/Probes|Ledger:|Guard coverage|Zones:/u.test(text), "nothing else is rendered")
     }

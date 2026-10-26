@@ -18,7 +18,8 @@ import { type CheckRoundRecord } from "./store.js"
 import { gapState } from "./probes.js"
 import { ledgerOf, ledgerSummary, renderLedger } from "./ledger.js"
 import type { PlatformOptions } from "./platform.js"
-import { acceptRound, renderGuardItem, renderReviewList, type CarriedItem } from "./accept.js"
+import { acceptRound, renderGuardItem, renderItemForReview, renderOpenItem, renderReviewList, type CarriedItem } from "./accept.js"
+import { DeliveryLedger, deliveryLine, type DeliveryClass } from "./delivery.js"
 import { guardCheck, guardCoverage, liveGuards, runGuards } from "./guards.js"
 import { itemCheckRecord, notInForce, type FormalizeTransport, type Premise } from "./formalize.js"
 import { runChecks, type CheckRun } from "./verdict.js"
@@ -339,7 +340,7 @@ export class Serial {
       const asked = (id: string) => { const last = [...atStart.guard_events].reverse().find(e => e.guard === id); return last?.status === "failing" && (last.changed_text?.length ?? 0) > 0 }
       const gs = liveGuards(atStart.guards, atStart.guard_events).filter(g => openGuards.has(g.id) && !asked(g.id))
       const runs = await this.timed("carry-over", () => runGuards(gs, atStart.checks, baseline, this.c.runner, round, registryStart, facts, limits.checkTimeoutMs))
-      gs.forEach((g, i) => { if (runs[i].outcome === "fail") carried.push({ id: g.id, text: renderGuardItem(g, guardCheck(g, atStart.checks), runs[i].run, registryStart, true), check: guardCheck(g, atStart.checks), digest: runDigest(runs[i].run) }) })
+      gs.forEach((g, i) => { if (runs[i].outcome === "fail") carried.push({ id: g.id, text: renderGuardItem(g, guardCheck(g, atStart.checks), runs[i].run, registryStart, true), check: guardCheck(g, atStart.checks), digest: runDigest(runs[i].run), material: { round: g.round, units: [...g.units], run: runs[i].run, guard: g } }) })
       const openItems = new Set(ledger.filter(e => e.state === "open" && e.source === "review").map(e => e.id))
       const open = atStart.executions.flatMap(e => e.review_items ?? []).filter(r => openItems.has(r.id) && r.check)
       // An item whose text this round replaced is not carried: it ends as superseded (fix block B1).
@@ -349,7 +350,7 @@ export class Serial {
       if (items.length) {
         const records = items.map(r => itemCheckRecord(r.id, r.round, { item: r.item, text: r.text, units: r.units, input: r.check!.input, why_no_input: null, assertions: [], reference_script: r.check!.reference_script }, r.check!))
         const rs = await this.timed("carry-over", () => runChecks(records, baseline, this.c.runner, round, registryStart, facts, limits.checkTimeoutMs))
-        items.forEach((r, i) => { if (rs[i].outcome === "fail") carried.push({ id: r.id, text: r.text, check: records[i], digest: runDigest(rs[i]) }) })
+        items.forEach((r, i) => { if (rs[i].outcome === "fail") carried.push({ id: r.id, text: r.text, check: records[i], digest: runDigest(rs[i]), material: { round: r.round, units: [...r.units], run: rs[i], words: r.text } }) })
       }
     }
     // The verification state as the round starts (batch 1, DESIGN-OPUS §2): the earlier rounds' sentences, against
@@ -366,15 +367,41 @@ export class Serial {
     const deltaWork = (a.workorderScope ?? "delta") === "delta", deltaReview = (a.reviewScope ?? "delta") === "delta"
     let pkg: ReturnType<typeof fitPackage> | undefined
     if (deltaWork || deltaReview) {
-      const built = roundPackage(registry, round, carried.map(c => ({ id: c.id, units: c.check ? [...c.check.blocks] : [] })))
+      // Batch 1 (§0a, decision 3): no paragraph an edge brings, revised units alone (class B), no open item as a paragraph.
+      const built = roundPackage(registry, round, [], { delivery: true })
       // The comparisons (§6c revision item 4): the guards on units this round revises, what they get on the baseline now.
       const live = liveGuards(state.guards, state.guard_events)
-      const bound = packageComparisons(registry, round, live, state.checks, new Map())
+      const bound = packageComparisons(registry, round, live, state.checks, new Map(), { delivery: true })
       const gs = live.filter(g => bound.some(b => b.guard === g.id))
       const runs = baseline.kind !== "null" && gs.length ? await this.timed("comparisons", () => runGuards(gs, state.checks, baseline, this.c.runner, round, registry, codeFacts(registry, round), limits.checkTimeoutMs)) : []
-      built.comparisons = packageComparisons(registry, round, live, state.checks, new Map(gs.flatMap((g, i) => runs[i] ? [[g.id, guardOutput(guardCheck(g, state.checks), runs[i].run)] as const] : [])))
+      built.comparisons = packageComparisons(registry, round, live, state.checks, new Map(gs.flatMap((g, i) => runs[i] ? [[g.id, guardOutput(guardCheck(g, state.checks), runs[i].run)] as const] : [])), { delivery: true })
       pkg = fitPackage(built)
     }
+    // The round's delivery ledger (batch 1, §0a): this round's paragraphs (A) and the revised units (B) to the executor
+    // and the reviewer, the formalizer reading what the reviewer reads (F); then the open items' text (C) to the
+    // executor, cut to ids from the oldest item up when the line is passed. The reviewer gets the items as material.
+    const delivery = new DeliveryLedger(registry, round, deliveryLine(state.sources.find(x => x.round === round)?.text.length ?? 0))
+    for (const s of pkg?.pkg.segments ?? []) {
+      const cls: DeliveryClass | null = s.why === "this round" ? "A" : s.why === "revised" ? "B" : s.why === "debt" ? "D" : null
+      if (!cls) continue
+      const parts = s.parts?.length ? s.parts.map(p => [p, registry.block(p)!.text.trim().length] as const) : [[s.paragraph, s.text.length] as const]
+      for (const [id, n] of parts) {
+        if (cls !== "D" && deltaWork) delivery.give("executor", cls, id, n)
+        if (deltaReview) { delivery.give("reviewer", cls, id, n); delivery.give("formalizer", "F", id, n) }
+      }
+    }
+    const byAge = [...carried].sort((x, y) => (x.material?.round ?? 0) - (y.material?.round ?? 0))
+    const owed = (c: CarriedItem) => [...new Set(c.material?.units ?? [])].filter(u => !delivery.has("executor", u)).reduce((n, u) => n + (registry.block(u)?.text.trim().length ?? 0), 0)
+    let over = delivery.chars("executor") + byAge.reduce((n, c) => n + owed(c), 0) - delivery.line
+    const cut = new Set<string>()
+    for (const c of byAge) { if (over <= 0) break; cut.add(c.id); over -= owed(c) }
+    for (const c of carried) {
+      const m = c.material
+      if (!m || !c.check) continue
+      const quote = (units: readonly string[]) => delivery.quote("executor", units, "C", cut.has(c.id))
+      c.text = m.guard ? renderGuardItem(m.guard, c.check, m.run, registryStart, true, quote) : renderOpenItem(m.words ?? c.text, c.check, m.run, m.units, quote)
+    }
+    const reviewItems = deltaReview ? carried.flatMap(c => c.material && c.check ? [{ id: c.id, text: renderItemForReview(c.id, c.check, c.material.run, c.material.units) }] : []) : []
     const workorder: WorkOrder = buildWorkOrder({
       registry, round, library: state.checks, events: state.check_events, statuses: start.statuses, runs: start.runs, anchors: anchorsNow, links, steps,
       previous_task: previous ? state.executions.find(x => x.round === round - 1)?.task ?? [] : [],
@@ -398,7 +425,7 @@ export class Serial {
       copyDir: label => join(this.c.copies ?? join(this.c.checkpoints, "review-copies"), label),
       ...(checkWriting ? { libraryNow: async () => { await checksReady(); const n = store.inspect(); return { library: n.checks, events: n.check_events } } } : {}),
       record: { review: r => store.recordReviewCall(r), formalize: c => store.recordFormalizeCalls(c), guards: (b, e) => store.recordGuards(b, e) },
-      carried, quiet, superseded, time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
+      carried, quiet, superseded, delivery, ...(reviewItems.length ? { reviewItems } : {}), time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
     }, { ...limits.execution, ...(a.reviews !== undefined ? { reviews: a.reviews } : {}), ...(a.trialFixes !== undefined ? { trialFixes: a.trialFixes } : {}), ...(a.premiseBlock ? { premiseBlock: a.premiseBlock } : {}), ...(a.fallback ? { fallback: a.fallback } : {}), ...(a.voidWithoutRuns !== undefined ? { voidWithoutRuns: a.voidWithoutRuns } : {}) })
     await this.timed("waiting for checks", checksReady)
     // 5. The library's verdict on the final program, the guard coverage, the ledger, the report, the checkpoint.
@@ -414,9 +441,13 @@ export class Serial {
     const summary = acceptanceFromLedger(acceptanceSummary({ library: state.checks, runs: verdict.runs, events: state.check_events, findings: [], gaps: gapState(registry, state.probe_rounds, libraryCovers(registry, state.checks, state.check_events)) }).by_kind, ledgerNow)
     // The verification state at the end: this round's sentences too, the open items those still failing on the kept program.
     const openUnits = (execution.final ?? []).map(f => ({ id: f.id, units: state.guards.find(g => g.id === f.id)?.units ?? [...state.executions, execution].flatMap(e => e.review_items ?? []).find(x => x.id === f.id)?.units ?? carried.find(c => c.id === f.id)?.check?.blocks ?? [] }))
+    // What the roles outside the line read of the original text this round (decision 4): their requests' sources.
+    const sourcesRead = (calls: readonly { round: number; request: unknown }[]) => calls.filter(c => c.round === round).reduce((n, c) => n + String((c.request as { sources?: unknown }).sources ?? "").length, 0)
+    delivery.read("attribution", sourcesRead(state.calls))
+    delivery.read("check writing", sourcesRead(state.check_calls))
     const verification = summarizeVerification(registry, round, verificationStates(registry, round, { guards: state.guards, guardEvents: state.guard_events, library: state.checks, checkEvents: state.check_events, open: openUnits }), verifiedAtStart)
     const report = buildReport({
-      round, registry, workorder, execution, summary, verification, ...(this.c.gold ? { gold: this.c.gold } : {}), ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: verdict.statuses,
+      round, registry, workorder, execution, summary, verification, delivery: delivery.summary(), ...(this.c.gold ? { gold: this.c.gold } : {}), ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: verdict.statuses,
       understand: state.calls.filter(c => c.round === round), acceptance: state.check_calls.filter(c => c.round === round),
       interrupted: {
         attempts: interrupted.length, understand: interrupted.flatMap(x => x.calls), acceptance: interrupted.flatMap(x => [...x.check_calls, ...(x.probe_calls ?? []), ...(x.judge_calls ?? []), ...(x.review_calls ?? []), ...(x.formalize_calls ?? [])]),
