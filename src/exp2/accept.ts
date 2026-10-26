@@ -640,7 +640,9 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       accept.reviews.push(summary)
       const { cycle: _c, ...ofCycle } = summary
       cycle.review = ofCycle
-      again = !!deps.scope && reviews < reviewsMax && !items.some(i => i.action === "send") && owed().length > 0
+      // Again on the same program only when this review reported no deviation: one it found and could not send (held,
+      // blocked) is not found again by looking again at the same program.
+      again = !!deps.scope && reviews < reviewsMax && summary.reported === 0 && !items.some(i => i.action === "send") && owed().length > 0
     }
     // 6. What goes back to the executor: items the plan sends (regressions, review items, carried items not yet fixed).
     for (const i of items) if (i.action === "send" || i.action === "hold") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}) })
