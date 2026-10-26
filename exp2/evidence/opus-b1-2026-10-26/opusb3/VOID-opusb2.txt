@@ -1,0 +1,4 @@
+VOID - not proven (COVERED parse defect). Decision of the Opus design agent via the design session, 2026-10-26T03:18:10-04:00.
+Stopped during R2 (serial, both .cmd wrappers and both bun servers stopped by hand); R1 checkpointed: official 142/219, first delivery 91/219.
+Cause: the review request lists the sentences owed as "R1.S2.P1: s1, s2"; the reviewer wrote COVERED lines in that shape ("R1.S2.P1 s1, R1.S2.P2 s1 ... BY RUN 7"), and coveredIn cut each id at the space, reading a paragraph, which under decision B covers no sentence. R1: 30 COVERED lines, 5 guards and 11 sentences bound; 40 of the 44 ids set aside as paragraphs were written so; on the same lines a fixed parser reads 78 sentence ids, not 24. Less debt cleared, a larger slice and owed scope from R1 on.
+Not to be counted, resumed or compared. Fix: [mech] COVERED id parsing (ea404cd) and the owed list by full sentence ids, then a fresh directory.

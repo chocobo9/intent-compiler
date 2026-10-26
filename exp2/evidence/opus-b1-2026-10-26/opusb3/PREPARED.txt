@@ -1,0 +1,56 @@
+opusb3: the real run of batch 1 of DESIGN-OPUS-2026-10-26 (Opus design agent, via the design session, 2026-10-26), R1-R6.
+Built in D:\huawei\intent_compiler\project-exp2-opusb1 (worktree, detached at d47ba26, opus-b1).
+It replaces opusb1 (exp2-icacc-r6-luna56-low-opusb1-20261026; VOID.txt: not proven, unit id format contamination; stopped in R2, R1 141/219): the check writer wrote unit ids with the paragraph's hash inside (R1.S3.P22#efa62a05.s1), read as the paragraph, which under decision B covers no sentence.
+It also replaces opusb2 (exp2-icacc-r6-luna56-low-opusb2-20261026; VOID.txt: not proven, COVERED parse defect; stopped in R2, R1 142/219): the reviewer echoed the owed list's paragraph grouping ("R1.S2.P1 s1") and the parser read paragraphs; on R1's lines the fixed parser binds 17 guards and 33 sentences, not 5 and 11 (covered-replay.md).
+
+Code makeup, relative to rep1j3's base ab190b9 (rep1j3 = ab190b9 + de1e333, the [mech] path fix):
+- ab190b9..2acfdba: the package batch (P1-P3, 6458a9e), batch 2 (2a-2c), batch 3c and 3b, as DESIGN-OPUS section 8 fixes the start (rep1k line); these rode earlier real runs (rep1k, rep1l, rep1m and their evidence).
+- 529d983 [mech]: 4202df4 (the path fix, the same as de1e333) on that line.
+- Batch 1 of DESIGN-OPUS = one behavioural batch, its commits:
+  24b4409 [mech] units coarser than a sentence admitted, counted, cover no sentence (decision B); 1d03be7 [mech] test.
+  3129f3d [behav] no repair is reverted; a regression is an item with its material (5A(a) + 5B), counted.
+  0f086d7 [mech] verification state per sentence, pass-only coverage, roles' wall time (reported only).
+  f4a5707 [behav] delivery ledger, package by recipient (0a, decisions 3 and 4).
+  4df94bb [behav] debt slice for the reviewer (<= 8 paragraphs and <= line - A - B), rotation, NOT BEHAVIOUR declarations.
+  2cf838f [behav] COVERED lines become snapshot guards; reviews go on while scope sentences are owed (effect 8); 318cfc7 [behav] the same-program repeat only after a review with no entry; 6d0dc5b [mech], a3aa3b3 [behav] tests.
+  a7badb5 [behav] a later review of the round reads only the scope sentences owed and those the last repair touched (section 12).
+  b5eb821 [behav] a COVERED guard needs two runs again alike (rule A); a run both covered and quoted in a deviation is a conflict.
+  5f732a5 [behav] commit-2 supplements: regressions held as no progress counted apart (regressions.held, in the Guards line); evidence: the reverted cycles replayed, 222 vs 131.
+  abea6aa [mech] a unit id with its paragraph's hash inside reads as the unit it names (canonicalUnit; the check writer's drafts normalised).
+  ea404cd [mech] COVERED ids read as reviewers write them after the request's list (paragraph and part apart, bare parts).
+  f0ccc81 [mech] the owed list by full id, one a line - reverted by d47ba26 (Opus: the list keeps its grouped display tonight; the fixed parser reads all four forms; a display change adds a variable).
+  30ac888 [mech] the check writer's note on normalised unit ids worded without a word the neutrality list forbids (abea6aa's note).
+  f8135be, f7590d8 [mech]: evidence and notes only.
+
+Config: copied from rep1j3 (through opusb1); run id and paths, ports (46033/46034), prompt-cache keys (exp2-*-icacc-opusb3-20261026), build cache (exp2-gocache-icacc-opusb3) and label changed. rounds 6, --to 6; delta (default); executor 5.6 low; reviewer, formalizer and checks 5.6 medium; reviews 3 a round.
+
+Pre-registration (DESIGN-OPUS section 13 as written before the run; the lines are not changed after it):
+
+## 13. 第一批真实运行预注册（运行前写死）
+
+代码：opus-b1 HEAD，含第 1–8 个提交和第 2 个提交的三项补交。切片取每轮 ≤ 8 段，且 ≤ 线 − A − B。6 轮，执行方 low。
+
+| 行 | 线 |
+|---|---|
+| R3–R6 每轮 (i) 类（对照两次运行的差集）| ≤ 4 |
+| R5 / R6 官方分 | ≥ 656 / ≥ 688 |
+| 执行方、审查员各自每轮原文字符 | ≤ 本轮原文 × 2 + 10k；A+B 超线照发，标出 |
+| 非执行 token，6 轮合计 | ≤ 3.90M |
+| 墙钟，6 轮合计 | ≤ 248 分钟 |
+| 整周期回退 | = 0 |
+| COVERED：可执行 A 句被覆盖的比例、重跑一致率、每条平均句数、审查员 token | 只报 |
+| 每轮新增债 / 清债 / 债余量、切片段数 | 只报 |
+
+判定：只跑一次，结论只能是三者之一——"真实成立（一次）"（所有设线的行都过）、"不过"（任一行不过，并附 (i)–(iv) 分账）、"未证明"（运行被未计划的因素污染）。不得写成"真实成立"。线不得在运行后修改。
+
+Notes on section 13 for this run:
+- The code is opus-b1 d47ba26: batch 1 commits 1-8, the commit-2 supplements and two mechanical fixes added after the void runs (the unit id normalisation; the COVERED id parsing), as listed; still one behavioural batch.
+- COVERED guards are born on two runs again alike (rule A); unstable reruns and conflicts are counted by the run itself. After the run: 20 COVERED lines drawn and checked by hand for whether the run numbered n shows the sentences named.
+- Contamination rule (Opus): a line with a threshold that fails, its loss falling on regressions from COVERED guards that were unstable or in conflict, is "not proven", not "fails".
+- Known risk (Opus, from opusb1 R1: G26/G28 against V1.2.9): a snapshot guard can record old behaviour beside what its sentences state (G26/G28 kept the dropped empty record) and then pull against a later item that changes it. No mechanism is added; after the run, reported offline: the number of flips between snapshot guards and later items, both ways, and of those the cases on a requirement_ref with an official loss.
+- Verdict: one of "holds in reality (once)", "fails" (with the (i)-(iv) accounts), "not proven".
+
+Started 2026-10-26T02:58:47.4597752-04:00, --to 6.
+
+Started 2026-10-26T04:00:24.6858670-04:00, --to 6.
+Finished 2026-10-26T06:08:52.2901972-04:00: status done, last checkpoint 6, 0 resumes. Servers stopped.

@@ -1,0 +1,4 @@
+VOID - not proven (unit id format contamination). Decision of the Opus design agent via the design session, 2026-10-26T02:29:04-04:00.
+Stopped during R2 (serial and both servers stopped by hand, about 02:28); R1 checkpointed: official 141/219, first delivery 96/219.
+Cause: the check writer wrote unit ids with the paragraph's hash inside (R1.S3.P22#efa62a05.s1); parseRef reads them as the paragraph, which under batch 1's decision B covers no sentence. Library guards then hold almost no sentence in the verification state (R1: units coarser than a sentence 318 in 39 checks; passing coverage 35%), inflating the owed scope, the debt and the slice. What the executor was given is not affected.
+Not to be counted, resumed or compared. Fix: [mech] unit id normalisation in the check writer (P#hash.sN -> P.sN), then a fresh directory.
