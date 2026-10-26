@@ -358,7 +358,7 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       // Two groups only (§12j.4): the §12i line and the interface counts; the rest is in report.json.
       assert.match(text, /^# Round \d+ report\n\nOfficial score: [^\n]*\n\n§12i measures: wall \d+ s; guards \d+→\d+;[^\n]*\n\nInterface counts:\n\n/u)
       assert.match(text, /- Reviewer items: reported \d+, entered a repair list \d+ \(verified \d+, logged \d+, fallback \d+\), blocked \d+; every entry ended once: yes; no_input \d+; reviews \d+ \(void sessions \d+\)/u)
-      assert.match(text, /- Check writing: admitted \d+\/\d+, unknown never told the model 0; dropped after the repairs \d+ .*; runs refused as an unknown subcommand \d+; units no check rests on \d+ \(reported only\)\./u)
+      assert.match(text, /- Check writing: admitted \d+\/\d+, unknown never told the model 0; dropped after the repairs \d+ .*; runs refused as an unknown subcommand \d+; units coarser than a sentence \d+ in \d+ checks \(admitted, they cover no sentence\); units no check rests on \d+ \(reported only\)\./u)
       assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
       assert.match(text, /- Requirements given: work order source zone delta, \d+ characters/u)
       assert.match(text, /- Revision recall: no gold set for this task\.\n- Relation recall: no gold set for this task\./u)
