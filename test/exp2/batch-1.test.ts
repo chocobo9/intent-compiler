@@ -262,13 +262,14 @@ ${annotate(reg.sources.get(1)!)}`))
       return s.inspect()
     }
     const delta = await run("delta"), all = await run("all")
-    const sizes = (st: typeof delta) => st.reports.map(r => ({ round: r.round, chars: r.zones.source_chars!, all: r.zones.source_chars_all!, review: r.review!.request_chars! }))
+    // Per review request: under delta, batch 1 of DESIGN-OPUS reviews again while scope sentences are owed (effect 8), so the rounds' totals differ by the reviews' number.
+    const sizes = (st: typeof delta) => st.reports.map(r => ({ round: r.round, chars: r.zones.source_chars!, all: r.zones.source_chars_all!, review: Math.round(r.review!.request_chars! / Math.max(1, r.review!.reviews.length)), reviews: r.review!.reviews.length }))
     const d = sizes(delta), a = sizes(all)
     console.log(JSON.stringify({ delta: d, all: a }))
     for (const k of [1, 2]) {
       assert.ok(d[k].chars < a[k].chars, `R${k + 1} work order: delta ${d[k].chars}, all ${a[k].chars}`)
       assert.equal(a[k].chars, a[k].all)
-      assert.ok(d[k].review < a[k].review, `R${k + 1} review requests: delta ${d[k].review}, full ${a[k].review}`)
+      assert.ok(d[k].review < a[k].review, `R${k + 1} characters a review request: delta ${d[k].review} (${d[k].reviews} reviews), full ${a[k].review} (${a[k].reviews})`)
     }
     // The report says so, in its interface counts.
     assert.match(renderReport(delta.reports[2]), /- Requirements given: work order source zone delta, \d+ characters in \d+ paragraphs of \d+ objects \(this round \d+ \(\d+ characters\), revised \d+ \(\d+ characters\), edge \d+ \(\d+ characters\), open item \d+ \(\d+ characters\)\), \d+ object heads; this round's edges to a block \d+, to an object \d+; \d+ comparisons \(guards on revised units\).* \(every round's text: \d+ in \d+ blocks\); review requests \d+ characters/u)
