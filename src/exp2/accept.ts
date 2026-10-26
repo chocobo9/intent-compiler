@@ -226,7 +226,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   let raisedBefore: string[] = []
   // The units the last repair's items rest on (batch 1, §12).
   let repairUnits: string[] = []
-  accept.regressions = { raised: 0, fixed_next: 0, persisted: 0 }
+  accept.regressions = { raised: 0, fixed_next: 0, persisted: 0, held: 0 }
   // The executor's quotes of the text an item rests on (§0a): through the ledger when there is one.
   const quote: Quote | undefined = deps.delivery ? units => deps.delivery!.quote("executor", units) : undefined
   // A question's quotes for the reviewer: a text given already is named by its id (an empty text), any other is counted.
@@ -385,6 +385,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const d = runDigest(run)
       const plan = sends.plan(g.id, d)
       items.push({ id: g.id, digest: d, verdict: "not_landed", ...plan })
+      // Held by the no-progress rule (the same output as when sent): carried, not sent again this round (second batch).
+      if (plan.action === "hold") accept.regressions!.held!++
       itemChecks.set(g.id, { text: renderGuardItem(g, guardCheck(g, library), run, registry, carried.has(g.id), quote), record: guardCheck(g, library) })
     }
     // 4. Items sent before (this round's review items, items carried in): fixed ones become guards; the rest are seen again.

@@ -300,7 +300,7 @@ export interface AcceptRoundRecord {
    * Batch 1 (5A): guards that regressed this round (a flip on text the round left as it was); on the cycle after,
    * fixed or still failing. No repair is reverted: a regression stays an item, carried as long as it fails.
    */
-  regressions?: { raised: number; fixed_next: number; persisted: number }
+  regressions?: { raised: number; fixed_next: number; persisted: number; /** Regressions held by the no-progress rule (same output as when sent), not sent again. */ held?: number }
   /** Batch 1 (DESIGN-OPUS §10.2 G2): sentences the reviewer declared not behaviour (NOT BEHAVIOUR lines), in force, by review. */
   declared?: { id: string; reason: string; review: string }[]
   /** Batch 1 (§11 item 1): each COVERED line of the round's reviews, what it bound and what became of it. */

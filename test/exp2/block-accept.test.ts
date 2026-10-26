@@ -13,7 +13,7 @@ import { assessPremises, itemCheckRecord, reproduces, type FormalItem } from "..
 import { git, head, initRepo } from "../../src/exp2/git.js"
 import { changedTextBehind, guardCoverage, type GuardEvent, type GuardRecord } from "../../src/exp2/guards.js"
 import { ledgerOf } from "../../src/exp2/ledger.js"
-import { renderFlips, renderReport } from "../../src/exp2/report.js"
+import { buildReport, renderFlips, renderReport } from "../../src/exp2/report.js"
 import { invokesProgram, isNoIssues, programRunsIn, REPAIR_INTRO, REVIEW_INTRO, REVIEW_REPLY, reviewBaseText, reviewRanProgram, supersededIn } from "../../src/exp2/review.js"
 import { LocalProcessRunner, LocalScriptSandbox } from "../../src/exp2/runner.js"
 import { Serial } from "../../src/exp2/serial.js"
@@ -212,12 +212,24 @@ describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed ite
     assert.ok(!m.includes("reverted"), m.slice(0, 300))
     assert.ok(!m.includes("Keep rows where the column satisfies the condition"), "the filter's fix is kept: not sent again")
     assert.equal(record.kept, c3.id)
-    assert.deepEqual(record.accept!.regressions, { raised: 1, fixed_next: 1, persisted: 0 })
+    assert.deepEqual(record.accept!.regressions, { raised: 1, fixed_next: 1, persisted: 0, held: 0 })
     assert.ok(!git(workdir, ["show", "HEAD:filter.go"]).includes("keep != true"), "the filter is fixed on the kept program")
     const ledger = ledgerOf({ ...store.inspect(), executions: [record] }, store.registry())
     assert.deepEqual(ledger.find(x => x.id === "V1.1.1")!.end?.how, "fixed")
     assert.ok(!ledger.some(x => x.end?.how === "discarded"))
     assert.ok(executor.log.messages[1].text.startsWith(REPAIR_INTRO))
+  })
+
+  it("a regression still failing at the same output on the next cycle: persisted, and held by the no-progress rule, counted apart (commit 2, supplement 3)", async () => {
+    const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }])
+    const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
+    // The third program is the second again: the sort guard fails as it did, the regression is not sent a second time.
+    const { record, executor } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true })), wd => write(wd, files({ reverseInTransform: true }))], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
+    const c3 = record.cycles[2]
+    assert.deepEqual(c3.items!.filter(i => i.id === "G1").map(i => i.action), ["hold"])
+    assert.equal(executor.log.messages.length, 3, "no message after the hold")
+    assert.deepEqual(record.accept!.regressions, { raised: 1, fixed_next: 0, persisted: 1, held: 1 })
+    assert.match(renderReport(buildReport({ round: 1, registry: store.registry(), understand: [], acceptance: [], execution: record, executorIsStub: true, interrupted: { attempts: 0, understand: [], acceptance: [], coding: { calls: 0, tokens: { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0, reasoning_tokens: 0 }, stub_calls: 0 } }, workorder: buildWorkOrder({ registry: store.registry(), round: 1, library: [], events: [], statuses: [], runs: [], anchors: [], links: [], steps: [], previous_task: [] }), statuses: [], checks: { entered: 0, stale: 0, retired: 0, run: 0, passed: 0, failed: 0 }, review: { accept: record.accept!, first_delivery: record.first_delivery ?? null, review_calls: [], formalize_calls: [], coverage: null } })), /still failing then 1, of them held as no progress 1 \(no repair is reverted\)/u)
   })
 
   it("a judgment turned from ok to wrong on the same output is a lead for the reviewer: never a guard, never a repair", async () => {
@@ -364,7 +376,7 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       assert.match(text, /^# Round \d+ report\n\nOfficial score: [^\n]*\n\n§12i measures: wall \d+ s; guards \d+→\d+;[^\n]*\n\nInterface counts:\n\n/u)
       assert.match(text, /- Reviewer items: reported \d+, entered a repair list \d+ \(verified \d+, logged \d+, fallback \d+\), blocked \d+; every entry ended once: yes; no_input \d+; reviews \d+ \(void sessions \d+\)/u)
       assert.match(text, /- Check writing: admitted \d+\/\d+, unknown never told the model 0; dropped after the repairs \d+ .*; runs refused as an unknown subcommand \d+; units coarser than a sentence \d+ in \d+ checks \(admitted, they cover no sentence\); units no check rests on \d+ \(reported only\)\./u)
-      assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+; regressions raised \d+, fixed on the next cycle \d+, still failing then \d+ \(no repair is reverted\)\./u)
+      assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+; regressions raised \d+, fixed on the next cycle \d+, still failing then \d+, of them held as no progress \d+ \(no repair is reverted\)\./u)
       assert.match(text, /- Requirements given: work order source zone delta, \d+ characters/u)
       // Batch 1 (DESIGN-OPUS §0a, §2, G12): the delivery by recipient against the line, the verification state, the roles' time.
       assert.ok(r.delivery && r.delivery.line === 2 * roundText(r.round).length + 10_000 && r.delivery.recipients.executor.chars.A > 0 && r.delivery.recipients.reviewer.chars.A > 0, JSON.stringify(r.delivery?.recipients))

@@ -139,7 +139,7 @@ describe("batch 1, item 11: a flip is classified first; a regression on unchange
     assert.match(after, /fails now \(G1\)\.\nRequirement: [^]*\nCommand: \["transform"[^]*\nWhat the program did: /u)
     assert.ok(!/reverted by the controller/u.test(after))
     assert.ok(!/Keep rows where the column satisfies the condition/u.test(after), "the filter's fix was kept: not sent again")
-    assert.deepEqual(a.regressions, { raised: 1, fixed_next: 1, persisted: 0 })
+    assert.deepEqual(a.regressions, { raised: 1, fixed_next: 1, persisted: 0, held: 0 })
     assert.ok(!record.cycles.flatMap(c => c.items ?? []).some(i => i.action === "discarded"), "nothing is discarded")
     const ledger = ledgerOf({ ...recorded.inspect(), executions: [record] }, recorded.registry())
     assert.ok(!ledger.some(e => e.end?.how === "discarded"))
