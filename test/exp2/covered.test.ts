@@ -118,3 +118,22 @@ describe("[behav] batch 1: COVERED lines become snapshot guards", () => {
     assert.match(renderCovered(s, 0, 0), /; rerun unstable 1, conflicts with a deviation 1;/u)
   })
 })
+
+describe("[mech] batch 1: COVERED ids as the reviewer wrote them after the request's list (opusb2 R1)", () => {
+  it("paragraph and part apart (by a space or a colon), a bare part continuing its paragraph, full ids: each the sentence it names", () => {
+    const got = coveredIn([
+      "COVERED R1.S2.P1 s1, R1.S2.P2 s1, R1.S2.P2 s2 BY RUN 7",
+      "COVERED R1.S3.P23: s2, s5, s6 BY RUN 19",
+      "COVERED R1.S4.P1.s1, R1.S4.P2#abcd1234.s1 BY RUN 10",
+      "COVERED R1.S6.P1 s1.c2 BY RUN 13",
+      "COVERED R1.S6.P3 BY RUN 14",
+    ].join("\n"))
+    assert.deepEqual(got.map(c => [c.ids, c.run]), [
+      [["R1.S2.P1.s1", "R1.S2.P2.s1", "R1.S2.P2.s2"], 7],
+      [["R1.S3.P23.s2", "R1.S3.P23.s5", "R1.S3.P23.s6"], 19],
+      [["R1.S4.P1.s1", "R1.S4.P2.s1"], 10],
+      [["R1.S6.P1.s1.c2"], 13],
+      [["R1.S6.P3"], 14],
+    ])
+  })
+})

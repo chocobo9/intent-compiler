@@ -31,9 +31,26 @@ export function reviewerRuns(materials: Pick<ReviewMaterials, "commands" | "file
 
 /** `COVERED <ids> BY RUN <n>` lines: ids separated by commas or spaces, as the annotations show them (hash dropped). */
 export function coveredIn(text: string): { ids: string[]; run: number; line: string }[] {
-  return [...text.matchAll(/^\s*[-*]?\s*`?COVERED\s+(.+?)\s+BY\s+RUN\s+#?(\d+)`?\.?\s*$/gimu)].map(m => ({
-    ids: [...m[1].matchAll(/R\d+(?:\.[A-Za-z]*\d+|\.H)+/gu)].map(x => x[0]), run: Number(m[2]), line: m[0].trim(),
-  }))
+  return [...text.matchAll(/^\s*[-*]?\s*`?COVERED\s+(.+?)\s+BY\s+RUN\s+#?(\d+)`?\.?\s*$/gimu)].map(m => ({ ids: coveredIds(m[1]), run: Number(m[2]), line: m[0].trim() }))
+}
+
+/**
+ * The ids of a COVERED line, as reviewers write them after the request's list ("R1.S2.P1: s1, s2"): a full id
+ * (its hash dropped), a paragraph and a part apart by a space or a colon ("R1.S2.P1 s1", "R1.S3.P23: s2"), or a bare
+ * part continuing the paragraph before it ("s5"). opusb2 R1: 40 of 44 ids read as paragraphs were written so.
+ */
+export function coveredIds(list: string): string[] {
+  const out: string[] = []
+  let paragraph: string | null = null
+  for (const raw of list.split(/,|;/u).map(x => x.trim().replace(/^`|`$/gu, "")).filter(Boolean)) {
+    const m = /^(R\d+(?:\.(?:[A-Z]+\d+|H))+)(?:#[0-9a-f]+)?(?:(?:\s*:\s*|\s+|\.)((?:[sc]\d+)(?:\.[sc]\d+)*))?$/u.exec(raw)
+    if (m) { paragraph = m[1]; out.push(m[2] ? `${m[1]}.${m[2]}` : m[1]); continue }
+    const part = /^((?:[sc]\d+)(?:\.[sc]\d+)*)$/u.exec(raw)
+    if (part && paragraph) { out.push(`${paragraph}.${part[1]}`); continue }
+    // Anything else: the ids it holds, as before.
+    for (const x of raw.matchAll(/R\d+(?:\.[A-Za-z]*\d+|\.H)+/gu)) out.push(x[0])
+  }
+  return out
 }
 
 const norm = (s: string) => s.replace(/\r\n/gu, "\n").split("\n").map(l => l.trimEnd()).join("\n").trim()
