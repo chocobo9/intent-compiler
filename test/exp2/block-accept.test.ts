@@ -485,7 +485,7 @@ describe("[behav] batch 1, effect 8 and §11 item 1: reviews go on while scope s
     assert.deepEqual(a.reviews.map(x => x.cycle), [record.cycles[0].id, record.cycles[0].id, record.cycles[0].id], "all on the first program, no repair between")
     assert.equal(executor.log.messages.length, 1)
     assert.deepEqual(a.gaps, [FILTER_UNIT, SORT_UNIT])
-    assert.match(reviewer.requests[0].request, /# Sentences to show by a run\n[^]*COVERED <sentence ids> BY RUN <n>[^]*\n- R1\.S3\.P2\.s4\n- R1\.S3\.P9\.s2/u)
+    assert.match(reviewer.requests[0].request, /# Sentences to show by a run\n[^]*COVERED <sentence ids> BY RUN <n>[^]*\nR1\.S3\.P2: s4\nR1\.S3\.P9: s2/u)
   })
 
   it("COVERED lines bound to the reviewer's runs, run again with the same output, are guards; the reviews end when nothing is owed", async () => {
@@ -501,7 +501,7 @@ describe("[behav] batch 1, effect 8 and §11 item 1: reviews go on while scope s
     assert.deepEqual(a.gaps, [])
     assert.deepEqual(a.covered!.map(c => [c.outcome, c.bound, c.ignored.map(i => i.why)]), [["guard", [SORT_UNIT], []], ["guard", [FILTER_UNIT], ["coarser than a sentence"]]])
     assert.equal(a.guards.born.length, 2)
-    assert.match(reviewer.requests[1].request, /# Sentences to show by a run\n[^]*\n- R1\.S3\.P2\.s4\n/u)
+    assert.match(reviewer.requests[1].request, /# Sentences to show by a run\n[^]*\nR1\.S3\.P2: s4\n/u)
     assert.ok(!/R1\.S3\.P9: s2/u.test(reviewer.requests[1].request), "the sort sentence is held: not asked again")
   })
 
