@@ -778,6 +778,9 @@ export function normalizeDraft(k: CheckDraft, binary: string | null): string[] {
     if (typeof a.expect_json !== "string") continue
     try { JSON.parse(a.expect_json) } catch { a.expect_json = JSON.stringify(a.expect_json); notes.push(`assertion ${a.id}: expect_json read as the string written`) }
   }
+  // A unit id written with its paragraph's hash inside (R1.S3.P22#efa62a05.s1) is the unit it names (batch 1, opusb1 R1).
+  const blocks = (k.blocks ?? []).map(b => typeof b === "string" ? canonicalUnit(b) : b)
+  if (blocks.some((b, i) => b !== k.blocks[i])) { k.blocks = blocks; notes.push("blocks read without the hash inside their ids") }
   const first = k.input?.args?.[0]
   if (binary && typeof first === "string" && first.replace(/^\.?[\\/]/u, "").replace(/\.exe$/iu, "") === binary && k.input.args.length > 1) { k.input.args = k.input.args.slice(1); notes.push(`args: the leading program name ${JSON.stringify(first)} dropped (args come after the program name)`) }
   return notes
@@ -1001,6 +1004,14 @@ export const CHECKS_SCHEMA = {
     retire_remove: stringArray,
     uncheckable_add: { type: "array", items: { type: "object", additionalProperties: false, required: ["block", "reason"], properties: { block: { type: "string" }, reason: { type: "string" } } }, description: "Units named in an `uncovered` issue that state nothing a run of the program can check (say, a sentence that only introduces what follows), each with why." },
   },
+}
+
+/** A unit id as code knows it: the annotation's hash dropped wherever it stands, `id:part` as `id.part`. */
+export function canonicalUnit(u: string): string {
+  // A hash wherever it stands (opusb1 R1: R1.S3.P22#efa62a05.s1, the paragraph's annotation and the unit's part joined).
+  const t = u.trim().replace(/#[0-9a-f]{4,}(?=$|[.:])/gu, "")
+  const m = /^([^#:]+)(?::(.+))?$/u.exec(t)
+  return m ? (m[2] ? `${m[1]}.${m[2]}` : m[1]) : u
 }
 
 /** Batch 1 (2026-10-26): what counts as a unit a check rests on, said the same way to every writer. */

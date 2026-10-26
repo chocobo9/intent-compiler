@@ -297,3 +297,23 @@
 离线成立：held 的计数和报告行（先红后绿）；24 个周期的材料齐全 50/50、编号连续，这两项是按记录核对得到的。
 离线做不到的：执行方收到这些回归条目后能否修好；"重发 0"是按构造成立，不是新规则下真实跑出来的。
 真实运行要看的线：每轮 regressions raised / fixed_next / persisted / held；opusb1 运行用的是 b5eb821，不含 held 计数，它的 held 要从记录里离线算。
+
+## 9. [mech] 单位 id 的规范化：hash 不论在 id 的哪个位置都去掉（opusb1 R1 发现）
+
+问题：opusb1 运行 R1 里，写检查的模型把单位写成 `R1.S3.P22#efa62a05.s1`，把注释里段的 hash 夹在中间。parseRef 一向把 # 之后都当 hash，读成段 R1.S3.P22。批 1 之前，这只是"引用整段"。按 B，这类检查不覆盖任何句：R1 报告 "units coarser than a sentence 318 in 39 checks"，通过覆盖 35%。于是欠着的范围句、债和切片都被放大。opusb1 因此作废（VOID.txt：未证明，单位 id 格式污染）。
+
+做法：
+- `canonicalUnit` 挪进 checks.ts（formalize 从那里再导出，供审查条目使用），先去掉 id 里任何位置上紧跟 `.`、`:` 或结尾的 `#hex`，再把 `id:part` 读作 `id.part`。
+- 写检查的草稿在 `normalizeDraft` 里把 blocks 这样规范化，并记一条 note（"blocks read without the hash inside their ids"）。
+- formalize 的条目 units 原本就走 canonicalUnit，现在也认这种形式。
+
+测试（先红后绿）：batch1 新增两条。
+- canonicalUnit 对 `R1.S3.P22#efa62a05.s1`、`…s3.c2`、`#hash` 结尾、`:s1` 几种形式的结果。
+- 草稿 blocks 写成 `R1.S8.P1#<hash>.s1` 时，规范成句子编号，没有粗单位，并有 note。
+- 两条都在 b5eb821 上失败，本提交通过：batch1 5/5，checks 20/20，verification 5/5，slice 6/6，covered 8/8。
+
+opusb1 R1 的另一项零成本核查：快照守卫 G26、G28 在 C1.3 翻转是真回归。C1.3 为 V1.2.9（保留空 CSV 记录）的修补，让末尾带空记录的输入在 transform 里崩溃：`panic: index out of range [0] with length 0`，退出 2。附带的设计问题：快照也记下了旧的空记录处理，崩溃修好、输出保留空行后，它们仍会翻转。按 Opus 的定，今晚不改，只看快照守卫翻转数。
+
+离线成立：hash 夹在中间的单位 id 被读作它所指的句（先红后绿）。
+离线做不到的：写检查的模型还有没有别的 id 写法；规范化之后真实运行里的通过覆盖和债的规模。
+真实运行要看的线：写检查一行的 coarse 块数（应远低于 opusb1 R1 的 318）、通过覆盖；第 13 节各线。

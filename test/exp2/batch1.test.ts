@@ -3,8 +3,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { before, describe, it } from "node:test"
 import assert from "node:assert/strict"
-import { checkChecks, coarseHints, coarseUnit, type CheckDraft } from "../../src/exp2/checks.js"
-import { formalizeProblems } from "../../src/exp2/formalize.js"
+import { checkChecks, coarseHints, coarseUnit, normalizeDraft, type CheckDraft } from "../../src/exp2/checks.js"
+import { canonicalUnit, formalizeProblems } from "../../src/exp2/formalize.js"
 import { Exp2Store } from "../../src/exp2/store.js"
 import { roundText } from "./inputs.js"
 import { stubTransport } from "./stubs.js"
@@ -45,5 +45,29 @@ describe("[mech] batch 1: units coarser than a sentence are admitted, counted, a
     assert.equal(coarse.hints!.length, 1)
     assert.match(coarse.hints![0], /item 1: unit R1\.S4 is a section; it is kept, but covers none of its sentences/u)
     assert.deepEqual(fine.hints, [])
+  })
+})
+
+describe("[mech] batch 1: a unit id with its paragraph's hash inside reads as the unit (opusb1 R1: R1.S3.P22#efa62a05.s1)", () => {
+  const store = new Exp2Store(mkdtempSync(join(tmpdir(), "exp2-b1-canon-")), "b1c")
+  before(async () => { await store.ingestRound(1, roundText(1), stubTransport()) })
+
+  it("canonicalUnit drops a hash wherever it stands; the annotation forms still read as before", () => {
+    assert.equal(canonicalUnit("R1.S3.P22#efa62a05.s1"), "R1.S3.P22.s1")
+    assert.equal(canonicalUnit("R1.S3.P22#efa62a05.s3.c2"), "R1.S3.P22.s3.c2")
+    assert.equal(canonicalUnit("R1.S3.P22#efa62a05"), "R1.S3.P22")
+    assert.equal(canonicalUnit("R1.S3.P22#efa62a05:s1"), "R1.S3.P22.s1")
+    assert.equal(canonicalUnit("R1.S3.P22.s1"), "R1.S3.P22.s1")
+  })
+
+  it("a check draft's blocks so written are read as the sentences they name: no coarse unit, a note that says so", () => {
+    const reg = store.registry()
+    const object = reg.coverOf("R1.S8.P1.s1")!.owner
+    const hash = reg.block("R1.S8.P1")!.hash
+    const k: CheckDraft = { key: "k", object, blocks: [`R1.S8.P1#${hash}.s1`, `R1.S8.P1#${hash}.s2`], uses: [], note: null, reference_script: null, input: { args: ["ingest", "--input", "missing.csv"], files: [] }, assertions: [] }
+    const notes = normalizeDraft(k, "dpipe")
+    assert.deepEqual(k.blocks, ["R1.S8.P1.s1", "R1.S8.P1.s2"])
+    assert.ok(notes.some(n => /blocks read without the hash/u.test(n)), JSON.stringify(notes))
+    assert.deepEqual(coarseHints(reg, { checks: [k], retire: [] }), [])
   })
 })

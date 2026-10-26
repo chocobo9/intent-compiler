@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
 import { AuthInvalid, QuotaExhausted, ReplayMiss, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
 import { EnvironmentBlocked } from "./platform.js"
-import { COARSE_HINT, coarseUnit, methodB, replacedBasis, statesValue, targetProblems, type Assertion, type AssertionDraft, type CheckDraft, type CheckRecord, type CodeFacts, type Target } from "./checks.js"
+import { canonicalUnit, COARSE_HINT, coarseUnit, methodB, replacedBasis, statesValue, targetProblems, type Assertion, type AssertionDraft, type CheckDraft, type CheckRecord, type CodeFacts, type Target } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import { safePath, type CheckInput, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import { annotate } from "./source.js"
@@ -171,10 +171,7 @@ export function buildFormalizeRequest(registry: Registry, round: number, review:
  * (`R1.S3.P12#f683eb75` → `R1.S3.P12`) and a relative unit marker joined with a dot (`…#f683eb75:s10.c1` →
  * `R1.S3.P12.s10.c1`). Ids that are already canonical are unchanged.
  */
-export function canonicalUnit(u: string): string {
-  const m = /^([^#:]+)(?:#[0-9a-f]+)?(?::(.+))?$/u.exec(u.trim())
-  return m ? (m[2] ? `${m[1]}.${m[2]}` : m[1]) : u
-}
+export { canonicalUnit }
 
 /** Definite errors of an answer, per item (an item with problems is asked again once, then dropped as malformed). */
 export function formalizeProblems(registry: Registry, round: number, answer: unknown, materials: ReviewMaterials = NO_MATERIALS, binary: string | null = null): { problems: { item: number | null; message: string }[]; items: FormalItem[]; hints?: string[] } {
