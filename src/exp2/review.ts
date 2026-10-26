@@ -55,12 +55,6 @@ export interface ReviewFocus {
   partial?: boolean
 }
 
-/** Sentence ids by paragraph, one line a paragraph: "R1.S8.P1: s1, s2, s4". */
-export function idsByParagraph(ids: readonly string[]): string[] {
-  const by = new Map<string, string[]>()
-  for (const id of ids) { const at = id.lastIndexOf("."); const p = id.slice(0, at); by.set(p, [...(by.get(p) ?? []), id.slice(at + 1)]) }
-  return [...by].map(([p, ss]) => `${p}: ${ss.join(", ")}`)
-}
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
 const quote = (t: string) => t.trim().split(/\r?\n/u).map(l => `> ${l}`).join("\n")
@@ -92,8 +86,9 @@ export function reviewAppendix(f: ReviewFocus): string {
   }
   if (f.coverage?.length) {
     out.push("", "# Sentences to show by a run")
-    out.push(`No check has passed yet on the sentences below (${f.coverage.length}; this round's text and some earlier text above). Check them as you review, by running the program. For each run of the program that shows some of them hold, write one line \`COVERED <sentence ids> BY RUN <n>\` in your reply, the ids as the annotations show them, n counting your runs of the program in this session from 1 in the order you made them (only runs of the program count). A sentence the program breaks is a deviation, to list as usual.`)
-    out.push(...idsByParagraph(f.coverage))
+    out.push(`No check has passed yet on the sentences below (${f.coverage.length}; this round's text and some earlier text above). Check them as you review, by running the program. For each run of the program that shows some of them hold, write one line \`COVERED <sentence ids> BY RUN <n>\` in your reply, each id written in full as listed below, n counting your runs of the program in this session from 1 in the order you made them (only runs of the program count). A sentence the program breaks is a deviation, to list as usual.`)
+    // Full ids, one a line (opusb2 R1: a list grouped by paragraph was echoed with the paragraph and the part apart).
+    out.push(...f.coverage.map(id => `- ${id}`))
   }
   if (f.declare) {
     out.push("", "# Sentences that state no behaviour")
