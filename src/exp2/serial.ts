@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path"
 import type { AnchorExtractor } from "./anchors.js"
 import { AuthInvalid, QuotaExhausted, RoleUnavailable, type AttributionTransport, type ModelReply } from "./attribution.js"
-import { codeFacts, libraryCovers, type CheckRecord, type ChecksTransport } from "./checks.js"
+import type { Registry } from "./registry.js"
+import { coarseUnit, codeFacts, libraryCovers, type CheckRecord, type ChecksTransport } from "./checks.js"
 import { type BuildResult, type ExecutionLimits, type ExecutionRecord, type Executor, type SupersededItem } from "./execution.js"
 import { head, initRepo, resetTo } from "./git.js"
 import { acceptanceFromLedger, acceptanceSummary, buildReport, codingCost, renderReport, type RoundReport, type StageCost } from "./report.js"
@@ -414,7 +415,7 @@ export class Serial {
         attempts: interrupted.length, understand: interrupted.flatMap(x => x.calls), acceptance: interrupted.flatMap(x => [...x.check_calls, ...(x.probe_calls ?? []), ...(x.judge_calls ?? []), ...(x.review_calls ?? []), ...(x.formalize_calls ?? [])]),
         coding: interrupted.reduce((t: StageCost, x) => { const c = codingCost(x.execution, this.c.executorIsStub); return { calls: t.calls + c.calls, tokens: sumUsage(t.tokens, c.tokens), stub_calls: t.stub_calls + c.stub_calls } }, codingCost(null, false)),
       },
-      checks: { entered: state.checks.filter(k => k.round === round).length, stale: events.filter(e => e.status === "stale").length, retired: events.filter(e => e.status === "retired").length, run: verdict.runs.length, passed: verdict.runs.filter(r => r.outcome === "pass").length, failed: verdict.runs.filter(r => r.outcome === "fail").length, ...checkWritingCounts(state, round, execution), ...(state.checks.some(k => k.direction === "withdrawn") ? { read_as_holds: state.checks.filter(k => k.direction === "withdrawn").map(k => k.id) } : {}) },
+      checks: { entered: state.checks.filter(k => k.round === round).length, stale: events.filter(e => e.status === "stale").length, retired: events.filter(e => e.status === "retired").length, run: verdict.runs.length, passed: verdict.runs.filter(r => r.outcome === "pass").length, failed: verdict.runs.filter(r => r.outcome === "fail").length, ...checkWritingCounts(state, round, execution, registry), ...(state.checks.some(k => k.direction === "withdrawn") ? { read_as_holds: state.checks.filter(k => k.direction === "withdrawn").map(k => k.id) } : {}) },
       review: { accept: execution.accept!, first_delivery: execution.first_delivery ?? null, review_calls: state.review_calls.filter(c => c.round === round), formalize_calls: state.formalize_calls.filter(c => c.round === round), coverage: cov },
     })
     await store.recordRound(execution, report)
@@ -502,7 +503,7 @@ function sumUsage(a: StageCost["tokens"], b: StageCost["tokens"]): StageCost["to
 export type { ModelReply }
 
 /** What became of the round's check writing (batch C, effects 1–2), from the state and the round's runs. */
-export function checkWritingCounts(state: Pick<Exp2State, "checks" | "check_rounds">, round: number, execution: ExecutionRecord): Pick<RoundReport["checks"], "admitted" | "unknown" | "unknown_not_fed_back" | "dropped" | "normalized" | "refused_calls" | "uncovered"> {
+export function checkWritingCounts(state: Pick<Exp2State, "checks" | "check_rounds">, round: number, execution: ExecutionRecord, registry?: Registry): Pick<RoundReport["checks"], "coarse" | "admitted" | "unknown" | "unknown_not_fed_back" | "dropped" | "normalized" | "refused_calls" | "uncovered"> {
   const mine = state.checks.filter(k => k.round === round)
   const tally = (list: string[]) => list.reduce((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {} as Record<string, number>)
   const record = state.check_rounds.find(r => r.round === round && r.status === "accepted")
@@ -513,6 +514,8 @@ export function checkWritingCounts(state: Pick<Exp2State, "checks" | "check_roun
     normalized: tally(mine.flatMap(k => (k.normalized ?? []).map(n => n.startsWith("args") ? "leading program name" : n.includes("expect_json") ? "unquoted expected string" : n.includes("Python dict") ? "Python dict output" : n.includes("several lines") ? "JSON on several lines" : n.includes("backslash") ? "doubled escapes" : "other"))),
     refused_calls: execution.cycles.reduce((n, c) => n + c.runs.filter(r => r.failure === "not_landed/refused_call").length, 0),
     uncovered: (record?.coverage?.gaps ?? []).reduce((n, g) => n + g.units.length, 0),
+    // Batch 1 (decision B): blocks coarser than a sentence, in the checks that entered; admitted, they cover no sentence.
+    ...(registry ? { coarse: (() => { const c = mine.map(k => k.blocks.filter(b => coarseUnit(registry, b.split("#")[0])).length); return { checks: c.filter(n => n > 0).length, blocks: c.reduce((a, b) => a + b, 0) } })() } : {}),
   }
 }
 

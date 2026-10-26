@@ -313,7 +313,7 @@ export interface CheckRequest {
 export type CheckIssueCode =
   | "unparseable" | "shape" | "duplicate_key" | "object_not_in_scope" | "unknown_object" | "unknown_block" | "basis_not_object"
   | "name_unknown" | "verbatim_not_found" | "verbatim_mismatch" | "expect_invalid" | "target_invalid" | "input_invalid"
-  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth" | "unavailable" | "unit_unchanged" | "admission_failed"
+  | "script_missing" | "uses_missing" | "retire_invalid" | "exit_missing" | "computed_by_hand" | "uncovered" | "transport" | "quota" | "auth" | "unavailable" | "unit_unchanged" | "admission_failed" | "unit_too_coarse"
   | "reference_output" | "reference_value_missing" | "methods_disagree" | "computed_missing"
 
 /** `blocks`: for code, the units an `uncovered` issue names. */
@@ -833,6 +833,19 @@ export interface DeriveOutcome {
   normalized?: Record<string, string[]>
   /** Check keys whose admission problems went back to the model in a repair request (batch C, effect 1). */
   fed_back?: string[]
+  /** Batch 1 (decision B): blocks coarser than a sentence in the checks that entered; admitted, they cover no sentence. */
+  coarse?: { checks: number; blocks: number }
+}
+
+/**
+ * Batch 1 (DESIGN-OPUS, decision B): a check citing a section, or a paragraph that has sentences, is admitted; it covers
+ * none of their sentences. The writer hears of it as a note that does not block, in a repair request sent anyway.
+ */
+export function coarseHints(registry: Registry, draft: ChecksDraft): CheckIssue[] {
+  return draft.checks.flatMap(k => k.blocks.map(b => parseRef(b).id).filter(b => coarseUnit(registry, b)).map(b => ({
+    code: "unit_too_coarse" as const, check: k.key,
+    message: `check ${k.key}: block ${b} is a ${registry.block(b)!.level}; it is admitted, but covers none of its sentences: name the sentences, list items or clauses the check tests (${COARSE_HINT}); this does not block the check`,
+  })))
 }
 
 /** The admission problems of a check (batch C, effect 1): the issues for the model and how its output was read. */
@@ -851,11 +864,16 @@ export async function deriveChecks(registry: Registry, round: number, library: r
   // Admission is the same for the same check: run once per distinct draft.
   const admitted = new Map<string, Awaited<ReturnType<AdmitCheck>>>()
   const admit = async (k: CheckDraft) => { const key = JSON.stringify(k); if (!admitted.has(key)) admitted.set(key, await options.admit!(k)); return admitted.get(key)! }
-  const finish = (o: DeriveOutcome): DeriveOutcome => ({ ...o, normalized, fed_back: [...fedBack] })
+  const finish = (o: DeriveOutcome): DeriveOutcome => {
+    const hints = o.draft ? coarseHints(registry, o.draft) : []
+    return { ...o, normalized, fed_back: [...fedBack], coarse: { checks: new Set(hints.map(h => h.check)).size, blocks: hints.length } }
+  }
+  let hints: CheckIssue[] = []
   for (let attempt = 1; attempt <= options.maxRepairs + 1; attempt++) {
     // The problems this request carries are the ones the model hears about.
     for (const i of issues) if (i.check && ADMISSION_CODES.has(i.code)) fedBack.add(i.check)
-    const request = buildCheckRequest(registry, round, library, events, draft, issues)
+    // Notes that do not block ride along only when a repair goes out anyway.
+    const request = buildCheckRequest(registry, round, library, events, draft, issues.length ? [...issues, ...hints] : issues)
     const text = requestJson(request)
     const base = { id: options.callId(calls.length + 1), round, stage: "acceptance" as const, step: "checks" as const, kind: attempt === 1 ? "attribute" as const : "repair" as const, attempt, request, request_chars: text.length, request_sha256: createHash("sha256").update(text).digest("hex") }
     let reply: ModelReply
@@ -890,6 +908,7 @@ export async function deriveChecks(registry: Registry, round: number, library: r
       issues.push(...a.issues)
     }
     record.issues = issues
+    hints = coarseHints(registry, draft)
     parsedOnce = true
     if (!issues.length) return finish({ status: "accepted", draft, calls, issues, dropped: [], coverage: coverage(registry, round, draft, library, events) })
   }
@@ -922,7 +941,7 @@ const checkSchema = {
   properties: {
     key: { type: "string", description: "Your name for this check within the draft." },
     object: { type: "string", description: "The object (id) whose requirement the check tests; one of this round's scope." },
-    blocks: { ...stringArray, description: "Source blocks the check rests on." },
+    blocks: { ...stringArray, description: "The sentences, list items or clauses the check tests, by id (a paragraph id only for a paragraph that has no sentences)." },
     uses: { ...stringArray, description: "Shared-convention objects (ids) whose rules the expected output follows, e.g. an error-message format." },
     input: {
       type: "object", additionalProperties: false, required: ["args", "files"],
@@ -984,6 +1003,17 @@ export const CHECKS_SCHEMA = {
   },
 }
 
+/** Batch 1 (2026-10-26): what counts as a unit a check rests on, said the same way to every writer. */
+export const COARSE_HINT = "a section id, or the id of a paragraph that has sentences, covers none of its sentences"
+
+/** A unit too coarse to rest a check on: a section, or a paragraph that has sentences (batch 1, 2026-10-26). */
+export function coarseUnit(registry: Registry, id: string): boolean {
+  const b = registry.block(id)
+  if (!b) return false
+  if (b.level === "section") return true
+  return b.level === "paragraph" && b.children.some(c => registry.block(c)?.level === "sentence")
+}
+
 export const CHECKS_SYSTEM_PROMPT = [
   "You write acceptance checks for a command-line program from its requirements. `sources` holds every round so far, annotated with block ids; the original text is the only authority and newer text overrides older text.",
   "Write checks for the objects in `scope` (they changed this round), and to replace the checks in `stale` (whose source changed, or whose call the program refused; each says why); for no other object. A check runs the program once: `input.files` are written into an empty directory, the program is called with `input.args`, and each assertion reads one fact of the result. Command names, options and JSON keys must be those the requirements' code fragments show.",
@@ -991,6 +1021,7 @@ export const CHECKS_SYSTEM_PROMPT = [
   "One assertion reads one fact. A fact that rests on a reading the text does not state goes in its own assertion, apart from the facts that do not, and names that reading in `reading`; a failure of such an assertion is reported, not counted against the program.",
   "Keep convention facts (a shared error format, an output-formatting rule) in their own assertions with role convention, and list those conventions in `uses`; business facts are the object's own behaviour.",
   "Every check states its expected exit code. Prefer checks whose expected output depends on the input data; a check of the exit code alone shows little. `checks` lists the library's checks for these objects and `stale` those whose source text changed this round: write their replacements where the text still says something checkable. You may propose retiring a check whose expectation rests on replaced text; the code verifies the proposal.",
+  `\`blocks\` name the sentences, list items or clauses the check tests: ${COARSE_HINT}.`,
   "Cover the text: every sentence, list item or clause of this round's changed blocks that states a specific value, limit, edge case or error needs a check resting on it (by `blocks` or by an assertion's `block`, at that unit or finer). An `uncovered` issue lists the units no check rests on yet; cover them, or list in `uncheckable_add` those that state nothing a run can check. A check whose problems remain is dropped on its own; the others enter.",
   "Answer as a patch on `previous_draft` (empty on the first call). When `issues` is not empty, fix exactly those problems and leave the rest as it is.",
 ].join("\n")

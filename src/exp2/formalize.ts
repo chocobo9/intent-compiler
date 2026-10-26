@@ -2,7 +2,7 @@ import { createHash } from "node:crypto"
 import { requestJson } from "../model/opencode-transport.js"
 import { AuthInvalid, QuotaExhausted, ReplayMiss, TRANSPORT_RETRIES, type ModelReply, type TokenUsage } from "./attribution.js"
 import { EnvironmentBlocked } from "./platform.js"
-import { methodB, replacedBasis, statesValue, targetProblems, type Assertion, type AssertionDraft, type CheckDraft, type CheckRecord, type CodeFacts, type Target } from "./checks.js"
+import { COARSE_HINT, coarseUnit, methodB, replacedBasis, statesValue, targetProblems, type Assertion, type AssertionDraft, type CheckDraft, type CheckRecord, type CodeFacts, type Target } from "./checks.js"
 import { LIVE_STATES, type Registry } from "./registry.js"
 import { safePath, type CheckInput, type CheckRunner, type ProgramRef, type ScriptSandbox } from "./runner.js"
 import { annotate } from "./source.js"
@@ -62,6 +62,8 @@ export interface FormalizeCallRecord {
   request_chars: number
   response_text: string
   problems: string[]
+  /** Batch 1 (decision B): units coarser than a sentence in the answer's items; kept, they cover no sentence. */
+  coarse_units?: number
   usage: TokenUsage
   stub: boolean
   usage_unknown?: boolean
@@ -175,7 +177,7 @@ export function canonicalUnit(u: string): string {
 }
 
 /** Definite errors of an answer, per item (an item with problems is asked again once, then dropped as malformed). */
-export function formalizeProblems(registry: Registry, round: number, answer: unknown, materials: ReviewMaterials = NO_MATERIALS, binary: string | null = null): { problems: { item: number | null; message: string }[]; items: FormalItem[] } {
+export function formalizeProblems(registry: Registry, round: number, answer: unknown, materials: ReviewMaterials = NO_MATERIALS, binary: string | null = null): { problems: { item: number | null; message: string }[]; items: FormalItem[]; hints?: string[] } {
   const a = answer as Partial<FormalizeAnswer> | null
   if (!a || typeof a !== "object" || !Array.isArray(a.items)) return { problems: [{ item: null, message: "the answer must have an items list" }], items: [] }
   // Mechanical slips of the interface, read the one way they can mean (fix block A6): an id written as the annotation
@@ -196,6 +198,7 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
   }
   const problems: { item: number | null; message: string }[] = []
   const items: FormalItem[] = []
+  const hints: string[] = []
   for (const [k, raw] of a.items.entries()) {
     const it = raw as Partial<FormalItem> | null
     const n = typeof it?.item === "number" ? it.item : k + 1
@@ -206,7 +209,12 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
     const known = (u: unknown): u is string => typeof u === "string" && !!registry.block(u) && registry.block(u)!.round <= round
     if (!Array.isArray(it.units) || !it.units.length || !it.units.every(u => typeof u === "string")) add(`units must name at least one unit id; ${UNIT_SYNTAX}`)
     else if (!it.units.some(known)) for (const u of it.units) add(UNIT_ID.test(u) ? `unit ${u} does not exist in the requirements so far` : `unit ${u} is not in the unit id format; ${UNIT_SYNTAX}`)
-    else it.units = it.units.filter(known)
+    else {
+      it.units = it.units.filter(known)
+      // Decision B (batch 1): a section, or a paragraph that has sentences, is kept and covers none of its sentences; a
+      // note that does not block, sent only with a repair request that goes out anyway.
+      for (const u of it.units.filter(u => coarseUnit(registry, u))) hints.push(`item ${n}: unit ${u} is a ${registry.block(u)!.level}; it is kept, but covers none of its sentences: name the sentences, list items or clauses the item breaks (${COARSE_HINT}); this does not block the item`)
+    }
     // No input: code may still rebuild it from the materials (batch C, effect 3), so the assertions that are well formed
     // are kept; nothing about them is a problem the formalizer is asked again about.
     if (it.input === null || it.input === undefined) {
@@ -253,7 +261,7 @@ export function formalizeProblems(registry: Registry, round: number, answer: unk
       reference_script: derived ? it.reference_script! : null,
     })
   }
-  return { problems, items }
+  return { problems, items, hints }
 }
 
 /**
@@ -280,14 +288,15 @@ export async function formalizeReview(registry: Registry, round: number, review:
     }
     let parsed: unknown = null
     try { parsed = JSON.parse(reply.text) } catch { parsed = null }
-    const checked = parsed === null ? { problems: [{ item: null, message: "the reply is not JSON" }], items: [] as FormalItem[] } : formalizeProblems(registry, round, parsed, materials, program)
-    calls.push({ ...base, response_text: reply.text, problems: checked.problems.map(p => p.message), usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) })
+    const checked: ReturnType<typeof formalizeProblems> = parsed === null ? { problems: [{ item: null, message: "the reply is not JSON" }], items: [] as FormalItem[] } : formalizeProblems(registry, round, parsed, materials, program)
+    const hints = checked.hints ?? []
+    calls.push({ ...base, response_text: reply.text, problems: checked.problems.map(p => p.message), coarse_units: hints.length, usage: { ...zero(), ...reply.usage }, stub: reply.stub === true, ...(reply.usage === undefined && reply.stub !== true ? { usage_unknown: true } : {}), ...(reply.model ? { model: reply.model } : {}) })
     items = checked.items
     malformed = checked.problems
     const listed = parsed && typeof parsed === "object" && Array.isArray((parsed as FormalizeAnswer).items) ? (parsed as FormalizeAnswer).items : []
     texts = listed.flatMap((x, k) => x && typeof x === "object" && typeof x.text === "string" ? [{ item: typeof x.item === "number" ? x.item : k + 1, text: x.text }] : [])
     if (!malformed.length) break
-    if (parsed !== null && typeof parsed === "object") request = { ...request, previous_answer: parsed as FormalizeAnswer, problems: malformed.map(p => p.message) }
+    if (parsed !== null && typeof parsed === "object") request = { ...request, previous_answer: parsed as FormalizeAnswer, problems: [...malformed.map(p => p.message), ...hints] }
     else request = { ...request, problems: malformed.map(p => p.message) }
   }
   return { items: items.map(it => completeInput(it, materials, program)), malformed, calls, texts }
