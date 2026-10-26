@@ -49,6 +49,15 @@ export interface ReviewFocus {
   items?: readonly { id: string; text: string }[]
   /** Batch 1 (DESIGN-OPUS §10.2 G2): the reviewer may say which sentences state no behaviour (NOT BEHAVIOUR lines). */
   declare?: boolean
+  /** Batch 1 (§11 item 1): the scope sentences no passing check holds yet, which this review is to show by runs (COVERED lines). */
+  coverage?: readonly string[]
+}
+
+/** Sentence ids by paragraph, one line a paragraph: "R1.S8.P1: s1, s2, s4". */
+export function idsByParagraph(ids: readonly string[]): string[] {
+  const by = new Map<string, string[]>()
+  for (const id of ids) { const at = id.lastIndexOf("."); const p = id.slice(0, at); by.set(p, [...(by.get(p) ?? []), id.slice(at + 1)]) }
+  return [...by].map(([p, ss]) => `${p}: ${ss.join(", ")}`)
 }
 
 const clip = (s: string, n: number) => s.length > n ? `${s.slice(0, n)}…` : s
@@ -74,6 +83,11 @@ export function reviewAppendix(f: ReviewFocus): string {
       if (g.was.length) out.push(`Text it rested on (before): ${g.was.map(said).join(" ")}`)
       if (g.now.length) out.push(`Text in force now: ${g.now.map(said).join(" ")}`)
     }
+  }
+  if (f.coverage?.length) {
+    out.push("", "# Sentences to show by a run")
+    out.push(`No check has passed yet on the sentences below (${f.coverage.length}; this round's text and some earlier text above). Check them as you review, by running the program. For each run of the program that shows some of them hold, write one line \`COVERED <sentence ids> BY RUN <n>\` in your reply, the ids as the annotations show them, n counting your runs of the program in this session from 1 in the order you made them (only runs of the program count). A sentence the program breaks is a deviation, to list as usual.`)
+    out.push(...idsByParagraph(f.coverage))
   }
   if (f.declare) {
     out.push("", "# Sentences that state no behaviour")
@@ -115,9 +129,10 @@ export function repairFromReview(list: string, notes: string[] = []): string {
 
 /**
  * The lines of a reply that speak to code, not deviations: SUPERSEDED (a guard the text no longer requires) and, in
- * batch 1, NOT BEHAVIOUR (a sentence that states no behaviour a run could show). They are no entries of the list.
+ * batch 1, NOT BEHAVIOUR (a sentence that states no behaviour a run could show) and COVERED (a run that shows
+ * sentences hold). They are no entries of the list.
  */
-export const CONTROL_LINE = /^\s*[-*]?\s*`?(?:SUPERSEDED\s+G\d+|NOT BEHAVIOU?R\s+R\d)/u
+export const CONTROL_LINE = /^\s*[-*]?\s*`?(?:SUPERSEDED\s+G\d+|NOT BEHAVIOU?R\s+R\d|COVERED\s+R\d)/u
 const content = (text: string) => text.split(/\r?\n/u).filter(l => !CONTROL_LINE.test(l)).join("\n")
 
 /** exactly NO ISSUES (markdown emphasis or a final period tolerated), the control lines aside. */

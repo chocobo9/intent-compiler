@@ -303,6 +303,12 @@ export interface AcceptRoundRecord {
   regressions?: { raised: number; fixed_next: number; persisted: number }
   /** Batch 1 (DESIGN-OPUS §10.2 G2): sentences the reviewer declared not behaviour (NOT BEHAVIOUR lines), in force, by review. */
   declared?: { id: string; reason: string; review: string }[]
+  /** Batch 1 (§11 item 1): each COVERED line of the round's reviews, what it bound and what became of it. */
+  covered?: import("./covered.js").CoveredRecord[]
+  /** Batch 1 (effect 8): scope sentences still owed when the round's reviews ended; next round's slice begins with them. */
+  gaps?: string[]
+  /** Batch 1: flips of snapshot guards (from COVERED lines) this round. */
+  snapshot_flips?: number
   trial: { runs: number; failures: number }
   /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind; dropped: past the cap of one review (§6c). */
   leads: { library: number; judgment: number; dropped?: number }

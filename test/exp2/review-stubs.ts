@@ -89,14 +89,14 @@ export function workingReviewer(builds: string, options: { also?: (request: stri
 }
 
 /** A reviewer stand-in answering from a table (text and runs per review, in order; the last repeats). */
-export function scriptedReviewer(script: { text: string; runs?: ProgramRun[] }[]): Reviewer & { requests: { dir: string; request: string; label: string }[] } {
+export function scriptedReviewer(script: { text: string; runs?: ProgramRun[]; materials?: { files: { path: string; content: string }[]; commands: { command: string; output: string }[] } }[]): Reviewer & { requests: { dir: string; request: string; label: string }[] } {
   const requests: { dir: string; request: string; label: string }[] = []
   return {
     requests,
     async review(dir, request, label) {
       requests.push({ dir, request, label })
       const s = script[Math.min(requests.length - 1, script.length - 1)]
-      return { text: s.text, usage: { input_tokens: 10_000, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 100, reasoning_tokens: 0 }, model: "stub:reviewer", session: `stub-review-${requests.length}`, runs: s.runs ?? [{ command: "./dpipe transform --input data.csv", exit_code: 0 }] }
+      return { text: s.text, usage: { input_tokens: 10_000, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 100, reasoning_tokens: 0 }, model: "stub:reviewer", session: `stub-review-${requests.length}`, runs: s.runs ?? [{ command: "./dpipe transform --input data.csv", exit_code: 0 }], ...(s.materials ? { materials: s.materials } : {}) }
     },
   }
 }

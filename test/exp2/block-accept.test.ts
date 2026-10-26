@@ -64,7 +64,7 @@ const sidecarCheck = (id: string, object: string): CheckRecord => ({
 const noop = { review: async () => {}, formalize: async () => {}, guards: async () => {} }
 
 /** Runs one round with the review acceptance on a fresh work tree; the stand-ins and guards as given. */
-async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: string) => void)[], o: { library?: CheckRecord[]; guards?: GuardRecord[]; guardEvents?: GuardEvent[]; reviewer: AcceptDeps["reviewer"]; formalize: AcceptDeps["formalize"]; leads?: AcceptDeps["leads"]; reviews?: number; record?: AcceptDeps["record"]; carried?: AcceptDeps["carried"]; voidWithoutRuns?: boolean }) {
+async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: string) => void)[], o: { library?: CheckRecord[]; guards?: GuardRecord[]; guardEvents?: GuardEvent[]; reviewer: AcceptDeps["reviewer"]; formalize: AcceptDeps["formalize"]; leads?: AcceptDeps["leads"]; reviews?: number; record?: AcceptDeps["record"]; carried?: AcceptDeps["carried"]; voidWithoutRuns?: boolean; scope?: readonly string[] }) {
   const workdir = join(dir, `work-${r}-${Math.random().toString(36).slice(2, 6)}`)
   mkdirSync(workdir, { recursive: true })
   initRepo(workdir)
@@ -75,7 +75,7 @@ async function round(dir: string, store: Exp2Store, r: number, messages: ((wd: s
     registry, library: o.library ?? [], events: [], facts: codeFacts(registry, r), guards: o.guards ?? [], guardEvents: o.guardEvents ?? [],
     runner: new LocalProcessRunner(), sandbox: new LocalScriptSandbox(), anchors, build: goBuilder(join(dir, "builds"), {}, "dpipe"),
     reviewer: o.reviewer, formalize: o.formalize, binary: "dpipe", sources: store.inspect().sources.map(s => ({ round: s.round, text: s.text })),
-    copyDir: label => join(dir, "copies", label), ...(o.leads ? { leads: o.leads } : {}), record: o.record ?? noop, ...(o.carried ? { carried: o.carried } : {}), checkTimeoutMs: 10_000,
+    copyDir: label => join(dir, "copies", label), ...(o.leads ? { leads: o.leads } : {}), record: o.record ?? noop, ...(o.carried ? { carried: o.carried } : {}), ...(o.scope ? { scope: o.scope } : {}), checkTimeoutMs: 10_000,
   }, { ...DEFAULT_LIMITS, repairCycles: 3, ...(o.reviews !== undefined ? { reviews: o.reviews } : {}), ...(o.voidWithoutRuns ? { voidWithoutRuns: true } : {}) })
   return { record, executor, workdir, registry }
 }
@@ -368,7 +368,7 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       // Batch 1 (DESIGN-OPUS §0a, §2, G12): the delivery by recipient against the line, the verification state, the roles' time.
       assert.ok(r.delivery && r.delivery.line === 2 * roundText(r.round).length + 10_000 && r.delivery.recipients.executor.chars.A > 0 && r.delivery.recipients.reviewer.chars.A > 0, JSON.stringify(r.delivery?.recipients))
       assert.ok(r.delivery.outside["check writing"]!.chars > 0, "the check writing's reading is recorded")
-      assert.match(text, /- Original text delivered: line [\d.]+k?; executor [^\n]*; reviewer [^\n]*; formalizer [^\n]*\(outside the line\)[^\n]*\.\n(?:- Debt slice: \d+ paragraphs [^\n]*\n)?- Verification state:\d+ sentences in force; [^\n]*\n- Wall time: round [\d.]+ min; executor [\d.]+ min, reviewer [\d.]+ min/u)
+      assert.match(text, /- Original text delivered: line [\d.]+k?; executor [^\n]*; reviewer [^\n]*; formalizer [^\n]*\(outside the line\)[^\n]*\.\n(?:- Debt slice: \d+ paragraphs [^\n]*\n)?(?:- COVERED lines: \d+; [^\n]*\n)?- Verification state:\d+ sentences in force; [^\n]*\n- Wall time: round [\d.]+ min; executor [\d.]+ min, reviewer [\d.]+ min/u)
       assert.match(text, /- Revision recall: no gold set for this task\.\n- Relation recall: no gold set for this task\./u)
       assert.ok(!/Probes|Ledger:|Guard coverage|Zones:/u.test(text), "nothing else is rendered")
     }
@@ -456,4 +456,39 @@ describe("batch 1b (§6b): a flip's text changed when the attribution's records 
       assert.match(renderFlips(flips), how === "changed_text" ? /edge 1, none 0; G1 C5\.1 changed text \(edge; expected verbatim\)/u : /edge 0, none 1; G1 C5\.1 regression \(none; expected verbatim\)/u)
     })
   }
+})
+
+describe("[behav] batch 1, effect 8 and §11 item 1: reviews go on while scope sentences are owed; COVERED lines make snapshot guards", () => {
+  const dir = mkdtempSync(join(tmpdir(), "exp2-b1-end-"))
+  const store = new Exp2Store(join(dir, "store"), "b1e")
+  before(async () => { await store.ingestRound(1, roundText(1), stubTransport()) })
+  const command = (i: typeof SORT_INPUT) => `./dpipe ${i.args.join(" ")}`
+
+  it("a review that finds nothing with scope sentences owed is followed by another on the same program, up to three; what is owed then is the round's gaps", async () => {
+    const reviewer = scriptedReviewer([{ text: "NO ISSUES" }])
+    const { record, executor } = await round(dir, store, 1, [wd => write(wd, files())], { reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), scope: [FILTER_UNIT, SORT_UNIT] })
+    const a = record.accept!
+    assert.equal(a.reviews.length, 3, "three reviews, none ended the round early")
+    assert.deepEqual(a.reviews.map(x => x.cycle), [record.cycles[0].id, record.cycles[0].id, record.cycles[0].id], "all on the first program, no repair between")
+    assert.equal(executor.log.messages.length, 1)
+    assert.deepEqual(a.gaps, [FILTER_UNIT, SORT_UNIT])
+    assert.match(reviewer.requests[0].request, /# Sentences to show by a run\n[^]*COVERED <sentence ids> BY RUN <n>[^]*\nR1\.S3\.P2: s4\nR1\.S3\.P9: s2/u)
+  })
+
+  it("COVERED lines bound to the reviewer's runs, run again with the same output, are guards; the reviews end when nothing is owed", async () => {
+    const materials = (i: typeof SORT_INPUT) => ({ files: i.files, commands: [{ command: "go build -o dpipe .", output: "" }, { command: command(i), output: "" }] })
+    const reviewer = scriptedReviewer([
+      { text: `COVERED ${SORT_UNIT} BY RUN 1\nNO ISSUES`, materials: materials(SORT_INPUT) },
+      { text: `COVERED ${FILTER_UNIT}, R1.S3.P2 BY RUN 1\nNO ISSUES`, materials: materials(FILTER_INPUT) },
+      { text: "NO ISSUES" },
+    ])
+    const { record } = await round(dir, store, 1, [wd => write(wd, files())], { reviewer, formalize: stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT }), scope: [FILTER_UNIT, SORT_UNIT] })
+    const a = record.accept!
+    assert.equal(a.reviews.length, 2)
+    assert.deepEqual(a.gaps, [])
+    assert.deepEqual(a.covered!.map(c => [c.outcome, c.bound, c.ignored.map(i => i.why)]), [["guard", [SORT_UNIT], []], ["guard", [FILTER_UNIT], ["coarser than a sentence"]]])
+    assert.equal(a.guards.born.length, 2)
+    assert.match(reviewer.requests[1].request, /# Sentences to show by a run\n[^]*\nR1\.S3\.P2: s4\n/u)
+    assert.ok(!/R1\.S3\.P9: s2/u.test(reviewer.requests[1].request), "the sort sentence is held: not asked again")
+  })
 })

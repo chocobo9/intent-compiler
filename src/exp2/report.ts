@@ -13,6 +13,7 @@ import type { PackageOverflow } from "./view.js"
 import { renderVerification, type VerificationSummary } from "./verification.js"
 import { renderDelivery, type DeliverySummary } from "./delivery.js"
 import { renderSlice, type SliceRecord } from "./slice.js"
+import { renderCovered, summarizeCovered, type CoveredSummary } from "./covered.js"
 
 /**
  * The round report (DESIGN §14), built by code from the round's records: official score (filled in locally only,
@@ -111,6 +112,8 @@ export interface RoundReport {
   delivery?: DeliverySummary
   /** Batch 1 (DESIGN-OPUS §3, §11 item 3): the debt slice the reviewer got. */
   slice?: SliceRecord
+  /** Batch 1 (§11 item 1, effect 8): the round's COVERED lines, the snapshot guards' flips, the scope left owed. */
+  covered?: CoveredSummary & { snapshot_flips: number; gaps: number }
 }
 
 /** Tokens of one role: uncached input, cache reads, output (cache writes, when a provider reports them, apart). */
@@ -304,6 +307,7 @@ function reportOf(i: ReportInput): RoundReport {
     ...(i.verification ? { verification: i.verification } : {}),
     ...(i.delivery ? { delivery: i.delivery } : {}),
     ...(e.slice ? { slice: e.slice } : {}),
+    ...(e.accept?.gaps ? { covered: { ...summarizeCovered(e.accept.covered ?? []), snapshot_flips: e.accept.snapshot_flips ?? 0, gaps: e.accept.gaps.length } } : {}),
     ...(i.summary ? { acceptance: i.summary } : {}),
     ...(i.ledger ? { ledger: i.ledger } : {}),
     ...(i.review ? { review: reviewReport(i.review) } : {}),
@@ -417,6 +421,7 @@ export function renderReport(r: RoundReport): string {
     ...(r.zones.package?.utilization ? [renderUse(r.zones.package.utilization)] : []),
     ...(r.delivery ? [renderDelivery(r.delivery)] : []),
     ...(r.slice ? [renderSlice(r.slice)] : []),
+    ...(r.covered ? [renderCovered(r.covered, r.covered.snapshot_flips, r.covered.gaps)] : []),
     ...(r.verification ? [renderVerification(r.verification)] : []),
     ...(r.wall ? [renderRoleTime(r.wall)] : []),
     r.gold ? renderRecall(`Revision recall (gold set ${r.gold.task})`, r.gold.revision) : "- Revision recall: no gold set for this task.",

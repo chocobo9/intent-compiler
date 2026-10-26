@@ -26,7 +26,7 @@ import { runChecks, type CheckRun } from "./verdict.js"
 import { fitPackage, packageComparisons, paragraphInForce, renderPackage, roundPackage, type PackageSegment } from "./view.js"
 import type { GoldSets } from "./gold.js"
 import type { Reviewer } from "./review.js"
-import { declarations, summarizeVerification, verificationStates } from "./verification.js"
+import { declarations, ruleNotBehaviour, sentencesInForce, summarizeVerification, verificationStates } from "./verification.js"
 import { chooseSlice } from "./slice.js"
 
 /**
@@ -394,12 +394,14 @@ export class Serial {
     // The debt slice (batch 1, §3, §11 item 3): earlier paragraphs in debt, for the reviewer only, within its line
     // less A and B and at most 8 paragraphs; the formalizer reads them too.
     const lastExecution = [...state.executions].sort((x, y) => y.round - x.round)[0]
-    const slice = deltaReview && pkg ? chooseSlice(registry, round, verifiedAtStart, { ...(lastExecution?.slice ? { last: lastExecution.slice } : {}) }, { chars: delivery.room("reviewer") }) : null
+    const slice = deltaReview && pkg ? chooseSlice(registry, round, verifiedAtStart, { ...(lastExecution?.slice ? { last: lastExecution.slice } : {}), ...(lastExecution?.accept?.gaps?.length ? { gaps: lastExecution.accept.gaps } : {}) }, { chars: delivery.room("reviewer") }) : null
     const debtSegments: PackageSegment[] = (slice?.sent ?? []).map(x => {
       const b = registry.block(x.paragraph)!
       return { object: x.object, name: registry.objects.get(x.object)?.name ?? x.object, paragraph: x.paragraph, round: b.round, path: [`R${b.round}`, ...registry.lineage(x.paragraph).filter(s => s.level === "section" && s.heading).reverse().map(s => s.heading!.trim().replace(/^#+s*/u, ""))].join(" › "), why: "debt" as const, via: x.sentences, text: paragraphInForce(registry, x.paragraph, round) }
     })
     for (const s of debtSegments) { delivery.give("reviewer", "D", s.paragraph, s.text.length); delivery.give("formalizer", "F", s.paragraph, s.text.length) }
+    // The review's scope (batch 1, §11 item 1): this round's sentences that are behaviour, and the slice's debt sentences.
+    const scope = slice ? [...sentencesInForce(registry, round).filter(s => s.round === round && !ruleNotBehaviour(registry, s)).map(s => s.id), ...slice.sent.flatMap(x => x.sentences)] : null
     const byAge = [...carried].sort((x, y) => (x.material?.round ?? 0) - (y.material?.round ?? 0))
     const owed = (c: CarriedItem) => [...new Set(c.material?.units ?? [])].filter(u => !delivery.has("executor", u)).reduce((n, u) => n + (registry.block(u)?.text.trim().length ?? 0), 0)
     let over = delivery.chars("executor") + byAge.reduce((n, c) => n + owed(c), 0) - delivery.line
@@ -435,7 +437,7 @@ export class Serial {
       copyDir: label => join(this.c.copies ?? join(this.c.checkpoints, "review-copies"), label),
       ...(checkWriting ? { libraryNow: async () => { await checksReady(); const n = store.inspect(); return { library: n.checks, events: n.check_events } } } : {}),
       record: { review: r => store.recordReviewCall(r), formalize: c => store.recordFormalizeCalls(c), guards: (b, e) => store.recordGuards(b, e) },
-      carried, quiet, superseded, delivery, ...(reviewItems.length ? { reviewItems } : {}), time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
+      carried, quiet, superseded, delivery, ...(reviewItems.length ? { reviewItems } : {}), ...(scope ? { scope } : {}), time: (stage: string, x: number, y: number) => { this.spans.push({ stage, start: x, end: y }) }, onProgress: r => { this.progress = r }, checkTimeoutMs: limits.checkTimeoutMs,
     }, { ...limits.execution, ...(a.reviews !== undefined ? { reviews: a.reviews } : {}), ...(a.trialFixes !== undefined ? { trialFixes: a.trialFixes } : {}), ...(a.premiseBlock ? { premiseBlock: a.premiseBlock } : {}), ...(a.fallback ? { fallback: a.fallback } : {}), ...(a.voidWithoutRuns !== undefined ? { voidWithoutRuns: a.voidWithoutRuns } : {}) })
     await this.timed("waiting for checks", checksReady)
     // 5. The library's verdict on the final program, the guard coverage, the ledger, the report, the checkpoint.

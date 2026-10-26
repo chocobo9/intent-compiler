@@ -9,6 +9,7 @@ import { changedTextBehind, changeQuotes, guardCheck, guardStatuses, runGuards, 
 import { sessionInput, type ReviewMaterials } from "./materials.js"
 import type { Registry } from "./registry.js"
 import { notBehaviourIn } from "./review.js"
+import { bindCovered, reviewerRuns, uncoveredScope, type CoveredRecord } from "./covered.js"
 import { copyProgram, discardCopy, isNoIssues, repairFromReview, replyAsList, reviewEntries, reviewRanProgram, reviewRequest, reviewRequestOn, supersededIn, type ReviewCallRecord, type Reviewer, type ReviewFocus } from "./review.js"
 import type { DeliveryLedger } from "./delivery.js"
 import type { CheckRunner, ProgramRef, ScriptSandbox } from "./runner.js"
@@ -97,6 +98,11 @@ export interface AcceptDeps {
   delivery?: DeliveryLedger
   /** Batch 1 (decision 3): the open items the reviewer is given, as check material without original text. */
   reviewItems?: readonly { id: string; text: string }[]
+  /**
+   * Batch 1 (§11 item 1, effect 8): the review's scope sentences, this round's behaviour sentences and the slice's debt.
+   * Reviews go on while some no passing guard holds (at most `reviews`); COVERED lines bind them to the reviewer's runs.
+   */
+  scope?: readonly string[]
   onProgress?: (record: ExecutionRecord) => void
   checkTimeoutMs?: number
 }
@@ -222,6 +228,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
   const quote: Quote | undefined = deps.delivery ? units => deps.delivery!.quote("executor", units) : undefined
   // A question's quotes for the reviewer: a text given already is named by its id (an empty text), any other is counted.
   const forReviewer = (list: { id: string; text: string }[], cls: "A" | "B") => list.map(x => { if (!deps.delivery) return x; if (deps.delivery.has("reviewer", x.id)) return { id: x.id, text: "" }; deps.delivery.give("reviewer", cls, x.id, x.text.length); return x })
+  // The scope sentences owed (batch 1, effect 8): no live passing guard holds them, no open item rests on them, not declared.
+  const owed = () => deps.scope ? uncoveredScope(registry, deps.scope, live(), status, [...itemChecks.values()].flatMap(p => p.record.blocks)).filter(s => !accept.declared?.some(d => d.id === s)) : []
   const timed = async <T>(stage: string, f: () => Promise<T>): Promise<T> => { const a = Date.now(); try { return await f() } finally { deps.time?.(stage, a, Date.now()) } }
   const block = new Set<Premise>(limits.premiseBlock ?? DEFAULT_PREMISE_BLOCK)
   const fallbackMode = limits.fallback ?? "items"
@@ -398,8 +406,10 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       if (bornNow.length) { await note(bornNow, evNow); accept.guards.born.push(...bornNow.map(g => g.id)); cycle.guards.born.push(...bornNow.map(g => g.id)) }
     }
     // 5. The review, when one may still lead to a repair and the last one found something (§12i item 1).
-    const canReview = reviews < reviewsMax && lastReviewFound && repairs < limits.repairCycles
-    if (canReview) {
+    // Batch 1 (effect 8): with a scope, a review also follows while scope sentences are owed, and another follows on the
+    // same program when one found nothing to send and some are still owed.
+    const canReview = reviews < reviewsMax && (lastReviewFound || owed().length > 0) && repairs < limits.repairCycles
+    for (let again = canReview; again;) {
       const n2 = reviews + 1
       const program = current.program
       // Leads: library checks failing that never passed, and judgments (when on), each once per round at an output.
@@ -434,13 +444,25 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       const revised = registry.objects.size ? [...registry.objects.values()].flatMap(o => o.blocks.flatMap(b => b.modifications.filter(m => m.round === round).flatMap(m => m.parts.map(p => ({ id: p, text: `${registry.block(p)?.text.trim() ?? ""} (${m.kind === "withdraw" ? "withdrawn" : m.kind === "partial" ? "partly revised" : "replaced"} by ${m.by.join(", ")} in round ${round})` }))))) : []
       // Under the round's package the reviewer reads the text in force; the appendix names this round's units (§6c).
       const thisRound = round === 1 ? [] : [...new Set(registry.roundScope(round).flatMap(c => c.entries.map(e => e.block)))].sort((a, b) => registry.block(a)!.start - registry.block(b)!.start)
-      const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads, ...(deps.reviewItems?.length ? { items: deps.reviewItems } : {}), ...(deps.delivery ? { declare: true } : {}) } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads }
+      const focus: ReviewFocus = deps.body ? { round, units: [], unit_ids: thisRound, guardFailures, leads, ...(deps.reviewItems?.length ? { items: deps.reviewItems } : {}), ...(deps.delivery ? { declare: true } : {}), ...(deps.scope ? { coverage: owed() } : {}) } : { round, units: round === 1 ? [] : dedupe(revised), guardFailures, leads, ...(deps.scope ? { coverage: owed() } : {}) }
       const r = await review(current, focus, n2)
       reviews++
       const summary: ReviewSummary = { n: n2, cycle: current.cycle, attempts: r?.attempts ?? 0, valid: !!r?.out, no_issues: !!r?.out && isNoIssues(r.out.text), reported: 0, malformed: 0, blocked: 0, sent: 0, superseded: [] as string[], leads: leads.length, program_runs: r?.out?.runs.length ?? 0, fallback: 0, logged: 0 }
       for (const g of questions) asked.add(g.id)
       survivors = []
       if (r?.out) {
+        // COVERED lines (batch 1, §11 item 1): the reviewer's runs, numbered by code, run again on the program reviewed;
+        // the same output is a guard on the scope sentences named.
+        if (deps.scope) {
+          const runs = reviewerRuns({ files: r.out.materials?.files ?? [], commands: r.out.materials?.commands ?? [] }, deps.binary)
+          const b = await timed("guard rerun", () => bindCovered(r.out!.text, runs, { registry, round, review: `R${round}.${n2}`, cycle: id, program, runner: deps.runner, timeoutMs: timeout, open: new Set(owed()), nextGuard: () => `G${nextGuard++}` }))
+          accept.covered = [...(accept.covered ?? []), ...b.records]
+          if (b.guards.length) {
+            await note(b.guards, b.guards.map(g => ({ guard: g.id, round, cycle: id, status: "passing" as const, program: program.id })))
+            accept.guards.born.push(...b.guards.map(g => g.id))
+            cycle.guards!.born.push(...b.guards.map(g => g.id))
+          }
+        }
         // SUPERSEDED lines retire guards; a questioned guard not superseded is a regression from here on.
         // NOT BEHAVIOUR lines (batch 1, G2): a sentence (a clause stands for its sentence) in force is recorded once.
         if (deps.delivery) for (const d of notBehaviourIn(r.out.text)) {
@@ -618,6 +640,7 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
       accept.reviews.push(summary)
       const { cycle: _c, ...ofCycle } = summary
       cycle.review = ofCycle
+      again = !!deps.scope && reviews < reviewsMax && !items.some(i => i.action === "send") && owed().length > 0
     }
     // 6. What goes back to the executor: items the plan sends (regressions, review items, carried items not yet fixed).
     for (const i of items) if (i.action === "send" || i.action === "hold") sends.mark(i.id, i.digest, { action: i.action, ...(i.why ? { why: i.why } : {}) })
@@ -662,6 +685,8 @@ export async function acceptRound(workdir: string, workorder: WorkOrder, text: s
     last.failing = failingGuards
   } else record.carried = task
   accept.guards.at_end = live().length
+  // What the reviews left owed: next round's slice starts from their paragraphs (batch 1, effect 8).
+  if (deps.scope) { accept.gaps = owed(); const snap = new Set(guards.filter(g => g.snapshot).map(g => g.id)); accept.snapshot_flips = (accept.guards.flips ?? []).filter(f => snap.has(f.id)).length }
   record.head = head(workdir)
   return record
 }

@@ -27,6 +27,8 @@ export interface GuardRecord {
   reference_script?: CheckDraft["reference_script"]
   /** review: where it came from, with the reviewer's own words. */
   origin?: { item: string; review: string; text: string }
+  /** Batch 1 (DESIGN-OPUS §11 item 1): a guard from a reviewer's run a COVERED line bound, its output as the expectation. */
+  snapshot?: { review: string; run: number }
   born: { cycle: string; program: string }
 }
 
