@@ -368,7 +368,7 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       // Batch 1 (DESIGN-OPUS §0a, §2, G12): the delivery by recipient against the line, the verification state, the roles' time.
       assert.ok(r.delivery && r.delivery.line === 2 * roundText(r.round).length + 10_000 && r.delivery.recipients.executor.chars.A > 0 && r.delivery.recipients.reviewer.chars.A > 0, JSON.stringify(r.delivery?.recipients))
       assert.ok(r.delivery.outside["check writing"]!.chars > 0, "the check writing's reading is recorded")
-      assert.match(text, /- Original text delivered: line [\d.]+k?; executor [^\n]*; reviewer [^\n]*; formalizer [^\n]*\(outside the line\)[^\n]*\.\n(?:- Debt slice: \d+ paragraphs [^\n]*\n)?(?:- COVERED lines: \d+; [^\n]*\n)?- Verification state:\d+ sentences in force; [^\n]*\n- Wall time: round [\d.]+ min; executor [\d.]+ min, reviewer [\d.]+ min/u)
+      assert.match(text, /- Original text delivered: line [\d.]+k?; executor [^\n]*; reviewer [^\n]*; formalizer [^\n]*\(outside the line\)[^\n]*\.\n(?:- Debt slice: \d+ paragraphs [^\n]*\n)?(?:- COVERED lines: \d+; [^\n]*\n)?- Verification state: \d+ sentences in force;[^\n]*\n- Wall time: round [\d.]+ min; executor [\d.]+ min, reviewer [\d.]+ min/u)
       assert.match(text, /- Revision recall: no gold set for this task\.\n- Relation recall: no gold set for this task\./u)
       assert.ok(!/Probes|Ledger:|Guard coverage|Zones:/u.test(text), "nothing else is rendered")
     }
