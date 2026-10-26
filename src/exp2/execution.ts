@@ -294,6 +294,11 @@ export interface AcceptRoundRecord {
   /** flips: each flip, how it was classified and by which records (§6b: revision, object, edge; none), with where its expected values come from. */
   guards: { at_start: number; at_end: number; born: string[]; flipped_changed_text: string[]; flipped_unchanged: string[]; flips?: { id: string; cycle: string; how: "changed_text" | "regression"; sources: string[]; expected: string[] }[]; retired: { id: string; reason: string }[] }
   reverted: number
+  /**
+   * Batch 1 (5A): guards that regressed this round (a flip on text the round left as it was); on the cycle after,
+   * fixed or still failing. No repair is reverted: a regression stays an item, carried as long as it fails.
+   */
+  regressions?: { raised: number; fixed_next: number; persisted: number }
   trial: { runs: number; failures: number }
   /** Leads handed to the reviewer (library failures never confirmed, judgments), by kind; dropped: past the cap of one review (§6c). */
   leads: { library: number; judgment: number; dropped?: number }

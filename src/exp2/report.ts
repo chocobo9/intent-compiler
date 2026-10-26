@@ -151,6 +151,8 @@ export interface ReviewReport {
   program_runs_zero: number
   guards: AcceptRoundRecord["guards"]
   reverted: number
+  /** Batch 1 (5A): regressions raised, fixed on the next cycle, still failing then; null before batch 1. */
+  regressions: AcceptRoundRecord["regressions"] | null
   trial: { runs: number; failures: number }
   leads: { library: number; judgment: number; dropped?: number }
   /** Live rule units, those a guard that ran rests on, and those none does (DESIGN §12i item 7). */
@@ -333,7 +335,7 @@ function reviewReport(r: NonNullable<ReportInput["review"]>): ReviewReport {
       verified: a.reviews.reduce((n, x) => n + (x.conservation?.sent ?? 0), 0), logged: a.reviews.reduce((n, x) => n + (x.conservation?.logged ?? 0), 0), fallback: a.reviews.reduce((n, x) => n + (x.conservation?.fallback ?? 0), 0), blocked: a.reviews.reduce((n, x) => n + x.blocked, 0),
     },
     conservation_errors: a.conservation_errors ?? [],
-    premise_blocked: a.premise_blocked, premise_logged: a.premise_logged ?? {}, fallback: a.fallback ?? { reviews: 0, whole: 0, items: 0, reasons: {} }, program_runs_zero: a.program_runs_zero ?? 0, guards: a.guards, reverted: a.reverted, trial: a.trial, leads: a.leads, coverage: r.coverage,
+    premise_blocked: a.premise_blocked, premise_logged: a.premise_logged ?? {}, fallback: a.fallback ?? { reviews: 0, whole: 0, items: 0, reasons: {} }, program_runs_zero: a.program_runs_zero ?? 0, guards: a.guards, reverted: a.reverted, regressions: a.regressions ?? null, trial: a.trial, leads: a.leads, coverage: r.coverage,
     cache: { reviewer: cacheShare(reviewer.tokens), formalizer: cacheShare(formalizer.tokens) },
     request_chars: r.review_calls.reduce((n, c) => n + (c.request_chars ?? 0), 0),
   }
@@ -395,7 +397,7 @@ export function renderReport(r: RoundReport): string {
       ...(v.conservation_errors.length ? [`- Conservation broken: ${v.conservation_errors.join("; ")}.`] : []),
     ] : []),
     `- Check writing: admitted ${r.checks.admitted ?? r.checks.entered}/${r.checks.entered}, unknown never told the model ${r.checks.unknown_not_fed_back ?? 0}; dropped after the repairs ${sum(r.checks.dropped)} (${by(r.checks.dropped ?? {})}); runs refused as an unknown subcommand ${r.checks.refused_calls ?? 0}${r.checks.coarse ? `; units coarser than a sentence ${r.checks.coarse.blocks} in ${r.checks.coarse.checks} checks (admitted, they cover no sentence)` : ""}; units no check rests on ${r.checks.uncovered ?? 0} (reported only).${r.checks.read_as_holds?.length ? ` Checks written as withdrawn in older records, read as stating what the text requires: ${r.checks.read_as_holds.join(", ")}.` : ""}`,
-    ...(v ? [`- Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}; flips on changed text ${v.guards.flipped_changed_text.length}${ids(v.guards.flipped_changed_text)}, on unchanged text ${v.guards.flipped_unchanged.length}${ids(v.guards.flipped_unchanged)}; retired as superseded ${v.guards.retired.length}${ids(v.guards.retired.map(x => x.id))}; repairs reverted ${v.reverted}.`] : []),
+    ...(v ? [`- Guards: ${v.guards.at_start} at the start, ${v.guards.at_end} at the end, new ${v.guards.born.length}; flips on changed text ${v.guards.flipped_changed_text.length}${ids(v.guards.flipped_changed_text)}, on unchanged text ${v.guards.flipped_unchanged.length}${ids(v.guards.flipped_unchanged)}; retired as superseded ${v.guards.retired.length}${ids(v.guards.retired.map(x => x.id))}; repairs reverted ${v.reverted}${v.regressions ? `; regressions raised ${v.regressions.raised}, fixed on the next cycle ${v.regressions.fixed_next}, still failing then ${v.regressions.persisted} (no repair is reverted)` : ""}.`] : []),
     ...(v?.guards.flips?.length ? [renderFlips(v.guards.flips)] : []),
     ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters${r.zones.package ? ` in ${r.zones.package.segments.length} paragraphs of ${new Set(r.zones.package.segments.map(x => x.object)).size} objects (${segmentCounts(r.zones.package)}), ${r.zones.package.heads.length} object heads; this round's edges to a block ${r.zones.package.edges.to_block}, to an object ${r.zones.package.edges.to_object}; ${r.zones.package.guards} comparisons (guards on revised units)${r.zones.package.overflow ? `; over the budget of ${r.zones.package.overflow.limit} (${r.zones.package.overflow.chars}): dropped ${r.zones.package.overflow.dropped.length} paragraphs${r.zones.package.overflow.still_over ? ", still over" : ""}` : ""}` : ` in ${r.zones.source_blocks} blocks`} (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all} blocks)${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions${v.leads.dropped ? `, ${v.leads.dropped} leads past the cap of 20` : ""}` : ""}.`] : []),
     ...(r.zones.package?.utilization ? [renderUse(r.zones.package.utilization)] : []),

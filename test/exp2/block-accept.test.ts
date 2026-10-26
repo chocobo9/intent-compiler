@@ -194,20 +194,24 @@ describe("exp2 acceptance block §1, §3, §4: the reviewer finds, the fixed ite
     assert.deepEqual([e.source, e.units, e.sent, e.end?.how], ["review", [FILTER_UNIT], ["C1.1"], "fixed"])
   })
 
-  it("the repair of the filter breaks the sort guard: the repair is reverted, the tree back where it was; the item it was for is sent once more (§12j.7 item 2)", async () => {
+  it("the repair of the filter breaks the sort guard: not reverted (batch 1 of DESIGN-OPUS, 5A); the filter's fix stays, the sort guard goes back as an item with its material and is fixed on the next cycle", async () => {
     const reviewer = scriptedReviewer([{ text: `1. ${FILTER_ITEM_TEXT}` }, { text: "NO ISSUES" }])
     const formalize = stubFormalizer({ filter: FILTER_UNIT, sort: SORT_UNIT })
-    // The second program fixes the filter and breaks the sort; the third, sent the item again, fixes it alone.
+    // The second program fixes the filter and breaks the sort; the third, sent the regression, fixes the sort.
     const { record, executor, workdir } = await round(dir, store, 1, [wd => write(wd, files({ filterWrong: true })), wd => write(wd, files({ reverseInTransform: true })), wd => write(wd, files())], { library: [sortCheck("K1", objects().sort)], reviewer, formalize })
-    const [c1, c2, c3] = record.cycles
+    const [, c2, c3] = record.cycles
     assert.equal(c2.message, "repair")
-    assert.deepEqual(c2.reverted, { to: c1.commit, guards: ["G1"], resent: ["V1.1.1"] })
-    assert.equal(record.accept!.reverted, 1)
-    assert.ok(git(workdir, ["show", `${c2.reverted!.to}:filter.go`]).includes("keep != true"), "the tree went back to the state before the repair")
-    assert.deepEqual(c2.items!.filter(i => i.id === "V1.1.1").map(i => i.action), ["send"])
-    // The item is sent again, with word of the revert; the next repair fixes it, and it is a guard (no discarded end).
-    assert.match(executor.log.messages[2].text, /Keep rows where the column satisfies the condition[^]*reverted by the controller: it made G1 fail[^]*listed above again\./u)
+    assert.equal(c2.reverted, undefined, "no repair is reverted")
+    assert.equal(record.accept!.reverted, 0)
+    assert.deepEqual(record.accept!.guards.flipped_unchanged, ["G1"])
+    assert.deepEqual(c2.items!.filter(i => i.id === "G1").map(i => i.action), ["send"])
+    // The regression in the repair list, with its material; no word of a revert.
+    const m = executor.log.messages[2].text
+    assert.match(m, /A check that passed on the previous version of the program fails now \(G1\)\.\nRequirement: [^]*\nCommand: \["transform"[^]*\nWhat the program did: /u)
+    assert.ok(!m.includes("reverted"), m.slice(0, 300))
+    assert.ok(!m.includes("Keep rows where the column satisfies the condition"), "the filter's fix is kept: not sent again")
     assert.equal(record.kept, c3.id)
+    assert.deepEqual(record.accept!.regressions, { raised: 1, fixed_next: 1, persisted: 0 })
     assert.ok(!git(workdir, ["show", "HEAD:filter.go"]).includes("keep != true"), "the filter is fixed on the kept program")
     const ledger = ledgerOf({ ...store.inspect(), executions: [record] }, store.registry())
     assert.deepEqual(ledger.find(x => x.id === "V1.1.1")!.end?.how, "fixed")
@@ -359,7 +363,7 @@ describe("exp2 acceptance block: the serial R1–R3 with the review acceptance, 
       assert.match(text, /^# Round \d+ report\n\nOfficial score: [^\n]*\n\n§12i measures: wall \d+ s; guards \d+→\d+;[^\n]*\n\nInterface counts:\n\n/u)
       assert.match(text, /- Reviewer items: reported \d+, entered a repair list \d+ \(verified \d+, logged \d+, fallback \d+\), blocked \d+; every entry ended once: yes; no_input \d+; reviews \d+ \(void sessions \d+\)/u)
       assert.match(text, /- Check writing: admitted \d+\/\d+, unknown never told the model 0; dropped after the repairs \d+ .*; runs refused as an unknown subcommand \d+; units coarser than a sentence \d+ in \d+ checks \(admitted, they cover no sentence\); units no check rests on \d+ \(reported only\)\./u)
-      assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+\./u)
+      assert.match(text, /- Guards: \d+ at the start, \d+ at the end, new \d+; flips on changed text \d+.*, on unchanged text \d+.*; retired as superseded \d+.*; repairs reverted \d+; regressions raised \d+, fixed on the next cycle \d+, still failing then \d+ \(no repair is reverted\)\./u)
       assert.match(text, /- Requirements given: work order source zone delta, \d+ characters/u)
       assert.match(text, /- Revision recall: no gold set for this task\.\n- Relation recall: no gold set for this task\./u)
       assert.ok(!/Probes|Ledger:|Guard coverage|Zones:/u.test(text), "nothing else is rendered")
