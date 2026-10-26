@@ -10,6 +10,7 @@ import type { LedgerEntry, LedgerSummary } from "./ledger.js"
 import type { AcceptRoundRecord } from "./execution.js"
 import { relationRecall, renderRecall, revisionRecall as goldRevisionRecall, type GoldSets, type RecallLine } from "./gold.js"
 import type { PackageOverflow } from "./view.js"
+import { renderVerification, type VerificationSummary } from "./verification.js"
 
 /**
  * The round report (DESIGN §14), built by code from the round's records: official score (filled in locally only,
@@ -102,6 +103,8 @@ export interface RoundReport {
   first_delivery_score?: null | { passed: number; total: number }
   /** What §12i asks to report beside the decision, in one place (fix block B4); review mode only. */
   measures?: RoundMeasures
+  /** Batch 1 (DESIGN-OPUS §2): the verification state per sentence at the round's end, against its start. */
+  verification?: VerificationSummary
 }
 
 /** Tokens of one role: uncached input, cache reads, output (cache writes, when a provider reports them, apart). */
@@ -242,6 +245,7 @@ export interface ReportInput {
   summary?: AcceptanceSummary
   ledger?: LedgerSummary
   gold?: GoldSets
+  verification?: VerificationSummary
   review?: {
     accept: AcceptRoundRecord
     first_delivery: { cycle: string; commit: string } | null
@@ -290,6 +294,7 @@ function reportOf(i: ReportInput): RoundReport {
     loss,
     management_calls: i.understand.length + i.acceptance.length,
     ...(i.wall ? { wall: i.wall } : {}),
+    ...(i.verification ? { verification: i.verification } : {}),
     ...(i.summary ? { acceptance: i.summary } : {}),
     ...(i.ledger ? { ledger: i.ledger } : {}),
     ...(i.review ? { review: reviewReport(i.review) } : {}),
@@ -401,6 +406,8 @@ export function renderReport(r: RoundReport): string {
     ...(v?.guards.flips?.length ? [renderFlips(v.guards.flips)] : []),
     ...(r.zones.source_scope ? [`- Requirements given: work order source zone ${r.zones.source_scope}, ${r.zones.source_chars} characters${r.zones.package ? ` in ${r.zones.package.segments.length} paragraphs of ${new Set(r.zones.package.segments.map(x => x.object)).size} objects (${segmentCounts(r.zones.package)}), ${r.zones.package.heads.length} object heads; this round's edges to a block ${r.zones.package.edges.to_block}, to an object ${r.zones.package.edges.to_object}; ${r.zones.package.guards} comparisons (guards on revised units)${r.zones.package.overflow ? `; over the budget of ${r.zones.package.overflow.limit} (${r.zones.package.overflow.chars}): dropped ${r.zones.package.overflow.dropped.length} paragraphs${r.zones.package.overflow.still_over ? ", still over" : ""}` : ""}` : ` in ${r.zones.source_blocks} blocks`} (every round's text: ${r.zones.source_chars_all} in ${r.zones.source_blocks_all} blocks)${v ? `; review requests ${v.request_chars ?? 0} characters in ${v.reviewer.calls} sessions${v.leads.dropped ? `, ${v.leads.dropped} leads past the cap of 20` : ""}` : ""}.`] : []),
     ...(r.zones.package?.utilization ? [renderUse(r.zones.package.utilization)] : []),
+    ...(r.verification ? [renderVerification(r.verification)] : []),
+    ...(r.wall ? [renderRoleTime(r.wall)] : []),
     r.gold ? renderRecall(`Revision recall (gold set ${r.gold.task})`, r.gold.revision) : "- Revision recall: no gold set for this task.",
     r.gold ? renderRecall(`Relation recall (gold set ${r.gold.task})`, r.gold.relation) : "- Relation recall: no gold set for this task.",
     "",
@@ -432,4 +439,22 @@ const segmentCounts = (p: { segments: readonly { why: string }[]; sizes: Record<
 const pct = (a: number, b: number) => b ? `${Math.round(100 * a / b)}%` : "—"
 function renderUse(u: PackageUse): string {
   return `- Package use (review items sent to a repair list): objects ${u.objects.in_package}/${u.objects.total} (${pct(u.objects.in_package, u.objects.total)}), paragraphs ${u.paragraphs.cited}/${u.paragraphs.total} (${pct(u.paragraphs.cited, u.paragraphs.total)}); cited objects in the package ${u.objects.in_package}/${u.objects.cited.length}${u.objects.missing.length ? ` (not in it: ${u.objects.missing.join(", ")})` : ""}.`
+}
+
+/** The roles' wall time (batch 1, DESIGN-OPUS §10.2 G12): stages grouped by who spends the time; check writing runs beside the coding. */
+export const ROLE_STAGES: Record<string, readonly string[]> = {
+  executor: ["coding", "repair", "trial fix"],
+  reviewer: ["review"],
+  formalizer: ["formalize"],
+  attribution: ["attribution"],
+  "check writing": ["check writing", "checks"],
+  code: ["build", "trial", "guard rerun", "premise checks", "carry-over", "comparisons"],
+}
+
+export function renderRoleTime(w: NonNullable<RoundReport["wall"]>): string {
+  const min = (ms: number) => `${(ms / 60_000).toFixed(1)} min`
+  const of = (stages: readonly string[]) => w.stages.filter(s => stages.includes(s.stage)).reduce((n, s) => n + s.ms, 0)
+  const known = new Set(Object.values(ROLE_STAGES).flat())
+  const other = w.stages.filter(s => !known.has(s.stage) && s.stage !== "waiting for checks").reduce((n, s) => n + s.ms, 0)
+  return `- Wall time: round ${min(w.round_ms)}; ${Object.entries(ROLE_STAGES).map(([role, st]) => `${role} ${min(of(st))}`).join(", ")}${other ? `, other ${min(other)}` : ""} (check writing runs beside the coding).`
 }

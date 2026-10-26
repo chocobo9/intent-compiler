@@ -25,6 +25,7 @@ import { runChecks, type CheckRun } from "./verdict.js"
 import { fitPackage, packageComparisons, renderPackage, roundPackage } from "./view.js"
 import type { GoldSets } from "./gold.js"
 import type { Reviewer } from "./review.js"
+import { summarizeVerification, verificationStates } from "./verification.js"
 
 /**
  * The end-to-end serial (DESIGN §9, §14). Each round, from the previous round's checkpoint:
@@ -351,6 +352,9 @@ export class Serial {
         items.forEach((r, i) => { if (rs[i].outcome === "fail") carried.push({ id: r.id, text: r.text, check: records[i], digest: runDigest(rs[i]) }) })
       }
     }
+    // The verification state as the round starts (batch 1, DESIGN-OPUS §2): the earlier rounds' sentences, against
+    // the guards and checks so far; the open items are the ones carried in.
+    const verifiedAtStart = verificationStates(registryStart, round - 1, { guards: atStart.guards, guardEvents: atStart.guard_events, library: atStart.checks, checkEvents: atStart.check_events, open: carried.map(c => ({ id: c.id, units: c.check ? [...c.check.blocks] : [] })) })
     // 3. The work order, as before.
     let state = store.inspect()
     const registry = store.registry(state)
@@ -408,8 +412,11 @@ export class Serial {
     const events = state.check_events.filter(e => e.round === round)
     const ledgerNow = ledgerOf({ ...state, executions: [...state.executions, execution] }, registry, ledgerOptions)
     const summary = acceptanceFromLedger(acceptanceSummary({ library: state.checks, runs: verdict.runs, events: state.check_events, findings: [], gaps: gapState(registry, state.probe_rounds, libraryCovers(registry, state.checks, state.check_events)) }).by_kind, ledgerNow)
+    // The verification state at the end: this round's sentences too, the open items those still failing on the kept program.
+    const openUnits = (execution.final ?? []).map(f => ({ id: f.id, units: state.guards.find(g => g.id === f.id)?.units ?? [...state.executions, execution].flatMap(e => e.review_items ?? []).find(x => x.id === f.id)?.units ?? carried.find(c => c.id === f.id)?.check?.blocks ?? [] }))
+    const verification = summarizeVerification(registry, round, verificationStates(registry, round, { guards: state.guards, guardEvents: state.guard_events, library: state.checks, checkEvents: state.check_events, open: openUnits }), verifiedAtStart)
     const report = buildReport({
-      round, registry, workorder, execution, summary, ...(this.c.gold ? { gold: this.c.gold } : {}), ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: verdict.statuses,
+      round, registry, workorder, execution, summary, verification, ...(this.c.gold ? { gold: this.c.gold } : {}), ledger: ledgerSummary(ledgerNow, round), executorIsStub: this.c.executorIsStub, wall: wallTimes(this.spans, roundStart, Date.now()), statuses: verdict.statuses,
       understand: state.calls.filter(c => c.round === round), acceptance: state.check_calls.filter(c => c.round === round),
       interrupted: {
         attempts: interrupted.length, understand: interrupted.flatMap(x => x.calls), acceptance: interrupted.flatMap(x => [...x.check_calls, ...(x.probe_calls ?? []), ...(x.judge_calls ?? []), ...(x.review_calls ?? []), ...(x.formalize_calls ?? [])]),
